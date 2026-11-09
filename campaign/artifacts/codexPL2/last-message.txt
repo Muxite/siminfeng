@@ -1,0 +1,14 @@
+Implemented within `cc/moe_planner/` and `artifacts/codexPL2/`: diverse family winners, Pareto output, long-context FA/KV handling, separate prefill/TTFT predictions, component gating, hybrid crossover, and pending PAP calibration.
+
+**Pytest: 38 passed.** No Docker/GPU used; diff check clean.
+
+Example predictions:
+
+| Budget / context | Plan | GPU + guard | Decode |
+|---|---|---:|---:|
+| 900 MiB / 4096 | mixE4K n19, f16, factory-default q8_reuse | 875.867 + 2 MiB | 152.625 t/s |
+| 1200 MiB / 32768 | mixE4K n15, q4 KV, FA, explicitly enabled kv_quant_fix | 1173 + 2 MiB | 196.152 t/s |
+
+The 32k example requires extrapolation and has unmeasured quality; no plan fits without the fix enabled.
+
+[All example alternatives](/home/muk/projects/siminfeng/campaign/artifacts/codexPL2/examples.txt) · [Updated documentation](/home/muk/projects/siminfeng/campaign/cc/moe_planner/PLANNER.md)

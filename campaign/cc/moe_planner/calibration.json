@@ -1897,5 +1897,83 @@
       ],
       "training": "prose prefill seq0 positions [0,1560), f8a108be; evaluation must be disjoint"
     }
-  ]
+  ],
+  "planner_v2": {
+    "flash_attention": {
+      "source": "decisions/D028-kv-precision-protocol.md",
+      "job_id": "job-787f02f737",
+      "ctx": 32768,
+      "prompt_tokens": 1560,
+      "gpu_mib_on": 2762,
+      "gpu_mib_off": 3746,
+      "decode_tps_on": 627.2,
+      "decode_tps_off": 570.2,
+      "prefill_tps_on": 7001,
+      "prefill_tps_off": 5865,
+      "quality": "FA equivalence unmeasured; quantized KV aborted before fix"
+    },
+    "q8_reuse": {
+      "source": "decisions/D029-c1-q8reuse-accepted.md",
+      "job_id": "job-34c09bec98",
+      "decode_factor": 1.02,
+      "prefill_factor": 1.0,
+      "quality": "output-identical in measured regime"
+    },
+    "hybrid_crossover": {
+      "source": "decisions/D030-hybrid-split-rejected.md; decisions/D031-split-diagnosis-proxy-scale.md",
+      "extra_token_us": 2030,
+      "extra_handoff_layers": 12,
+      "cpu_expert_us": 30.6,
+      "reference_expert_bytes": 884736,
+      "required_margin": 2.0,
+      "note": "Effective extra per-layer cost includes dispatch, transfers and host overhead; 2x margin encodes >> as a conservative necessary condition, not a measured universal threshold"
+    },
+    "techniques": {
+      "static": {
+        "status": "calibrated",
+        "source": "D022"
+      },
+      "lru": {
+        "status": "calibrated-control",
+        "source": "D022",
+        "policy": "resident byte coverage >=60%"
+      },
+      "hybrid": {
+        "status": "rejected-small-expert-regime",
+        "source": [
+          "D030",
+          "D031"
+        ],
+        "eligibility": "expert bytes * CPU us/byte > 2 * per-layer fixed us; correctness and end-to-end calibration still required"
+      },
+      "pap": {
+        "status": "pending-calibration",
+        "source": "decisions/D032-pap-and-planner-validation-protocol.md",
+        "component": "pap",
+        "classification": "representation-tradeoff",
+        "calibration_points": [],
+        "result_source": "lab/jobs/<job-id>/att-<n>/result.json",
+        "point_fields": [
+          "job_id",
+          "attempt",
+          "test",
+          "model_path",
+          "representation",
+          "cpu_layers",
+          "expert_bytes",
+          "nonexpert_bytes",
+          "gpu_mib",
+          "decode_tps",
+          "prefill_tps",
+          "prompt_tokens",
+          "kld"
+        ],
+        "acceptance": {
+          "min_decode_ratio_vs_same_cpu_layers": 1.05,
+          "max_kld": 0.08
+        },
+        "enumeration": "No PAP throughput or quality invented while calibration_points is empty; future points must bind model bytes, placement and lab provenance"
+      }
+    }
+  }
 }

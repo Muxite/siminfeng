@@ -1,0 +1,238 @@
+[
+  {
+    "name": "plan-900-calibrated",
+    "gpu_mib": 900,
+    "ctx": 4096,
+    "families": 1,
+    "pareto_count": 6,
+    "plans": [
+      {
+        "id": "mixE4K-static19-f16-c4096-b2048-u512",
+        "representation": "mixE4K",
+        "kv_type": "f16",
+        "gpu_mib": 875.867,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 149.633,
+        "prefill_tps": 269.585,
+        "ttft_ms": 236.666,
+        "confidence": "calibrated",
+        "kld": null
+      }
+    ]
+  },
+  {
+    "name": "plan-900-diverse",
+    "gpu_mib": 900,
+    "ctx": 4096,
+    "families": 6,
+    "pareto_count": 18,
+    "plans": [
+      {
+        "id": "mixE4K-static19-f16-c4096-b2048-u512",
+        "representation": "mixE4K",
+        "kv_type": "f16",
+        "gpu_mib": 875.867,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 149.633,
+        "prefill_tps": 269.585,
+        "ttft_ms": 236.666,
+        "confidence": "calibrated",
+        "kld": null
+      },
+      {
+        "id": "mixE2K-static9-f16-c4096-b512-u128",
+        "representation": "mixE2K",
+        "kv_type": "f16",
+        "gpu_mib": 895.45,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 348.026,
+        "prefill_tps": 309.006,
+        "ttft_ms": 203.517,
+        "confidence": "extrapolated",
+        "kld": null
+      },
+      {
+        "id": "mixE3K-static13-f16-c4096-b512-u128",
+        "representation": "mixE3K",
+        "kv_type": "f16",
+        "gpu_mib": 886.342,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 242.035,
+        "prefill_tps": 291.93,
+        "ttft_ms": 216.511,
+        "confidence": "extrapolated",
+        "kld": null
+      },
+      {
+        "id": "Q4_K_M-static15-f16-c4096-b512-u128",
+        "representation": "Q4_K_M",
+        "kv_type": "f16",
+        "gpu_mib": 875.084,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 173.963,
+        "prefill_tps": 284.081,
+        "ttft_ms": 223.996,
+        "confidence": "extrapolated",
+        "kld": null
+      },
+      {
+        "id": "Q8_0-static20-f16-c4096-b512-u128",
+        "representation": "Q8_0",
+        "kv_type": "f16",
+        "gpu_mib": 863.933,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 87.601,
+        "prefill_tps": 266.189,
+        "ttft_ms": 244.333,
+        "confidence": "extrapolated",
+        "kld": null
+      }
+    ]
+  },
+  {
+    "name": "plan-1200-32k-baseline",
+    "gpu_mib": 1200,
+    "ctx": 32768,
+    "families": 0,
+    "pareto_count": 0,
+    "plans": []
+  },
+  {
+    "name": "plan-1200-32k-kvfix",
+    "gpu_mib": 1200,
+    "ctx": 32768,
+    "families": 7,
+    "pareto_count": 20,
+    "plans": [
+      {
+        "id": "mixE2K-static7-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix",
+        "representation": "mixE2K",
+        "kv_type": "q4_0",
+        "gpu_mib": 1197.217,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 429.722,
+        "prefill_tps": 2109.305,
+        "ttft_ms": 31.721,
+        "confidence": "extrapolated",
+        "kld": null
+      },
+      {
+        "id": "mixE3K-static11-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix",
+        "representation": "mixE3K",
+        "kv_type": "q4_0",
+        "gpu_mib": 1197.858,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 295.617,
+        "prefill_tps": 1507.438,
+        "ttft_ms": 44.512,
+        "confidence": "extrapolated",
+        "kld": null
+      },
+      {
+        "id": "Q4_K_M-static14-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix",
+        "representation": "Q4_K_M",
+        "kv_type": "q4_0",
+        "gpu_mib": 1174.479,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 201.496,
+        "prefill_tps": 1241.707,
+        "ttft_ms": 54.894,
+        "confidence": "extrapolated",
+        "kld": null
+      },
+      {
+        "id": "mixE4K-static15-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix",
+        "representation": "mixE4K",
+        "kv_type": "q4_0",
+        "gpu_mib": 1173.0,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 196.152,
+        "prefill_tps": 1172.794,
+        "ttft_ms": 57.963,
+        "confidence": "extrapolated",
+        "kld": null
+      },
+      {
+        "id": "mixE2K-lru256-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix",
+        "representation": "mixE2K",
+        "kv_type": "q4_0",
+        "gpu_mib": 1187.4,
+        "gpu_guard_mib": 0.0,
+        "decode_tps": 185.437,
+        "prefill_tps": 6165.957,
+        "ttft_ms": 15.448,
+        "confidence": "extrapolated",
+        "kld": null
+      }
+    ]
+  },
+  {
+    "name": "plan-1200-32k-stacked",
+    "gpu_mib": 1200,
+    "ctx": 32768,
+    "families": 7,
+    "pareto_count": 20,
+    "plans": [
+      {
+        "id": "mixE2K-static7-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "representation": "mixE2K",
+        "kv_type": "q4_0",
+        "gpu_mib": 1197.217,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 438.316,
+        "prefill_tps": 2109.305,
+        "ttft_ms": 31.675,
+        "confidence": "extrapolated",
+        "kld": null
+      },
+      {
+        "id": "mixE3K-static11-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "representation": "mixE3K",
+        "kv_type": "q4_0",
+        "gpu_mib": 1197.858,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 301.529,
+        "prefill_tps": 1507.438,
+        "ttft_ms": 44.446,
+        "confidence": "extrapolated",
+        "kld": null
+      },
+      {
+        "id": "Q4_K_M-static14-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "representation": "Q4_K_M",
+        "kv_type": "q4_0",
+        "gpu_mib": 1174.479,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 205.526,
+        "prefill_tps": 1241.707,
+        "ttft_ms": 54.797,
+        "confidence": "extrapolated",
+        "kld": null
+      },
+      {
+        "id": "mixE4K-static15-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "representation": "mixE4K",
+        "kv_type": "q4_0",
+        "gpu_mib": 1173.0,
+        "gpu_guard_mib": 2.0,
+        "decode_tps": 200.075,
+        "prefill_tps": 1172.794,
+        "ttft_ms": 57.863,
+        "confidence": "extrapolated",
+        "kld": null
+      },
+      {
+        "id": "mixE2K-lru256-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "representation": "mixE2K",
+        "kv_type": "q4_0",
+        "gpu_mib": 1187.4,
+        "gpu_guard_mib": 0.0,
+        "decode_tps": 189.145,
+        "prefill_tps": 6165.957,
+        "ttft_ms": 15.342,
+        "confidence": "extrapolated",
+        "kld": null
+      }
+    ]
+  }
+]

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:campaign:components:1",
+  "title": "Campaign engine component catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "components"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "components": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/component"}}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "strings": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "layers", "kind", "base_commit", "identities", "outputs", "ggml_abi_version", "supported_models", "supported_arch", "prerequisites", "tests", "evidence", "status", "scope", "config"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$"},
+        "layers": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["backend-cuda", "backend-cpu", "ggml-core", "libllama", "libllama-common", "tool", "build", "model-artifact", "runtime-config", "infrastructure", "unmapped"]}},
+        "kind": {"enum": ["source-patch", "binary", "artifact", "runtime-flag"]},
+        "base_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "ggml_abi_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "identities": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["path", "role", "sha256"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "role": {"enum": ["patch", "recipe", "source", "binary", "provenance", "artifact"]},
+              "sha256": {"$ref": "#/$defs/sha"}
+            }
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["path", "abi_version", "sha256", "observed_path"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "abi_version": {"type": ["string", "null"]},
+              "sha256": {"anyOf": [{"$ref": "#/$defs/sha"}, {"type": "null"}]},
+              "observed_path": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "supported_models": {"allOf": [{"$ref": "#/$defs/strings"}], "minItems": 1},
+        "supported_arch": {"allOf": [{"$ref": "#/$defs/strings"}], "minItems": 1},
+        "prerequisites": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["kind", "value"],
+            "properties": {"kind": {"enum": ["component", "source", "runtime", "build", "artifact", "recipe", "quality", "model", "policy", "measurement"]}, "value": {"type": "string", "minLength": 1}}
+          }
+        },
+        "tests": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["name", "result", "evidence"],
+            "properties": {"name": {"type": "string"}, "result": {"type": "string"}, "evidence": {"type": "string"}}
+          }
+        },
+        "evidence": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^D[0-9]{3}$"}},
+        "status": {"enum": ["accepted", "rejected", "provisional", "pending"]},
+        "scope": {"type": "string", "minLength": 1},
+        "config": {
+          "type": "object", "additionalProperties": false, "required": ["argv", "env", "build"],
+          "properties": {
+            "argv": {"type": "array", "items": {"type": "string"}},
+            "env": {"type": "object", "additionalProperties": {"type": "string"}},
+            "build": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      },
+      "allOf": [
+        {"if": {"properties": {"kind": {"const": "source-patch"}}}, "then": {"properties": {"identities": {"contains": {"properties": {"role": {"const": "patch"}}, "required": ["role"]}}}}},
+        {"if": {"properties": {"kind": {"const": "artifact"}}}, "then": {"properties": {"identities": {"contains": {"properties": {"role": {"const": "recipe"}}, "required": ["role"]}}}}},
+        {"if": {"properties": {"kind": {"const": "binary"}}}, "then": {"properties": {"identities": {"contains": {"properties": {"role": {"const": "binary"}}, "required": ["role"]}}}}}
+      ]
+    }
+  }
+}

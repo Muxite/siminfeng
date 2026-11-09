@@ -1,0 +1,13 @@
+{
+  "schema": "factory-components/0",
+  "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+  "components": [
+    {"id": "q8_reuse", "status": "accepted", "kind": "engine-patch", "decisions": ["D026", "D029"], "patch": "cc/q8_reuse/q8-activation-reuse.patch", "env": {"GGML_CUDA_Q8_REUSE": "1"}, "claim": "full-engine code gain (computation-preserving)", "scope": "D029: Granite batch-1 decode on x86-main; not a memory reduction"},
+    {"id": "kv_quant_fix", "status": "pending", "kind": "engine-patch", "decisions": ["D028", "T-KVB2"], "patch": "cc/kv_quant_fix/kv-quant-fix.patch", "scope": "CPU scheduler fix; CUDA qualification pending"},
+    {"id": "pap", "status": "pending", "kind": "model-transform", "decisions": ["T-PAP", "D032"], "recipe": "cc/pap/make_pap.sh", "scope": "Placement-matched BF16 -> Q8_0 with first-K expert Q2_K/Q3_K and remaining expert Q4_K; GPU measurement pending"},
+    {"id": "hybrid_split", "status": "rejected", "reason": "rejected-small-expert-regime", "kind": "engine-patch", "decisions": ["D030", "D031"]},
+    {"id": "moe_static_hot", "status": "rejected", "kind": "engine-patch", "decisions": ["D024"], "reason": "Allocated banks were never engaged"},
+    {"id": "gpu_budget", "status": "accepted", "kind": "infrastructure", "decisions": ["D021", "D023"], "scope": "Cooperative cap only; requires NO_VMM and verified interception; budget predictions do not enable or prove a cap"},
+    {"id": "flash-attn", "status": "accepted", "kind": "runtime-recommendation", "decisions": ["D028"], "argv": ["-fa", "on"], "scope": "Recommended for long context; quantized KV needs CUDA qualification and paired quality"}
+  ]
+}

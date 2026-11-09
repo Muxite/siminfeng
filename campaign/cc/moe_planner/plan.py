@@ -191,10 +191,92 @@ def hybrid_hit_rate(stats, spec):
     return hits/total, f"decode trace split={groups[0]['split']}; hot IDs fixed from prose prefill TRAIN; train/eval disjointness must be verified"
 
 
+def load_components(source=None):
+    """Registry may be absent. Accepted entries default on; pending needs enabled=true."""
+    if source is None:
+        source = ROOT / 'cc/factory/components.json'
+        if not source.is_file():
+            return {}
+    if isinstance(source, (str, Path)) and Path(source) == ROOT/'cc/factory/components.json' and not Path(source).is_file():
+        return {}
+    raw = read_json(source) if isinstance(source, (str, Path)) else source
+    entries = raw.get('components', raw) if isinstance(raw, dict) else raw
+    if isinstance(entries, list):
+        entries = {r if isinstance(r, str) else r.get('id', r.get('name')):
+                   {'enabled': True} if isinstance(r, str) else r for r in entries}
+    if not isinstance(entries, dict):
+        raise ValueError('components must be a mapping or list')
+    out = {}
+    for name, rec in entries.items():
+        if isinstance(rec, bool):
+            rec = {'enabled': rec}
+        if not isinstance(rec, dict):
+            continue  # registry metadata
+        enabled = rec.get('enabled', rec.get('status') == 'accepted')
+        if type(enabled) is not bool:
+            raise ValueError(f'component {name}: enabled must be boolean')
+        if enabled:
+            out[name] = rec
+    return out
+
+
+def crossover_model(stats, cal):
+    rec = cal['planner_v2']['hybrid_crossover']
+    per_byte = rec['cpu_expert_us'] / rec['reference_expert_bytes']
+    fixed = rec['extra_token_us'] / rec['extra_handoff_layers']
+    size = stats['expert_bytes'] / (stats['n_layer'] * stats['n_expert'])
+    threshold = fixed / per_byte
+    return dict(source=rec['source'], expert_bytes=size, cpu_us_per_byte=per_byte,
+                per_layer_fixed_us=fixed, crossover_expert_bytes=threshold,
+                crossover_expert_mib=threshold/MIB,
+                required_margin=rec['required_margin'],
+                predicted_beneficial=size*per_byte > rec['required_margin']*fixed,
+                note='Necessary amortization condition only; routing savings and GPU qualification still required')
+
+
+def prefill_prediction(cal, family, coord, prompt_tokens, ctx, flash):
+    """Fit prefill us/token independently of decode, using measured prompt counts."""
+    source_family = 'lru' if family == 'lru' else 'static'
+    points = [r for r in cal['points'] if r['family'] == source_family]
+    xs = sorted({r['x'] for r in points})
+    ys = [statistics.median(1e6/r['prefill_tps'] if r.get('prefill_tps') else
+                           r['prompt_ms']*1000/r['prompt_tokens']
+                           for r in points if r['x'] == x) for x in xs]
+    a, b = line(xs, ys)
+    us = max(1e-6, a+b*(coord if family != 'hybrid' else 24))
+    source = 'D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis'
+    d028 = cal['planner_v2']['flash_attention']
+    if ctx >= 8192:
+        # Transfer the independently measured CPU-placement penalty to D028's
+        # long-prompt GPU endpoint. Context/prompt/placement transfer is unvalidated.
+        baseline = 1e6/d028['prefill_tps_on' if flash else 'prefill_tps_off']
+        us = baseline + max(0, us-a)
+        source = 'D028 1560-token prefill endpoint + D022 placement us/token penalty; extrapolated'
+    return dict(prefill_tps=1e6/us, prefill_ms=prompt_tokens*us/1000, source=source)
+
+
+def pareto_front(candidates):
+    """Minimize GPU and risk, maximize decode; unknown risk is +infinity."""
+    def values(p):
+        return p['gpu_mib'], -p['decode_tps'], p['quality_risk'] if p['quality_risk'] is not None else math.inf
+    frontier = []
+    for p in sorted(candidates, key=lambda p: (*values(p), p['id'])):
+        v = values(p)
+        if any(all(a <= b for a, b in zip(values(q), v)) and
+               any(a < b for a, b in zip(values(q), v)) for q in frontier):
+            continue
+        frontier = [q for q in frontier if not (
+            all(a <= b for a, b in zip(v, values(q))) and any(a < b for a, b in zip(v, values(q))))]
+        frontier.append(p)
+    return frontier
+
+
 def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
-         all_representations=True, cal=None, prompt_tokens=62):
+         all_representations=True, cal=None, prompt_tokens=62, components=None):
     cal = cal or read_json(HERE / 'calibration.json')
     s = adapt_stats(raw)
+    enabled = load_components(components)
+    crossover = crossover_model(s, cal)
     ctx = budget['ctx']
     finite(ctx, 'ctx', positive=True)
     if int(ctx) != ctx or ctx > s['context_length']:
@@ -247,7 +329,19 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                 # Batch/ubatch alternatives are proposed tests, never calibrated improvements.
                 for batch, ubatch in ((2048, 512), (512, 128), (512, 512)):
                     reasons, notes = [], []
+                    flash = ctx >= 8192 or kv != 'f16'
+                    component_ids = sorted(k for k in enabled if k in ('q8_reuse', 'kv_quant_fix'))
                     ident = f'{rep}-{family}{coord}-{kv}-c{ctx}-b{batch}-u{ubatch}'
+                    if flash:
+                        ident += '-fa'
+                    if component_ids:
+                        ident += '-cmp-' + '-'.join(component_ids)
+                    if kv != 'f16' and 'kv_quant_fix' not in enabled:
+                        rejected.append(dict(id=ident, reasons=['D028: quantized KV aborted; requires enabled component kv_quant_fix']))
+                        continue
+                    if family == 'hybrid' and not crossover_model(v, cal)['predicted_beneficial']:
+                        rejected.append(dict(id=ident, reasons=['D030/D031: hybrid rejected in small-expert regime; below crossover margin']))
+                        continue
                     if not same_host:
                         reasons.append('host differs from discrete x86-main calibration')
                     if not matched:
@@ -298,18 +392,32 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                         gpu = predict_fit(fits['static'], 24)['gpu_mib'] + resident
                         spec = next(z for z in cal['hybrid_specs'] if sum(z['hot_counts']) == coord)
                         hit, trace_note = hybrid_hit_rate(v, spec)
-                        decode_us = predict_fit(fits['static'], 0)['decode_us'] + 30.6*v['n_layer']*v['n_expert_used']*(1-hit) + 15.2*v['n_layer']
+                        hybrid_cost = crossover_model(v, cal)
+                        decode_us = predict_fit(fits['static'], 0)['decode_us'] + hybrid_cost['cpu_us_per_byte']*slot*MIB*v['n_layer']*v['n_expert_used']*(1-hit) + hybrid_cost['per_layer_fixed_us']*v['n_layer']
                         flags = ['-ot', r'\.cold$=CPU', '--no-op-offload', '--no-repack']
-                        notes += [trace_note, 'D019 serial harness estimate omits split launch/transfer overhead; likely optimistic.',
+                        notes += [trace_note, 'D030/D031 effective per-layer dispatch/handoff cost included; larger-expert transfer remains unmeasured.',
                                   'D027 amendment: focused CUDA correctness test failed; exploratory until repaired and requalified.']
                     gpu += kv_mib-192 + compute_mib-108
+                    attention_delta = 0.0
+                    d028 = cal['planner_v2']['flash_attention']
+                    if ctx >= 8192:
+                        scale = (ctx-4096)/(d028['ctx']-4096)
+                        off_delta = d028['gpu_mib_off'] - (predict_fit(fits['static'], 0)['gpu_mib'] + (d028['ctx']-4096)*v['kv_bytes_per_token']['f16']/MIB)
+                        attention_delta = (off_delta - (d028['gpu_mib_off']-d028['gpu_mib_on']))*scale
+                        gpu += attention_delta
+                        decode_us /= d028['decode_tps_on']/d028['decode_tps_off']
+                        notes.append('D028: -fa on default at ctx >=8192; f16 memory/decode transfer is extrapolated; FA quality equivalence unmeasured')
+                    if 'q8_reuse' in enabled:
+                        decode_us /= cal['planner_v2']['q8_reuse']['decode_factor']
+                        notes.append('D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured')
                     # Conservative file-backed working set including load; not warm cgroup RSS.
                     host_mib = exp+non+400+(v['n_layer']*exp/(v['n_expert']*v['n_layer']) if family == 'hybrid' else 0)
                     guard = report['lru' if family == 'lru' else 'static']['max_loo_gpu_mib']
-                    prompt_ms = base['prompt_ms'] * prompt_tokens/62
+                    prefill = prefill_prediction(cal, family, coord, prompt_tokens, ctx, flash)
+                    prompt_ms = prefill['prefill_ms']
                     ttft_ms = prompt_ms + decode_us/1000
                     # Calibrated KLD belongs to the original all-GPU representation only.
-                    exact_quality = family == 'static' and coord == 0 and kv == 'f16' and matched
+                    exact_quality = family == 'static' and coord == 0 and kv == 'f16' and matched and ctx == 4096 and not flash
                     kld = quality_kld if exact_quality else None
                     notes.append('Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS')
                     if kld is None:
@@ -326,7 +434,7 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                     flags = ['-m', model_path, '-ngl', '99', '--fit', 'off', '-c', str(ctx),
                              '-b', str(batch), '-ub', str(ubatch), '-ctk', kv, '-ctv', kv,
                              '-t', '8', '-tb', '8'] + flags
-                    if kv != 'f16':
+                    if flash:
                         flags += ['-fa', 'on']
                     confidence = 'extrapolated' if reasons else 'calibrated'
                     p = dict(id=ident, representation=rep, placement=family, gpu_mib=round(gpu,3),
@@ -335,8 +443,15 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                              ttft_definition='warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling',
                              quality_class='bf16-reference' if kld == 0 else 'measured-representation-drift' if kld is not None else 'combined-quality-unmeasured',
                              kld=kld, representation_kld=quality_kld,
+                             quality_risk=kld, quality_risk_unknown=kld is None,
+                             kv_type=kv, kv_mib=round(kv_mib,3), flash_attention=flash,
+                             attention_delta_mib=round(attention_delta,3), components=component_ids,
+                             runtime_env={'GGML_CUDA_Q8_REUSE':'1'} if 'q8_reuse' in enabled else {},
+                             technique_family='|'.join([rep, family, kv, 'fa-on' if flash else 'fa-off', ','.join(component_ids) or 'base']),
+                             prefill_tps=round(prefill['prefill_tps'],3), prefill_ms=round(prompt_ms,3),
+                             prefill_source=prefill['source'],
                              techniques=[rep, family, f'kv:{kv}', f'ctx:{ctx}', f'batch:{batch}', f'ubatch:{ubatch}'],
-                             confidence=confidence, metric_confidence=dict(gpu_mib=confidence, decode_tps=confidence, host_mib='extrapolated', ttft_ms='proxy'),
+                             confidence=confidence, metric_confidence=dict(gpu_mib=confidence, decode_tps=confidence, host_mib='extrapolated', prefill_tps='proxy', ttft_ms='proxy'),
                              flags=flags, model_path=model_path, notes=notes,
                              required_engine='hybrid_split patch + pinned base; CUDA qualification required' if family == 'hybrid' else 'llama.cpp 31288c9c6',
                              prerequisites=['Check mechanism engagement (D024)', 'Measure shim peak AND baseline-subtracted device peak (D023)', 'Paired quality check before accepting drift; 3 alternated timing rounds'])
@@ -344,6 +459,11 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                         p['hot_counts_per_layer'] = spec['hot_counts']
                         p['routing_hit_estimate'] = hit
                         p['prerequisites'].insert(0, 'Resolve D027 CUDA correctness failure; pass test-hybrid-split and GET_ROWS i32 on CUDA')
+                    if 'q8_reuse' in enabled:
+                        p['metric_confidence']['decode_tps'] = 'extrapolated-component-transfer'
+                        p['required_engine'] += ' + q8_reuse patch (D029)'
+                    if 'kv_quant_fix' in enabled:
+                        p['required_engine'] += ' + kv_quant_fix patch (D028; qualification pending)'
                     candidates.append(p)
     def rank(p):
         if objective == 'ttft':
@@ -355,8 +475,20 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
         # Measured regime precedes unvalidated hypotheses regardless of predicted speed.
         return (p['confidence'] != 'calibrated', -score, p['gpu_mib'], p['id'])
     candidates.sort(key=rank)
+    best = {}
+    for p in candidates:
+        best.setdefault(p['technique_family'], p)
+    family_best = list(best.values())
+    pareto = sorted(pareto_front(candidates), key=rank)
+    if len(family_best) < top:
+        warnings.append(f'Only {len(family_best)} feasible technique families; top is a maximum, not a quota. Use --allow-extrapolation to consider unmeasured alternatives.')
     return dict(schema='moe-plan/0', prediction_only=True, prompt_tokens=prompt_tokens, budget=dict(gpu_mib=gb, host_mib=hb, ctx=ctx, max_quality_loss=max_kld, objective=objective),
-                plans=candidates[:top], feasible_count=len(candidates), rejected=rejected, calibration_residuals=report,
+                plans=family_best[:top], family_best=family_best, family_count=len(family_best),
+                pareto_set=pareto, pareto_axes=['gpu_mib:min', 'decode_tps:max', 'quality_risk:min'],
+                quality_risk_policy='measured combined KLD; null is unknown and treated as +infinity for dominance, never zero',
+                hybrid_crossover=crossover, enabled_components=sorted(enabled),
+                technique_catalog=cal['planner_v2']['techniques'],
+                feasible_count=len(candidates), rejected=rejected, calibration_residuals=report,
                 warnings=warnings+['No hard VRAM guarantee; predictions require measurement.',
                                    'Calibrated confidence describes GPU/decode regime; host is analytical and TTFT is a warm proxy.',
                                    'No finite KLD bound is inferred from identical weights or greedy output.',
@@ -377,7 +509,7 @@ def emit_lab_tests(result):
         for phase, n in (('engagement', min(8, remaining)), ('timing', min(160, remaining))):
             tests[f'{tag}_{phase}'] = dict(tool='llama-completion', parser='completion',
                 model_file=Path(p['model_path']).name,
-                docker_args=['-v', str(ROOT / 'artifacts/traces/in')+':/tin:ro'],
+                docker_args=[item for k,v in p.get('runtime_env', {}).items() for item in ('-e', f'{k}={v}')]+['-v', str(ROOT / 'artifacts/traces/in')+':/tin:ro'],
                 args=common+['-f', '/tin/chat.txt', '-n', str(n), '--temp', '0', '-s', '1', '-no-cnv', '--no-warmup'])
         if p['representation_kld'] is not None and (ROOT/'artifacts/kl/bf16.kl').is_file():
             # Existing reference logits are 20x512. Do not claim this tests ctx=4096.
@@ -385,7 +517,7 @@ def emit_lab_tests(result):
             quality_flags[quality_flags.index('-c')+1] = '512'
             tests[f'{tag}_quality512'] = dict(tool='llama-perplexity', parser='kl', needs_data=True,
                 model_file=Path(p['model_path']).name,
-                docker_args=['-v', str(ROOT/'artifacts/kl')+':/planner-kl:ro'],
+                docker_args=[item for k,v in p.get('runtime_env', {}).items() for item in ('-e', f'{k}={v}')]+['-v', str(ROOT/'artifacts/kl')+':/planner-kl:ro'],
                 args=quality_flags+['--chunks', '20', '--kl-divergence', '--kl-divergence-base', '/planner-kl/bf16.kl'])
     return tests
 
@@ -403,6 +535,7 @@ def main(argv=None):
     a.add_argument('--allow-extrapolation', action='store_true')
     a.add_argument('--only-input-representation', action='store_true')
     a.add_argument('--resource-sample')
+    a.add_argument('--components', nargs='?', const=str(ROOT/'cc/factory/components.json'), help='Component registry JSON (default: cc/factory/components.json if present); pending entries require enabled=true')
     a.add_argument('--prompt-tokens', type=int, default=62)
     a.add_argument('--emit-lab-tests')
     args = a.parse_args(argv)
@@ -413,12 +546,13 @@ def main(argv=None):
         result = plan(read_json(args.stats), read_json(args.host), budget,
                       allow_extrapolation=args.allow_extrapolation, top=args.top,
                       sample=read_json(args.resource_sample) if args.resource_sample else None,
-                      all_representations=not args.only_input_representation, prompt_tokens=args.prompt_tokens)
+                      all_representations=not args.only_input_representation, prompt_tokens=args.prompt_tokens,
+                      components=args.components)
         if args.emit_lab_tests:
             dest = Path(args.emit_lab_tests).resolve()
             # Assignment scope also constrains paths requested through this CLI.
-            if not any(dest.is_relative_to(base) for base in (HERE, ROOT/'artifacts/codexPL')):
-                raise ValueError('--emit-lab-tests must stay under cc/moe_planner or artifacts/codexPL')
+            if not any(dest.is_relative_to(base) for base in (HERE, ROOT/'artifacts/codexPL2')):
+                raise ValueError('--emit-lab-tests must stay under cc/moe_planner or artifacts/codexPL2')
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(json.dumps(emit_lab_tests(result), indent=2)+'\n')
         print(json.dumps(result, indent=2, allow_nan=False))

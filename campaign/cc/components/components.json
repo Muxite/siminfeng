@@ -1,0 +1,552 @@
+{
+  "schema_version": 1,
+  "components": [
+    {
+      "id": "q8_reuse",
+      "layers": [
+        "backend-cuda"
+      ],
+      "kind": "source-patch",
+      "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+      "identities": [
+        {
+          "path": "cc/q8_reuse/q8-activation-reuse.patch",
+          "role": "patch",
+          "sha256": "9943dee44b930f4febd23dce91fcb9c50ff67625ede5fb3fcc8126ea734a0675"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "libggml-cuda.so.0.27.0",
+          "abi_version": "0.27.0",
+          "sha256": "f4011d9adf0926764924c2e73ed631c5182700e5be12ac603cee07cb81fd5735",
+          "observed_path": "artifacts/x7-comp/reuse/libggml-cuda.so.0.27.0"
+        }
+      ],
+      "ggml_abi_version": "0.27.0",
+      "supported_models": [
+        "Granite-3.1-1B-A400M-Instruct"
+      ],
+      "supported_arch": [
+        "linux-x86_64",
+        "CUDA-sm_120 / RTX 5070 Ti"
+      ],
+      "prerequisites": [
+        {
+          "kind": "runtime",
+          "value": "GGML_CUDA_Q8_REUSE=1 (unset also enables); eligible Q8_0 batch-1 MMVQ path"
+        },
+        {
+          "kind": "build",
+          "value": "same pinned engine/compiler/CUDA settings for swaps"
+        }
+      ],
+      "tests": [
+        {
+          "name": "CUDA MUL_MAT",
+          "result": "2445/2445 passed",
+          "evidence": "D029"
+        },
+        {
+          "name": "paired quality",
+          "result": "greedy text and PPL identical OFF/ON",
+          "evidence": "D029"
+        },
+        {
+          "name": "decode ABBA",
+          "result": "+2.06% Q8_0 llama-bench",
+          "evidence": "D029"
+        },
+        {
+          "name": "backend swap",
+          "result": "same greedy text; +2.0% decode",
+          "evidence": "D036"
+        },
+        {
+          "name": "ELF surface",
+          "result": "two weak C++ exports removed/two added; strict compatibility fails",
+          "evidence": "artifacts/codexCOMP/abi-diff.json"
+        }
+      ],
+      "evidence": [
+        "D026",
+        "D029",
+        "D036"
+      ],
+      "status": "accepted",
+      "scope": "Qualified Granite batch-1 decode on RTX 5070 Ti. No memory-reduction claim. Recorded swap works but exported ELF surface is not identical; arbitrary consumers are unqualified.",
+      "config": {
+        "argv": [],
+        "env": {
+          "GGML_CUDA_Q8_REUSE": "1"
+        },
+        "build": []
+      }
+    },
+    {
+      "id": "kv_quant_fix",
+      "layers": [
+        "ggml-core"
+      ],
+      "kind": "source-patch",
+      "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+      "identities": [
+        {
+          "path": "cc/kv_quant_fix/kv-quant-fix.patch",
+          "role": "patch",
+          "sha256": "dd0e4ffd3ffa1e414353f70addf67312816d167ebb1e9518cc75b543b86e8e6c"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "libggml-base.so.0.27.0",
+          "abi_version": "0.27.0",
+          "sha256": null,
+          "observed_path": null
+        }
+      ],
+      "ggml_abi_version": "0.27.0",
+      "supported_models": [
+        "Granite-3.1-1B-A400M-Instruct"
+      ],
+      "supported_arch": [
+        "linux-x86_64",
+        "CUDA-sm_120 / RTX 5070 Ti"
+      ],
+      "prerequisites": [
+        {
+          "kind": "source",
+          "value": "apply to pinned scheduler; rebuild ggml-base"
+        }
+      ],
+      "tests": [
+        {
+          "name": "scheduler node+leaf capacity",
+          "result": "CPU regression recorded",
+          "evidence": "artifacts/codexKVB/ROOTCAUSE.md"
+        },
+        {
+          "name": "quantized KV CUDA load and quality",
+          "result": "D033 job 15/15 clean; q8_0 PPL +0.01%",
+          "evidence": "D033"
+        },
+        {
+          "name": "release composability",
+          "result": "all 2 permutations, identical tree",
+          "evidence": "artifacts/codexCOMP/release-stack.json"
+        }
+      ],
+      "evidence": [
+        "D033"
+      ],
+      "status": "accepted",
+      "scope": "Generic scheduler capacity fix; GPU qualification recorded for Granite. Correctness enabler, not a speed gain.",
+      "config": {
+        "argv": [],
+        "env": {},
+        "build": []
+      }
+    },
+    {
+      "id": "imatrix-quantization",
+      "layers": [
+        "model-artifact"
+      ],
+      "kind": "artifact",
+      "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+      "identities": [
+        {
+          "path": "cc/pap/make_pap.sh",
+          "role": "recipe",
+          "sha256": "f7c4383be1800ded88d8f9b0df7620ca9f0991491905affc88a2fa359bd9e792"
+        },
+        {
+          "path": "artifacts/codexPAP/MANIFEST.json",
+          "role": "provenance",
+          "sha256": "a3f9f72da91d2a31279a2735d78fe9795a0132f86e93ba7cc725f5f4dd89d8bd"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "artifacts/codexPAP/models/granite-wtrain.imatrix",
+          "abi_version": null,
+          "sha256": "106f834b2452b33a0a4eed7d69270a60c5b2330879f2c292a5331bc8450f77a9",
+          "observed_path": "artifacts/codexPAP/models/granite-wtrain.imatrix"
+        },
+        {
+          "path": "artifacts/codexPAP/models/mix4_imat.gguf",
+          "abi_version": null,
+          "sha256": "bd20848b1ea30bb73e8e6e1db7131bce641b4713dce0affcb8faff48622027ac",
+          "observed_path": "artifacts/codexPAP/models/mix4_imat.gguf"
+        }
+      ],
+      "ggml_abi_version": "0.27.0",
+      "supported_models": [
+        "Granite-3.1-1B-A400M-Instruct"
+      ],
+      "supported_arch": [
+        "linux-x86_64",
+        "CUDA-sm_120 / RTX 5070 Ti"
+      ],
+      "prerequisites": [
+        {
+          "kind": "artifact",
+          "value": "BF16 GGUF + WikiText TRAIN SHA256s in T-PAP MANIFEST; TEST held out"
+        },
+        {
+          "kind": "recipe",
+          "value": "make_pap.sh calibrate: context 512, 100 chunks; quantize mix4_imat with --imatrix, experts Q4_K/base Q8_0"
+        },
+        {
+          "kind": "quality",
+          "value": "qualify each new model/corpus; PAP lower-bit variants have separate status"
+        }
+      ],
+      "tests": [
+        {
+          "name": "GGUF types and identities",
+          "result": "verified by T-PAP",
+          "evidence": "artifacts/codexPAP/MANIFEST.json"
+        },
+        {
+          "name": "held-out KLD",
+          "result": "4-bit 0.040->0.027 (-33%); 3-bit -13%",
+          "evidence": "D035"
+        }
+      ],
+      "evidence": [
+        "D032",
+        "D035"
+      ],
+      "status": "accepted",
+      "scope": "Artifact recipe, no inference engine modification. Imatrix accepted default within measured scope; PAP12-Q3 speed is provisional and is not promoted here. Generalization beyond WikiText untested.",
+      "config": {
+        "argv": [],
+        "env": {},
+        "build": []
+      }
+    },
+    {
+      "id": "flash-attn",
+      "layers": [
+        "runtime-config"
+      ],
+      "kind": "runtime-flag",
+      "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+      "identities": [],
+      "outputs": [],
+      "ggml_abi_version": "0.27.0",
+      "supported_models": [
+        "Granite-3.1-1B-A400M-Instruct"
+      ],
+      "supported_arch": [
+        "linux-x86_64",
+        "CUDA-sm_120 / RTX 5070 Ti"
+      ],
+      "prerequisites": [
+        {
+          "kind": "runtime",
+          "value": "CUDA FA support for model/head dimensions/KV types"
+        }
+      ],
+      "tests": [
+        {
+          "name": "long-context f16 comparison",
+          "result": "-984 MiB; decode +10%; prefill +19%; text differs",
+          "evidence": "D028"
+        },
+        {
+          "name": "quality limitation",
+          "result": "FA vs non-FA paired PPL not measured",
+          "evidence": "D028"
+        }
+      ],
+      "evidence": [
+        "D028"
+      ],
+      "status": "accepted",
+      "scope": "Recommended for long context; reduction order changes output. Quality equivalence to non-FA not established.",
+      "config": {
+        "argv": [
+          "-fa",
+          "on"
+        ],
+        "env": {},
+        "build": []
+      }
+    },
+    {
+      "id": "kv-q8",
+      "layers": [
+        "runtime-config"
+      ],
+      "kind": "runtime-flag",
+      "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+      "identities": [],
+      "outputs": [],
+      "ggml_abi_version": "0.27.0",
+      "supported_models": [
+        "Granite-3.1-1B-A400M-Instruct"
+      ],
+      "supported_arch": [
+        "linux-x86_64",
+        "CUDA-sm_120 / RTX 5070 Ti"
+      ],
+      "prerequisites": [
+        {
+          "kind": "component",
+          "value": "kv_quant_fix"
+        },
+        {
+          "kind": "component",
+          "value": "flash-attn"
+        },
+        {
+          "kind": "runtime",
+          "value": "set both K and V cache types to q8_0; declare context"
+        }
+      ],
+      "tests": [
+        {
+          "name": "32k memory and speed",
+          "result": "-720 MiB (2762->2042); decode -10.5%",
+          "evidence": "D033"
+        },
+        {
+          "name": "WikiText PPL 4k",
+          "result": "7.5385->7.5392 (+0.01%); passed +1% gate",
+          "evidence": "D033"
+        }
+      ],
+      "evidence": [
+        "D028",
+        "D033"
+      ],
+      "status": "accepted",
+      "scope": "Representation trade-off measured on Granite mixE4K; q4_0 KV fails the same accuracy gate.",
+      "config": {
+        "argv": [
+          "-fa",
+          "on",
+          "-ctk",
+          "q8_0",
+          "-ctv",
+          "q8_0"
+        ],
+        "env": {},
+        "build": []
+      }
+    },
+    {
+      "id": "hybrid_split",
+      "layers": [
+        "build",
+        "backend-cpu",
+        "libllama",
+        "unmapped"
+      ],
+      "kind": "source-patch",
+      "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+      "identities": [
+        {
+          "path": "cc/hybrid_split/hybrid-split.patch",
+          "role": "patch",
+          "sha256": "1063ac102a14bff798d56b5bf292d21455f3f4c847f0e2043d98d58126bd1efb"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "libggml-cpu.so.0.27.0",
+          "abi_version": "0.27.0",
+          "sha256": null,
+          "observed_path": null
+        },
+        {
+          "path": "libllama.so.0.7.0",
+          "abi_version": "0.7.0",
+          "sha256": null,
+          "observed_path": null
+        }
+      ],
+      "ggml_abi_version": "0.27.0",
+      "supported_models": [
+        "Granite-3.1-1B-A400M-Instruct"
+      ],
+      "supported_arch": [
+        "linux-x86_64",
+        "CUDA-sm_120 / RTX 5070 Ti"
+      ],
+      "prerequisites": [
+        {
+          "kind": "model",
+          "value": "Granite expert split configuration; see D027; never auto-select rejected candidates"
+        }
+      ],
+      "tests": [
+        {
+          "name": "matched memory integrated decode",
+          "result": "-16%/-19%/-32% vs static offload",
+          "evidence": "D030"
+        },
+        {
+          "name": "quality",
+          "result": "gate not reached; CUDA unit mismatch open",
+          "evidence": "D030"
+        },
+        {
+          "name": "three-patch composability",
+          "result": "6 orders clean and identical; no runtime implication",
+          "evidence": "artifacts/codexCOMP/multi-layer-stack.json"
+        }
+      ],
+      "evidence": [
+        "D027",
+        "D030",
+        "D031"
+      ],
+      "status": "rejected",
+      "scope": "Rejected performance candidate retained as multi-layer test case. Unmapped files are docs and test source.",
+      "config": {
+        "argv": [],
+        "env": {},
+        "build": []
+      }
+    },
+    {
+      "id": "static_hot",
+      "layers": [
+        "libllama"
+      ],
+      "kind": "source-patch",
+      "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+      "identities": [
+        {
+          "path": "cc/moe_static_hot/static-hot.patch",
+          "role": "patch",
+          "sha256": "0d91a155e727633270cf483f5f03e35d2d58c68b5e7088bea8ea7d5caa1f9880"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "libllama.so.0.7.0",
+          "abi_version": "0.7.0",
+          "sha256": null,
+          "observed_path": null
+        }
+      ],
+      "ggml_abi_version": "0.27.0",
+      "supported_models": [
+        "Granite-3.1-1B-A400M-Instruct"
+      ],
+      "supported_arch": [
+        "linux-x86_64",
+        "CUDA-sm_120 / RTX 5070 Ti"
+      ],
+      "prerequisites": [
+        {
+          "kind": "runtime",
+          "value": "LLAMA_MOE_CACHE_STATIC hot-set path; positive --moe-cache-mib; host expert weights"
+        },
+        {
+          "kind": "policy",
+          "value": "never auto-select rejected candidates"
+        }
+      ],
+      "tests": [
+        {
+          "name": "engagement fingerprint",
+          "result": "failed: banks allocated but unused; CPU fingerprint",
+          "evidence": "D024"
+        }
+      ],
+      "evidence": [
+        "D024"
+      ],
+      "status": "rejected",
+      "scope": "Mechanism never engages; static mode returns no slot map. Not an acceleration component.",
+      "config": {
+        "argv": [],
+        "env": {},
+        "build": []
+      }
+    },
+    {
+      "id": "gpu_budget",
+      "layers": [
+        "infrastructure"
+      ],
+      "kind": "binary",
+      "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+      "identities": [
+        {
+          "path": "cc/gpu_budget/gpubudget.c",
+          "role": "source",
+          "sha256": "d08aa59ff2388ce51f044b1ff98a8474b9bb28a40c05ff29d962d1d38ee9a062"
+        },
+        {
+          "path": "cc/gpu_budget/build.sh",
+          "role": "recipe",
+          "sha256": "d5d79e1e59f59adc6875ffc821fbe327e22b0d76d79930b9379cd2992e002b45"
+        },
+        {
+          "path": "artifacts/x3-shim/cuda/libgpubudget.so",
+          "role": "binary",
+          "sha256": "0cdd53200e915df68cca5f0c340abd833ff9d854cb1a97f437e4d57799853cf2"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "libgpubudget.so",
+          "abi_version": null,
+          "sha256": "0cdd53200e915df68cca5f0c340abd833ff9d854cb1a97f437e4d57799853cf2",
+          "observed_path": "artifacts/x3-shim/cuda/libgpubudget.so"
+        }
+      ],
+      "ggml_abi_version": "0.27.0",
+      "supported_models": [
+        "Granite-3.1-1B-A400M-Instruct"
+      ],
+      "supported_arch": [
+        "linux-x86_64",
+        "CUDA-sm_120 / RTX 5070 Ti"
+      ],
+      "prerequisites": [
+        {
+          "kind": "build",
+          "value": "GGML_CUDA_NO_VMM=ON is compile-time; dynamic libcudart with verified imports"
+        },
+        {
+          "kind": "runtime",
+          "value": "LD_PRELOAD=libgpubudget.so; GPU_BUDGET_MIB and per-process log"
+        },
+        {
+          "kind": "measurement",
+          "value": "verify interception and measure uncounted context/driver overhead"
+        }
+      ],
+      "tests": [
+        {
+          "name": "real CUDA shim APIs",
+          "result": "39/39 passed",
+          "evidence": "D021"
+        },
+        {
+          "name": "engine probe",
+          "result": "3 cudaMalloc intercepted; VMM temporaries uncovered",
+          "evidence": "D021"
+        }
+      ],
+      "evidence": [
+        "D021",
+        "D023"
+      ],
+      "status": "accepted",
+      "scope": "Infrastructure only: cooperative per-process intercepted-allocation budget, bypassable; not a hard physical VRAM cap. Shim ABI unversioned; ggml ABI field describes the engine context.",
+      "config": {
+        "argv": [],
+        "env": {},
+        "build": []
+      }
+    }
+  ]
+}

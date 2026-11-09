@@ -1,0 +1,23 @@
+Completed within the allowed write locations. [Documentation and manifests](/home/muk/projects/siminfeng/campaign/cc/components/COMPONENTS.md) are ready; **31 tests pass**.
+
+| Patch | Layers |
+|---|---|
+| q8_reuse | backend-cuda |
+| kv_quant_fix | ggml-core |
+| hybrid_split | backend-cpu, libllama, build; unmapped docs/tests |
+| static_hot | libllama |
+
+Both stacks are order-independent:
+
+- Release: **2/2** orders clean; tree `954f7c74045ee731531b20ae68fd0a7701b48c4c`.
+- Including hybrid_split: **6/6** clean; tree `c15a1e300f4ce6d2ef62676ec4efbf686de03998`.
+
+ABI comparison: only CUDA differs among 13 libraries. Contrary to expectation, it removes two and adds two weak C++ exports; `readelf` confirms this. `ggml_*` exports remain unchanged, but strict ABI compatibility fails.
+
+Release-patch SHA256:
+
+```text
+2e340d159bc51d9918bfdf41327f989478daa52cd2dab3e876a8fe722d663031
+```
+
+Combined-patch replay reproduces the release tree. Gaps: no combined-release build/GPU qualification, no cross-version/layout ABI proof, and no observed KV-fix binary hash. Factory discrepancies are documented without editing `cc/factory`.

@@ -1,4 +1,4 @@
-"""CPU-only checks. All test scratch files belong under artifacts/codexPL."""
+"""CPU-only checks. All test scratch files belong under artifacts/codexPL2."""
 import ast
 import copy
 import importlib.util
@@ -31,6 +31,7 @@ def host():
 
 def run(stats, host, **kw):
     budget = kw.pop('budget', dict(gpu_mib=900, ctx=4096))
+    kw.setdefault('components', {})  # deterministic even as the factory registry lands
     return planner.plan(stats, host, budget, **kw)
 
 
@@ -113,7 +114,8 @@ def test_no_silent_extrapolation(stats, host, change):
 
 
 def test_quant_kv_flash_attention_and_batch_candidates(stats, host):
-    r = run(stats, host, budget=dict(gpu_mib=16000,ctx=4096), allow_extrapolation=True, top=10000)
+    r = run(stats, host, budget=dict(gpu_mib=16000,ctx=4096), allow_extrapolation=True, top=10000,
+            components={'kv_quant_fix': {'enabled':True, 'status':'pending'}})
     quant = [p for p in r['plans'] if 'kv:q8_0' in p['techniques'] or 'kv:q4_0' in p['techniques']]
     assert quant
     assert all(p['flags'][p['flags'].index('-fa')+1] == 'on' for p in quant)
@@ -131,17 +133,28 @@ def test_lru_policy_uses_resident_coverage_not_guessed_hit_rate(stats, host):
 
 def test_hybrid_has_real_per_layer_hot_counts_and_null_bank_cost(stats, host, cal):
     r = run(stats, host, budget=dict(gpu_mib=16000,ctx=4096), allow_extrapolation=True, top=10000)
-    hybrid = [p for p in r['plans'] if p['placement'] == 'hybrid' and '-f16-' in p['id'] and '-b2048-u512' in p['id']]
-    assert len(hybrid) == 3
-    for p in hybrid:
+    assert not any(p['placement'] == 'hybrid' for p in r['plans'])
+    assert any('D030/D031' in ' '.join(p['reasons']) for p in r['rejected'])
+    # Isolate accounting under a hypothetical qualified crossover calibration.
+    # Keep each real transform separately because plans now contains family winners.
+    for spec in cal['hybrid_specs']:
+        hypothetical = copy.deepcopy(cal)
+        hypothetical['planner_v2']['hybrid_crossover']['required_margin'] = 0
+        hypothetical['hybrid_specs'] = [spec]
+        r = run(stats, host, budget=dict(gpu_mib=16000,ctx=4096), allow_extrapolation=True,
+                top=10000, cal=hypothetical)
+        hybrid = [p for p in r['plans'] if p['placement'] == 'hybrid']
+        assert len(hybrid) == 1
+        p = hybrid[0]
         assert len(p['hot_counts_per_layer']) == 24
         assert '--no-op-offload' in p['flags'] and '--no-repack' in p['flags']
         assert p['confidence'] == 'extrapolated' and p['kld'] is None
         assert any('CUDA correctness failure' in s for s in p['prerequisites'])
-    smallest = min(hybrid, key=lambda p:p['gpu_mib'])
-    # 168 real + 24 null expert slots = 162 MiB; not 141.75 MiB.
-    floor = planner.predict_fit(planner.fit(planner.grouped(cal,'static'),'static'),24)['gpu_mib']
-    assert smallest['gpu_mib']-floor == pytest.approx(162, abs=.001)
+        floor = planner.predict_fit(planner.fit(planner.grouped(cal,'static'),'static'),24)['gpu_mib']
+        # At extrapolated ties the winner may use a smaller ubatch.
+        ub = int(p['flags'][p['flags'].index('-ub')+1])
+        payload = (sum(spec['hot_counts'])+24)*.84375
+        assert p['gpu_mib']-floor-(108*ub/512-108) == pytest.approx(payload, abs=.001)
 
 
 def test_fixed_hot_ids_applied_to_decode_not_reranked(stats, cal):
@@ -228,7 +241,7 @@ def test_emission_matches_real_lab_loader_and_schema(stats,host,tmp_path):
 
 
 def test_cli_output_and_write_boundary(stats,host,capsys):
-    dest=ROOT/'artifacts/codexPL/cli-test-definitions.json'
+    dest=ROOT/'artifacts/codexPL2/cli-test-definitions.json'
     argv=['--stats',str(ROOT/'artifacts/codexPL/granite-fixture.json'),'--host',str(ROOT/'cc/engine_handoff/hosts/x86-main.json'),
           '--budget-gpu-mib','900','--ctx','4096','--emit-lab-tests',str(dest)]
     assert planner.main(argv)==0
@@ -237,3 +250,143 @@ def test_cli_output_and_write_boundary(stats,host,capsys):
     argv[-1]=str(ROOT/'lab/tests/forbidden-planner.json')
     with pytest.raises(SystemExit) as e: planner.main(argv)
     assert e.value.code==2 and not (ROOT/'lab/tests/forbidden-planner.json').exists()
+
+
+def test_diversity_best_per_family_and_top_is_maximum(stats, host):
+    r = run(stats, host, allow_extrapolation=True, top=5)
+    assert len(r['plans']) == 5
+    assert len({p['technique_family'] for p in r['plans']}) == 5
+    assert len({p['representation'] for p in r['plans']}) >= 4
+    assert r['plans'] == r['family_best'][:5]
+    # A calibrated-only singleton family must not be padded with n20..n23.
+    calibrated = run(stats, host, all_representations=False)
+    assert len(calibrated['plans']) == 1
+    assert calibrated['plans'][0]['id'].startswith('mixE4K-static19-')
+    assert len(calibrated['pareto_set']) == 6
+    assert any('top is a maximum' in w for w in calibrated['warnings'])
+
+
+def test_pareto_is_global_and_unknown_quality_is_not_zero():
+    def p(name, gpu, speed, risk):
+        return dict(id=name, gpu_mib=gpu, decode_tps=speed, quality_risk=risk)
+    points = [p('dominated', 100, 10, None), p('unknown-fast', 100, 20, None),
+              p('measured', 100, 20, .04), p('small', 90, 15, .08),
+              p('quality', 120, 10, 0)]
+    assert {r['id'] for r in planner.pareto_front(points)} == {'measured', 'small', 'quality'}
+    assert {r['id'] for r in planner.pareto_front(list(reversed(points)))} == {'measured', 'small', 'quality'}
+
+
+@pytest.mark.parametrize('ctx,flash', [(4096,False), (8192,True), (32768,True)])
+def test_flash_attention_threshold_and_kv_bytes(stats, host, ctx, flash):
+    r = run(stats, host, budget=dict(gpu_mib=16000, ctx=ctx), allow_extrapolation=True, top=10000)
+    assert r['plans']
+    for p in r['plans']:
+        assert p['flash_attention'] is flash
+        assert p['kv_mib'] == pytest.approx(ctx*stats['kv_bytes_per_token'][p['kv_type']]/planner.MIB)
+        if flash:
+            assert p['flags'][p['flags'].index('-fa')+1] == 'on'
+            assert any('D028' in note for note in p['notes'])
+            assert p['confidence'] == 'extrapolated' and p['kld'] is None
+    if ctx == 32768:
+        allgpu = next(p for p in r['family_best'] if p['technique_family'].startswith('mixE4K|static|'))
+        # The all-GPU D028 anchor includes its attention-buffer observation.
+        assert '--n-cpu-moe' not in allgpu['flags']
+        ub = int(allgpu['flags'][allgpu['flags'].index('-ub')+1])
+        assert allgpu['gpu_mib'] == pytest.approx(2762+108*ub/512-108, abs=.01)
+        assert allgpu['prefill_tps'] == pytest.approx(7001, abs=.001)
+
+
+def test_long_context_quant_kv_requires_enabled_fix(stats, host):
+    budget = dict(gpu_mib=1200, ctx=32768)
+    assert not run(stats, host, budget=budget, allow_extrapolation=True)['plans']
+    pending = {'components': {'kv_quant_fix': {'status':'pending'}}}
+    assert not run(stats, host, budget=budget, allow_extrapolation=True, components=pending)['plans']
+    pending['components']['kv_quant_fix']['enabled'] = True
+    r = run(stats, host, budget=budget, allow_extrapolation=True, components=pending)
+    assert r['plans'] and len({p['technique_family'] for p in r['plans']}) == len(r['plans'])
+    for p in r['plans']:
+        assert p['kv_type'] in ('q8_0','q4_0')
+        assert p['kv_mib'] == pytest.approx(32768*stats['kv_bytes_per_token'][p['kv_type']]/planner.MIB)
+        assert p['gpu_mib']+p['gpu_guard_mib'] <= 1200
+        assert 'kv_quant_fix' in p['required_engine']
+        assert p['kld'] is None and p['quality_risk'] is None
+        assert 'kv_quant_fix' in p['components']
+    strict = dict(budget, max_quality_loss=.08)
+    assert not run(stats, host, budget=strict, allow_extrapolation=True, components=pending)['plans']
+
+
+def test_components_absence_registry_formats_and_fail_closed(tmp_path, monkeypatch):
+    # Missing default is tolerated, but a misspelled explicit path is an error.
+    monkeypatch.setattr(planner, 'ROOT', tmp_path)
+    assert planner.load_components() == {}
+    with pytest.raises(FileNotFoundError):
+        planner.load_components(tmp_path/'missing.json')
+    registry = tmp_path/'components.json'
+    registry.write_text(json.dumps({'schema':'factory-components/0', 'components':[
+        dict(id='q8_reuse', status='accepted'), dict(id='kv_quant_fix', status='pending'),
+        dict(id='hybrid_split',status='rejected-small-expert-regime'),
+        dict(id='pap',status='pending',enabled=False)]}))
+    assert set(planner.load_components(registry)) == {'q8_reuse'}
+    assert set(planner.load_components(['q8_reuse', 'kv_quant_fix'])) == {'q8_reuse','kv_quant_fix'}
+    with pytest.raises(ValueError, match='boolean'):
+        planner.load_components({'q8_reuse': {'enabled':'false'}})
+
+
+def test_q8_reuse_multiplies_only_decode_and_emits_env(stats, host):
+    kw = dict(budget=dict(gpu_mib=900,ctx=4096), allow_extrapolation=True, all_representations=False)
+    base = run(stats, host, **kw)['plans'][0]
+    patched_result = run(stats, host, components={'q8_reuse': {'status':'accepted'}}, **kw)
+    patched = patched_result['plans'][0]
+    assert patched['decode_tps'] == pytest.approx(base['decode_tps']*1.02, abs=.001)
+    assert patched['prefill_tps'] == base['prefill_tps']
+    assert patched['prefill_ms'] == base['prefill_ms']
+    assert patched['gpu_mib'] == base['gpu_mib'] and patched['host_mib'] == base['host_mib']
+    assert patched['ttft_ms'] == pytest.approx(patched['prefill_ms']+1000/patched['decode_tps'], abs=.001)
+    assert patched['runtime_env'] == {'GGML_CUDA_Q8_REUSE':'1'}
+    assert 'q8_reuse' in patched['technique_family'] and patched['id'] != base['id']
+    for definition in planner.emit_lab_tests(patched_result).values():
+        assert 'GGML_CUDA_Q8_REUSE=1' in definition['docker_args']
+
+
+def test_prefill_is_independent_of_decode_and_scales_prompt(stats, host, cal):
+    a = planner.prefill_prediction(cal, 'static', 12, 62, 4096, False)
+    modified = copy.deepcopy(cal)
+    for row in modified['points']:
+        row['decode_tps'] *= 100
+    assert planner.prefill_prediction(modified, 'static',12,62,4096,False) == a
+    doubled = planner.prefill_prediction(cal,'static',12,124,4096,False)
+    assert doubled['prefill_tps'] == a['prefill_tps']
+    assert doubled['prefill_ms'] == a['prefill_ms']*2
+    off = planner.prefill_prediction(cal,'static',0,1560,32768,False)
+    on = planner.prefill_prediction(cal,'static',0,1560,32768,True)
+    assert off['prefill_tps'] == pytest.approx(5865)
+    assert on['prefill_tps'] == pytest.approx(7001)
+    assert on['prefill_ms'] == pytest.approx(1560/7001*1000)
+
+
+def test_crossover_reports_measured_fixed_cost_and_large_expert_condition(stats, cal):
+    c = planner.crossover_model(planner.adapt_stats(stats), cal)
+    assert c['per_layer_fixed_us'] == pytest.approx(2030/12)
+    assert c['crossover_expert_mib'] == pytest.approx(4.664522)
+    assert c['expert_bytes']/planner.MIB == .84375
+    assert not c['predicted_beneficial']
+    large = copy.deepcopy(stats)
+    large['expert_bytes'] *= 20
+    assert planner.crossover_model(planner.adapt_stats(large), cal)['predicted_beneficial']
+    pap = cal['planner_v2']['techniques']['pap']
+    assert pap['calibration_points'] == [] and pap['status'] == 'pending-calibration'
+    assert {'job_id','test','decode_tps','prefill_tps','kld','cpu_layers'} <= set(pap['point_fields'])
+
+
+def test_cli_components_read_and_old_write_location_rejected(tmp_path, capsys):
+    registry = tmp_path/'components.json'
+    registry.write_text(json.dumps({'components':{'kv_quant_fix':{'enabled':True,'status':'pending'}}}))
+    args = ['--stats',str(ROOT/'artifacts/codexPL/granite-inspected.json'),
+            '--host',str(ROOT/'cc/engine_handoff/hosts/x86-main.json'),
+            '--budget-gpu-mib','1200','--ctx','32768','--allow-extrapolation','--components',str(registry)]
+    assert planner.main(args) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result['plans'] and result['enabled_components'] == ['kv_quant_fix']
+    with pytest.raises(SystemExit):
+        planner.main(args+['--emit-lab-tests',str(ROOT/'artifacts/codexPL/forbidden-pl2.json')])
+    assert not (ROOT/'artifacts/codexPL/forbidden-pl2.json').exists()

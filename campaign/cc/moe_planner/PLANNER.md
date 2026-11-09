@@ -5,7 +5,7 @@ campaign patches. It does not compile, launch inference, reserve resources,
 submit jobs, or contact services. Its recommendation is a discriminating lab
 experiment, not a demonstrated engine improvement or a hard memory guarantee.
 All implementation and scratch writes are confined to `cc/moe_planner/` and
-`artifacts/codexPL/`. There are no changes to `bin/lab` or `lab/tests`.
+`artifacts/codexPL2/`. Prior T-PL artifacts are read-only inputs. There are no changes to `bin/lab` or `lab/tests`.
 
 ## Run
 
@@ -16,11 +16,12 @@ python3 -B cc/moe_planner/plan.py \
   --stats artifacts/codexPL/granite-fixture.json \
   --host cc/engine_handoff/hosts/x86-main.json \
   --budget-gpu-mib 900 --ctx 4096 --top 5 \
-  --emit-lab-tests artifacts/codexPL/lab-tests.json \
-  > artifacts/codexPL/plan-900.json
+  --components artifacts/codexPL2/components-baseline.json \
+  --emit-lab-tests artifacts/codexPL2/lab-tests.json \
+  > artifacts/codexPL2/plan-900.json
 
 PYTHONDONTWRITEBYTECODE=1 python3 -B -m pytest -q -p no:cacheprovider \
-  cc/moe_planner/test_plan.py --basetemp=artifacts/codexPL/pytest-temp
+  cc/moe_planner/test_plan.py --basetemp=artifacts/codexPL2/pytest-temp
 ```
 
 The real T-MI inspection of mixE4K is also saved read-only as
@@ -34,11 +35,18 @@ are never invented. All other inputs enumerate their supplied representation.
 
 Additional controls: `--budget-host-mib`, `--max-kld`,
 `--objective decode|ttft|balanced`, `--allow-extrapolation`, and
-`--resource-sample sample.json`. `--prompt-tokens` changes the analytical warm
+`--resource-sample sample.json`, and `--components [registry.json]`. `--prompt-tokens` changes the analytical warm
 TTFT proxy and requires extrapolation for values other than 62; lab emission
 then refuses because the actual mounted chat fixture contains 62 tokens.
-Output JSON includes ranked feasible plans, every rejected candidate and its
-reason, fit coefficients/residuals, effective budgets and limitations. Invalid
+Output JSON includes `plans` (at most `--top` family winners), `family_best`
+(all family winners), `pareto_set` (globally nondominated feasible candidates),
+every rejected candidate and its reason, fit coefficients/residuals, effective
+budgets and limitations. A family is representation × placement mechanism ×
+KV type × attention mode × enabled engine components. Layer/cache coordinates
+and batch/ubatch sizes compete within a family. Top is a maximum: if only one
+calibrated family fits, return one plan and explain the shortage. Use
+`--allow-extrapolation` to explore other available representations. That flag
+continues to be required for every unmeasured host/model/context/KV/batch regime. Invalid
 inputs exit 2; a valid budget with no feasible supported plan returns an empty
 list and explicit rejections. An empty list does not prove no engine can run.
 `--emit-lab-tests` deliberately accepts only destinations under the two allowed
@@ -98,7 +106,13 @@ extrapolation flag and does not establish unified-memory accounting correctness.
   KV then exceeds compressed weights. Context is a required constraint; the
   planner never silently shortens it to fit. KV q8_0 and q4_0 use the inspector's
   exact block accounting (102 and 54 MiB at ctx4096 here), require `-fa on`,
-  and remain uncalibrated for speed and combined quality.
+  and remain uncalibrated for speed and combined quality. D028 observed both
+  quantized types aborting before the fix: neither is enumerated unless the
+  `kv_quant_fix` component is explicitly enabled (or accepted in the registry).
+  Pending status alone does not enable it. At ctx >=8192, f16 also defaults to
+  `-fa on`, citing [D028](../../decisions/D028-kv-precision-protocol.md). Its
+  measured 32k f16 memory delta is -984 MiB, decode ratio 627.2/570.2, and
+  prefill ratio 7001/5865. FA changed text; quality equivalence is unknown.
 * **Auto-fit is not a baseline.** D023's virtual 900 MiB budget caused auto-fit
   to place only 155 MiB on GPU and decode at 86 t/s, below explicit static n24.
   Every emitted plan sets `-ngl 99 --fit off` and declares placement explicitly.
@@ -143,7 +157,7 @@ Decode us(K)     = 1575.237082 + 268.831188 K
 Prompt ms(K)     = 174.238070 + 2.933955 K
 ```
 
-The LRU model is ordinary least squares of log time:
+The retained D022 residual diagnostic for LRU is ordinary least squares of log time:
 
 ```text
 GPU MiB(C)       = 742 + C
@@ -153,11 +167,21 @@ log Prompt ms(C) = 5.474944 + 0.000019467 C
 
 The log model preserves positive time and captures the cache trend with two
 parameters; its error is large. No polynomial or perfectly interpolating fit
-is used to hide that error. Decode t/s = 1e6 / decode us. Prompt ms comes from
-D022's measured 62-token prompt-eval counts/rates, not the much faster bench
-pp512 workload. TTFT is **warm prompt ms + one decode step**, excluding load,
+is used to hide that error. Decode t/s = 1e6 / decode us. The prefill model is
+separate from decode. It fits median microseconds/token
+from D022 `prefill_tps` (or measured prompt time/count if a rate is missing)
+against placement coordinates. Static reproduces the prompt-ms OLS above; LRU
+uses its own linear prefill fit rather than borrowing decode's log-time fit.
+These are completion prompt-eval measurements, not bench pp512. TTFT is
+**warm prompt ms + one decode step**, excluding load,
 queueing, tokenization and sampling. Actual first-token arrival was not measured.
 A different prompt length is a linear-scaling hypothesis requiring the flag.
+At ctx >=8192 the independent D028 prefill endpoint (7001 t/s FA on, 5865 off,
+1560-token prose) replaces D022's all-GPU intercept. D022's placement penalty
+in us/token is added to that endpoint. This is an explicit extrapolation across
+prompt/context/placement; a 62-token long-context prompt is not a new measured
+prefill result. Output carries `prefill_tps`, `prefill_ms`, and `prefill_source`;
+`ttft_ms = prefill_ms + 1000/decode_tps`.
 
 | Family | Max fitted GPU error | Max held-out GPU error | Max fitted decode error | Max held-out decode error |
 | --- | ---: | ---: | ---: | ---: |
@@ -192,27 +216,85 @@ missing endpoints fall back to D022's ~684 t/s, explicitly unvalidated. The
 other-representation LRU transfer scales fitted time with expert bytes. These
 coarse proposals exist to select tests; they are not calibrated speed results.
 
-Hybrid candidates use the **existing** n18/n12/n6 split files, exact per-layer
-hot counts/IDs from the transform manifests, and one null expert per layer.
-Their real-hot totals 168/360/552 plus 24 nulls require 162/324/486 MiB of expert
-GPU payload. If the input includes exactly one complete decode trace group,
-fixed TRAIN-selected IDs are evaluated against its frequencies; they are never
-reranked on evaluation. Otherwise uniform routing is an explicitly stated
-fallback. The serial hypothesis adds `30.6 us * expected misses + 15.2 us * 24`
-to the fitted GPU baseline. This comes only from D019's exploratory harness,
-with D014's independent 33.3 us calibration as a cross-check; it omits the real
-split engine's extra launches and synchronization. The prediction is likely
-optimistic. D027 records a focused CUDA correctness failure: candidates remain
-exploratory until repaired and requalified. CPU equality is insufficient.
+Long-context memory retains the exact KV/token byte accounting from model-stats.
+For ctx >=8192, use the D028 all-GPU f16 endpoint to model attention workspace:
+let `scale = (ctx-4096)/(32768-4096)` and let `off_delta` be 3746 minus
+(D022 all-GPU fitted MiB + the 4096→32768 f16 KV delta). Add
+`(off_delta - 984) * scale` to the D022-plus-KV footprint. At ctx32768 this
+recovers 2762 MiB for mixE4K all-GPU at the baseline ubatch (within input byte
+rounding). The correction is +30.4 MiB relative to the existing linear KV model;
+subtracting 984 again from that model would double-count a nonexistent KQ buffer.
+Use the f16 workspace correction as an explicitly unmeasured transfer for
+quantized KV. Decode uses D028's FA ratio multiplicatively; other placement,
+prompt and context effects remain unmeasured. Batch/ubatch buffer scaling is
+still a hypothesis. No context is shortened to make a plan fit.
+
+D030 rejected hybrid at all three measured Granite placements. D031 measured
+2030 us/token extra cost at n12, with 12 additional handoff layers: an effective
+169.17 us/layer, including dispatch, exposed synchronization/transfers and host
+cost. D019's 30.6 us per 884736-byte expert supplies a CPU us/byte estimate.
+The reported crossover is `fixed_us / cpu_us_per_byte = 4.665 MiB/expert`.
+A conservative 2x margin implements the assignment's “much greater” condition:
+only experts above ~9.329 MiB satisfy the necessary amortization condition.
+Granite's 0.844 MiB experts fail it, so all real hybrid transforms are rejected
+with D030/D031 reasons, even with extrapolation enabled. This is a scale model,
+not proof of a universal threshold or sufficient evidence to enable a new model.
+
+The hybrid accounting path retains existing n18/n12/n6 transform manifests,
+fixed TRAIN hot IDs, per-layer null expert bytes and decode trace evaluation.
+Its CPU cost scales with expert bytes and its fixed cost now comes from D031;
+CUDA correctness/quality qualification remains required. Larger models do not
+inherit Granite split files. Tests isolate the accounting under a hypothetical
+crossover calibration without promoting those files into valid recommendations.
+
+### Components and pending PAP calibration
+
+`--components` reads `cc/factory/components.json` by default if it exists.
+Absence is tolerated; an explicit missing alternative path fails. A JSON object
+may contain a `components` mapping/list or directly map IDs to records. List
+records accept `id` or `name`. `status: accepted` defaults enabled; an explicit
+boolean `enabled` overrides that. Pending/rejected entries default disabled;
+`enabled: true` is the caller's explicit opt-in. An empty object disables all
+components. The planner does not edit the registry or build/apply patches.
+For example, an exploratory registry may contain:
+
+```json
+{"components": {
+  "q8_reuse": {"status": "accepted"},
+  "kv_quant_fix": {"status": "pending", "enabled": true}
+}}
+```
+
+Enabled q8_reuse multiplies decode t/s by **1.02** (D029); memory and prefill
+stay unchanged. Runtime environment `GGML_CUDA_Q8_REUSE=1` and the patch
+requirement accompany the plan and emitted lab definitions. Transfer of that
+factor to placements/contexts beyond D029 remains explicit in metric confidence
+and notes. q8_reuse preserves computation in its measured regime; it does not
+make representation, placement or quantized-KV KLD known.
+
+`calibration.json:planner_v2.techniques.pap` is a pending representation trade-off
+entry, with empty calibration points, a lab/jobs result source, explicit future
+point fields (including model bytes, CPU layers, GPU MiB, decode, prefill, KLD
+and job/attempt/test provenance), and D032 acceptance criteria. No PAP speed,
+quality or nonexistent model is emitted. Future calibration must bind the actual
+transform/model and same-placement control before activating this technique.
 
 ## Ranking, quality and the measurement handoff
 
 Plans must fit `predicted GPU + guard <= GPU budget` and conservative host
 working set `<= host budget`, each capped by physical capacity and optionally
-resource availability. Ranking first prefers the calibrated regime. Within each
+resource availability. Each family is ranked first; its best candidate survives. Ranking first
+prefers the calibrated regime. Within each
 confidence tier, decode maximizes decode t/s, ttft minimizes the warm TTFT proxy,
 and balanced maximizes decode t/s divided by TTFT. Ties prefer smaller GPU
-footprint and stable candidate ID. No cross-tier speed claim is implied.
+footprint and stable candidate ID. No cross-tier speed claim is implied. `family_best` contains every winner;
+`plans` takes the first `--top` of those. `pareto_set` is independent of this
+ranking and considers **all** feasible candidates, minimizing GPU MiB and
+quality risk while maximizing decode t/s. Quality risk is measured combined
+KLD; unknown risk is JSON null and treated as +infinity for dominance, never
+zero. Measured representation KLD is retained separately as a prior. Tied
+nondominated points remain available, and the full Pareto set is not truncated
+by `--top`.
 
 Without `--max-kld`, measured representation KLD is a risk prior; changed
 CPU/GPU placement, hybrid arithmetic and quantized KV have **unknown combined
@@ -258,7 +340,8 @@ No tests were submitted or executed on the GPU by this worker.
 
 ## Example and remaining gaps
 
-The real mixE4K inspection at 900 MiB, ctx4096 recommends static n19 with f16 KV:
+With components disabled explicitly, the real mixE4K inspection at 900 MiB,
+ctx4096 recommends static n19 with f16 KV:
 875.867 MiB predicted GPU plus 2.000 MiB guard, 1178.695 MiB host working-set
 allowance, 149.633 decode t/s, and 236.666 ms warm TTFT proxy. The hand-derived
 fixture differs by 0.0055 MiB from exact nonexpert header bytes. Exact flags:
@@ -269,10 +352,29 @@ fixture differs by 0.0055 MiB from exact nonexpert header bytes. Exact flags:
 -t 8 -tb 8 --n-cpu-moe 19
 ```
 
-The remaining top five use K20..23 with progressively lower footprint and
-throughput. They are predictions between the measured K18 and K24 points,
-with unmeasured placement KLD. Gaps: actual TTFT/load time, long-context and
-quantized-KV quality, uncontented host working-set/SSD behavior, other model and
-host calibration, batch/prefill buffer measurements, GPU hybrid correctness,
-launch/transfer costs and engagement, disjoint task-level quality, and prediction
-uncertainty beyond the observed residuals. Measurements must decide acceptance.
+With extrapolation enabled, the 900 MiB top five instead contain five
+representation families: mixE4K static19 (calibrated regime), mixE2K static9,
+mixE3K static13, Q4_K_M static15, and Q8_0 static20 (the last four use the
+hypothetical ubatch128 footprint). Their combined placement KLD is unknown;
+low-bit alternatives carry substantial representation risk (see D013).
+Without extrapolation, the planner returns just the calibrated mixE4K family
+winner and keeps n19..24 in the separate memory/speed Pareto set.
+
+At 1200 MiB / ctx32768, f16 KV alone requires 1536 MiB. No supported plan fits
+with the baseline components. With kv_quant_fix explicitly enabled and
+extrapolation allowed, q4_0 KV takes 432 MiB. For example, mixE4K static15,
+FA on, batch512/ubatch128 predicts 1173 MiB GPU (+2 MiB guard), 196.152 decode
+t/s, and 57.963 ms warm TTFT for the 62-token prompt. These are unvalidated
+post-fix speed/memory/quality hypotheses; a strict KLD gate rejects them.
+
+With the factory registry now present, the default enables accepted q8_reuse
+and the same n19 plan predicts 152.625 t/s (+2%). Pending kv_quant_fix remains
+disabled. The component-free examples above use `components-baseline.json`
+so future registry changes cannot alter their interpretation.
+
+Reproducible JSON reports, component selections, emitted test definitions and
+CPU-only pytest results are in `artifacts/codexPL2/`. No Docker or GPU work was
+run. Remaining gaps include actual TTFT/load time, long-context and quantized-KV
+quality, post-fix GPU qualification, host working set, other model/host
+calibration, batch/prefill buffers, larger-expert crossover validation and PAP
+results. Measurements must decide acceptance.
