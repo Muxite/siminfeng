@@ -1,0 +1,533 @@
+
+=== 1/6: Build identity: content, local execution reference, transport, linkage ===
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB='' bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py build builds/results/novmm-4/build-record.json
+{
+  "archive": {
+    "bytes": 2210029568,
+    "path": "engine-image.docker.tar",
+    "sha256": "9dc43cf8e01ad24ce23d60378f1f5c47e6fe5a8028f0b4a67e8f3b6a08295210"
+  },
+  "config_digest": "sha256:0b78d876baa669c8461804b6d7788256c2e99ccfa2ae95e854cc1cce305676f8",
+  "linkage": {
+    "dt_needed": [
+      "libggml-base.so.0",
+      "libcudart.so.12",
+      "libcublas.so.12",
+      "libnccl.so.2",
+      "libstdc++.so.6",
+      "libm.so.6",
+      "libgcc_s.so.1",
+      "libc.so.6",
+      "ld-linux-x86-64.so.2"
+    ],
+    "libcudart_dynamic": true,
+    "status": "passed",
+    "undefined_imports": {
+      "cuMemCreate": false,
+      "cudaFree": true,
+      "cudaFreeAsync": false,
+      "cudaMalloc": true,
+      "cudaMallocAsync": false,
+      "cudaMemGetInfo": true
+    }
+  },
+  "run_ref": "sha256:d0be4084616777e3252ad3c98733fc668e029562b43cc67174f4d72ece90c39b",
+  "status": "success"
+}
+
+=== 2/6: Submit a fresh immutable job with the existing mixE4K tests ===
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB='' bin/run_op --agent demo --task DEMO -- date -u +%Y%m%dT%H%M%S.%NZ
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py setup /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862 lab
+Existing image registration and test definitions copied to /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- bin/lab submit --image llamacpp-novmm4 --model /home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf --tests m1_static_n12\,m1_static_n0 --key demo-20261109T230625.053878644Z-1426862
+New job: job-6cb9c2ac5c
+
+=== 3/6: One proposal: accept x86; reject the Jetson template with reasons ===
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py policy /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/policy.json /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1 builds/results/novmm-4/build-record.json
+{
+  "attempt_id": "att-1",
+  "build_record_ref": "builds/results/novmm-4/build-record.json",
+  "campaign_id": "c1",
+  "capture_bytes": 8388608,
+  "evidence": {
+    "controller_outside_test_sandbox": true,
+    "durable_destination_ref": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1",
+    "outputs": [
+      "stdout",
+      "stderr",
+      "state.jsonl",
+      "result.json"
+    ]
+  },
+  "experiment_id": "DEMO",
+  "memory": {
+    "accounting_method": "cgroup-v2-memory",
+    "budget_bytes": 17179869184,
+    "domain": "host-ram",
+    "guarantee": "cgroup-host"
+  },
+  "release_role": "engine",
+  "wall_time_s": 900
+}
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/engine_handoff/envelopes.py proposal --build-record builds/results/novmm-4/build-record.json --job-spec /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/jobs/job-6cb9c2ac5c/job.json --host-profile cc/engine_handoff/hosts/x86-main.json --policy /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/policy.json --out /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/proposal.json
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py proposal /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/proposal.json
+{
+  "attempt_id": "att-1",
+  "campaign_id": "c1",
+  "dispatchable": true,
+  "evidence": {
+    "controller_outside_test_sandbox": true,
+    "durable_destination_ref": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1",
+    "outputs": [
+      "stdout",
+      "stderr",
+      "state.jsonl",
+      "result.json"
+    ]
+  },
+  "experiment_id": "DEMO",
+  "format": "campaign-job-proposal/0",
+  "inputs": {
+    "data_files": {},
+    "model_files": {
+      "granite-3.1-1b-a400m-instruct-mixE4K.gguf": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6"
+    },
+    "mounts": {
+      "prompt-0": {
+        "chat.txt": "65d188967378a61add25e0f98c35cd2bce2b02235451b09f6735d5512b3486b0"
+      }
+    },
+    "tests": {
+      "m1_static_n0": "b31e4d5c49470036e6142c2538af958086cb6130b6de5dea727e5a409ee74078",
+      "m1_static_n12": "5da1f5982fdf24a2d18197226b4fa65961f4598f11330992ae21b0bb365d5b5b"
+    }
+  },
+  "invocation": {
+    "mounts": [
+      {
+        "access": "ro",
+        "role": "model"
+      },
+      {
+        "access": "rw",
+        "role": "results"
+      },
+      {
+        "access": "ro",
+        "role": "prompt-0",
+        "target": "/tin"
+      }
+    ],
+    "tests": [
+      {
+        "argv": [
+          "/app/llama-completion",
+          "-m",
+          "/m/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+          "-f",
+          "/tin/chat.txt",
+          "-n",
+          "160",
+          "-c",
+          "4096",
+          "--temp",
+          "0",
+          "-s",
+          "1",
+          "-ngl",
+          "99",
+          "-no-cnv",
+          "--no-warmup",
+          "--n-cpu-moe",
+          "12"
+        ],
+        "cold_cache": null,
+        "environment": {},
+        "occurrence": 0,
+        "test": "m1_static_n12"
+      },
+      {
+        "argv": [
+          "/app/llama-completion",
+          "-m",
+          "/m/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+          "-f",
+          "/tin/chat.txt",
+          "-n",
+          "160",
+          "-c",
+          "4096",
+          "--temp",
+          "0",
+          "-s",
+          "1",
+          "-ngl",
+          "99",
+          "-no-cnv",
+          "--no-warmup"
+        ],
+        "cold_cache": null,
+        "environment": {},
+        "occurrence": 1,
+        "test": "m1_static_n0"
+      }
+    ]
+  },
+  "policy": {
+    "capture_bytes": 8388608,
+    "gpu_jobs_on_host": 1,
+    "memory": {
+      "accounting_method": "cgroup-v2-memory",
+      "budget_bytes": 17179869184,
+      "domain": "host-ram",
+      "guarantee": "cgroup-host"
+    },
+    "wall_time_s": 900
+  },
+  "release": {
+    "build_record_ref": "builds/results/novmm-4/build-record.json",
+    "cmake_defines": {
+      "BUILD_SHARED_LIBS": "ON",
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_CUDA_ARCHITECTURES": "120",
+      "CMAKE_CUDA_COMPILER_LAUNCHER": "ccache",
+      "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+      "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+      "CMAKE_EXE_LINKER_FLAGS": "-Wl,--allow-shlib-undefined",
+      "GGML_CUDA": "ON",
+      "GGML_CUDA_NO_VMM": "ON",
+      "GGML_NATIVE": "OFF",
+      "LLAMA_BUILD_TESTS": "OFF",
+      "LLAMA_BUILD_UI": "OFF",
+      "LLAMA_CURL": "OFF",
+      "LLAMA_OPENSSL": "OFF",
+      "LLAMA_USE_PREBUILT_UI": "OFF"
+    },
+    "executables_sha256": {
+      "/app/libggml-base.so.0.27.0": "d321c076cdd5dcaf93adcd476a76f3a9766d57a0bd8c579e290b2563feb4247e",
+      "/app/libggml-cpu.so.0.27.0": "773cb86dc4beaa94c6ae4ea0ce604e91870704eedf67311d8d13b032fed48f08",
+      "/app/libggml-cuda.so.0.27.0": "86b2b1d5ec751f5b7a1694cd8742d0967281137b73eb8ec5f2bded7f382b2341",
+      "/app/libggml.so.0.27.0": "d3e024373df3fe152fb7aa63f5ba061c3e4645a801f2e08b463af3aa791ccc7c",
+      "/app/libgomp.so.1": "135f3c8f006d2fe5e68e51281c7974cb991a03de3bfb3593d68d174dfcf854d1",
+      "/app/libllama-bench-impl.so": "8066ff0aa702c07472bfebc136b8a43dca2dcad5f69f2dae6c7c21f44998b11d",
+      "/app/libllama-cli-impl.so": "93927124ca3ba2953422feb7b28e52e2a337469e84220e213332a75be2d54076",
+      "/app/libllama-common.so.0.7.0": "0e0ffb8ab4b30fb36168abce9271ab052ae5e0a96a12f7738a8ed01927e3b32b",
+      "/app/libllama-completion-impl.so": "0ceb47a1ffec1bbdc0417534ffee2d0a5f4c0c97f4828dff289c0a79cdcd1f18",
+      "/app/libllama-perplexity-impl.so": "57188b2496a626d6ff067d3ae587dbe5a25e8e3a129d2549428127d576ad3e1b",
+      "/app/libllama-server-impl.so": "b049c665239d7382389fec724185c0ad6cf49b3194eb27423d606b97843f2c47",
+      "/app/libllama.so.0.7.0": "5a992918773bb801a043a2d52358dbd250273e326e335d4298356f6013824904",
+      "/app/libmtmd.so.0.7.0": "bef2ace7ee57ae4e53a8faafe35b22dae60295919ddbc67f75782e3c13f688ce",
+      "/app/llama-bench": "5e0ab8edefe81093fc8df5d489d629b8a02a755c5dbdae4db18cbe9035be04d6",
+      "/app/llama-cli": "64b0d6833da5b7d3b3604067bef2fc01f9c42e50ed3e6e24aaf918ec20c9ac04",
+      "/app/llama-completion": "e019cf44193545e8316015b4bae16dc19c709c460a0bfd5a4a386e56391400c3",
+      "/app/llama-eval-callback": "bb3f8b38288100ee248cfa2a4b5a9e5e86cf85b8e12a101ac96a536202cb5471",
+      "/app/llama-perplexity": "aa7ec61d95fb674005cca2f65b74a82d4588bb5b1bbdedf61f9a294da01d99dc",
+      "/app/llama-server": "3a385482c21a40febee7ef9be8727d3724a594e6c51b3afa127711a259ac257a",
+      "/app/llama-tokenize": "684063b67410fb7fd87b777f9b86b355daef251f71269d5fb49d57cef1b45486"
+    },
+    "image_config_id": "sha256:0b78d876baa669c8461804b6d7788256c2e99ccfa2ae95e854cc1cce305676f8",
+    "index_digest": "sha256:d0be4084616777e3252ad3c98733fc668e029562b43cc67174f4d72ece90c39b",
+    "patch_sha256": null,
+    "role": "engine",
+    "source": {
+      "commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+      "tree": "158a7ade930818efdb06c5561920a8d018d404ba"
+    },
+    "transport": {
+      "bytes": 2210029568,
+      "kind": "docker-archive",
+      "sha256": "9dc43cf8e01ad24ce23d60378f1f5c47e6fe5a8028f0b4a67e8f3b6a08295210"
+    }
+  },
+  "request_id": "job-6cb9c2ac5c",
+  "target": {
+    "host_id": "x86-main",
+    "platform": "linux/amd64",
+    "platform_compat": {
+      "cuda_arch": [
+        "sm_120"
+      ],
+      "driver_min": null,
+      "jetpack_l4t": null
+    },
+    "required_capabilities": [
+      "docker",
+      "nvidia-runtime"
+    ]
+  },
+  "unresolved": []
+}
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/engine_handoff/envelopes.py admit --proposal /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/proposal.json --host-profile cc/engine_handoff/hosts/x86-main.json --out /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/admit-x86.json
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py admission /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/admit-x86.json accepted
+{
+  "decision": "accepted",
+  "reasons": []
+}
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/engine_handoff/envelopes.py admit --proposal /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/proposal.json --host-profile cc/engine_handoff/hosts/jetson-arm.TEMPLATE.json --out /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/admit-jetson.json
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py admission /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/admit-jetson.json rejected
+{
+  "decision": "rejected",
+  "reasons": [
+    "platform mismatch: requested linux/amd64, host linux/arm64",
+    "host_id mismatch: requested x86-main, host jetson-arm",
+    "cuda_arch mismatch",
+    "target.platform_compat.jetpack_l4t: missing",
+    "host.capabilities: missing",
+    "host.memory_guarantees: missing"
+  ]
+}
+
+=== 4/6: Interrupt only the owned test sandbox; verify durable exported evidence ===
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- bin/lab run job-6cb9c2ac5c
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py wait-running /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/jobs/job-6cb9c2ac5c/att-1/state.jsonl
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- docker inspect --format \{\{.State.Running\}\} lab-c1-job-6cb9c2ac5c-att-1-m1_static_n12-0
+error: no such object: lab-c1-job-6cb9c2ac5c-att-1-m1_static_n12-0
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- sleep 0.05
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- docker inspect --format \{\{.State.Running\}\} lab-c1-job-6cb9c2ac5c-att-1-m1_static_n12-0
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- bin/lab chaos job-6cb9c2ac5c att-1
+killed owned containers: ['1478407654b7']
+{"attempt": "att-1", "cleanup": {"confirmed": true, "owned_containers_left": []}, "evidence": {"coverage": {"interrupted": true, "note": "incomplete data is never scored; affected comparisons invalid", "tests_completed_cleanly": 0, "tests_expected": 2, "tests_started": 1}, "files": {"m1_static_n12#0.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "m1_static_n12#0.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}}, "execution": {"status": "interrupted_sandbox_terminated"}, "image_id": "sha256:d0be4084616777e3252ad3c98733fc668e029562b43cc67174f4d72ece90c39b", "job": "job-6cb9c2ac5c", "performance": {"exclusive_before_after": true, "gpu_po
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- tail -n 12 /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/jobs/job-6cb9c2ac5c/att-1/state.jsonl
+{"attempt": "att-1", "job": "job-6cb9c2ac5c", "state": "queued", "ts": "2026-11-09T23:06:26.983244+00:00"}
+{"attempt": "att-1", "job": "job-6cb9c2ac5c", "state": "preparing", "ts": "2026-11-09T23:06:26.984051+00:00"}
+{"admission": "none (gpu lock removed by user decision)", "attempt": "att-1", "gpu_pre": {"compute_apps": [], "gpu": "31 MiB, 300 MHz, 37, 14.65 W"}, "job": "job-6cb9c2ac5c", "state": "running", "ts": "2026-11-09T23:06:28.015470+00:00"}
+{"attempt": "att-1", "container": "lab-c1-job-6cb9c2ac5c-att-1-m1_static_n12-0", "job": "job-6cb9c2ac5c", "state": "running", "test": "m1_static_n12", "ts": "2026-11-09T23:06:28.026747+00:00"}
+{"attempt": "att-1", "exit_code": 137, "job": "job-6cb9c2ac5c", "last_durable_bytes": 0, "last_durable_mtime": "2026-11-09T23:06:28.026276+00:00", "state": "sandbox_terminated", "test": "m1_static_n12", "ts": "2026-11-09T23:06:29.222300+00:00"}
+{"attempt": "att-1", "job": "job-6cb9c2ac5c", "state": "assessing", "ts": "2026-11-09T23:06:29.285484+00:00"}
+{"attempt": "att-1", "job": "job-6cb9c2ac5c", "state": "exporting", "ts": "2026-11-09T23:06:29.307413+00:00"}
+{"attempt": "att-1", "job": "job-6cb9c2ac5c", "result_sha256": "13bae1499da00dc4ea0ffe8fe76273f7b7de63319f426b346494e968839329c6", "state": "terminal", "ts": "2026-11-09T23:06:29.309619+00:00"}
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py verify /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1
+chaos.jsonl: OK (sha256 4596440acec9794507ab26ac78a1b3adebcc12f7037a0dbf9fa33c9bf1637edc)
+m1_static_n12#0.stderr: OK (sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)
+m1_static_n12#0.stdout: OK (sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)
+owner.json: OK (sha256 a8f59b3c60594e3424a2aee19e5f0e51e23af6f4aa685bc8084a2e8b9ff13be3)
+result.json: OK (sha256 13bae1499da00dc4ea0ffe8fe76273f7b7de63319f426b346494e968839329c6)
+state.jsonl: OK (sha256 e81783d4398458268924be54993a9251b36ba7b11a0d1b994e5f98e0017d00bb)
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/engine_handoff/envelopes.py result --job-dir /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/jobs/job-6cb9c2ac5c --attempt att-1 --claim-category interrupted-observation --out /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/result-att-1.json
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py result /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/result-att-1.json interrupted_sandbox_terminated
+{
+  "artifact_refs": [
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1/chaos.jsonl",
+      "sha256": "4596440acec9794507ab26ac78a1b3adebcc12f7037a0dbf9fa33c9bf1637edc"
+    },
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1/m1_static_n12#0.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1/m1_static_n12#0.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1/owner.json",
+      "sha256": "a8f59b3c60594e3424a2aee19e5f0e51e23af6f4aa685bc8084a2e8b9ff13be3"
+    },
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1/result.json",
+      "sha256": "13bae1499da00dc4ea0ffe8fe76273f7b7de63319f426b346494e968839329c6"
+    },
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1/state.jsonl",
+      "sha256": "e81783d4398458268924be54993a9251b36ba7b11a0d1b994e5f98e0017d00bb"
+    }
+  ],
+  "attempt_id": "att-1",
+  "campaign_id": null,
+  "claim_category": "interrupted-observation",
+  "evidence_completeness": {
+    "clean": 0,
+    "expected": 2,
+    "journal_errors": [],
+    "manifest_present": true,
+    "missing": [
+      "m1_static_n12#0",
+      "m1_static_n0#1"
+    ],
+    "started": 1
+  },
+  "execution_outcome": {
+    "status": "interrupted_sandbox_terminated"
+  },
+  "experiment_id": null,
+  "format": "campaign-job-result/0",
+  "last_durable_sequence": {
+    "last_ts": "2026-11-09T23:06:29.309619+00:00",
+    "line_count": 8
+  },
+  "manifest_ref": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1/MANIFEST.json",
+  "request_id": "job-6cb9c2ac5c",
+  "resource_generation": {
+    "attempt": "att-1",
+    "owner_token_sha256": "591d58098774408feebc2bf1a51f7e6b3452b18670a3f81543908d90356d14e0"
+  },
+  "stop_confirmed": true,
+  "test_assessment": {
+    "assessed": false,
+    "reason": "incomplete durable test evidence",
+    "recorded_quality": {
+      "all_ok": false,
+      "tests": {
+        "m1_static_n12#0": {
+          "decode_tokens": null,
+          "decode_tps": null,
+          "elapsed_s": 1.195,
+          "exit_code": 137,
+          "mem": {
+            "gpu_baseline_mib": 31,
+            "gpu_delta_mib": 0,
+            "gpu_peak_mib": 31,
+            "host_cgroup_peak_mib": 11.6,
+            "io_read_mib": 0.9,
+            "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak",
+            "samples": 3
+          },
+          "ok": false,
+          "partial": true,
+          "prefill_tokens": null,
+          "prefill_tps": null,
+          "text_head": ""
+        }
+      }
+    }
+  }
+}
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py snapshot /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/jobs/job-6cb9c2ac5c/att-1 /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1 /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/att-1-before.json
+Saved att-1 live/export SHA256 snapshot: /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/att-1-before.json
+
+=== 5/6: Retry as att-2; complete both tests and preserve att-1 byte for byte ===
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- bin/lab run job-6cb9c2ac5c
+{"attempt": "att-2", "cleanup": {"confirmed": true, "owned_containers_left": []}, "evidence": {"coverage": {"interrupted": false, "note": "incomplete data is never scored; affected comparisons invalid", "tests_completed_cleanly": 2, "tests_expected": 2, "tests_started": 2}, "files": {"m1_static_n0#1.stderr": "0153fda082c6e2ca2d1765aab03a3658921f95f6cd9bc5d352d6b37b83a09317", "m1_static_n0#1.stdout": "950b46b192be7504d7954ebc82e61980a1617c6cac19f5cd6f95c7a9ee0fa3be", "m1_static_n12#0.stderr": "b90189fed052b11b2aae9d8b96e61d589e20348d37c7b316f86c2e0f28e19052", "m1_static_n12#0.stdout": "956d615d96006d8fbc4934d80934f06dd1c3c0ace1864175f539526d4a853099"}}, "execution": {"status": "completed"}, "
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- tail -n 12 /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/jobs/job-6cb9c2ac5c/att-2/state.jsonl
+{"attempt": "att-2", "job": "job-6cb9c2ac5c", "state": "queued", "ts": "2026-11-09T23:06:29.875809+00:00"}
+{"attempt": "att-2", "job": "job-6cb9c2ac5c", "state": "preparing", "ts": "2026-11-09T23:06:29.878653+00:00"}
+{"admission": "none (gpu lock removed by user decision)", "attempt": "att-2", "gpu_pre": {"compute_apps": [], "gpu": "31 MiB, 300 MHz, 37, 14.97 W"}, "job": "job-6cb9c2ac5c", "state": "running", "ts": "2026-11-09T23:06:31.037003+00:00"}
+{"attempt": "att-2", "container": "lab-c1-job-6cb9c2ac5c-att-2-m1_static_n12-0", "job": "job-6cb9c2ac5c", "state": "running", "test": "m1_static_n12", "ts": "2026-11-09T23:06:31.039469+00:00"}
+{"attempt": "att-2", "container": "lab-c1-job-6cb9c2ac5c-att-2-m1_static_n0-1", "job": "job-6cb9c2ac5c", "state": "running", "test": "m1_static_n0", "ts": "2026-11-09T23:06:35.806954+00:00"}
+{"attempt": "att-2", "job": "job-6cb9c2ac5c", "state": "assessing", "ts": "2026-11-09T23:06:37.756147+00:00"}
+{"attempt": "att-2", "job": "job-6cb9c2ac5c", "state": "exporting", "ts": "2026-11-09T23:06:37.778526+00:00"}
+{"attempt": "att-2", "job": "job-6cb9c2ac5c", "result_sha256": "c4f5983e32f2c9c808be9033bfc9ba7c97a2730f3f6498db51ec782eb97d6ec3", "state": "terminal", "ts": "2026-11-09T23:06:37.780582+00:00"}
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py verify /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-2
+m1_static_n0#1.stderr: OK (sha256 0153fda082c6e2ca2d1765aab03a3658921f95f6cd9bc5d352d6b37b83a09317)
+m1_static_n0#1.stdout: OK (sha256 950b46b192be7504d7954ebc82e61980a1617c6cac19f5cd6f95c7a9ee0fa3be)
+m1_static_n12#0.stderr: OK (sha256 b90189fed052b11b2aae9d8b96e61d589e20348d37c7b316f86c2e0f28e19052)
+m1_static_n12#0.stdout: OK (sha256 956d615d96006d8fbc4934d80934f06dd1c3c0ace1864175f539526d4a853099)
+owner.json: OK (sha256 5ae387f65aa404feba0d649efad86706075b04be3036cc37604bfab38a0889f4)
+result.json: OK (sha256 c4f5983e32f2c9c808be9033bfc9ba7c97a2730f3f6498db51ec782eb97d6ec3)
+state.jsonl: OK (sha256 e711a1ec263514e79b279544a8c97f392ae98ae568cc7655b5cb8e561fddc3f6)
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/engine_handoff/envelopes.py result --job-dir /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/jobs/job-6cb9c2ac5c --attempt att-2 --claim-category infrastructure-validation --out /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/result-att-2.json
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py result /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/result-att-2.json completed
+{
+  "artifact_refs": [
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-2/m1_static_n0#1.stderr",
+      "sha256": "0153fda082c6e2ca2d1765aab03a3658921f95f6cd9bc5d352d6b37b83a09317"
+    },
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-2/m1_static_n0#1.stdout",
+      "sha256": "950b46b192be7504d7954ebc82e61980a1617c6cac19f5cd6f95c7a9ee0fa3be"
+    },
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-2/m1_static_n12#0.stderr",
+      "sha256": "b90189fed052b11b2aae9d8b96e61d589e20348d37c7b316f86c2e0f28e19052"
+    },
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-2/m1_static_n12#0.stdout",
+      "sha256": "956d615d96006d8fbc4934d80934f06dd1c3c0ace1864175f539526d4a853099"
+    },
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-2/owner.json",
+      "sha256": "5ae387f65aa404feba0d649efad86706075b04be3036cc37604bfab38a0889f4"
+    },
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-2/result.json",
+      "sha256": "c4f5983e32f2c9c808be9033bfc9ba7c97a2730f3f6498db51ec782eb97d6ec3"
+    },
+    {
+      "path": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-2/state.jsonl",
+      "sha256": "e711a1ec263514e79b279544a8c97f392ae98ae568cc7655b5cb8e561fddc3f6"
+    }
+  ],
+  "attempt_id": "att-2",
+  "campaign_id": null,
+  "claim_category": "infrastructure-validation",
+  "evidence_completeness": {
+    "clean": 2,
+    "expected": 2,
+    "journal_errors": [],
+    "manifest_present": true,
+    "missing": [],
+    "started": 2
+  },
+  "execution_outcome": {
+    "status": "completed"
+  },
+  "experiment_id": null,
+  "format": "campaign-job-result/0",
+  "last_durable_sequence": {
+    "last_ts": "2026-11-09T23:06:37.780582+00:00",
+    "line_count": 8
+  },
+  "manifest_ref": "/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-2/MANIFEST.json",
+  "request_id": "job-6cb9c2ac5c",
+  "resource_generation": {
+    "attempt": "att-2",
+    "owner_token_sha256": "96d8c14f8f5b26d864b112871cf8a1587228eee0196beeebaef2d812c836f3ee"
+  },
+  "stop_confirmed": true,
+  "test_assessment": {
+    "all_ok": true,
+    "tests": {
+      "m1_static_n0#1": {
+        "decode_tokens": 159,
+        "decode_tps": 668.02,
+        "elapsed_s": 1.901,
+        "exit_code": 0,
+        "mem": {
+          "gpu_baseline_mib": 31,
+          "gpu_delta_mib": 1388,
+          "gpu_peak_mib": 1419,
+          "host_cgroup_peak_mib": 412.3,
+          "io_read_mib": 0.0,
+          "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak",
+          "samples": 5
+        },
+        "ok": true,
+        "partial": false,
+        "prefill_tokens": 62,
+        "prefill_tps": 319.4,
+        "text_head": "at each token is attended to by a different subset of experts. The number of experts in each subset is determined by the token's position in the input sequence."
+      },
+      "m1_static_n12#0": {
+        "decode_tokens": 159,
+        "decode_tps": 63.7,
+        "elapsed_s": 4.767,
+        "exit_code": 0,
+        "mem": {
+          "gpu_baseline_mib": 31,
+          "gpu_delta_mib": 1064,
+          "gpu_peak_mib": 1095,
+          "host_cgroup_peak_mib": 415.5,
+          "io_read_mib": 0.0,
+          "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak",
+          "samples": 14
+        },
+        "ok": true,
+        "partial": false,
+        "prefill_tokens": 62,
+        "prefill_tps": 252.77,
+        "text_head": " all the tokens in the input sequence. This can significantly reduce the computational requirements of the model, especially for long sequences.\n\nHowever, there"
+      }
+    }
+  }
+}
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py compare /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/jobs/job-6cb9c2ac5c/att-1 /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab/export/job-6cb9c2ac5c/att-1 /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/att-1-before.json
+att-1 live and exported file sets + every SHA256 unchanged
+
+=== 6/6: Five-line summary ===
++ CAMPAIGN_ID=c1 CAMPAIGN_ROOT=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1 LAB=/home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862/lab bin/run_op --agent demo --task DEMO -- python3 cc/demo/inspect.py summary job-6cb9c2ac5c /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862
+1. novmm-4: successful build; config, run_ref, and archive identities are distinct fields.
+2. job-6cb9c2ac5c: new immutable submission with two pinned test definitions and inputs.
+3. Compatibility receipt: x86 accepted; Jetson template rejected with reasons.
+4. att-1: sandbox interrupted, partial evidence exported and hashes verified; stop confirmed.
+5. att-2: 2/2 clean completions; att-1 unchanged; records: /home/muk/projects/siminfeng/campaign/artifacts/codexDEMO1/demo-20261109T230625.053878644Z-1426862
