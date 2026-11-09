@@ -1,0 +1,4 @@
+# D034 — Planner (cc/moe_planner, T-PL) predictions validated on GPU (900 MiB budget, ctx 4096)
+Protocol D032(B). Job job-56115e2bf1 (20/20 clean). 5 plans mixE4K --n-cpu-moe 19..23: GPU MiB predicted vs measured within +0.1..+0.3% (all); decode predicted vs measured +2.6..+7.2% (all optimistic; 3 samples each). Within the planner's own leave-one-out bound (16%) -> VALIDATED IN RANGE. KLD 0.040 / top-1 90.5% for all (placement does not change quality, as expected for identical weights).
+Next: add these 5 points to calibration.json (systematic optimism ~5%); validate out of range (Qwen3-30B-A3B proxy, D031) where the planner must say "extrapolated".
+Method lesson: "plan -> emitted lab tests -> measured -> prediction error" is the factory's self-check loop; it caught a consistent decode bias on its first run.

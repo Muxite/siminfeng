@@ -1,0 +1,6 @@
+# D033 — Quantized KV fixed (T-KVB2 patch) and measured: q8_0 KV = same accuracy, -720 MiB at 32k
+Fix: cc/kv_quant_fix/kv-quant-fix.patch sha256 dd0e4ffd... (Codex T-KVB2): the backend scheduler sizes its hash set for graph NODES only while storing nodes+leaves; quantized-KV extra ops push Granite's graph to 2065 tensors > 2053 slots -> GGML_ABORT. Generic capacity defect (upstream-worthy). Image kvfix-1 (Build CC success, run_ref sha256:7c31deda...).
+Job job-a945fa8656 (protocol D028 unchanged, 15/15 clean; download running concurrently: dl=3 in monitor, no compiler). -fa on, -c 32768, 1560-token prompt:
+  KV f16 2762 MiB, decode 625.1, prefill 7383 | q8_0 2042 MiB (-720), 559.2 (-10.5%), 6947 (-6%) | q4_0 1658 MiB (-1104), 502.3 (-20%), 7188 | f16 no-FA 3746 MiB, 573.7, 5916.
+  PPL wikitext -c 4096: f16 7.5385±0.171, q8_0 7.5392±0.171 (+0.01%: ACCEPT, same accuracy), q4_0 8.1368±0.185 (+7.9%: REJECT under the ±1% rule).
+Factory rules: long context -> -fa on (always); then KV q8_0 (needs kv_quant_fix on this llama.cpp pin) trades ~10% decode for ~26% less GPU KV+attention memory at ~equal PPL; q4_0 KV only with an explicit quality budget. Classification: representation (KV) trade-off + engine defect fix (the fix is a correctness enabler, not a speed gain).
