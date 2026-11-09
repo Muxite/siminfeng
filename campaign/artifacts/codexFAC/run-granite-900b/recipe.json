@@ -1,0 +1,349 @@
+{
+  "schema": "factory-stage/0",
+  "stage": "recipe",
+  "status": "completed",
+  "inputs": {
+    "files": {
+      "/home/muk/projects/siminfeng/campaign/cc/factory/factory.py": "0bdb2623eae85809bb60c838d254e3192de4fae3116570316529f7226662989b",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/run-granite-900b/plan.json": "99dbb44147998f69507d8dbde9e81bb32d978e421f76963afbb849aa3b5a7f68",
+      "/home/muk/projects/siminfeng/campaign/cc/factory/components.json": "7cbd58ac46ba8427e44b11e65ffdaf5be28b83824dd3f4ccd2cc0e48f1ea24f8",
+      "/home/muk/projects/siminfeng/campaign/cc/pap/make_pap.sh": "f7c4383be1800ded88d8f9b0df7620ca9f0991491905affc88a2fa359bd9e792",
+      "/home/muk/projects/siminfeng/campaign/cc/q8_reuse/q8-activation-reuse.patch": "9943dee44b930f4febd23dce91fcb9c50ff67625ede5fb3fcc8126ea734a0675",
+      "/home/muk/projects/siminfeng/campaign/cc/kv_quant_fix/kv-quant-fix.patch": "dd0e4ffd3ffa1e414353f70addf67312816d167ebb1e9518cc75b543b86e8e6c",
+      "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6"
+    },
+    "parameters": {
+      "include_pending": false,
+      "ctx": 4096
+    }
+  },
+  "inputs_sha256": "ea2257c383d54cc1633d34a12ca5d4082890b0a43437c897c6920dc5226a9155",
+  "data": {
+    "schema": "factory-recipe/0",
+    "recipes": [
+      {
+        "plan_id": "mixE4K-static19-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+        "model": {
+          "path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+          "sha256": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6"
+        },
+        "model_transforms": [
+          {
+            "action": "reuse-existing-representation",
+            "input": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+            "output": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+            "input_sha256": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6",
+            "output_sha256": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6"
+          }
+        ],
+        "engine": {
+          "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+          "ordered_patches": [
+            {
+              "component": "q8_reuse",
+              "path": "/home/muk/projects/siminfeng/campaign/cc/q8_reuse/q8-activation-reuse.patch",
+              "sha256": "9943dee44b930f4febd23dce91fcb9c50ff67625ede5fb3fcc8126ea734a0675",
+              "decisions": [
+                "D026",
+                "D029"
+              ]
+            },
+            {
+              "component": "kv_quant_fix",
+              "path": "/home/muk/projects/siminfeng/campaign/cc/kv_quant_fix/kv-quant-fix.patch",
+              "sha256": "dd0e4ffd3ffa1e414353f70addf67312816d167ebb1e9518cc75b543b86e8e6c",
+              "decisions": [
+                "D028",
+                "D033"
+              ]
+            }
+          ],
+          "patch_bundle": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/run-granite-900b/ordered-components.patch",
+          "patch_bundle_sha256": "947aa5caf4db69ce874d208478d70bd53d3309f9c704a4f18f6c2aa6451665ef",
+          "cmake_defines": [],
+          "extra_targets": [],
+          "linkage": true,
+          "env": {
+            "GGML_CUDA_Q8_REUSE": "1"
+          }
+        },
+        "runtime_argv": [
+          "/app/llama-completion",
+          "-m",
+          "/m/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+          "-ngl",
+          "99",
+          "--fit",
+          "off",
+          "-c",
+          "4096",
+          "-b",
+          "2048",
+          "-ub",
+          "512",
+          "-ctk",
+          "f16",
+          "-ctv",
+          "f16",
+          "-t",
+          "8",
+          "-tb",
+          "8",
+          "--n-cpu-moe",
+          "19"
+        ],
+        "runtime_mounts": [
+          {
+            "source": "/home/muk/models/campaign/gguf",
+            "target": "/m",
+            "access": "ro"
+          }
+        ],
+        "runtime_env": {
+          "GGML_CUDA_Q8_REUSE": "1"
+        },
+        "tests": {
+          "pl_4a769792685b_engagement": {
+            "tool": "llama-completion",
+            "parser": "completion",
+            "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+            "docker_args": [
+              "-v",
+              "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+            ],
+            "args": [
+              "-ngl",
+              "99",
+              "--fit",
+              "off",
+              "-c",
+              "4096",
+              "-b",
+              "2048",
+              "-ub",
+              "512",
+              "-ctk",
+              "f16",
+              "-ctv",
+              "f16",
+              "-t",
+              "8",
+              "-tb",
+              "8",
+              "--n-cpu-moe",
+              "19",
+              "-f",
+              "/tin/chat.txt",
+              "-n",
+              "8",
+              "--temp",
+              "0",
+              "-s",
+              "1",
+              "-no-cnv",
+              "--no-warmup"
+            ],
+            "env": {
+              "GGML_CUDA_Q8_REUSE": "1"
+            }
+          },
+          "pl_4a769792685b_timing": {
+            "tool": "llama-completion",
+            "parser": "completion",
+            "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+            "docker_args": [
+              "-v",
+              "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+            ],
+            "args": [
+              "-ngl",
+              "99",
+              "--fit",
+              "off",
+              "-c",
+              "4096",
+              "-b",
+              "2048",
+              "-ub",
+              "512",
+              "-ctk",
+              "f16",
+              "-ctv",
+              "f16",
+              "-t",
+              "8",
+              "-tb",
+              "8",
+              "--n-cpu-moe",
+              "19",
+              "-f",
+              "/tin/chat.txt",
+              "-n",
+              "160",
+              "--temp",
+              "0",
+              "-s",
+              "1",
+              "-no-cnv",
+              "--no-warmup"
+            ],
+            "env": {
+              "GGML_CUDA_Q8_REUSE": "1"
+            }
+          },
+          "pl_4a769792685b_quality512": {
+            "tool": "llama-perplexity",
+            "parser": "kl",
+            "needs_data": true,
+            "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+            "docker_args": [
+              "-v",
+              "/home/muk/projects/siminfeng/campaign/artifacts/kl:/planner-kl:ro"
+            ],
+            "args": [
+              "-ngl",
+              "99",
+              "--fit",
+              "off",
+              "-c",
+              "512",
+              "-b",
+              "2048",
+              "-ub",
+              "512",
+              "-ctk",
+              "f16",
+              "-ctv",
+              "f16",
+              "-t",
+              "8",
+              "-tb",
+              "8",
+              "--n-cpu-moe",
+              "19",
+              "--chunks",
+              "20",
+              "--kl-divergence",
+              "--kl-divergence-base",
+              "/planner-kl/bf16.kl"
+            ],
+            "env": {
+              "GGML_CUDA_Q8_REUSE": "1"
+            }
+          }
+        },
+        "prerequisites": [
+          "Check mechanism engagement (D024)",
+          "Measure shim peak AND baseline-subtracted device peak (D023)",
+          "Paired quality check before accepting drift; 3 alternated timing rounds"
+        ],
+        "component_scope": "Accepted components only"
+      }
+    ],
+    "components": [
+      {
+        "id": "q8_reuse",
+        "status": "accepted",
+        "kind": "engine-patch",
+        "decisions": [
+          "D026",
+          "D029"
+        ],
+        "patch": "cc/q8_reuse/q8-activation-reuse.patch",
+        "env": {
+          "GGML_CUDA_Q8_REUSE": "1"
+        },
+        "claim": "full-engine code gain (computation-preserving)",
+        "scope": "D029: Granite batch-1 decode on x86-main; not a memory reduction"
+      },
+      {
+        "id": "kv_quant_fix",
+        "status": "accepted",
+        "kind": "engine-patch",
+        "decisions": [
+          "D028",
+          "D033"
+        ],
+        "patch": "cc/kv_quant_fix/kv-quant-fix.patch",
+        "scope": "Generic scheduler hash-set sizing fix; CUDA-qualified in kvfix-1 (D033) and release-1 (q8 KV text identical to kvfix-1; op tests 2445/2445)"
+      },
+      {
+        "id": "gpu_budget",
+        "status": "accepted",
+        "kind": "infrastructure",
+        "decisions": [
+          "D021",
+          "D023"
+        ],
+        "scope": "Cooperative cap only; requires NO_VMM and verified interception; budget predictions do not enable or prove a cap"
+      },
+      {
+        "id": "flash-attn",
+        "status": "accepted",
+        "kind": "runtime-recommendation",
+        "decisions": [
+          "D028"
+        ],
+        "argv": [
+          "-fa",
+          "on"
+        ],
+        "scope": "Recommended for long context; quantized KV needs CUDA qualification and paired quality"
+      },
+      {
+        "id": "imatrix_quant",
+        "status": "accepted",
+        "kind": "model-transform",
+        "decisions": [
+          "D035"
+        ],
+        "recipe": "cc/pap/make_pap.sh (imatrix step)",
+        "scope": "Same bytes, KLD 0.040->0.027 at 4-bit experts (wikitext-train calibration, wikitext-test eval)"
+      }
+    ],
+    "excluded": [
+      {
+        "id": "pap",
+        "status": "pending",
+        "kind": "model-transform",
+        "decisions": [
+          "T-PAP",
+          "D032"
+        ],
+        "recipe": "cc/pap/make_pap.sh",
+        "scope": "Placement-matched BF16 -> Q8_0 with first-K expert Q2_K/Q3_K and remaining expert Q4_K; GPU measurement pending; D035: pap12_q3 provisional (+9.8% decode, KLD 0.073) pending quiet-host rerun"
+      },
+      {
+        "id": "hybrid_split",
+        "status": "rejected",
+        "reason": "rejected-small-expert-regime",
+        "kind": "engine-patch",
+        "decisions": [
+          "D030",
+          "D031"
+        ]
+      },
+      {
+        "id": "moe_static_hot",
+        "status": "rejected",
+        "kind": "engine-patch",
+        "decisions": [
+          "D024"
+        ],
+        "reason": "Allocated banks were never engaged"
+      }
+    ],
+    "transform_alternatives": [],
+    "notes": [
+      "gpu_budget is infrastructure; no hard VRAM cap is inferred or enabled.",
+      "Planner quantized KV flags include flash attention; long-context f16 flash attention remains a recommendation.",
+      "Ordered patch bundle must pass Build CC git apply checks; component acceptance does not qualify combinations."
+    ]
+  },
+  "outputs": {
+    "data_sha256": "0ea66cce7296b6d0a163301ab5a9b8d90a28c5a3412e3a657251059d378b1c22",
+    "files": {
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/run-granite-900b/ordered-components.patch": "947aa5caf4db69ce874d208478d70bd53d3309f9c704a4f18f6c2aa6451665ef"
+    }
+  }
+}

@@ -1,0 +1,216 @@
+diff --git a/ggml/src/ggml-cuda/common.cuh b/ggml/src/ggml-cuda/common.cuh
+--- a/ggml/src/ggml-cuda/common.cuh
++++ b/ggml/src/ggml-cuda/common.cuh
+@@ -1445,6 +1445,33 @@
+     }
+ };
+ 
++struct ggml_cuda_q8_reuse {
++    // Keep all sizes alive: older captured graphs can still use them.
++    std::unordered_map<size_t, void *> buffers;
++    const ggml_tensor * src = nullptr;
++    ggml_tensor layout = {};
++    cudaStream_t stream = nullptr;
++    bool allowed = false;
++
++    bool matches(const ggml_tensor * tensor, cudaStream_t current_stream) const {
++        if (src != tensor || stream != current_stream || layout.data != tensor->data || layout.type != tensor->type) {
++            return false;
++        }
++        for (int i = 0; i < GGML_MAX_DIMS; ++i) {
++            if (layout.ne[i] != tensor->ne[i] || layout.nb[i] != tensor->nb[i]) {
++                return false;
++            }
++        }
++        return true;
++    }
++
++    void remember(const ggml_tensor * tensor, cudaStream_t current_stream) {
++        src = tensor;
++        layout = *tensor;
++        stream = current_stream;
++    }
++};
++
+ struct ggml_backend_cuda_context {
+     int device;
+     std::string name;
+@@ -1456,6 +1483,7 @@
+     size_t cublas_workspace_sizes[GGML_CUDA_MAX_DEVICES] = {};
+ 
+     int curr_stream_no = 0;
++    ggml_cuda_q8_reuse q8_reuse;
+ 
+ #ifdef USE_CUDA_GRAPH
+     // Map from first_node_ptr to cuda_graph - allows multiple graphs per context
+diff --git a/ggml/src/ggml-cuda/ggml-cuda.cu b/ggml/src/ggml-cuda/ggml-cuda.cu
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -743,6 +743,15 @@
+ 
+     if (copy_event != nullptr) {
+         CUDA_CHECK(cudaEventDestroy(copy_event));
++    }
++    if (!q8_reuse.buffers.empty()) {
++        ggml_cuda_set_device(device);
++#ifdef USE_CUDA_GRAPH
++        cuda_graphs.clear();
++#endif
++        for (const auto & entry : q8_reuse.buffers) {
++            CUDA_CHECK(cudaFree(entry.second));
++        }
+     }
+     for (int i = 0; i < GGML_CUDA_MAX_DEVICES; ++i) {
+         for (int j = 0; j < GGML_CUDA_MAX_STREAMS; ++j) {
+@@ -4546,6 +4555,33 @@
+     return 0;
+ }
+ 
++static bool ggml_cuda_q8_reuse_enabled() {
++    static const bool enabled = [] {
++        const char * value = getenv("GGML_CUDA_Q8_REUSE");
++        return !(value && value[0] == '0' && value[1] == '\0');
++    }();
++    return enabled;
++}
++
++static bool ggml_cuda_q8_reuse_candidate(const ggml_tensor * node) {
++    if (node->op != GGML_OP_MUL_MAT || !node->src[0] || !node->src[1]) {
++        return false;
++    }
++    const ggml_tensor * weight = node->src[0];
++    const ggml_tensor * input  = node->src[1];
++    return weight->type == GGML_TYPE_Q8_0 && input->type == GGML_TYPE_F32 && node->type == GGML_TYPE_F32 &&
++        input->ne[0] > 0 && input->ne[1] == 1 && input->ne[2] == 1 && input->ne[3] == 1 &&
++        ggml_is_contiguous(input) &&
++        ggml_backend_buffer_get_usage(weight->buffer) != GGML_BACKEND_BUFFER_USAGE_COMPUTE;
++}
++
++static bool ggml_cuda_q8_reuse_overlaps(const ggml_tensor * node, const ggml_tensor & input) {
++    const uintptr_t a = (uintptr_t) node->data;
++    const uintptr_t b = (uintptr_t) input.data;
++    // Subtract addresses instead of adding lengths, to avoid end-address overflow.
++    return a <= b ? b - a < ggml_nbytes(node) : a - b < ggml_nbytes(&input);
++}
++
+ static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph, const bool use_cuda_graph, const bool cuda_graph_update_required, const void * graph_key) {
+     bool graph_evaluated_or_captured = false;
+ 
+@@ -4686,9 +4722,19 @@
+                     continue;
+                 }
+ 
++                auto & reuse = cuda_ctx->q8_reuse;
++                const bool reuse_candidate = ggml_cuda_q8_reuse_enabled() && !should_launch_concurrent_events &&
++                    ggml_cuda_q8_reuse_candidate(node);
++                if ((!reuse_candidate && node->op != GGML_OP_ROPE) ||
++                        (reuse.src && ggml_cuda_q8_reuse_overlaps(node, reuse.layout))) {
++                    reuse.src = nullptr;
++                }
++
++                // Fused kernels use their original scratch allocation and cannot hit this cache.
+                 int nodes_to_skip = ggml_cuda_try_fuse(cuda_ctx, cgraph, i);
+ 
+                 if (nodes_to_skip != 0) {
++                    reuse.src = nullptr;
+ #ifdef GGML_CUDA_DEBUG
+                     const int last_fused = i + nodes_to_skip;
+                     GGML_LOG_INFO("nodes_fused: %d, first: %s (%s), last: %s (%s)\n",
+@@ -4715,7 +4761,10 @@
+                 GGML_UNUSED(integrated);
+ #endif  // NDEBUG
+ 
++                reuse.allowed = reuse_candidate && cuda_ctx->curr_stream_no == 0 &&
++                    !ggml_cuda_q8_reuse_overlaps(node, *node->src[1]);
+                 bool ok = ggml_cuda_compute_forward(*cuda_ctx, node);
++                reuse.allowed = false;
+                 if (!ok) {
+                     GGML_LOG_ERROR("%s: op not supported %s (%s)\n", __func__, node->name, ggml_op_name(node->op));
+                 }
+@@ -4784,6 +4833,8 @@
+ static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
+     ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *) backend->context;
+ 
++    cuda_ctx->q8_reuse.src = nullptr;
++    cuda_ctx->q8_reuse.allowed = false;
+     ggml_cuda_set_device(cuda_ctx->device);
+ 
+     bool use_cuda_graph             = false;
+@@ -4828,6 +4879,26 @@
+         }
+     }
+ #endif // USE_CUDA_GRAPH
++
++    // Allocate outside capture. Never replace storage referenced by an older graph.
++    if ((!use_cuda_graph || cuda_graph_update_required) && ggml_cuda_q8_reuse_enabled() && cuda_ctx->stream_context().concurrent_events.empty()) {
++        for (int i = 0; i < cgraph->n_nodes; ++i) {
++            const ggml_tensor * node = cgraph->nodes[i];
++            if (!ggml_cuda_q8_reuse_candidate(node)) {
++                continue;
++            }
++            const int64_t n = node->src[1]->ne[0];
++            GGML_ASSERT(n <= INT64_MAX - MATRIX_ROW_PADDING);
++            const uint64_t blocks = GGML_PAD(n, MATRIX_ROW_PADDING) / QK8_1;
++            GGML_ASSERT(blocks <= SIZE_MAX / sizeof(block_q8_1));
++            const size_t bytes = blocks * sizeof(block_q8_1);
++            if (cuda_ctx->q8_reuse.buffers.count(bytes) == 0) {
++                void * ptr = nullptr;
++                CUDA_CHECK(cudaMalloc(&ptr, bytes));
++                cuda_ctx->q8_reuse.buffers.emplace(bytes, ptr);
++            }
++        }
++    }
+ 
+     if (use_cuda_graph && cuda_graph_update_required) {
+         // Start CUDA graph capture
+diff --git a/ggml/src/ggml-cuda/mmvq.cu b/ggml/src/ggml-cuda/mmvq.cu
+--- a/ggml/src/ggml-cuda/mmvq.cu
++++ b/ggml/src/ggml-cuda/mmvq.cu
+@@ -1549,12 +1549,21 @@
+     }
+ 
+     const int64_t ne10_padded = GGML_PAD(ne10, MATRIX_ROW_PADDING);
+-    ggml_cuda_pool_alloc<char> src1_q8_1(ctx.pool(), ne13*ne12 * ne11*ne10_padded * sizeof(block_q8_1)/QK8_1);
+-    {
++    const size_t q8_bytes = ne13*ne12 * ne11*ne10_padded * sizeof(block_q8_1)/QK8_1;
++    ggml_cuda_pool_alloc<char> src1_q8_1;
++    auto & reuse = ctx.q8_reuse;
++    const auto cached_buffer = reuse.buffers.find(q8_bytes);
++    const bool can_reuse = reuse.allowed && !ids && !fusion && src0->type == GGML_TYPE_Q8_0 &&
++        ne11 == 1 && ne12 == 1 && ne13 == 1 && cached_buffer != reuse.buffers.end();
++    void * src1_q8_data = can_reuse ? cached_buffer->second : src1_q8_1.alloc(ctx.pool(), q8_bytes);
++    if (!can_reuse || !reuse.matches(src1, stream)) {
+         const int64_t s11 = src1->nb[1] / ts_src1;
+         const int64_t s12 = src1->nb[2] / ts_src1;
+         const int64_t s13 = src1->nb[3] / ts_src1;
+-        quantize_row_q8_1_cuda(src1_d, nullptr, src1_q8_1.get(), src0->type, ne10, s11, s12, s13, ne10_padded, ne11, ne12, ne13, stream);
++        quantize_row_q8_1_cuda(src1_d, nullptr, src1_q8_data, src0->type, ne10, s11, s12, s13, ne10_padded, ne11, ne12, ne13, stream);
++        if (can_reuse) {
++            reuse.remember(src1, stream);
++        }
+     }
+ 
+     const int64_t s01 = src0->nb[1] / ts_src0;
+@@ -1580,7 +1589,7 @@
+     const int64_t ids_stride = ids ? ids->nb[1] / ggml_type_size(ids->type) : 0;
+ 
+     mul_mat_vec_q_switch_type(
+-        src0->data, src0->type, src1_q8_1.get(), ids_d, fusion_local, dst_d, ne00,
++        src0->data, src0->type, src1_q8_data, ids_d, fusion_local, dst_d, ne00,
+         ne01,              ncols_dst,     s01, stride_col_y,     stride_col_dst,
+         ne02, nchannels_y, nchannels_dst, s02, stride_channel_y, stride_channel_dst,
+         ne03,              ne3,           s03, s13,              s3,               ids_stride, stream);
+--- a/ggml/src/ggml-backend.cpp
++++ b/ggml/src/ggml-backend.cpp
+@@ -1972,9 +1972,8 @@
+     sched->n_backends = n_backends;
+     sched->n_copies = parallel ? GGML_SCHED_MAX_COPIES : 1;
+ 
+-    // initialize hash table
+-    // FIXME: needs to be size*2 to account for leafs (do it in graph_split instead)
+-    sched->hash_set    = ggml_hash_set_new(graph_size);
++    // The hash table holds both nodes and leafs, as in ggml_new_graph_custom.
++    sched->hash_set    = ggml_hash_set_new(graph_size * 2);
+     sched->hv_tensor_backend_ids = (int *) malloc(sched->hash_set.size * sizeof(sched->hv_tensor_backend_ids[0]));
+     sched->hv_tensor_copies      = (ggml_tensor **) malloc(sched->hash_set.size * sched->n_backends * sched->n_copies * sizeof(struct ggml_tensor *));
+ 
