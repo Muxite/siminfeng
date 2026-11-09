@@ -323,6 +323,10 @@ def resolve_base(run, value, kind):
 
 def build(args, runner=None):
     defines = validate_defines(getattr(args, "cmake_define", []) or [])
+    if any(t.startswith("test-") for t in (getattr(args, "extra_target", []) or [])):
+        # Derived, recorded define: llama.cpp test targets (e.g. test-backend-ops) only exist with
+        # LLAMA_BUILD_TESTS=ON; the recipe's later -D overrides its built-in OFF (q8base-1 failure).
+        defines.setdefault("LLAMA_BUILD_TESTS", "ON")
     define_flags = [f"-D{key}={value}" for key, value in defines.items()]
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,15 @@
+Implemented within the allowed write locations; `ref/` remains unchanged.
+
+- [README and commands](/home/muk/projects/siminfeng/campaign/cc/hybrid_split/README.md)
+- [Engine patch](/home/muk/projects/siminfeng/campaign/cc/hybrid_split/hybrid-split.patch)
+- [Test evidence](/home/muk/projects/siminfeng/campaign/artifacts/codexR/verification.json)
+- [Resumable checkpoint](/home/muk/projects/siminfeng/campaign/artifacts/codexR/checkpoint.md)
+
+CPU build passed at `-j4`. Eight pytest cases and eight focused configurations passed. All three variants matched **64/64 greedy tokens**, with **maximum logit difference 0**.
+
+Unverified: CUDA compilation/execution, graph capture, total GPU footprint equality, and performance. Extra hot-slot launches and cold activation transfers remain significant risks.
+
+Patch SHA256:
+```text
+1063ac102a14bff798d56b5bf292d21455f3f4c847f0e2043d98d58126bd1efb
+```

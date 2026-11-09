@@ -1,0 +1,528 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 12f4555..750b449 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -130,6 +130,7 @@ option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE
+ 
+ # extra artifacts
+ option(LLAMA_BUILD_TESTS     "llama: build tests"                                                                ${LLAMA_STANDALONE})
++option(LLAMA_BUILD_HYBRID_SPLIT_TESTS "llama: expose tests for the hybrid split campaign build" OFF)
+ option(LLAMA_BUILD_TOOLS     "llama: build tools"                                                                ${LLAMA_STANDALONE})
+ option(LLAMA_BUILD_EXAMPLES  "llama: build examples"                                                             ${LLAMA_STANDALONE})
+ option(LLAMA_BUILD_SERVER    "llama: build server example"                                                       ${LLAMA_STANDALONE})
+@@ -240,7 +241,7 @@ if (LLAMA_BUILD_COMMON)
+     add_subdirectory(common)
+ endif()
+ 
+-if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
++if (LLAMA_BUILD_COMMON AND (LLAMA_BUILD_TESTS OR LLAMA_BUILD_HYBRID_SPLIT_TESTS) AND NOT CMAKE_JS_VERSION)
+     include(CTest)
+     add_subdirectory(tests)
+ endif()
+diff --git a/docs/ops.md b/docs/ops.md
+index 581db64..9557c20 100644
+--- a/docs/ops.md
++++ b/docs/ops.md
+@@ -2,6 +2,12 @@
+ 
+ List of GGML operations and backend support status.
+ 
++In the hybrid-split campaign fork, plain-buffer CPU `MUL_MAT_ID` treats negative
++IDs as skipped slots and writes exact zero to their output columns. Positive IDs
++are bounds-checked in Release builds. This convention is not implemented by CUDA
++or repacked CPU kernels. Split Granite models require CPU cold banks,
++`--no-op-offload` and `--no-repack`; their CUDA hot banks use in-range null IDs.
++
+ ## How to add a backend to this table:
+ 
+ 1. Run `test-backend-ops support --output csv` with your backend name and redirect output to a csv file in `docs/ops/` (e.g., `docs/ops/CUDA.csv`)
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.c b/ggml/src/ggml-cpu/ggml-cpu.c
+index ab82e3d..2d6fb53 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu.c
++++ b/ggml/src/ggml-cpu/ggml-cpu.c
+@@ -1652,7 +1652,11 @@ static void ggml_compute_forward_mul_mat_id(
+             for (int id = 0; id < n_ids; ++id) {
+                 const int32_t i02 = *(const int32_t *) ((const char *) ids->data + iid1*ids->nb[1] + id*ids->nb[0]);
+ 
+-                assert(i02 >= 0 && i02 < n_as);
++                if (i02 < 0) {
++                    memset((char *) dst->data + iid1 * dst->nb[2] + id * dst->nb[1], 0, ne0 * sizeof(float));
++                    continue;
++                }
++                GGML_ASSERT(i02 < n_as);
+ 
+                 MMID_MATRIX_ROW(i02, matrix_row_counts[i02]) = (struct mmid_row_mapping) {id, iid1};
+                 matrix_row_counts[i02] += 1;
+diff --git a/src/llama-arch.cpp b/src/llama-arch.cpp
+index ffa35bd..469a2ec 100644
+--- a/src/llama-arch.cpp
++++ b/src/llama-arch.cpp
+@@ -490,6 +490,7 @@ static const std::map<llm_tensor, const char *> LLM_TENSOR_NAMES = {
+     { LLM_TENSOR_ATTN_OUT,                               "blk.%d.attn_output" },
+     { LLM_TENSOR_ATTN_ROT_EMBD,                          "blk.%d.attn_rot_embd" },
+     { LLM_TENSOR_FFN_GATE_INP,                           "blk.%d.ffn_gate_inp" },
++    { LLM_TENSOR_FFN_EXPERT_IDS,                         "blk.%d.ffn_expert_ids" },
+     { LLM_TENSOR_FFN_NORM,                               "blk.%d.ffn_norm" },
+     { LLM_TENSOR_FFN_GATE,                               "blk.%d.ffn_gate" },
+     { LLM_TENSOR_FFN_DOWN,                               "blk.%d.ffn_down" },
+@@ -921,6 +922,7 @@ static const std::map<llm_tensor, llm_tensor_info> LLM_TENSOR_INFOS = {
+     {LLM_TENSOR_ENC_FFN_UP,                 {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+     {LLM_TENSOR_FFN_GATE_INP_SHEXP,         {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+     {LLM_TENSOR_FFN_GATE_INP,               {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
++    {LLM_TENSOR_FFN_EXPERT_IDS,             {LLM_TENSOR_LAYER_REPEATING, GGML_OP_GET_ROWS}},
+     {LLM_TENSOR_SSM_IN,                     {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+     {LLM_TENSOR_SSM_X,                      {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+     {LLM_TENSOR_SSM_DT,                     {LLM_TENSOR_LAYER_REPEATING, GGML_OP_MUL_MAT}},
+diff --git a/src/llama-arch.h b/src/llama-arch.h
+index 14ce29a..5e5efcf 100644
+--- a/src/llama-arch.h
++++ b/src/llama-arch.h
+@@ -508,6 +508,7 @@ enum llm_tensor {
+     LLM_TENSOR_ATTN_RESID_ALPHA,
+     LLM_TENSOR_ATTN_RESID_BETA,
+     LLM_TENSOR_FFN_GATE_INP,
++    LLM_TENSOR_FFN_EXPERT_IDS,
+     LLM_TENSOR_FFN_GATE_INP_SHEXP,
+     LLM_TENSOR_FFN_NORM,
+     LLM_TENSOR_FFN_POST_NORM,
+diff --git a/src/llama-graph.cpp b/src/llama-graph.cpp
+index 2bc3a29..5a4d509 100644
+--- a/src/llama-graph.cpp
++++ b/src/llama-graph.cpp
+@@ -2122,7 +2122,8 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
+          ggml_tensor * down_exps_s,
+          ggml_tensor * selected_experts_in,
+          ggml_tensor * post_exp_norm,
+-               float   post_exp_norm_eps) const {
++               float   post_exp_norm_eps,
++ const llama_layer * split_layer) const {
+     return build_moe_ffn(
+         cur,
+         gate_inp,  /* gate_inp_b  */ nullptr,
+@@ -2145,7 +2146,8 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
+         down_exps_s,
+         selected_experts_in,
+         post_exp_norm,
+-        post_exp_norm_eps
++        post_exp_norm_eps,
++        split_layer
+     );
+ }
+ 
+@@ -2175,7 +2177,8 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
+          ggml_tensor * down_exps_s,
+          ggml_tensor * selected_experts_in,
+          ggml_tensor * post_exp_norm,
+-               float   post_exp_norm_eps) const {
++               float   post_exp_norm_eps,
++ const llama_layer * split_layer) const {
+     const int64_t n_embd   = cur->ne[0];
+     const int64_t n_tokens = cur->ne[1];
+     const bool weight_before_ffn = arch == LLM_ARCH_LLAMA4; // for llama4, we apply the sigmoid-ed weights before the FFN
+@@ -2192,6 +2195,13 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
+         logits = probs_in;
+     }
+ 
++    if (split_layer && split_layer->ffn_up_exps_cold) {
++        // Preserve the original reduction order and top-k tie break after permutation.
++        auto * rows = ggml_cont(ctx0, ggml_transpose(ctx0, logits));
++        logits = ggml_cont(ctx0, ggml_transpose(ctx0, ggml_get_rows(ctx0, rows, split_layer->ffn_expert_ids_router)));
++        cb(logits, "ffn_moe_logits_original_order", il);
++    }
++
+     if (gate_inp_b) {
+         logits = ggml_add(ctx0, logits, gate_inp_b);
+         cb(logits, "ffn_moe_logits_biased", il);
+@@ -2315,6 +2325,78 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
+     //call early so that topk-moe can be used
+     ggml_build_forward_expand(gf, weights);
+ 
++    if (split_layer && split_layer->ffn_up_exps_cold) {
++        if (cparams.op_offload) {
++            throw std::runtime_error("split Granite requires --no-op-offload to keep cold operations on CPU");
++        }
++        if (moe_cache || (loras && !loras->empty()) || hdmd || weight_before_ffn || type_op != LLM_FFN_SILU || !gate_exps || gate_up_exps ||
++                up_exps_b || gate_exps_b || down_exps_b || up_exps_s || gate_exps_s || down_exps_s || post_exp_norm) {
++            throw std::runtime_error("unsupported split Granite FFN configuration");
++        }
++        for (auto * bank : {split_layer->ffn_up_exps_cold, split_layer->ffn_gate_exps_cold, split_layer->ffn_down_exps_cold}) {
++            if (!ggml_backend_buffer_is_host(bank->buffer)) {
++                throw std::runtime_error("split cold banks require plain host buffers: -ot '\\.cold$=CPU' --no-repack");
++            }
++        }
++
++        const int64_t n_hot = up_exps->ne[2] - 1;
++        std::vector<int32_t> map_hot(n_expert), map_cold(n_expert), map_router(n_expert);
++        std::vector<bool> seen(n_expert, false);
++        ggml_backend_tensor_get(split_layer->ffn_expert_ids_hot, map_hot.data(), 0, n_expert * sizeof(int32_t));
++        ggml_backend_tensor_get(split_layer->ffn_expert_ids_cold, map_cold.data(), 0, n_expert * sizeof(int32_t));
++        ggml_backend_tensor_get(split_layer->ffn_expert_ids_router, map_router.data(), 0, n_expert * sizeof(int32_t));
++        for (int64_t e = 0; e < n_expert; ++e) {
++            const int32_t p = map_router[e];
++            if (p < 0 || p >= n_expert || seen[p] || map_hot[e] != (p < n_hot ? p : n_hot) || map_cold[e] != (p < n_hot ? -1 : p - n_hot)) {
++                throw std::runtime_error("invalid Granite split ID map");
++            }
++            seen[p] = true;
++        }
++
++        // Flatten first: GET_ROWS table batches must match the ID batches.
++        auto * ids_flat = ggml_reshape_1d(ctx0, ggml_cont(ctx0, selected_experts), n_expert_used * n_tokens);
++        auto * ids_hot = ggml_reshape_2d(ctx0, ggml_get_rows(ctx0, split_layer->ffn_expert_ids_hot, ids_flat), n_expert_used, n_tokens);
++        auto * ids_cold = ggml_reshape_2d(ctx0, ggml_get_rows(ctx0, split_layer->ffn_expert_ids_cold, ids_flat), n_expert_used, n_tokens);
++        cb(ids_hot, "ffn_moe_ids_hot", il);
++        cb(ids_cold, "ffn_moe_ids_cold", il);
++        auto * inp = ggml_reshape_3d(ctx0, cur, n_embd, 1, n_tokens);
++        auto ffn = [&](ggml_tensor * u, ggml_tensor * g, ggml_tensor * d, ggml_tensor * ids) {
++            auto * up = build_lora_mm_id(u, inp, ids);
++            auto * gate = build_lora_mm_id(g, inp, ids);
++            auto * act = ggml_swiglu_split(ctx0, gate, up);
++            return build_lora_mm_id(d, act, ids);
++        };
++
++        // CUDA MMQ's compaction assumes unique IDs per token. Dispatch hot slots
++        // separately so multiple misses can safely share one zero expert.
++        ggml_tensor * hot = nullptr;
++        if (ggml_backend_buffer_is_host(up_exps->buffer)) {
++            hot = ffn(up_exps, gate_exps, down_exps, ids_hot);
++        } else {
++            for (int64_t slot = 0; slot < n_expert_used; ++slot) {
++                auto * ids = ggml_view_2d(ctx0, ids_hot, 1, n_tokens, ids_hot->nb[1], slot * ids_hot->nb[0]);
++                auto * out = ffn(up_exps, gate_exps, down_exps, ids);
++                hot = hot ? ggml_concat(ctx0, hot, out, 1) : out;
++            }
++        }
++        auto * cold = ffn(split_layer->ffn_up_exps_cold, split_layer->ffn_gate_exps_cold, split_layer->ffn_down_exps_cold, ids_cold);
++        cb(hot, "ffn_moe_hot", il);
++        cb(cold, "ffn_moe_cold", il);
++        auto * experts = ggml_mul(ctx0, ggml_add(ctx0, hot, cold), weights);
++        cb(experts, "ffn_moe_weighted", il);
++        ggml_tensor * out = nullptr;
++        for (int64_t slot = 0; slot < n_expert_used; ++slot) {
++            auto * value = ggml_view_2d(ctx0, experts, n_embd, n_tokens, experts->nb[2], slot * experts->nb[1]);
++            out = out ? ggml_add(ctx0, out, value) : value;
++            ggml_build_forward_expand(gf, out);
++        }
++        if (n_expert_used == 1) {
++            out = ggml_cont(ctx0, out);
++        }
++        cb(out, "ffn_moe_out", il);
++        return out;
++    }
++
+     // the experts of host-resident layers may be read from the MoE cache
+     ggml_tensor * slots = build_moe_cache_slots(selected_experts, up_exps, gate_exps, down_exps, gate_up_exps, il);
+ 
+diff --git a/src/llama-graph.h b/src/llama-graph.h
+index f66bedb..b7ba391 100644
+--- a/src/llama-graph.h
++++ b/src/llama-graph.h
+@@ -1184,7 +1184,8 @@ struct llm_graph_context {
+              ggml_tensor * down_exps_s = nullptr,
+              ggml_tensor * selected_experts_in = nullptr,
+              ggml_tensor * post_exp_norm = nullptr,
+-                   float   post_exp_norm_eps = 1e-5f) const;
++                   float   post_exp_norm_eps = 1e-5f,
++     const llama_layer * split_layer = nullptr) const;
+ 
+     ggml_tensor * build_moe_ffn(
+              ggml_tensor * cur,
+@@ -1212,7 +1213,8 @@ struct llm_graph_context {
+              ggml_tensor * down_exps_s = nullptr,
+              ggml_tensor * selected_experts_in = nullptr,
+              ggml_tensor * post_exp_norm = nullptr,
+-                   float   post_exp_norm_eps = 1e-5f) const;
++                   float   post_exp_norm_eps = 1e-5f,
++     const llama_layer * split_layer = nullptr) const;
+ 
+     // the slots of the selected experts in the MoE cache, nullptr if the experts of the layer are not read from the cache
+     ggml_tensor * build_moe_cache_slots(
+diff --git a/src/llama-model.h b/src/llama-model.h
+index a187c27..e7949b9 100644
+--- a/src/llama-model.h
++++ b/src/llama-model.h
+@@ -357,6 +357,14 @@ struct llama_layer {
+     struct ggml_tensor * ffn_up_exps_b     = nullptr;
+     struct ggml_tensor * ffn_gate_up_exps_b = nullptr;
+ 
++    // Optional Granite hot/cold banks; the normal expert fields hold the hot banks.
++    struct ggml_tensor * ffn_gate_exps_cold = nullptr;
++    struct ggml_tensor * ffn_up_exps_cold   = nullptr;
++    struct ggml_tensor * ffn_down_exps_cold = nullptr;
++    struct ggml_tensor * ffn_expert_ids_hot = nullptr;
++    struct ggml_tensor * ffn_expert_ids_cold = nullptr;
++    struct ggml_tensor * ffn_expert_ids_router = nullptr;
++
+     // ff MoE per-expert scales (NVFP4 per-tensor scale2)
+     struct ggml_tensor * ffn_gate_exps_s   = nullptr;
+     struct ggml_tensor * ffn_down_exps_s   = nullptr;
+diff --git a/src/models/granite-moe.cpp b/src/models/granite-moe.cpp
+index febe1bf..33e1bd8 100644
+--- a/src/models/granite-moe.cpp
++++ b/src/models/granite-moe.cpp
+@@ -18,7 +18,7 @@ void llama_model_granite_moe::load_arch_hparams(llama_model_loader & ml) {
+     ml.get_key(LLM_KV_EXPERT_SHARED_FEED_FORWARD_LENGTH, hparams.n_ff_shexp, /* required */ false);
+ }
+ 
+-void llama_model_granite_moe::load_arch_tensors(llama_model_loader &) {
++void llama_model_granite_moe::load_arch_tensors(llama_model_loader & ml) {
+     LLAMA_LOAD_LOCALS;
+ 
+     tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, 0);
+@@ -64,9 +64,35 @@ void llama_model_granite_moe::load_arch_tensors(llama_model_loader &) {
+             layer.ffn_up_b   = create_tensor(tn(LLM_TENSOR_FFN_UP,   "bias", i), {n_ff}, TENSOR_NOT_REQUIRED);
+         } else {
+             layer.ffn_gate_inp  = create_tensor(tn(LLM_TENSOR_FFN_GATE_INP,  "weight", i), {n_embd, n_expert}, 0);
+-            layer.ffn_gate_exps = create_tensor(tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd,   n_ff, n_expert}, TENSOR_NOT_REQUIRED);
+-            layer.ffn_down_exps = create_tensor(tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {  n_ff, n_embd, n_expert}, 0);
+-            layer.ffn_up_exps   = create_tensor(tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {n_embd,   n_ff, n_expert}, 0);
++            const auto hot_name = tn(LLM_TENSOR_FFN_UP_EXPS, "weight.hot", i);
++            const auto * hot_meta = ml.get_tensor_meta(hot_name.str().c_str());
++            if (hot_meta) {
++                const int64_t n_hot = hot_meta->ne[2] - 1;
++                if (n_hot < 0 || n_hot >= n_expert) {
++                    throw std::runtime_error("invalid Granite split expert count");
++                }
++                for (auto tensor : {LLM_TENSOR_FFN_GATE_EXPS, LLM_TENSOR_FFN_UP_EXPS, LLM_TENSOR_FFN_DOWN_EXPS}) {
++                    if (ml.get_tensor_meta(tn(tensor, "weight", i).str().c_str())) {
++                        throw std::runtime_error("mixed split and unsplit Granite expert banks");
++                    }
++                }
++                layer.ffn_gate_exps = create_tensor(tn(LLM_TENSOR_FFN_GATE_EXPS, "weight.hot", i), {n_embd, n_ff, n_hot + 1}, 0);
++                layer.ffn_up_exps   = create_tensor(hot_name, {n_embd, n_ff, n_hot + 1}, 0);
++                layer.ffn_down_exps = create_tensor(tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight.hot", i), {n_ff, n_embd, n_hot + 1}, 0);
++                layer.ffn_gate_exps_cold = create_tensor(tn(LLM_TENSOR_FFN_GATE_EXPS, "weight.cold", i), {n_embd, n_ff, n_expert - n_hot}, 0);
++                layer.ffn_up_exps_cold   = create_tensor(tn(LLM_TENSOR_FFN_UP_EXPS, "weight.cold", i), {n_embd, n_ff, n_expert - n_hot}, 0);
++                layer.ffn_down_exps_cold = create_tensor(tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight.cold", i), {n_ff, n_embd, n_expert - n_hot}, 0);
++                layer.ffn_expert_ids_hot  = create_tensor(tn(LLM_TENSOR_FFN_EXPERT_IDS, "ids_hot", i), {1, n_expert}, 0);
++                layer.ffn_expert_ids_cold = create_tensor(tn(LLM_TENSOR_FFN_EXPERT_IDS, "ids_cold", i), {1, n_expert}, 0);
++                layer.ffn_expert_ids_router = create_tensor(tn(LLM_TENSOR_FFN_EXPERT_IDS, "ids_router", i), {n_expert}, 0);
++                if (layer.ffn_expert_ids_hot->type != GGML_TYPE_I32 || layer.ffn_expert_ids_cold->type != GGML_TYPE_I32 || layer.ffn_expert_ids_router->type != GGML_TYPE_I32) {
++                    throw std::runtime_error("Granite split ID maps must be I32");
++                }
++            } else {
++                layer.ffn_gate_exps = create_tensor(tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd, n_ff, n_expert}, TENSOR_NOT_REQUIRED);
++                layer.ffn_down_exps = create_tensor(tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {n_ff, n_embd, n_expert}, 0);
++                layer.ffn_up_exps   = create_tensor(tn(LLM_TENSOR_FFN_UP_EXPS, "weight", i), {n_embd, n_ff, n_expert}, 0);
++            }
+ 
+             // For Granite MoE Shared
+             if (hparams.n_ff_shexp > 0) {
+diff --git a/src/models/granite.cpp b/src/models/granite.cpp
+index 4cac495..0def7ed 100644
+--- a/src/models/granite.cpp
++++ b/src/models/granite.cpp
+@@ -284,7 +284,8 @@ ggml_tensor * llama_model_granite::graph::build_layer_ffn(
+                 LLM_FFN_SILU, true,
+                 hparams.expert_weights_scale,
+                 LLAMA_EXPERT_GATING_FUNC_TYPE_SOFTMAX,
+-                il);
++                il, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 1e-5f,
++                &model.layers[il]);
+         cb(moe_out, "ffn_moe_out", il);
+ 
+         // For Granite MoE Shared
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index 991bf54..5de33b4 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -378,3 +378,5 @@ if (TARGET gguf-model-data)
+     target_link_libraries(test-export-graph-ops PRIVATE gguf-model-data)
+     target_compile_definitions(test-export-graph-ops PRIVATE LLAMA_HF_FETCH)
+ endif()
++
++llama_build_and_test(test-hybrid-split.cpp LINK ggml)
+diff --git a/tests/test-hybrid-split.cpp b/tests/test-hybrid-split.cpp
+new file mode 100644
+index 0000000..89f6a80
+--- /dev/null
++++ b/tests/test-hybrid-split.cpp
+@@ -0,0 +1,189 @@
++#include "ggml.h"
++#include "ggml-alloc.h"
++#include "ggml-backend.h"
++#include "ggml-cpu.h"
++
++#include <cmath>
++#include <cstdio>
++#include <cstring>
++#include <limits>
++#include <stdexcept>
++#include <vector>
++
++static void require(bool value, const char * message) {
++    if (!value) { throw std::runtime_error(message); }
++}
++
++static ggml_context * context() {
++    ggml_init_params p = {ggml_tensor_overhead() * 512 + ggml_graph_overhead_custom(512, false), nullptr, true};
++    auto * ctx = ggml_init(p);
++    require(ctx, "context allocation");
++    return ctx;
++}
++
++// Run cold MUL_MAT_ID on CPU and hot/null slots on the requested backend.
++// All numerical expectations come from scalar dequantized dot products.
++static void test(ggml_backend_t hot_backend, ggml_backend_t cpu, ggml_type type, int nt, bool broadcast) {
++    const int k = 256, m = 32, used = 8;
++    auto * hc = context();
++    auto * cc = context();
++    auto * gc = context();
++    auto * ah = ggml_new_tensor_3d(hc, type, k, m, 3);
++    auto * ac = ggml_new_tensor_3d(cc, type, k, m, 2);
++    auto * mh = ggml_new_tensor_2d(hc, GGML_TYPE_I32, 1, 4);
++    auto * mc = ggml_new_tensor_2d(hc, GGML_TYPE_I32, 1, 4);
++    auto * order = ggml_new_tensor_1d(hc, GGML_TYPE_I32, 4);
++    auto * logits = ggml_new_tensor_2d(hc, GGML_TYPE_F32, 4, nt);
++    auto * ids = ggml_new_tensor_2d(hc, GGML_TYPE_I32, used, nt);
++    auto * x = ggml_new_tensor_3d(hc, GGML_TYPE_F32, k, broadcast ? 1 : used, nt);
++    ggml_set_name(ah, "weight.hot");
++    ggml_set_name(ac, "weight.cold");
++    ggml_set_name(ids, "router_ids");
++    ggml_set_name(x, "input");
++    auto hb = ggml_backend_alloc_ctx_tensors(hc, hot_backend);
++    auto cb = ggml_backend_alloc_ctx_tensors(cc, cpu);
++    require(hb && cb, "weight allocation");
++    ggml_backend_buffer_set_usage(hb, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
++    ggml_backend_buffer_set_usage(cb, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
++
++    const size_t stride = ggml_row_size(type, k) * m;
++    std::vector<uint8_t> packed(4 * stride), hot(3 * stride, 0);
++    std::vector<float> weights(4 * k * m), dequant(weights.size());
++    for (int e = 0; e < 4; ++e) {
++        for (int j = 0; j < k * m; ++j) {
++            weights[e * k * m + j] = (e + 1) * ((j % 7) - 3) * 0.125f;
++        }
++    }
++    if (type == GGML_TYPE_F32) {
++        std::memcpy(packed.data(), weights.data(), packed.size());
++        dequant = weights;
++    } else {
++        require(ggml_quantize_chunk(type, weights.data(), packed.data(), 0, 4 * m, k, nullptr) == packed.size(), "quantize");
++        for (int row = 0; row < 4 * m; ++row) {
++            ggml_get_type_traits(type)->to_float(packed.data() + row * ggml_row_size(type, k), dequant.data() + row * k, k);
++        }
++    }
++    // new -> original permutation [2,0,3,1]
++    std::memcpy(hot.data(), packed.data() + 2 * stride, stride);
++    std::memcpy(hot.data() + stride, packed.data(), stride);
++    std::vector<uint8_t> cold_weights(2 * stride);
++    std::memcpy(cold_weights.data(), packed.data() + 3 * stride, stride);
++    std::memcpy(cold_weights.data() + stride, packed.data() + stride, stride);
++    ggml_backend_tensor_set(ah, hot.data(), 0, hot.size());
++    ggml_backend_tensor_set(ac, cold_weights.data(), 0, cold_weights.size());
++    int32_t hot_map[] = {1, 2, 0, 2};
++    int32_t cold_map[] = {-1, 1, -7, 0};
++    int32_t inverse[] = {1, 3, 0, 2};
++    int perm[] = {2, 0, 3, 1};
++    std::vector<float> permuted_logits(4 * nt);
++    for (int t = 0; t < nt; ++t) {
++        for (int e = 0; e < 4; ++e) { permuted_logits[t * 4 + e] = t * 10 + perm[e]; }
++    }
++    ggml_backend_tensor_set(order, inverse, 0, sizeof(inverse));
++    ggml_backend_tensor_set(logits, permuted_logits.data(), 0, permuted_logits.size() * sizeof(float));
++    ggml_backend_tensor_set(mh, hot_map, 0, sizeof(hot_map));
++    ggml_backend_tensor_set(mc, cold_map, 0, sizeof(cold_map));
++    std::vector<float> input(ggml_nelements(x));
++    for (size_t i = 0; i < input.size(); ++i) { input[i] = 1.0f + (i / k % 2) * .5f; }
++    ggml_backend_tensor_set(x, input.data(), 0, input.size() * sizeof(float));
++    auto * rows = ggml_cont(gc, ggml_transpose(gc, logits));
++    auto * restored = ggml_cont(gc, ggml_transpose(gc, ggml_get_rows(gc, rows, order)));
++    ggml_set_output(restored);
++    auto * flat = ggml_reshape_1d(gc, ids, used * nt);
++    auto * ih = ggml_reshape_2d(gc, ggml_get_rows(gc, mh, flat), used, nt);
++    auto * ic = ggml_reshape_2d(gc, ggml_get_rows(gc, mc, flat), used, nt);
++    auto * cold = ggml_mul_mat_id(gc, ac, x, ic);
++    ggml_set_name(cold, "cold_skipped");
++    ggml_set_output(cold);
++    ggml_tensor * hot_result = nullptr;
++    std::vector<ggml_tensor *> hot_ops;
++    for (int slot = 0; slot < used; ++slot) {
++        auto * id = ggml_view_2d(gc, ih, 1, nt, ih->nb[1], slot * ih->nb[0]);
++        auto * src = broadcast ? x : ggml_view_3d(gc, x, k, 1, nt, x->nb[1], x->nb[2], slot * x->nb[1]);
++        auto * one = ggml_mul_mat_id(gc, ah, src, id);
++        hot_ops.push_back(one);
++        hot_result = hot_result ? ggml_concat(gc, hot_result, one, 1) : one;
++    }
++    auto * out = ggml_add(gc, hot_result, cold);
++    ggml_set_output(out);
++    auto * graph = ggml_new_graph_custom(gc, 512, false);
++    ggml_build_forward_expand(graph, restored);
++    ggml_build_forward_expand(graph, out);
++    ggml_backend_t backends[] = {hot_backend, cpu};
++    auto sched = ggml_backend_sched_new(backends, nullptr, hot_backend == cpu ? 1 : 2, 512, false, false);
++    require(sched, "scheduler allocation");
++    require(ggml_backend_sched_alloc_graph(sched, graph), "graph allocation");
++    require(ggml_backend_sched_get_tensor_backend(sched, cold) == cpu, "cold op must stay on CPU");
++    for (auto * op : hot_ops) {
++        require(ggml_backend_sched_get_tensor_backend(sched, op) == hot_backend, "hot op must use requested backend");
++    }
++    std::vector<int32_t> route(used * nt);
++    std::vector<float> result(m * used * nt), cold_result(result.size());
++    for (int mode = 0; mode < 3; ++mode) {
++        for (int t = 0; t < nt; ++t) {
++            for (int slot = 0; slot < used; ++slot) {
++                // mixed, all cold (every hot ID is the same null), all hot (all cold IDs skipped)
++                route[t * used + slot] = mode == 0 ? (slot + t) % 4 : mode == 1 ? 1 + 2 * (slot % 2) : 2 * (slot % 2);
++            }
++        }
++        ggml_backend_tensor_set(ids, route.data(), 0, route.size() * sizeof(int32_t));
++        std::vector<float> poison(result.size(), std::numeric_limits<float>::quiet_NaN());
++        ggml_backend_tensor_set(cold, poison.data(), 0, poison.size() * sizeof(float));
++        require(ggml_backend_sched_graph_compute(sched, graph) == GGML_STATUS_SUCCESS, "graph computation");
++        std::vector<float> restored_logits(4 * nt);
++        ggml_backend_tensor_get(restored, restored_logits.data(), 0, restored_logits.size() * sizeof(float));
++        for (int t = 0; t < nt; ++t) {
++            for (int e = 0; e < 4; ++e) { require(restored_logits[t * 4 + e] == t * 10 + e, "router order mismatch"); }
++        }
++        ggml_backend_tensor_get(out, result.data(), 0, result.size() * sizeof(float));
++        ggml_backend_tensor_get(cold, cold_result.data(), 0, cold_result.size() * sizeof(float));
++        for (int t = 0; t < nt; ++t) {
++            for (int slot = 0; slot < used; ++slot) {
++                int e = route[t * used + slot];
++                int col = (t * (broadcast ? 1 : used) + (broadcast ? 0 : slot)) * k;
++                for (int row = 0; row < m; ++row) {
++                    float expected = 0;
++                    for (int i = 0; i < k; ++i) { expected += dequant[(e * m + row) * k + i] * input[col + i]; }
++                    int idx = (t * used + slot) * m + row;
++                    require(std::isfinite(result[idx]) && std::abs(result[idx] - expected) < .002f * (1 + std::abs(expected)), "split scalar reference mismatch");
++                    if (cold_map[e] < 0) {
++                        require(cold_result[idx] == 0.0f, "skipped output must be exact zero after buffer reuse");
++                    } else {
++                        require(std::isfinite(cold_result[idx]) && std::abs(cold_result[idx] - expected) < .002f * (1 + std::abs(expected)), "cold scalar reference mismatch");
++                    }
++                }
++            }
++        }
++    }
++    std::printf("PASS type=%s tokens=%d broadcast=%d hot=%s cold=CPU modes=mixed,all-cold,all-hot reuse=NaN-poison\n", ggml_type_name(type), nt, broadcast, ggml_backend_name(hot_backend));
++    ggml_backend_sched_free(sched);
++    ggml_backend_buffer_free(hb);
++    ggml_backend_buffer_free(cb);
++    ggml_free(gc);
++    ggml_free(hc);
++    ggml_free(cc);
++}
++
++int main(int argc, char ** argv) {
++    const char * name = "CPU";
++    if (argc == 3 && std::strcmp(argv[1], "--backend") == 0) { name = argv[2]; }
++    else if (argc != 1) { std::fprintf(stderr, "usage: test-hybrid-split [--backend CPU|CUDA0]\n"); return 2; }
++    ggml_backend_load_all();
++    auto * cpu = ggml_backend_init_by_name("CPU", nullptr);
++    auto * hot = std::strcmp(name, "CPU") == 0 ? cpu : ggml_backend_init_by_name(name, nullptr);
++    if (!cpu || !hot) { std::fprintf(stderr, "requested backend unavailable: %s\n", name); return 2; }
++    ggml_backend_cpu_set_n_threads(cpu, 4);
++    try {
++        for (auto type : {GGML_TYPE_F32, GGML_TYPE_Q4_K}) {
++            for (int nt : {1, 17}) {
++                for (bool broadcast : {true, false}) { test(hot, cpu, type, nt, broadcast); }
++            }
++        }
++    } catch (const std::exception & e) {
++        std::fprintf(stderr, "FAIL: %s\n", e.what());
++        return 1;
++    }
++    if (hot != cpu) { ggml_backend_free(hot); }
++    ggml_backend_free(cpu);
++    return 0;
++}

@@ -1,0 +1,118 @@
+{
+  "completed_utc": "2026-11-09T22:47:20.389799+00:00",
+  "patch": {
+    "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+    "patch": "cc/hybrid_split/hybrid-split.patch",
+    "patch_sha256": "1063ac102a14bff798d56b5bf292d21455f3f4c847f0e2043d98d58126bd1efb",
+    "bytes": 28462,
+    "files": [
+      "CMakeLists.txt",
+      "docs/ops.md",
+      "ggml/src/ggml-cpu/ggml-cpu.c",
+      "src/llama-arch.cpp",
+      "src/llama-arch.h",
+      "src/llama-graph.cpp",
+      "src/llama-graph.h",
+      "src/llama-model.h",
+      "src/models/granite-moe.cpp",
+      "src/models/granite.cpp",
+      "tests/CMakeLists.txt",
+      "tests/test-hybrid-split.cpp"
+    ]
+  },
+  "ref_status": "clean",
+  "write_locations": [
+    "cc/hybrid_split/",
+    "artifacts/codexR/"
+  ],
+  "build": {
+    "cuda": false,
+    "configuration": "Release, GGML_NATIVE=ON, LLAMA_BUILD_TESTS=OFF, LLAMA_BUILD_HYBRID_SPLIT_TESTS=ON",
+    "max_parallel_jobs": 4,
+    "targets": [
+      "llama-cli",
+      "llama-completion",
+      "test-backend-ops",
+      "test-hybrid-split"
+    ],
+    "log": "artifacts/codexR/build-final.log"
+  },
+  "pytest": {
+    "passed": 8,
+    "log": "artifacts/codexR/pytest.log"
+  },
+  "focused": {
+    "configurations_passed": 8,
+    "routing_modes_each": 3,
+    "threads": 4,
+    "log": "artifacts/codexR/focused-test.log"
+  },
+  "numerical": {
+    "n18": {
+      "backend": "CPU",
+      "threads": 4,
+      "prompt_tokens": 63,
+      "continuation_tokens": 64,
+      "different_top1_tokens": 0,
+      "max_abs_logit_difference": 0,
+      "rms_logit_difference": 0
+    },
+    "n12": {
+      "backend": "CPU",
+      "threads": 4,
+      "prompt_tokens": 63,
+      "continuation_tokens": 64,
+      "different_top1_tokens": 0,
+      "max_abs_logit_difference": 0,
+      "rms_logit_difference": 0
+    },
+    "n6": {
+      "backend": "CPU",
+      "threads": 4,
+      "prompt_tokens": 63,
+      "continuation_tokens": 64,
+      "different_top1_tokens": 0,
+      "max_abs_logit_difference": 0,
+      "rms_logit_difference": 0
+    }
+  },
+  "models": {
+    "n18": {
+      "path": "artifacts/codexR/models/granite-split-n18.gguf",
+      "sha256": "02951b0a845f954f8a665f1c48d5f4593fee469769cd992f71ab265571970c4d",
+      "bytes": 839517216,
+      "real_hot_experts": 168,
+      "hot_payload_bytes_including_nulls": 169869312
+    },
+    "n12": {
+      "path": "artifacts/codexR/models/granite-split-n12.gguf",
+      "sha256": "fbe26fbb7689df8cc5db4c46f1a81ccf55e99e2ca44f9b29dce7d1dc8d36c494",
+      "bytes": 839517216,
+      "real_hot_experts": 360,
+      "hot_payload_bytes_including_nulls": 339738624
+    },
+    "n6": {
+      "path": "artifacts/codexR/models/granite-split-n6.gguf",
+      "sha256": "f7d321d144887310bb863d225af4f4274e4460c05e3d9ec3a69ae8a53e7aa75f",
+      "bytes": 839517216,
+      "real_hot_experts": 552,
+      "hot_payload_bytes_including_nulls": 509607936
+    }
+  },
+  "not_verified": [
+    "CUDA compilation/execution",
+    "mixed-device logits",
+    "CUDA graph capture/reuse",
+    "weight/activation transfer tracing",
+    "total GPU MiB equality",
+    "GPU throughput versus static/LRU",
+    "other prompts/models",
+    "repacked CPU buffers"
+  ],
+  "open_risks": [
+    "GPU hot path uses 24 matmuls plus 7 concatenations per top-8 FFN",
+    "cold activations cross PCIe and force scheduler synchronization",
+    "CPU exactness does not imply mixed-device numerical equality",
+    "matching expert payload does not match complete GPU allocation footprint"
+  ]
+}

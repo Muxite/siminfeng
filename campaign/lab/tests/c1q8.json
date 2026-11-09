@@ -1,0 +1,278 @@
+{
+ "c1_q8_tg_r0": {
+  "tool": "llama-bench",
+  "parser": "bench_json",
+  "model_file": "granite-3.1-1b-a400m-instruct-Q8_0.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "0"
+  },
+  "args": [
+   "-p",
+   "0",
+   "-n",
+   "128",
+   "-r",
+   "10",
+   "-o",
+   "json",
+   "-ngl",
+   "99"
+  ]
+ },
+ "c1_q8_gen_r0": {
+  "tool": "llama-completion",
+  "parser": "completion",
+  "model_file": "granite-3.1-1b-a400m-instruct-Q8_0.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "0"
+  },
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+  ],
+  "args": [
+   "-f",
+   "/tin/chat.txt",
+   "-n",
+   "160",
+   "-c",
+   "4096",
+   "--temp",
+   "0",
+   "-s",
+   "1",
+   "-ngl",
+   "99",
+   "-no-cnv",
+   "--no-warmup"
+  ]
+ },
+ "c1_q8_ppl_r0": {
+  "tool": "llama-perplexity",
+  "parser": "ppl",
+  "model_file": "granite-3.1-1b-a400m-instruct-Q8_0.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "0"
+  },
+  "needs_data": true,
+  "args": [
+   "-c",
+   "512",
+   "--chunks",
+   "8",
+   "-b",
+   "512",
+   "-ub",
+   "1",
+   "-ngl",
+   "99"
+  ]
+ },
+ "c1_q8_tg_r1": {
+  "tool": "llama-bench",
+  "parser": "bench_json",
+  "model_file": "granite-3.1-1b-a400m-instruct-Q8_0.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "1"
+  },
+  "args": [
+   "-p",
+   "0",
+   "-n",
+   "128",
+   "-r",
+   "10",
+   "-o",
+   "json",
+   "-ngl",
+   "99"
+  ]
+ },
+ "c1_q8_gen_r1": {
+  "tool": "llama-completion",
+  "parser": "completion",
+  "model_file": "granite-3.1-1b-a400m-instruct-Q8_0.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "1"
+  },
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+  ],
+  "args": [
+   "-f",
+   "/tin/chat.txt",
+   "-n",
+   "160",
+   "-c",
+   "4096",
+   "--temp",
+   "0",
+   "-s",
+   "1",
+   "-ngl",
+   "99",
+   "-no-cnv",
+   "--no-warmup"
+  ]
+ },
+ "c1_q8_ppl_r1": {
+  "tool": "llama-perplexity",
+  "parser": "ppl",
+  "model_file": "granite-3.1-1b-a400m-instruct-Q8_0.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "1"
+  },
+  "needs_data": true,
+  "args": [
+   "-c",
+   "512",
+   "--chunks",
+   "8",
+   "-b",
+   "512",
+   "-ub",
+   "1",
+   "-ngl",
+   "99"
+  ]
+ },
+ "c1_mix_tg_r0": {
+  "tool": "llama-bench",
+  "parser": "bench_json",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "0"
+  },
+  "args": [
+   "-p",
+   "0",
+   "-n",
+   "128",
+   "-r",
+   "10",
+   "-o",
+   "json",
+   "-ngl",
+   "99"
+  ]
+ },
+ "c1_mix_gen_r0": {
+  "tool": "llama-completion",
+  "parser": "completion",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "0"
+  },
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+  ],
+  "args": [
+   "-f",
+   "/tin/chat.txt",
+   "-n",
+   "160",
+   "-c",
+   "4096",
+   "--temp",
+   "0",
+   "-s",
+   "1",
+   "-ngl",
+   "99",
+   "-no-cnv",
+   "--no-warmup"
+  ]
+ },
+ "c1_mix_ppl_r0": {
+  "tool": "llama-perplexity",
+  "parser": "ppl",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "0"
+  },
+  "needs_data": true,
+  "args": [
+   "-c",
+   "512",
+   "--chunks",
+   "8",
+   "-b",
+   "512",
+   "-ub",
+   "1",
+   "-ngl",
+   "99"
+  ]
+ },
+ "c1_mix_tg_r1": {
+  "tool": "llama-bench",
+  "parser": "bench_json",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "1"
+  },
+  "args": [
+   "-p",
+   "0",
+   "-n",
+   "128",
+   "-r",
+   "10",
+   "-o",
+   "json",
+   "-ngl",
+   "99"
+  ]
+ },
+ "c1_mix_gen_r1": {
+  "tool": "llama-completion",
+  "parser": "completion",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "1"
+  },
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+  ],
+  "args": [
+   "-f",
+   "/tin/chat.txt",
+   "-n",
+   "160",
+   "-c",
+   "4096",
+   "--temp",
+   "0",
+   "-s",
+   "1",
+   "-ngl",
+   "99",
+   "-no-cnv",
+   "--no-warmup"
+  ]
+ },
+ "c1_mix_ppl_r1": {
+  "tool": "llama-perplexity",
+  "parser": "ppl",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "env": {
+   "GGML_CUDA_Q8_REUSE": "1"
+  },
+  "needs_data": true,
+  "args": [
+   "-c",
+   "512",
+   "--chunks",
+   "8",
+   "-b",
+   "512",
+   "-ub",
+   "1",
+   "-ngl",
+   "99"
+  ]
+ }
+}
