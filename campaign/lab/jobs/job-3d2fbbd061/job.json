@@ -1,0 +1,661 @@
+{
+ "job": "job-3d2fbbd061",
+ "submitted": "2026-11-09T23:26:11.327780+00:00",
+ "spec": {
+  "image": "llamacpp-b0",
+  "image_id": "sha256:cf383f82e33130ce1be424b4c88a78ed12d8a693406b0c3b7ddb61afed0612d1",
+  "model": "/home/muk/projects/siminfeng/campaign/artifacts/codexPAP/models/pap12_q3.gguf",
+  "model_sha256": "777a38c8c2246843772c32f87f8d0e78226e09b8e4f42474aab800285e26514f",
+  "data": "/home/muk/models/campaign/data/wikitext/wikitext-2-raw/wiki.test.raw",
+  "data_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+  "tests": [
+   "pap_decode_pap12_q3_n12",
+   "pap_decode_pap12_q2_n12",
+   "pap_decode_pap18_q3_n18",
+   "pap_decode_pap18_q2_n18",
+   "pap_decode_pap24_q3_n24",
+   "pap_decode_pap24_q2_n24",
+   "pap_decode_pap24_q3_noimat_n24",
+   "pap_decode_mix4_imat_n12",
+   "pap_decode_mix4_imat_n18",
+   "pap_decode_mix4_imat_n24",
+   "pap_decode_mixE4K_n12",
+   "pap_decode_mixE4K_n18",
+   "pap_decode_mixE4K_n24",
+   "pap_decode_mixE4K_n24",
+   "pap_decode_mixE4K_n18",
+   "pap_decode_mixE4K_n12",
+   "pap_decode_mix4_imat_n24",
+   "pap_decode_mix4_imat_n18",
+   "pap_decode_mix4_imat_n12",
+   "pap_decode_pap24_q3_noimat_n24",
+   "pap_decode_pap24_q2_n24",
+   "pap_decode_pap24_q3_n24",
+   "pap_decode_pap18_q2_n18",
+   "pap_decode_pap18_q3_n18",
+   "pap_decode_pap12_q2_n12",
+   "pap_decode_pap12_q3_n12",
+   "pap_decode_pap12_q3_n12",
+   "pap_decode_pap12_q2_n12",
+   "pap_decode_pap18_q3_n18",
+   "pap_decode_pap18_q2_n18",
+   "pap_decode_pap24_q3_n24",
+   "pap_decode_pap24_q2_n24",
+   "pap_decode_pap24_q3_noimat_n24",
+   "pap_decode_mix4_imat_n12",
+   "pap_decode_mix4_imat_n18",
+   "pap_decode_mix4_imat_n24",
+   "pap_decode_mixE4K_n12",
+   "pap_decode_mixE4K_n18",
+   "pap_decode_mixE4K_n24",
+   "pap_kl_pap12_q3",
+   "pap_kl_pap12_q2",
+   "pap_kl_pap18_q3",
+   "pap_kl_pap18_q2",
+   "pap_kl_pap24_q3",
+   "pap_kl_pap24_q2",
+   "pap_kl_pap24_q3_noimat",
+   "pap_kl_mix4_imat",
+   "pap_kl_mixE4K"
+  ],
+  "resources": {
+   "cpus": "8",
+   "memory": "16g",
+   "pids": "512",
+   "timeout_s": "600",
+   "gpu_wait_s": "600"
+  },
+  "key": "PAP1-alt-2",
+  "inputs": {
+   "model_files": {
+    "pap12_q3.gguf": "777a38c8c2246843772c32f87f8d0e78226e09b8e4f42474aab800285e26514f",
+    "pap12_q2.gguf": "6d49335a981863786a1b5e2ef07e6ca829f9997a8e51e0647fbd776c3058f315",
+    "pap18_q3.gguf": "6428c352f9a3d20dd2733ab3c79bbffbabe6b931a6e047c859c34f9dc6a08b1e",
+    "pap18_q2.gguf": "606de93c9d813349473fc45085a64ed18b6d3291bf7af38f11f338a7dec578a8",
+    "pap24_q3.gguf": "105852e9119a9071cb7da2b7f77633d02c7e33ec38bfb679e855b00ddf127f67",
+    "pap24_q2.gguf": "2f0e3fa4657becee426515e8ab5f31a4773c7ec2ea499b47d3e74b83f3a85997",
+    "pap24_q3_noimat.gguf": "f2e687d3a054a584df313f28983c629c8fbae344cb46391464a807eb5f2e7876",
+    "mix4_imat.gguf": "bd20848b1ea30bb73e8e6e1db7131bce641b4713dce0affcb8faff48622027ac",
+    "granite-3.1-1b-a400m-instruct-mixE4K.gguf": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6"
+   },
+   "mounts": {
+    "/home/muk/projects/siminfeng/campaign/artifacts/traces/in": {
+     "chat.txt": "65d188967378a61add25e0f98c35cd2bce2b02235451b09f6735d5512b3486b0"
+    },
+    "/home/muk/projects/siminfeng/campaign/artifacts/kl": {
+     "bf16.kl": "ad8f351c215ad09971fa9db0ede3b206cf27fad652d9c1cc0abc8c2261d060cd"
+    }
+   },
+   "data_files": {
+    "/home/muk/models/campaign/data/wikitext/wikitext-2-raw/wiki.test.raw": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08"
+   },
+   "tests": {
+    "pap_decode_pap12_q3_n12": "51b9e3f77ee3941b71c2e61a933f4500f03983baa8128ebedd364fc5b27a9ad3",
+    "pap_decode_pap12_q2_n12": "784aa2d2f5cf97fe60bea5a77d04e0d1c06fe19b9bace92e69b29960df4bbd11",
+    "pap_decode_pap18_q3_n18": "332dfb28ef0f023ae7b56f448985d99fb4f2de513c7b0ed861e074912028ca4d",
+    "pap_decode_pap18_q2_n18": "d8bcbf5de220390623ee096ae47623481eb4f0da0dbc3caa48e4d53346268b3e",
+    "pap_decode_pap24_q3_n24": "f7ef52b3ee864e2b06809366b37b1c83ec453d6326c05978fa7bd794f552c993",
+    "pap_decode_pap24_q2_n24": "f13ed7faa04b58f98f947ee98372c63bab428cfc7e3950266b8cc3b5ce649e75",
+    "pap_decode_pap24_q3_noimat_n24": "e281be7c46b2062a0b14a61ef3fe23aaa3903e6501ba8afe16f5e1bac4d1f151",
+    "pap_decode_mix4_imat_n12": "be5b2b441a87a2964f873ab43e87ca898501f23d2ad63a1010a7d208e65b8b75",
+    "pap_decode_mix4_imat_n18": "07a554b3f63e6c10a9e04d524bb6ea7c2e84e83822d9afd471d4b18ceddc2278",
+    "pap_decode_mix4_imat_n24": "12fc8a8258cca92e3394355884a8305ddbdf17820a76c04bbb1a202bdff5322f",
+    "pap_decode_mixE4K_n12": "5da1f5982fdf24a2d18197226b4fa65961f4598f11330992ae21b0bb365d5b5b",
+    "pap_decode_mixE4K_n18": "cc39366e0c23827ad4e6f37af426539a63d236e7289ba88bf44206b3d5fa4337",
+    "pap_decode_mixE4K_n24": "6b90a51c19ed8b6c4a8a2ba3c044611670b136eb6abde1a919ba361f619d2357",
+    "pap_kl_pap12_q3": "19cc46b0a18aa3c58d7fa6a270bc2b456409ba477f4d1c21e54f23eaed2432a1",
+    "pap_kl_pap12_q2": "0dd3203d0ad383b6cf50971d38905952a3d3b2e191cd512665b69871dbf3594b",
+    "pap_kl_pap18_q3": "df34de4f191128bed1b01e17adf38f3ffb801dc713246d0e9574c44c19c12300",
+    "pap_kl_pap18_q2": "d26d2b198b0cfacdfb6b7b01af4230d7188d47a900fc3eedad0503424de7fc72",
+    "pap_kl_pap24_q3": "05d8c611df9720dd91e8e856a53e173814e871650d17519a7920d15996f29707",
+    "pap_kl_pap24_q2": "e4bfa28db3e79b74f854248d05cbc22915450fd967c87db7d1a3ed2f7a841568",
+    "pap_kl_pap24_q3_noimat": "67d3b68ed775b753f4f2bd848116374da3a553ea5840f756833fc720f44a6d47",
+    "pap_kl_mix4_imat": "dc7fc207255cfd533b5592c643eb0c82636878b01a04ef3f323c9267f302a063",
+    "pap_kl_mixE4K": "4a2593a5b0d57f5909c5403a3e85c6bf8cdf62f97822923df086474f90230def"
+   }
+  },
+  "test_definitions": {
+   "pap_decode_pap12_q3_n12": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "pap12_q3.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "12"
+    ]
+   },
+   "pap_decode_pap12_q2_n12": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "pap12_q2.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "12"
+    ]
+   },
+   "pap_decode_pap18_q3_n18": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "pap18_q3.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "18"
+    ]
+   },
+   "pap_decode_pap18_q2_n18": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "pap18_q2.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "18"
+    ]
+   },
+   "pap_decode_pap24_q3_n24": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "pap24_q3.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "24"
+    ]
+   },
+   "pap_decode_pap24_q2_n24": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "pap24_q2.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "24"
+    ]
+   },
+   "pap_decode_pap24_q3_noimat_n24": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "pap24_q3_noimat.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "24"
+    ]
+   },
+   "pap_decode_mix4_imat_n12": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "mix4_imat.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "12"
+    ]
+   },
+   "pap_decode_mix4_imat_n18": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "mix4_imat.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "18"
+    ]
+   },
+   "pap_decode_mix4_imat_n24": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "mix4_imat.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "24"
+    ]
+   },
+   "pap_decode_mixE4K_n12": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "12"
+    ]
+   },
+   "pap_decode_mixE4K_n18": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "18"
+    ]
+   },
+   "pap_decode_mixE4K_n24": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "24"
+    ]
+   },
+   "pap_kl_pap12_q3": {
+    "tool": "llama-perplexity",
+    "needs_data": true,
+    "parser": "kl",
+    "model_file": "pap12_q3.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+    ],
+    "args": [
+     "-c",
+     "512",
+     "--chunks",
+     "20",
+     "-ngl",
+     "99",
+     "--kl-divergence-base",
+     "/out/bf16.kl",
+     "--kl-divergence"
+    ]
+   },
+   "pap_kl_pap12_q2": {
+    "tool": "llama-perplexity",
+    "needs_data": true,
+    "parser": "kl",
+    "model_file": "pap12_q2.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+    ],
+    "args": [
+     "-c",
+     "512",
+     "--chunks",
+     "20",
+     "-ngl",
+     "99",
+     "--kl-divergence-base",
+     "/out/bf16.kl",
+     "--kl-divergence"
+    ]
+   },
+   "pap_kl_pap18_q3": {
+    "tool": "llama-perplexity",
+    "needs_data": true,
+    "parser": "kl",
+    "model_file": "pap18_q3.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+    ],
+    "args": [
+     "-c",
+     "512",
+     "--chunks",
+     "20",
+     "-ngl",
+     "99",
+     "--kl-divergence-base",
+     "/out/bf16.kl",
+     "--kl-divergence"
+    ]
+   },
+   "pap_kl_pap18_q2": {
+    "tool": "llama-perplexity",
+    "needs_data": true,
+    "parser": "kl",
+    "model_file": "pap18_q2.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+    ],
+    "args": [
+     "-c",
+     "512",
+     "--chunks",
+     "20",
+     "-ngl",
+     "99",
+     "--kl-divergence-base",
+     "/out/bf16.kl",
+     "--kl-divergence"
+    ]
+   },
+   "pap_kl_pap24_q3": {
+    "tool": "llama-perplexity",
+    "needs_data": true,
+    "parser": "kl",
+    "model_file": "pap24_q3.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+    ],
+    "args": [
+     "-c",
+     "512",
+     "--chunks",
+     "20",
+     "-ngl",
+     "99",
+     "--kl-divergence-base",
+     "/out/bf16.kl",
+     "--kl-divergence"
+    ]
+   },
+   "pap_kl_pap24_q2": {
+    "tool": "llama-perplexity",
+    "needs_data": true,
+    "parser": "kl",
+    "model_file": "pap24_q2.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+    ],
+    "args": [
+     "-c",
+     "512",
+     "--chunks",
+     "20",
+     "-ngl",
+     "99",
+     "--kl-divergence-base",
+     "/out/bf16.kl",
+     "--kl-divergence"
+    ]
+   },
+   "pap_kl_pap24_q3_noimat": {
+    "tool": "llama-perplexity",
+    "needs_data": true,
+    "parser": "kl",
+    "model_file": "pap24_q3_noimat.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+    ],
+    "args": [
+     "-c",
+     "512",
+     "--chunks",
+     "20",
+     "-ngl",
+     "99",
+     "--kl-divergence-base",
+     "/out/bf16.kl",
+     "--kl-divergence"
+    ]
+   },
+   "pap_kl_mix4_imat": {
+    "tool": "llama-perplexity",
+    "needs_data": true,
+    "parser": "kl",
+    "model_file": "mix4_imat.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+    ],
+    "args": [
+     "-c",
+     "512",
+     "--chunks",
+     "20",
+     "-ngl",
+     "99",
+     "--kl-divergence-base",
+     "/out/bf16.kl",
+     "--kl-divergence"
+    ]
+   },
+   "pap_kl_mixE4K": {
+    "tool": "llama-perplexity",
+    "needs_data": true,
+    "parser": "kl",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+    ],
+    "args": [
+     "-c",
+     "512",
+     "--chunks",
+     "20",
+     "-ngl",
+     "99",
+     "--kl-divergence-base",
+     "/out/bf16.kl",
+     "--kl-divergence"
+    ]
+   }
+  }
+ },
+ "spec_sha256": "af67eef3f8516ac4716384b3425971881981fd389fc50e54ef52f333b0896710"
+}
