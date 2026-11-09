@@ -1,0 +1,242 @@
+{
+ "job": "job-787f02f737",
+ "submitted": "2026-11-09T23:03:17.042467+00:00",
+ "spec": {
+  "image": "llamacpp-b0",
+  "image_id": "sha256:cf383f82e33130ce1be424b4c88a78ed12d8a693406b0c3b7ddb61afed0612d1",
+  "model": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "model_sha256": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6",
+  "data": "/home/muk/models/campaign/data/wikitext/wikitext-2-raw/wiki.test.raw",
+  "data_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+  "tests": [
+   "kv_gen32k_f16",
+   "kv_gen32k_q8_0",
+   "kv_gen32k_q4_0",
+   "kv_gen32k_f16_nofa",
+   "kv_gen32k_f16_nofa",
+   "kv_gen32k_q4_0",
+   "kv_gen32k_q8_0",
+   "kv_gen32k_f16",
+   "kv_gen32k_f16",
+   "kv_gen32k_q8_0",
+   "kv_gen32k_q4_0",
+   "kv_gen32k_f16_nofa",
+   "kv_ppl4k_f16",
+   "kv_ppl4k_q8_0",
+   "kv_ppl4k_q4_0"
+  ],
+  "resources": {
+   "cpus": "8",
+   "memory": "16g",
+   "pids": "512",
+   "timeout_s": "600",
+   "gpu_wait_s": "600"
+  },
+  "key": "KV1-precision-32k-1",
+  "inputs": {
+   "model_files": {
+    "granite-3.1-1b-a400m-instruct-mixE4K.gguf": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6"
+   },
+   "mounts": {
+    "/home/muk/projects/siminfeng/campaign/artifacts/traces/in": {
+     "prose.txt": "612d3213098e6bda6723eb03e9d757cec746946927b71652b8f5f86ed7c25f96"
+    }
+   },
+   "data_files": {
+    "/home/muk/models/campaign/data/wikitext/wikitext-2-raw/wiki.test.raw": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08"
+   },
+   "tests": {
+    "kv_gen32k_f16": "855432f9914a180bfae0028d8ccbf3391f25d83cf84e0bcc3e261e2542ebc66f",
+    "kv_gen32k_q8_0": "4cec8993c967b6485e4ab383ff86cbeae38066b30d215335d474b6b1300215da",
+    "kv_gen32k_q4_0": "a4d892b4d70e8f883efa5894ae45ba3c6e1232d95450f3ffec40de3ec1914aba",
+    "kv_gen32k_f16_nofa": "47bf6b6589ed2d72f7d9a65f99ebcc5da5da3d2a82371727bdfb564991b2526b",
+    "kv_ppl4k_f16": "f649469b0be1b2f88fa96bd1d7187436aea336e4d05b74e5774083bdd96e333e",
+    "kv_ppl4k_q8_0": "8bd707645d6aa50dd3d4b740ea83438a85631715447776067eb666b0ad111e59",
+    "kv_ppl4k_q4_0": "045955c697e7bc9f23fd8014aafdc6659f9c1cd8aede046d097dcfeaafeb25d7"
+   }
+  },
+  "test_definitions": {
+   "kv_gen32k_f16": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/prose.txt",
+     "-n",
+     "96",
+     "-c",
+     "32768",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "-fa",
+     "on",
+     "-ctk",
+     "f16",
+     "-ctv",
+     "f16"
+    ]
+   },
+   "kv_gen32k_q8_0": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/prose.txt",
+     "-n",
+     "96",
+     "-c",
+     "32768",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "-fa",
+     "on",
+     "-ctk",
+     "q8_0",
+     "-ctv",
+     "q8_0"
+    ]
+   },
+   "kv_gen32k_q4_0": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/prose.txt",
+     "-n",
+     "96",
+     "-c",
+     "32768",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "-fa",
+     "on",
+     "-ctk",
+     "q4_0",
+     "-ctv",
+     "q4_0"
+    ]
+   },
+   "kv_gen32k_f16_nofa": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/prose.txt",
+     "-n",
+     "96",
+     "-c",
+     "32768",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "-fa",
+     "off"
+    ]
+   },
+   "kv_ppl4k_f16": {
+    "tool": "llama-perplexity",
+    "parser": "ppl",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "needs_data": true,
+    "args": [
+     "-c",
+     "4096",
+     "--chunks",
+     "6",
+     "-ngl",
+     "99",
+     "-fa",
+     "on",
+     "-ctk",
+     "f16",
+     "-ctv",
+     "f16"
+    ]
+   },
+   "kv_ppl4k_q8_0": {
+    "tool": "llama-perplexity",
+    "parser": "ppl",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "needs_data": true,
+    "args": [
+     "-c",
+     "4096",
+     "--chunks",
+     "6",
+     "-ngl",
+     "99",
+     "-fa",
+     "on",
+     "-ctk",
+     "q8_0",
+     "-ctv",
+     "q8_0"
+    ]
+   },
+   "kv_ppl4k_q4_0": {
+    "tool": "llama-perplexity",
+    "parser": "ppl",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "needs_data": true,
+    "args": [
+     "-c",
+     "4096",
+     "--chunks",
+     "6",
+     "-ngl",
+     "99",
+     "-fa",
+     "on",
+     "-ctk",
+     "q4_0",
+     "-ctv",
+     "q4_0"
+    ]
+   }
+  }
+ },
+ "spec_sha256": "dc40d93d073137e5350742648b19a85086c22daf6e2dab6fd9cba3e0bfb8c182"
+}
