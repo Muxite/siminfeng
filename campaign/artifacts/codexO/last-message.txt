@@ -1,0 +1,14 @@
+Completed within the allowed write locations; `ref/llama.cpp` remains clean.
+
+Files: [patch](cc/moe_static_hot/static-hot.patch), [generator](cc/moe_static_hot/make_hot_set.py), [tests](cc/moe_static_hot/test_make_hot_set.py), [README](cc/moe_static_hot/README.md), [source map](artifacts/codexO/moe-cache-map.md), and [checkpoint](artifacts/codexO/checkpoint.md).
+
+Verification: patch apply/reverse checks passed, 22 pytest cases passed, and the patched library compiled and linked CPU-only with `-j4`. [Evidence](artifacts/codexO/verification.json).
+
+Invariants: unset preserves LRU behavior; static mode prefills fixed banks and never admits or evicts afterward.
+
+Open risks: GPU correctness and performance remain unverified. Misses still upload to temporary storage; hits incur D2D copies. This does not add CPU-miss computation.
+
+Patch SHA256:
+```text
+0d91a155e727633270cf483f5f03e35d2d58c68b5e7088bea8ea7d5caa1f9880
+```

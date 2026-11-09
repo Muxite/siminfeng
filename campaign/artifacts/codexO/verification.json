@@ -1,0 +1,38 @@
+{
+  "completed_utc": "2026-11-09T22:22:20.604580+00:00",
+  "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+  "patch_sha256": "0d91a155e727633270cf483f5f03e35d2d58c68b5e7088bea8ea7d5caa1f9880",
+  "patch_apply_check": "passed with GIT_CEILING_DIRECTORIES isolating archive",
+  "patched_source_sha256": "95057eefe76b554e37c888b04848529664280cb3453669247dada67c97bf166e",
+  "compile": {
+    "status": "passed",
+    "exit_code": 0,
+    "target": "llama",
+    "backend": "CPU only; GGML_CUDA=OFF",
+    "compiler": "GCC 13.3.0",
+    "jobs": 4,
+    "configure": "cmake -S artifacts/codexO/tree -B artifacts/codexO/build -G Ninja -DGGML_CUDA=OFF -DGGML_NATIVE=OFF -DLLAMA_BUILD_COMMON=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_BUILD_UI=OFF -DLLAMA_OPENSSL=OFF",
+    "build": "cmake --build artifacts/codexO/build --target llama -j4",
+    "final_log": "artifacts/codexO/compile-verified-patch.log",
+    "library_sha256": "5a22fcebddb318669d9068f73a52d518fc55346a428043e77a5606e1525ebe3b"
+  },
+  "pytest": {
+    "status": "passed",
+    "cases": 22,
+    "log": "artifacts/codexO/pytest.log"
+  },
+  "reference_status": "",
+  "permitted_write_locations": [
+    "cc/moe_static_hot/**",
+    "artifacts/codexO/**"
+  ],
+  "runtime_validation": "not run; cache constructor requires GPU",
+  "risks": [
+    "no CUDA build or runtime init/copy/negative-file tests",
+    "no token/logit equivalence measurements",
+    "no measured memory/traffic/latency results",
+    "misses still upload into temporary storage; hits incur D2D",
+    "generator assumes one GPU and one homogeneous Granite group",
+    "BF16 profile transfer to mixE4K routing unverified"
+  ]
+}

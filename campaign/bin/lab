@@ -153,14 +153,110 @@ def cmd_chaos(a):
     for c in cs: sh(["docker", "kill", c])
     append(os.path.join(LAB, "jobs", a.job, a.att, "chaos.jsonl"), dict(ts=now(), action="kill-sandbox", containers=cs)); print("killed owned containers:", cs)
 
+def test_definition_sha(td):
+    """Canonical JSON identity, independent of source formatting/key order."""
+    return sha_s(json.dumps(td, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+
+def readonly_mounts(td):
+    """Directory bind mounts in the test's Docker argument vector."""
+    args = iter(td.get("docker_args", []))
+    for arg in args:
+        if arg in ("-v", "--volume"):
+            value = next(args, "")
+        elif arg.startswith("--volume="):
+            value = arg.split("=", 1)[1]
+        elif arg.startswith("-v") and len(arg) > 2:
+            value = arg[2:]
+        else:
+            continue
+        parts = value.split(":")
+        if len(parts) == 3 and "ro" in parts[2].split(","):
+            host, ctr = parts[:2]
+            if not os.path.isabs(host) or not os.path.isabs(ctr):
+                raise ValueError(f"read-only bind mount requires absolute paths: {value}")
+            yield os.path.abspath(host), os.path.normpath(ctr)
+
+def collect_inputs(spec):
+    inputs = dict(model_files={}, mounts={}, data_files={}, tests={})
+    for t in spec["tests"]:
+        if t not in TESTS: raise ValueError(f"unknown test: {t}")
+        td = TESTS[t]
+        inputs["tests"][t] = test_definition_sha(td)
+        name = td.get("model_file", os.path.basename(spec["model"]))
+        if not name or os.path.basename(name) != name:
+            raise ValueError(f"test {t}: model_file must be a basename: {name}")
+        if name not in inputs["model_files"]:
+            inputs["model_files"][name] = sha(os.path.join(os.path.dirname(spec["model"]), name))
+        if td.get("needs_data") and not spec.get("data"):
+            raise ValueError(f"test {t} requires --data")
+        mounts = sorted(readonly_mounts(td), key=lambda m: len(m[1]), reverse=True)
+        for host, ctr in mounts:
+            if not os.path.isdir(host):
+                raise ValueError(f"test {t}: read-only mount is not a directory: {host}")
+            inputs["mounts"].setdefault(host, {})
+        # Paths may be positional values or --option=/container/path. Do not
+        # walk entire mounts: unrelated files must not change job identity.
+        for arg in td.get("args", []):
+            value = arg.split("=", 1)[1] if arg.startswith("-") and "=" in arg else arg
+            if not value.startswith("/"): continue
+            value = os.path.normpath(value)
+            for host, ctr in mounts:
+                if value == ctr or value.startswith(ctr.rstrip("/") + "/"):
+                    rel = os.path.relpath(value, ctr)
+                    path = os.path.join(host, rel)
+                    if not os.path.isfile(path):
+                        raise ValueError(f"test {t}: referenced input file missing or not a file: {path} ({value})")
+                    inputs["mounts"][host][rel] = sha(path)
+                    break
+    if spec.get("data"):
+        inputs["data_files"][os.path.abspath(spec["data"])] = sha(spec["data"])
+    return inputs
+
+def verify_inputs(spec):
+    """Return a diagnostic naming the first changed/missing input, or None."""
+    def check(path, expected):
+        try: actual = sha(path)
+        except OSError as exc: return f"input unavailable: {path}: {exc}"
+        if actual != expected: return f"input hash mismatch: {path}"
+    error = check(spec["model"], spec["model_sha256"])
+    if error: return error
+    if "inputs" not in spec: return None  # Legacy attempts verify only spec.model.
+    inputs = spec["inputs"]
+    for t, expected in inputs["tests"].items():
+        if t not in TESTS or test_definition_sha(TESTS[t]) != expected:
+            return f"test definition hash mismatch: {t} (lab/tests/*.json)"
+    for name, expected in inputs["model_files"].items():
+        error = check(os.path.join(os.path.dirname(spec["model"]), name), expected)
+        if error: return error
+    for host, manifest in inputs["mounts"].items():
+        for rel, expected in manifest.items():
+            error = check(os.path.join(host, rel), expected)
+            if error: return error
+    for path, expected in inputs["data_files"].items():
+        error = check(path, expected)
+        if error: return error
+
 def cmd_submit(a):
     img = json.load(open(os.path.join(LAB, "images", a.image + ".json")))
     res = dict(cpus="8", memory="16g", pids="512", timeout_s="300", gpu_wait_s="600"); res.update(dict(kv.split("=") for kv in (a.res or "").split(",") if kv))
-    spec = dict(image=a.image, image_id=img["image_id"], model=os.path.abspath(a.model), model_sha256=a.model_sha256 or sha(a.model),
-                data=a.data, data_sha256=(sha(a.data) if a.data else None), tests=a.tests.split(","), resources=res, key=a.key)
+    try:
+        spec = dict(image=a.image, image_id=img["image_id"], model=os.path.abspath(a.model), model_sha256=a.model_sha256 or sha(a.model),
+                    data=a.data, data_sha256=(sha(a.data) if a.data else None), tests=a.tests.split(","), resources=res, key=a.key)
+    except OSError as exc:
+        sys.exit(f"input rejected: {exc}")
     jid = "job-" + sha_s(a.key)[:10]; jdir = os.path.join(LAB, "jobs", jid); p = os.path.join(jdir, "job.json")
     if os.path.exists(p):
         old = json.load(open(p))["spec"]
+        # Migration: legacy keys compare only their original spec fields and
+        # retain the immutable old job; new keys compare full input identities.
+        if "inputs" not in old:
+            if old != spec: sys.exit(f"idempotency key reused with DIFFERENT spec -> rejected (job {jid})")
+            print(f"duplicate submission: existing {jid} (legacy inputs unverified)"); return
+    try:
+        spec["inputs"] = collect_inputs(spec)
+    except (OSError, ValueError) as exc:
+        sys.exit(f"input rejected: {exc}")
+    if os.path.exists(p):
         if old != spec: sys.exit(f"idempotency key reused with DIFFERENT spec -> rejected (job {jid})")
         print(f"duplicate submission: existing {jid}"); return
     os.makedirs(jdir); json.dump(dict(job=jid, submitted=now(), spec=spec, spec_sha256=sha_s(jd(spec))), open(p, "w"), indent=1); os.chmod(p, 0o444)
@@ -188,8 +284,10 @@ def cmd_run(a):
     json.dump(dict(attempt=att, runner_pid=os.getpid(), runner_start=proc_start(os.getpid()), token=token, started=now()), open(os.path.join(adir, "owner.json"), "w"))
     S = lambda s, **kw: append(os.path.join(adir, "state.jsonl"), dict(ts=now(), job=a.job, attempt=att, state=s, **kw))
     S("queued"); res = spec["resources"]
-    S("preparing")
-    if sha(spec["model"]) != spec["model_sha256"]: S("terminal", execution="not_started", reason="model hash mismatch"); sys.exit(4)
+    S("preparing", **({"inputs_unverified": True} if "inputs" not in spec else {}))
+    error = verify_inputs(spec)
+    if error:
+        S("terminal", execution="not_started", reason=error, **({"inputs_unverified": True} if "inputs" not in spec else {})); sys.exit(4)
     S("running", admission="none (gpu lock removed by user decision)", gpu_pre=gpu_state())
     results = {}; cancelled = False; interrupted = False; sandbox_died = False
     for ti, tfull in enumerate(spec["tests"]):

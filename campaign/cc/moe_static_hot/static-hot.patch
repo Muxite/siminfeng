@@ -1,0 +1,164 @@
+diff --git a/src/llama-moe-cache.cpp b/src/llama-moe-cache.cpp
+--- a/src/llama-moe-cache.cpp
++++ b/src/llama-moe-cache.cpp
+@@ -6,6 +6,11 @@
+ #include "ggml-cpp.h"
+ 
+ #include <algorithm>
++#include <cstdlib>
++#include <fstream>
++#include <set>
++#include <sstream>
++#include <string>
+ #include <stdexcept>
+ #include <unordered_map>
+ #include <vector>
+@@ -196,6 +201,7 @@
+     static constexpr int64_t max_batch = 32;
+ 
+     int32_t n_expert_used;
++    bool static_mode = false;
+ 
+     stats stats_small; // up to 8 tokens per ubatch
+     stats stats_large;
+@@ -220,6 +226,42 @@
+ 
+     impl(const llama_model & model, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size) :
+             n_expert_used(model.hparams.n_expert_used_max()), layers(model.layers.size()) {
++        // Unset means exactly the original LRU path. An empty path is an error.
++        const char * static_path = std::getenv("LLAMA_MOE_CACHE_STATIC");
++        static_mode = static_path != nullptr;
++        std::vector<std::pair<int32_t, int32_t>> hot;
++        if (static_mode) {
++            std::ifstream input(static_path);
++            if (!input) {
++                throw std::runtime_error("cannot open LLAMA_MOE_CACHE_STATIC file");
++            }
++            std::set<std::pair<int32_t, int32_t>> seen;
++            std::string line;
++            size_t line_no = 0;
++            while (std::getline(input, line)) {
++                ++line_no;
++                line = line.substr(0, line.find('#'));
++                std::istringstream row(line);
++                row >> std::ws;
++                if (row.eof()) {
++                    continue;
++                }
++                int32_t il, e;
++                std::string extra;
++                if (!(row >> il >> e) || (row >> extra) ||
++                        il < 0 || il >= (int32_t) layers.size() ||
++                        e < 0 || e >= (int32_t) model.hparams.n_expert ||
++                        !seen.emplace(il, e).second) {
++                    throw std::runtime_error("invalid static MoE hot set at line " + std::to_string(line_no));
++                }
++                hot.emplace_back(il, e);
++            }
++            if (input.bad()) {
++                throw std::runtime_error("failed reading static MoE hot set");
++            }
++            // Deterministic packing permits consecutive experts to use contiguous slots.
++            std::sort(hot.begin(), hot.end());
++        }
+         for (size_t i = 0; i < backends.size(); ++i) {
+             const auto dev_type = ggml_backend_dev_type(ggml_backend_get_device(backends[i]));
+             if (dev_type == GGML_BACKEND_DEVICE_TYPE_GPU || dev_type == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+@@ -261,6 +303,9 @@
+                 it->host_bytes         += ggml_nbytes(t);
+                 devices[id].host_bytes += ggml_nbytes(t);
+             }
++        }
++        if (groups.empty() && static_mode) {
++            throw std::runtime_error("static MoE cache has no eligible host expert layers");
+         }
+         if (groups.empty()) {
+             LLAMA_LOG_WARN("%s: no layer has all of its experts in host memory, MoE cache is disabled\n", __func__);
+@@ -384,6 +429,18 @@
+             devices[g.id].buf_size += alloc_size(g, g.n_slots);
+         }
+ 
++        // Validate even during memory-only construction; never silently drop a requested expert.
++        std::vector<int32_t> hot_counts(groups.size(), 0);
++        for (const auto & key : hot) {
++            const layer & l = layers[key.first];
++            if (l.ig < 0 || key.second >= groups[l.ig].ref[0]->ne[2]) {
++                throw std::runtime_error("static MoE hot set names an ineligible layer/expert");
++            }
++            if (++hot_counts[l.ig] > groups[l.ig].n_slots) {
++                throw std::runtime_error("static MoE hot set exceeds a device/layout group budget");
++            }
++        }
++
+         if (model.hparams.no_alloc) {
+             // only used to measure the memory use, see llama_context::memory_breakdown
+             for (device & d : devices) {
+@@ -425,6 +482,33 @@
+                     }
+                 }
+             }
++        }
++
++        if (static_mode && !model.hparams.no_alloc) {
++            std::vector<int32_t> next_slot(groups.size(), 0);
++            size_t bytes = 0;
++            for (const auto & key : hot) {
++                const int32_t il = key.first;
++                const int32_t e  = key.second;
++                layer & l = layers[il];
++                group & g = groups[l.ig];
++                const int32_t slot = next_slot[l.ig]++;
++                // Synchronous writes keep the host source alive and finish before publication.
++                for (size_t ip = 0; ip < l.experts.size(); ++ip) {
++                    const ggml_tensor * w = l.experts[ip];
++                    const size_t expert_size = w->nb[2];
++                    ggml_backend_tensor_set(g.banks[ip], (const uint8_t *) w->data + e*expert_size,
++                                            slot*expert_size, expert_size);
++                    bytes += expert_size;
++                }
++                g.lru.slot_map[il][e] = slot;
++                g.lru.key_of[slot] = il*g.lru.n_expert + e;
++            }
++            for (const device & d : devices) {
++                ggml_backend_synchronize(d.backend);
++            }
++            LLAMA_LOG_INFO("%s: static MoE cache: %zu experts, %.2f MiB prefilled; no admission/eviction\n",
++                           __func__, hot.size(), bytes/1024.0/1024.0);
+         }
+ 
+         // as weights, the ops that read the banks run on the device and the slot maps are copied with the copy callback
+@@ -460,7 +544,11 @@
+     }
+ 
+     ggml_tensor * get_slot_map(int32_t il, int64_t n_tokens, int64_t n_expert_used) const {
+-        if (il < 0 || il >= (int32_t) layers.size() || layers[il].ig < 0) {
++        // A slot lookup cannot represent a miss: MUL_MAT_ID requires valid IDs.
++        // Static mode uses the existing selected-expert copy path for ALL batches:
++        // hits are copied D2D by copy_experts(), misses go to temporary storage,
++        // never to a persistent bank. No new kernels or negative expert IDs.
++        if (static_mode || il < 0 || il >= (int32_t) layers.size() || layers[il].ig < 0) {
+             return nullptr;
+         }
+         const layer & l = layers[il];
+@@ -521,6 +609,7 @@
+         const layer & l = layers[il];
+         group & g = groups[l.ig];
+ 
++        GGML_ASSERT(!static_mode); // static mode never emits slot-map lookups
+         GGML_ASSERT(backend == devices[g.id].backend);
+ 
+         // the get_rows that looks up the slots of the selected experts
+@@ -594,7 +683,12 @@
+         log("ubatch <= 8", stats_small);
+         log("ubatch  > 8", stats_large);
+         if (stats_copy.hits > 0) {
+-            LLAMA_LOG_INFO("llama_moe_cache: large batches: %zu experts copied from the cache, %.2f MiB\n", stats_copy.hits, stats_copy.bytes/1024.0/1024.0);
++            if (static_mode) {
++                LLAMA_LOG_INFO("llama_moe_cache: static copies (all batches): %zu expert projections, %.2f MiB D2D\n",
++                    stats_copy.hits, stats_copy.bytes/1024.0/1024.0);
++            } else {
++                LLAMA_LOG_INFO("llama_moe_cache: large batches: %zu experts copied from the cache, %.2f MiB\n", stats_copy.hits, stats_copy.bytes/1024.0/1024.0);
++            }
+         }
+     }
+ };

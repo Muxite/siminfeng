@@ -1,0 +1,9 @@
+Implemented input hashing and preparing-phase verification in `bin/lab`, with CPU-only regressions in `bin/test_lab_inputs.py`. Assessment and measurement code remain unchanged.
+
+Validation: `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider --basetemp=artifacts/codexQ/pytest-tmp bin/test_lab_inputs.py bin/test_lab_assess.py` — **48 passed**.
+
+Migration: legacy keys retain their immutable specs and original idempotency comparison. Legacy runs verify only `spec.model` and record `inputs_unverified: true`.
+
+Gaps: literal argument paths only; indirect dependencies and changes after verification remain uncovered. No Docker/GPU testing.
+
+Details: [REPORT.md](/home/muk/projects/siminfeng/campaign/artifacts/codexQ/REPORT.md).
