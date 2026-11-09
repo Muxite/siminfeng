@@ -1,0 +1,1 @@
+- GAP G-001: Claude Code project hooks (.claude/settings.json) installed mid-session; no live claude_hook records observed (only selftest). Native Claude record = session transcript under ~/.claude/projects until restart; verify after restart.

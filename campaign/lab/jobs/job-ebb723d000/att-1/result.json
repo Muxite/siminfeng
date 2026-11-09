@@ -1,0 +1,127 @@
+{
+ "job": "job-ebb723d000",
+ "attempt": "att-1",
+ "image_id": "sha256:395d01bb47eb23d5e967129c6ebd2b5969365401621e16dd3db33e50fa7462e3",
+ "token_sha": "2bcff90f0bfa90be5d1424f1b89a593673d435b9477a585c287aae8127a6355d",
+ "execution": {
+  "status": "completed"
+ },
+ "quality": {
+  "tests": {
+   "mem_tg_bf16#0": {
+    "exit_code": 0,
+    "elapsed_s": 3.946,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": 2881,
+     "gpu_baseline_mib": 31,
+     "gpu_delta_mib": 2850,
+     "host_cgroup_peak_mib": 209.7,
+     "samples": 11,
+     "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"
+    },
+    "ok": true,
+    "samples": [
+     {
+      "n_prompt": 0,
+      "n_gen": 128,
+      "avg_ts": 565.207385,
+      "samples_ts": [
+       552.042,
+       570.164,
+       559.429,
+       576.053,
+       568.35
+      ]
+     }
+    ]
+   },
+   "mem_tg_q8#1": {
+    "exit_code": 0,
+    "elapsed_s": 2.63,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": 1689,
+     "gpu_baseline_mib": 31,
+     "gpu_delta_mib": 1658,
+     "host_cgroup_peak_mib": 222.6,
+     "samples": 7,
+     "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"
+    },
+    "ok": true,
+    "samples": [
+     {
+      "n_prompt": 0,
+      "n_gen": 128,
+      "avg_ts": 774.054731,
+      "samples_ts": [
+       755.445,
+       780.694,
+       784.525,
+       779.847,
+       769.764
+      ]
+     }
+    ]
+   },
+   "mem_tg_q4km#2": {
+    "exit_code": 0,
+    "elapsed_s": 3.208,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": 1117,
+     "gpu_baseline_mib": 31,
+     "gpu_delta_mib": 1086,
+     "host_cgroup_peak_mib": 259.8,
+     "samples": 9,
+     "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"
+    },
+    "ok": true,
+    "samples": [
+     {
+      "n_prompt": 0,
+      "n_gen": 128,
+      "avg_ts": 676.400216,
+      "samples_ts": [
+       671.877,
+       682.153,
+       678.832,
+       662.677,
+       686.463
+      ]
+     }
+    ]
+   }
+  },
+  "all_ok": true
+ },
+ "performance": {
+  "gpu_post": {
+   "gpu": "31 MiB, 2955 MHz, 35, 73.51 W",
+   "compute_apps": []
+  },
+  "exclusive_before_after": true,
+  "note": "exclusivity = no compute apps visible at end; during-run interference not observed by lab"
+ },
+ "evidence": {
+  "files": {
+   "mem_tg_bf16#0.stderr": "73a312d30daf97d8271780101ed61300d1fa650c0d5524855f1149a7c656616b",
+   "mem_tg_bf16#0.stdout": "0fde8b267668af788277ae9bf385f91ed73bbb8a3b64cd696ec8c8b66a58da01",
+   "mem_tg_q4km#2.stderr": "73a312d30daf97d8271780101ed61300d1fa650c0d5524855f1149a7c656616b",
+   "mem_tg_q4km#2.stdout": "bc911ed096087f0e235e39c01fb3b4a2a32a16882035d7bf772ed069b3fe1d70",
+   "mem_tg_q8#1.stderr": "73a312d30daf97d8271780101ed61300d1fa650c0d5524855f1149a7c656616b",
+   "mem_tg_q8#1.stdout": "30b07a99b024b7859763e9b71fda647428c944df857105b8f8a47d846b3b6ad9"
+  },
+  "coverage": {
+   "tests_expected": 3,
+   "tests_started": 3,
+   "tests_completed_cleanly": 3,
+   "interrupted": false,
+   "note": "incomplete data is never scored; affected comparisons invalid"
+  }
+ },
+ "cleanup": {
+  "owned_containers_left": [],
+  "confirmed": true
+ }
+}

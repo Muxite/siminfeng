@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""lab — feasibility core of a "lab": image(container) + tests -> job -> attempts -> evidence. No UI. Discovery prototype.
+  lab image add NAME REF            register an image by immutable id/digest
+  lab submit --image N --model P --tests a,b --key K [--res cpus=8,memory=16g,timeout_s=300]   idempotent by key; job.json is immutable
+  lab run JOB                       new attempt (retry = new attempt); no GPU admission control (lock removed)
+  lab cancel JOB ATT                request cancellation (confirmed only when owned containers are gone)
+  lab status [JOB]                  states
+  lab reconcile                     inspect non-terminal attempts against REAL processes/containers; never trusts heartbeats
+  lab register JOB ATT              register result into index (idempotent; stale/conflicting rejected)
+Store: $LAB/{images,jobs,index}. Fault injection for recovery tests: LAB_FAULT=die_after_start|die_in_export
+"""
+import json, sys, os, re, time, uuid, hashlib, fcntl, subprocess, argparse, shutil, datetime as dt, glob
+LAB = os.environ.get("LAB", os.path.expanduser("~/projects/siminfeng/campaign/lab"))
+CID = os.environ.get("CAMPAIGN_ID", "c1")
+now = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+def jd(o): return json.dumps(o, sort_keys=True)
+def sha(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""): h.update(b)
+    return h.hexdigest()
+def sha_s(s): return hashlib.sha256(s.encode()).hexdigest()
+def sh(cmd, **kw): return subprocess.run(cmd, capture_output=True, text=True, **kw)
+def append(path, rec):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try: fcntl.flock(fd, fcntl.LOCK_EX); os.write(fd, (jd(rec) + "\n").encode()); os.fsync(fd)
+    finally: os.close(fd)
+def proc_start(pid):
+    try: return open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[19]
+    except Exception: return None
+def last_state(adir):
+    p = os.path.join(adir, "state.jsonl")
+    rows = [json.loads(l) for l in open(p)] if os.path.exists(p) else []
+    return rows[-1] if rows else None
+
+# ---- test definitions: how an image's tools are exercised and judged (the "tests" half of a lab) ----
+def load_tests():
+    t = {}
+    import glob as g
+    for f in sorted(g.glob(os.path.join(LAB, "tests", "*.json"))): t.update(json.load(open(f)))
+    return t
+TESTS = load_tests()
+def assess(test, out, err, rc):
+    txt = out + "\n" + err
+    if TESTS[test].get("parser") == "ppl":
+        m = re.search(r"Final estimate: PPL = ([\d.]+) \+/- ([\d.]+)", txt)
+        return dict(ok=rc == 0 and bool(m), ppl=float(m.group(1)) if m else None, ppl_stderr=float(m.group(2)) if m else None)
+    if TESTS[test].get("parser") == "kl":
+        g = lambda pat: (lambda m: float(m.group(1)) if m else None)(re.search(pat, txt))
+        return dict(ok=rc == 0 and g(r"Mean\s+KLD:\s+([\d.]+)") is not None, kld=g(r"Mean\s+KLD:\s+([\d.]+)"), kld_p99=g(r"99.0%\s+KLD:\s+([\d.]+)"),
+                    top1_pct=g(r"Same top p:\s+([\d.]+)"), ppl_ratio=g(r"Mean PPL\(Q\)/PPL\(base\)\s*:\s+([\d.]+)"), ppl=g(r"Mean PPL\(Q\)\s*:\s+([\d.]+)"))
+    if TESTS[test].get("parser") == "gen":
+        return dict(ok=rc == 0 and len(out.strip()) > 20, chars=len(out.strip()), head=out.strip()[:120])
+    if TESTS[test].get("parser") == "bench_json":
+        try: rows = json.loads(out[out.index("["):out.rindex("]") + 1])
+        except Exception: return dict(ok=False, parse_error=True)
+        return dict(ok=rc == 0 and bool(rows), samples=[dict(n_prompt=r["n_prompt"], n_gen=r["n_gen"], avg_ts=r["avg_ts"], samples_ts=r.get("samples_ts")) for r in rows])
+    return dict(ok=rc == 0)
+
+def gpu_state():
+    q = sh(["nvidia-smi","--query-gpu=memory.used,clocks.sm,temperature.gpu,power.draw","--format=csv,noheader"]).stdout.strip()
+    apps = sh(["nvidia-smi","--query-compute-apps=pid,used_memory","--format=csv,noheader"]).stdout.strip().splitlines()
+    return dict(gpu=q, compute_apps=apps)
+
+def read_int(path):
+    try: return int(open(path).read().strip())
+    except Exception: return None
+
+def cid_cgroup(cname):
+    cid = sh(["docker", "inspect", "-f", "{{.Id}}", cname]).stdout.strip()
+    return f"/sys/fs/cgroup/system.slice/docker-{cid}.scope" if cid else None
+
+def cmd_image(a):
+    ref = a.ref; r = sh(["docker", "image", "inspect", ref, "-f", "{{.Id}}|{{json .RepoDigests}}|{{.Created}}"])
+    if r.returncode: sys.exit("image not present locally: " + r.stderr)
+    iid, rd, created = r.stdout.strip().split("|")
+    rec = dict(name=a.name, ref=ref, image_id=iid, repo_digests=json.loads(rd), created=created, registered=now())
+    p = os.path.join(LAB, "images", a.name + ".json"); os.makedirs(os.path.dirname(p), exist_ok=True)
+    if os.path.exists(p) and json.load(open(p))["image_id"] != iid: sys.exit("name already bound to a different image id (images are immutable)")
+    json.dump(rec, open(p, "w"), indent=1); print(jd(rec))
+
+def cmd_imageload(a):
+    """Admit an engine image delivered as a docker archive: verify bytes BEFORE loading, verify loaded config id AFTER."""
+    got = sha(a.archive)
+    if got != a.sha256: print(f"REJECT: archive sha256 mismatch (expected {a.sha256[:12]}..., got {got[:12]}...)"); sys.exit(10)
+    r = sh(["docker", "load", "-i", a.archive])
+    if r.returncode: print("REJECT: docker load failed:", r.stderr[-300:]); sys.exit(11)
+    iid = a.expect_config_id
+    chk = sh(["docker", "image", "inspect", iid, "-f", "{{.Id}}"])
+    if chk.returncode or chk.stdout.strip() != iid: print(f"REJECT: loaded archive does not provide expected config id {iid[:19]}..."); sys.exit(12)
+    a.ref = iid; a.op = "add"; cmd_image(a); print("admitted:", a.name, iid[:19])
+
+def cmd_chaos(a):
+    ow = json.load(open(os.path.join(LAB, "jobs", a.job, a.att, "owner.json"))); cs = owned_containers(a.att, ow["token"])
+    for c in cs: sh(["docker", "kill", c])
+    append(os.path.join(LAB, "jobs", a.job, 

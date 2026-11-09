@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "status": "failed",
+  "failure_stage": "build",
+  "started_at": "2026-11-09T20:33:36.449680+00:00",
+  "source": {
+    "path": "/home/muk/projects/siminfeng/campaign/ref/llama.cpp",
+    "requested_commit": "31288c9c6",
+    "commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+    "tree": "158a7ade930818efdb06c5561920a8d018d404ba",
+    "dirty": false,
+    "status_porcelain": ""
+  },
+  "patch_sha256": null,
+  "tag": "campaign/llamacpp:b0",
+  "platform": "linux/amd64",
+  "cmake_flags": [
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DGGML_CUDA=ON",
+    "-DCMAKE_CUDA_ARCHITECTURES=120",
+    "-DLLAMA_CURL=OFF",
+    "-DBUILD_SHARED_LIBS=ON",
+    "-DGGML_NATIVE=OFF",
+    "-DLLAMA_BUILD_TESTS=OFF",
+    "-DLLAMA_BUILD_UI=OFF",
+    "-DLLAMA_USE_PREBUILT_UI=OFF",
+    "-DLLAMA_OPENSSL=OFF"
+  ],
+  "recipes": {
+    "Dockerfile": {
+      "sha256": "505750a9bf13ea22f8280ae4f225e28b7b4f0e36dfc4280b3200d0a0418c537d",
+      "bytes": 1622
+    },
+    "docker-bake.hcl": {
+      "sha256": "35f283f2086921a963ee9f81f5fc3a819cf300d1f352b215c2534ab8c6c710d6",
+      "bytes": 1091
+    }
+  },
+  "base_images": {
+    "devel": {
+      "reference": "nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66",
+      "digest": "sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66"
+    },
+    "runtime": {
+      "reference": "nvidia/cuda:12.8.1-runtime-ubuntu24.04@sha256:ebef3c171eeef0298e4eb2e4be843105edf3b8b0ac45e0b43acee358e8046867",
+      "digest": "sha256:ebef3c171eeef0298e4eb2e4be843105edf3b8b0ac45e0b43acee358e8046867"
+    }
+  },
+  "versions": {
+    "docker": "{\"Client\":{\"Platform\":{\"Name\":\"Docker Engine - Community\"},\"Version\":\"29.8.2\",\"ApiVersion\":\"1.56\",\"DefaultAPIVersion\":\"1.56\",\"GitCommit\":\"7fc2dff\",\"GoVersion\":\"go1.26.8\",\"Os\":\"linux\",\"Arch\":\"amd64\",\"BuildTime\":\"Wed Sep 30 19:32:28 2026\",\"Context\":\"default\"},\"Server\":{\"Platform\":{\"Name\":\"Docker Engine - Community\"},\"Version\":\"29.8.2\",\"ApiVersion\":\"1.56\",\"MinAPIVersion\":\"1.40\",\"Os\":\"linux\",\"Arch\":\"amd64\",\"Components\":[{\"Name\":\"Engine\",\"Version\":\"29.8.2\",\"Details\":{\"ApiVersion\":\"1.56\",\"Arch\":\"amd64\",\"BuildTime\":\"Wed Sep 30 19:32:28 2026\",\"Experimental\":\"false\",\"GitCommit\":\"8af9fe3\",\"GoVersion\":\"go1.26.8\",\"KernelVersion\":\"6.8.0-147-generic\",\"MinAPIVersion\":\"1.40\",\"Module\":\"github.com/moby/moby/v2\",\"ModuleVersion\":\"v2.0.0+unknown\",\"Os\":\"linux\"}},{\"Name\":\"containerd\",\"Version\":\"v2.3.6\",\"Details\":{\"GitCommit\":\"ee2735368117d2eb259779949d5e75cdafec9761\"}},{\"Name\":\"runc\",\"Version\":\"1.5.1\",\"Details\":{\"GitCommit\":\"v1.5.1-0-g8f2685a4\"}},{\"Name\":\"docker-init\",\"Version\":\"0.19.0\",\"Details\":{\"GitCommit\":\"de40ad0\"}}],\"GitCommit\":\"8af9fe3\",\"GoVersion\":\"go1.26.8\",\"KernelVersion\":\"6.8.0-147-generic\",\"BuildTime\":\"2026-09-30T19:32:28.000000000+00:00\"}}\n",
+    "buildx": "github.com/docker/buildx v0.37.1 0b265a9f62db554fa9aba6dd19e1bd5704bc7d8a"
+  },
+  "image": null,
+  "tools": {},
+  "archive": null,
+  "buildx_metadata": null,
+  "provenance": {
+    "retained": false,
+    "reason": "Archive not inspected"
+  },
+  "build_wall_seconds": 677.800965789007,
+  "error": "Command exited 1: ['docker', 'buildx', 'bake', '--file', '/home/muk/projects/siminfeng/campaign/builds/results/b0-baseline-2/staging-srbnfo5y/source/.campaign-recipe/docker-bake.hcl', '--metadata-file', '/home/muk/projects/siminfeng/campaign/builds/results/b0-baseline-2/buildx-metadata.json', '--progress', 'plain', 'engine']",
+  "wall_seconds": 679.8276905450039,
+  "finished_at": "2026-11-09T20:44:56.277369+00:00"
+}

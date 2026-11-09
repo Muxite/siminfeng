@@ -1,0 +1,41 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.8.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+WARNING: The NVIDIA Driver was not detected.  GPU functionality will not be available.
+   Use the NVIDIA Container Toolkit to start this container with GPU support; see
+   https://docs.nvidia.com/datacenter/cloud-native/ .
+
+[1/2] Building CXX object CMakeFiles/hybrid_moe_bench.dir/hybrid_moe_bench.cpp.o
+/src/hybrid_moe_bench.cpp: In lambda function:
+/src/hybrid_moe_bench.cpp:367:9: warning: this 'for' clause does not guard... [-Wmisleading-indentation]
+  367 |         for (auto & t : th) t.join(); return r;
+      |         ^~~
+/src/hybrid_moe_bench.cpp:367:39: note: ...this statement, but the latter is misleadingly indented as if it were guarded by the 'for'
+  367 |         for (auto & t : th) t.join(); return r;
+      |                                       ^~~~~~
+/src/hybrid_moe_bench.cpp: In function 'int main(int, char**)':
+/src/hybrid_moe_bench.cpp:480:5: warning: this 'for' clause does not guard... [-Wmisleading-indentation]
+  480 |     for (size_t i = 0; i < h2d_pinned.size(); i++) J << (i ? "," : "") << h2d_pinned[i]; J << "],\"pageable\":[";
+      |     ^~~
+/src/hybrid_moe_bench.cpp:480:90: note: ...this statement, but the latter is misleadingly indented as if it were guarded by the 'for'
+  480 |     for (size_t i = 0; i < h2d_pinned.size(); i++) J << (i ? "," : "") << h2d_pinned[i]; J << "],\"pageable\":[";
+      |                                                                                          ^
+/src/hybrid_moe_bench.cpp:481:5: warning: this 'for' clause does not guard... [-Wmisleading-indentation]
+  481 |     for (size_t i = 0; i < h2d_pageable.size(); i++) J << (i ? "," : "") << h2d_pageable[i]; J << "]},\n\"configs\":[\n";
+      |     ^~~
+/src/hybrid_moe_bench.cpp:481:94: note: ...this statement, but the latter is misleadingly indented as if it were guarded by the 'for'
+  481 |     for (size_t i = 0; i < h2d_pageable.size(); i++) J << (i ? "," : "") << h2d_pageable[i]; J << "]},\n\"configs\":[\n";
+      |                                                                                              ^
+[2/2] Linking CXX executable hybrid_moe_bench

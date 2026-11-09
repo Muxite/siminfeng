@@ -1,0 +1,96 @@
+format: engine-lab-handoff-draft/0
+status: received
+handoff_id: null
+release:
+  role: null
+  platform: null
+  transport:
+    kind: docker-archive
+    artifact: /home/muk/projects/siminfeng/campaign/builds/results/b0-baseline-3/engine-image.docker.tar
+    sha256: e910feaea3d12c511ce1caddcf5d2a1b072e2a37dfadb143ede7d709f9598aa1
+    bytes: 2210015232
+  expected_image_config_id: null
+  build_record: /home/muk/projects/siminfeng/campaign/builds/results/b0-baseline-3/build-record.json
+  executable_sha256: null
+inputs:
+  model:
+    repository: null
+    revision: null
+    manifest: /home/muk/models/campaign/granite-3.1-1b-a400m-instruct/config.json
+    manifest_sha256: f1b64813debfabeb9cc20f1a13ed8248da6774fe54e532d19912d4b3f2ab335d
+  workload:
+    artifact: /home/muk/projects/siminfeng/campaign/experiments/handoff-real/workload.json
+    sha256: 7872ea52e5f2130a69693d32775bffe884189bbcab4b14084b46a64970d1edfb
+invocation:
+  argv:
+  - /app/llama-completion
+  - -m
+  - MODEL
+  - -n
+  - '24'
+  mounts:
+  - input: model
+    access: ro
+  - input: workload
+    access: ro
+  - role: results
+    access: rw
+sandbox_requirements:
+  os: linux
+  gpu:
+    vendor: null
+    count: null
+  required_runtime_compatibility: null
+  network_after_staging: none
+  isolation_and_provisioning_owner: lab-team
+  resource_limits: null
+tests:
+  requested: []
+  policy_reference: null
+  profiling:
+    requested: null
+    tool_and_version: null
+evidence:
+  control_and_durable_storage_outside_test_sandbox: required
+  outputs: []
+  crash_outcome: interrupted-attempt-with-partial-coverage
+  resume: new-attempt-after-confirmed-stop
+unresolved:
+- 'build_record.schema_version: declared (not independently verified)'
+- 'build_record.status: declared (not independently verified)'
+- 'build_record.failure_stage: declared (not independently verified)'
+- 'build_record.started_at: declared (not independently verified)'
+- 'build_record.source: declared (not independently verified)'
+- 'build_record.patch_sha256: declared (not independently verified)'
+- 'build_record.tag: declared (not independently verified)'
+- 'build_record.platform: declared (not independently verified)'
+- 'build_record.cmake_flags: declared (not independently verified)'
+- 'build_record.recipes: declared (not independently verified)'
+- 'build_record.base_images: declared (not independently verified)'
+- 'build_record.versions: declared (not independently verified)'
+- 'build_record.image: declared (not independently verified)'
+- 'build_record.tools: declared (not independently verified)'
+- 'build_record.archive: declared (not independently verified)'
+- 'build_record.buildx_metadata: declared (not independently verified)'
+- 'build_record.provenance: declared (not independently verified)'
+- 'build_record.build_wall_seconds: declared (not independently verified)'
+- 'build_record.wall_seconds: declared (not independently verified)'
+- 'build_record.finished_at: declared (not independently verified)'
+- 'build_record.image_config_id: declared (not independently verified)'
+- 'build_record.executable_sha256: declared (not independently verified)'
+- 'build_record.source_commit: declared (not independently verified)'
+- 'build_record.base_image_digests: declared (not independently verified)'
+- 'handoff_id: missing'
+- 'release.role: missing'
+- 'release.platform: missing'
+- 'release.expected_image_config_id: missing'
+- 'release.executable_sha256: missing'
+- 'inputs.model.repository: missing'
+- 'inputs.model.revision: missing'
+- 'sandbox_requirements.gpu.vendor: missing'
+- 'sandbox_requirements.gpu.count: missing'
+- 'sandbox_requirements.required_runtime_compatibility: missing'
+- 'sandbox_requirements.resource_limits: missing'
+- 'tests.policy_reference: missing'
+- 'tests.profiling.requested: missing'
+- 'tests.profiling.tool_and_version: missing'

@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/home/muk/projects/siminfeng/campaign/bin/lab", line 275, in <module>
+    a = ap.parse_args(); a.model_sha256 = getattr(a, "model_sha256", None); a.f(a)
+                                                                            ^^^^^^
+  File "/home/muk/projects/siminfeng/campaign/bin/lab", line 193, in cmd_run
+    results[f"{t}#{ti}"] = dict(exit_code=rc, elapsed_s=round(time.monotonic()-ts,3), partial=died, mem=dict(gpu_peak_mib=peak_gpu, gpu_baseline_mib=base_gpu, gpu_delta_mib=peak_gpu-base_gpu, host_cgroup_peak_mib=round(peak_host/2**20,1), io_read_mib=round(io_rbytes/2**20,1), samples=nsamp, method="nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"), **assess(t, open(o).read(), open(e).read(), rc))
+                                                                                                                                                                                                                                                                                                                                                                                                                                 ^^^^^^^^^^^^^^
+  File "<frozen codecs>", line 322, in decode
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc7 in position 6316: invalid continuation byte

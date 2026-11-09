@@ -1,0 +1,537 @@
+{
+  "header": "SIMULATION on a logical trace: no residency/transfer semantics; Granite fully fits GPU memory.",
+  "schema_version": 1,
+  "assumptions": {
+    "experts": 32,
+    "top_k": 8,
+    "capacities_per_layer": [
+      4,
+      8,
+      12,
+      16,
+      24
+    ],
+    "initial_state": "cold per phase, layer and sequence; no prefill warming of decode",
+    "hit_accounting": "all eight lookups use token-entry slots; then update in array order",
+    "LFU": "resident counts start at 1 on admission, reset on eviction; LRU breaks ties",
+    "overlap": "intersection size / 8, adjacent positions only, within sequence and phase",
+    "entropy": "Shannon bits of unweighted expert selection counts (maximum 5 bits)",
+    "overall": "request-weighted hit rate; weights do not affect hit counting"
+  },
+  "phases": {
+    "prefill": {
+      "records": 12,
+      "layers": {
+        "0": {
+          "tokens": 6,
+          "histogram": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            6,
+            6,
+            5,
+            4,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "overlap_pairs": 5,
+          "overlap_experts_sum": 35,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 20,
+                "requests": 48,
+                "hit_rate": 0.4166666666666667
+              },
+              "8": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              },
+              "12": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              },
+              "16": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              },
+              "24": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 20,
+                "requests": 48,
+                "hit_rate": 0.4166666666666667
+              },
+              "8": {
+                "hits": 32,
+                "requests": 48,
+                "hit_rate": 0.6666666666666666
+              },
+              "12": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              },
+              "16": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              },
+              "24": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              }
+            }
+          },
+          "entropy_bits": 3.517079563925711,
+          "mean_overlap_experts": 7.0,
+          "mean_overlap_fraction": 0.875
+        },
+        "1": {
+          "tokens": 6,
+          "histogram": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            6,
+            6,
+            5,
+            4,
+            3,
+            2,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "overlap_pairs": 5,
+          "overlap_experts_sum": 35,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 20,
+                "requests": 48,
+                "hit_rate": 0.4166666666666667
+              },
+              "8": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              },
+              "12": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              },
+              "16": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              },
+              "24": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 20,
+                "requests": 48,
+                "hit_rate": 0.4166666666666667
+              },
+              "8": {
+                "hits": 32,
+                "requests": 48,
+                "hit_rate": 0.6666666666666666
+              },
+              "12": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              },
+              "16": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              },
+              "24": {
+                "hits": 35,
+                "requests": 48,
+                "hit_rate": 0.7291666666666666
+              }
+            }
+          },
+          "entropy_bits": 3.517079563925711,
+          "mean_overlap_experts": 7.0,
+          "mean_overlap_fraction": 0.875
+        }
+      },
+      "overall": {
+        "LRU": {
+          "4": {
+            "hits": 40,
+            "requests": 96,
+            "hit_rate": 0.4166666666666667
+          },
+          "8": {
+            "hits": 70,
+            "requests": 96,
+            "hit_rate": 0.7291666666666666
+          },
+          "12": {
+            "hits": 70,
+            "requests": 96,
+            "hit_rate": 0.7291666666666666
+          },
+          "16": {
+            "hits": 70,
+            "requests": 96,
+            "hit_rate": 0.7291666666666666
+          },
+          "24": {
+            "hits": 70,
+            "requests": 96,
+            "hit_rate": 0.7291666666666666
+          }
+        },
+        "LFU": {
+          "4": {
+            "hits": 40,
+            "requests": 96,
+            "hit_rate": 0.4166666666666667
+          },
+          "8": {
+            "hits": 64,
+            "requests": 96,
+            "hit_rate": 0.6666666666666666
+          },
+          "12": {
+            "hits": 70,
+            "requests": 96,
+            "hit_rate": 0.7291666666666666
+          },
+          "16": {
+            "hits": 70,
+            "requests": 96,
+            "hit_rate": 0.7291666666666666
+          },
+          "24": {
+            "hits": 70,
+            "requests": 96,
+            "hit_rate": 0.7291666666666666
+          }
+        }
+      }
+    },
+    "decode": {
+      "records": 36,
+      "layers": {
+        "0": {
+          "tokens": 18,
+          "histogram": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            7,
+            6,
+            5,
+            4,
+            3,
+            2,
+            1,
+            0
+          ],
+          "overlap_pairs": 17,
+          "overlap_experts_sum": 119,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 68,
+                "requests": 144,
+                "hit_rate": 0.4722222222222222
+              },
+              "8": {
+                "hits": 119,
+                "requests": 144,
+                "hit_rate": 0.8263888888888888
+              },
+              "12": {
+                "hits": 119,
+                "requests": 144,
+                "hit_rate": 0.8263888888888888
+              },
+              "16": {
+                "hits": 119,
+                "requests": 144,
+                "hit_rate": 0.8263888888888888
+              },
+              "24": {
+                "hits": 119,
+                "requests": 144,
+                "hit_rate": 0.8263888888888888
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 68,
+                "requests": 144,
+                "hit_rate": 0.4722222222222222
+              },
+              "8": {
+                "hits": 50,
+                "requests": 144,
+                "hit_rate": 0.3472222222222222
+              },
+              "12": {
+                "hits": 74,
+                "requests": 144,
+                "hit_rate": 0.5138888888888888
+              },
+              "16": {
+                "hits": 98,
+                "requests": 144,
+                "hit_rate": 0.6805555555555556
+              },
+              "24": {
+                "hits": 119,
+                "requests": 144,
+                "hit_rate": 0.8263888888888888
+              }
+            }
+          },
+          "entropy_bits": 4.482066842618278,
+          "mean_overlap_experts": 7.0,
+          "mean_overlap_fraction": 0.875
+        },
+        "1": {
+          "tokens": 18,
+          "histogram": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            8,
+            7,
+            6,
+            5,
+            4,
+            3,
+            2,
+            1
+          ],
+          "overlap_pairs": 17,
+          "overlap_experts_sum": 119,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 68,
+                "requests": 144,
+                "hit_rate": 0.4722222222222222
+              },
+              "8": {
+                "hits": 119,
+                "requests": 144,
+                "hit_rate": 0.8263888888888888
+              },
+              "12": {
+                "hits": 119,
+                "requests": 144,
+                "hit_rate": 0.8263888888888888
+              },
+              "16": {
+                "hits": 119,
+                "requests": 144,
+                "hit_rate": 0.8263888888888888
+              },
+              "24": {
+                "hits": 119,
+                "requests": 144,
+                "hit_rate": 0.8263888888888888
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 68,
+                "requests": 144,
+                "hit_rate": 0.4722222222222222
+              },
+              "8": {
+                "hits": 50,
+                "requests": 144,
+                "hit_rate": 0.3472222222222222
+              },
+              "12": {
+                "hits": 74,
+                "requests": 144,
+                "hit_rate": 0.5138888888888888
+              },
+              "16": {
+                "hits": 98,
+                "requests": 144,
+                "hit_rate": 0.6805555555555556
+              },
+              "24": {
+                "hits": 119,
+                "requests": 144,
+                "hit_rate": 0.8263888888888888
+              }
+            }
+          },
+          "entropy_bits": 4.482066842618278,
+          "mean_overlap_experts": 7.0,
+          "mean_overlap_fraction": 0.875
+        }
+      },
+      "overall": {
+        "LRU": {
+          "4": {
+            "hits": 136,
+            "requests": 288,
+            "hit_rate": 0.4722222222222222
+          },
+          "8": {
+            "hits": 238,
+            "requests": 288,
+            "hit_rate": 0.8263888888888888
+          },
+          "12": {
+            "hits": 238,
+            "requests": 288,
+            "hit_rate": 0.8263888888888888
+          },
+          "16": {
+            "hits": 238,
+            "requests": 288,
+            "hit_rate": 0.8263888888888888
+          },
+          "24": {
+            "hits": 238,
+            "requests": 288,
+            "hit_rate": 0.8263888888888888
+          }
+        },
+        "LFU": {
+          "4": {
+            "hits": 136,
+            "requests": 288,
+            "hit_rate": 0.4722222222222222
+          },
+          "8": {
+            "hits": 100,
+            "requests": 288,
+            "hit_rate": 0.3472222222222222
+          },
+          "12": {
+            "hits": 148,
+            "requests": 288,
+            "hit_rate": 0.5138888888888888
+          },
+          "16": {
+            "hits": 196,
+            "requests": 288,
+            "hit_rate": 0.6805555555555556
+          },
+          "24": {
+            "hits": 238,
+            "requests": 288,
+            "hit_rate": 0.8263888888888888
+          }
+        }
+      }
+    }
+  }
+}

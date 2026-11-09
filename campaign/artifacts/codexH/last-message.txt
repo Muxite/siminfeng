@@ -1,0 +1,12 @@
+Written:
+
+- [q8-activation-reuse.patch](/home/muk/projects/siminfeng/campaign/cc/q8_reuse/q8-activation-reuse.patch)
+- [DESIGN.md](/home/muk/projects/siminfeng/campaign/cc/q8_reuse/DESIGN.md)
+- [README.md](/home/muk/projects/siminfeng/campaign/cc/q8_reuse/README.md)
+- [Validation evidence](/home/muk/projects/siminfeng/campaign/artifacts/codexH/validation.txt)
+
+Reuse requires identical tensor identity, data, layout and quantization parameters within one evaluation and stream. Overlapping writes, other operations and successful fusions invalidate it. Context-owned buffers remain alive for captured graphs.
+
+Patch application and sanitized host checks passed; reference source is unchanged.
+
+Open risks: nvcc compilation, GPU bit identity, capture/replay and performance remain untested. MoE and fused paths are excluded. The README documents the perplexity format’s limitations for proving exact logits.

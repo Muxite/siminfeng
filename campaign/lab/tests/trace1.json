@@ -1,0 +1,74 @@
+{
+ "trace_prose": {
+  "tool": "llama-routing-trace",
+  "parser": "exit0",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro",
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/out:/tout"
+  ],
+  "args": [
+   "-f",
+   "/tin/prose.txt",
+   "-n",
+   "96",
+   "-c",
+   "4096",
+   "-ngl",
+   "99",
+   "--temp",
+   "0",
+   "--trace-out",
+   "/tout/prose.jsonl"
+  ]
+ },
+ "trace_code": {
+  "tool": "llama-routing-trace",
+  "parser": "exit0",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro",
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/out:/tout"
+  ],
+  "args": [
+   "-f",
+   "/tin/code.txt",
+   "-n",
+   "96",
+   "-c",
+   "4096",
+   "-ngl",
+   "99",
+   "--temp",
+   "0",
+   "--trace-out",
+   "/tout/code.jsonl"
+  ]
+ },
+ "trace_chat": {
+  "tool": "llama-routing-trace",
+  "parser": "exit0",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro",
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/out:/tout"
+  ],
+  "args": [
+   "-f",
+   "/tin/chat.txt",
+   "-n",
+   "160",
+   "-c",
+   "4096",
+   "-ngl",
+   "99",
+   "--temp",
+   "0",
+   "--trace-out",
+   "/tout/chat.jsonl"
+  ]
+ }
+}

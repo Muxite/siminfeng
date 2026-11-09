@@ -1,0 +1,71 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.8.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+WARNING: The NVIDIA Driver was not detected.  GPU functionality will not be available.
+   Use the NVIDIA Container Toolkit to start this container with GPU support; see
+   https://docs.nvidia.com/datacenter/cloud-native/ .
+
++ cmake --version
+version-cmake: exit 0 (0.064s)
++ g++ --version
+version-gpp: exit 0 (0.008s)
++ ninja --version
+version-ninja: exit 0 (0.004s)
++ git --version
+version-git: exit 0 (0.008s)
++ python3 --version
+version-python3: exit 0 (0.002s)
++ nvcc --version
+version-nvcc: exit 0 (0.008s)
++ uname -a
+version-machine: exit 0 (0.002s)
++ git -c safe.directory=/src -C /src rev-parse HEAD
+revision: exit 0 (0.008s)
++ cmake -S /src -B /build -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS= '-DCMAKE_CXX_FLAGS_RELEASE=-O2 -UNDEBUG' -DSTRATA_BUILD_TESTS=ON -DSTRATA_ENABLE_CUDA=OFF -DSTRATA_ENABLE_HIP=OFF -DSTRATA_HIP_GFX906=OFF -DSTRATA_ENABLE_SYCL=OFF -DSTRATA_NATIVE_EXPERTS=OFF -DSTRATA_PREFILL_MMQ=OFF -DSTRATA_ORCA_Q4KS_MMQ=OFF -DSTRATA_BUILD_CONVERSATION_TESTS=OFF -DSTRATA_BUILD_DSV41=OFF -DSTRATA_BUILD_SPLIT=OFF -DSTRATA_WERROR=OFF -DFETCHCONTENT_FULLY_DISCONNECTED=ON -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
+configure: exit 0 (0.865s)
++ g++ -std=c++20 -O2 -UNDEBUG -pthread -I/src/include /src/tests/core/exchange_storage_test.cpp -o /build/standalone/exchange_storage_test
+build-exchange_storage_test-0: exit 0 (1.867s)
++ /build/standalone/exchange_storage_test
+run-exchange_storage_test: exit 0 (0.665s)
++ cmake --build /build --target routed_stream_test --parallel 8
+build-routed_stream_test-0: exit 0 (1.267s)
++ /build/routed_stream_test
+run-routed_stream_test: exit 0 (0.114s)
++ g++ -std=c++20 -O2 -UNDEBUG -pthread -I/src/include -c /src/src/kernels/cpu/expert_multi_test.cpp -o /build/standalone/expert_multi_test.cpp.o
+build-expert_multi_test-0: exit 0 (0.916s)
++ g++ -std=c++20 -O2 -UNDEBUG -pthread -I/src/include -mavx512f -mavx512bw -mavx512vl -mavx512dq -mavx512vnni -mavx512vbmi -mf16c -mfma -c /src/src/kernels/cpu/expert.cpp -o /build/standalone/expert.cpp.o
+build-expert_multi_test-1: exit 0 (2.468s)
++ g++ -std=c++20 -O2 -UNDEBUG -pthread -I/src/include -c /src/src/kernels/cpu/expert_layout.cpp -o /build/standalone/expert_layout.cpp.o
+build-expert_multi_test-2: exit 0 (0.665s)
++ g++ -std=c++20 -O2 -UNDEBUG -pthread -I/src/include -mavx2 -mfma -mf16c -DSTRATA_AVXVNNI=0 -c /src/src/kernels/cpu/q2_avx2.cpp -o /build/standalone/q2_avx2.cpp.o
+build-expert_multi_test-3: exit 0 (0.966s)
++ g++ -std=c++20 -O2 -UNDEBUG -pthread -I/src/include -msse4.2 -mavx -mno-avx2 -mno-fma -mno-f16c -c /src/src/kernels/cpu/q2_avx1.cpp -o /build/standalone/q2_avx1.cpp.o
+build-expert_multi_test-4: exit 0 (0.916s)
++ g++ -std=c++20 -O2 -UNDEBUG -pthread -I/src/include -c /src/src/kernels/cpu/hadamard.cpp -o /build/standalone/hadamard.cpp.o
+build-expert_multi_test-5: exit 0 (0.866s)
++ g++ -pthread /build/standalone/expert_multi_test.cpp.o /build/standalone/expert.cpp.o /build/standalone/expert_layout.cpp.o /build/standalone/q2_avx2.cpp.o /build/standalone/q2_avx1.cpp.o /build/standalone/hadamard.cpp.o -o /build/standalone/expert_multi_test
+build-expert_multi_test-6: exit 0 (0.064s)
++ /build/standalone/expert_multi_test
+run-expert_multi_test: exit 77 (0.004s)
++ cmake --build /build --target gguf_geometry_test --parallel 8
+build-gguf_geometry_test-0: exit 0 (2.669s)
++ /build/gguf_geometry_test
+run-gguf_geometry_test: exit 0 (0.032s)
++ cmake --build /build --target model_family_test --parallel 8
+build-model_family_test-0: exit 0 (3.069s)
++ /build/model_family_test
+run-model_family_test: exit 0 (0.114s)
+{"passed": 4, "skipped_isa": 1}
+Results: /build/results.json; complete logs: /build/logs/

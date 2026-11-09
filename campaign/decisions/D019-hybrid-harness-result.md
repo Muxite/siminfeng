@@ -1,0 +1,9 @@
+# D019 — hybrid_moe_bench (Opus T-J) result on the D014 prediction (all timings UNSCORED/exploratory; discrete GPU; synthetic activations; replayed routing)
+Evidence: cc/hybrid_expert/{RESULTS.md,results.json,results_L12_single_layer.json}, artifacts/opus-hybrid/, evidence/opus-hybrid.jsonl (ops op-eb0f9a7be446 build 350 s; op-2ea9dea3e2e5 24-layer run 62 s).
+- Correctness: all-hit hybrid == GPU reference and zero-hit hybrid == CPU-all, bitwise, all 24 layers; mixed hit/miss within 1.5x the larger endpoint error vs fp64 (CPU quantizes activations Q8_K, CUDA Q8_1 => backends differ by float noise by construction).
+- Miss cost: 30.6 us marginal per CPU-computed expert + ~15 us fixed per layer with any miss (DRAM-bound ~29 GB/s) -> confirms the 33.3 us calibration (D014). AVX2 Q4_K dot confirmed by disassembly.
+- Serial model within -11%/+6% on 24 layers: K16 measured 2808 us/step vs predicted 2996. SUPPORTED (single-layer-in-isolation timing misleading: L3-resident).
+- Perfect-overlap bound NOT reached (0.06-0.33 of hideable time saved; 25-35 us/layer of CUDA launch work shares the CPU thread): D014's 517-704 t/s upper range is NOT supported by this implementation. Serial form stands: ~330 t/s at ~897 MiB derived (vs 212 measured static n12) — derived, not measured end to end.
+- H2D admission 37.9 us/expert pinned, 90 us pageable ~= CPU compute cost => LRU that admits every miss loses (admission traffic 1853 us/step at K16 > CPU time saved; hit rate 74.4% vs static 73.3%). Static hot set ~ LRU hit rate with zero admission traffic and CUDA-graph friendliness.
+- Existing engine feature found: llama.cpp 31288c9c6 has --moe-cache-mib (uploads misses). Test it end to end (next).
+Status of H-slotcache: serial prediction supported at single-layer-harness level; end-to-end still unmeasured.

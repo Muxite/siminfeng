@@ -1,0 +1,7 @@
+# D008 — Decode profile of Granite BF16 on llama.cpp (build 11723) and first screens
+Evidence: artifacts/profiles/tg128.nsys-rep (graph-level), tg128_node.nsys-rep (node-level), *_kern_sum.csv, lab/jobs/job-faead0556b (screen1).
+- Graph-level trace (less perturbing): per-token GPU graph exec median 1580 us, inter-graph gap median 170 us => ~90% GPU execution, ~10% host gap. Unprofiled decode 599 t/s (A/A spread 0.5-2%).
+- Node-level trace: ~487 kernels/token; ~71% of kernel time in 3 BF16 matmul kernels (mul_mat_vec_f bf16 x2, mul_mat_f bf16). BUT node-level tracing inflated the inter-token gap to ~507 us and graph-launch to ~367 us: PROFILER PERTURBATION. First reading (25% host gap) was wrong; corrected by comparing with graph-level trace. Lesson for methodology CC: cross-check any profiler-derived overhead number against a lower-perturbation trace and unprofiled wall time.
+- Per-token host work seen between graphs: 196,620 B D2H (logits 49155 x f32), ~10 tiny H2D copies + syncs (~70 us), graph launch.
+- Screen1 (runtime env, n=6 attempts, counterbalanced ABAB): ctrl 599.1 t/s; GGML_CUDA_GRAPH_OPT=1 595.8 (-0.55%, not supported); GGML_CUDA_DISABLE_GRAPHS=1 574.1 (-4.2%, graphs help).
+- Next hypotheses: H-quant (representation: Q8_0, Q4_K_M, labelled), H-bw (BF16 matvec kernels reach only part of DRAM bandwidth: needs ncu), H-gap (<=10% ceiling for host-gap work), H-fuse (fewer small kernels).

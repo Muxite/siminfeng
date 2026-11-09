@@ -1,0 +1,71 @@
+blk.12.ffn_gate_exps.weight type=q4_K ne=[1024,512,32] bytes=9437184
+blk.12.ffn_up_exps.weight type=q4_K ne=[1024,512,32] bytes=9437184
+blk.12.ffn_down_exps.weight type=q4_K ne=[512,1024,32] bytes=9437184
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 15833 MiB):
+  Device 0: NVIDIA GeForce RTX 5070 Ti, compute capability 12.0, VMM: yes, VRAM: 15833 MiB
+expert bytes (gate+up+down) = 884736 (0.844 MiB)
+repack: repack tensor  with q4_K_8x8
+repack: repack tensor  with q4_K_8x8
+repack: repack tensor  with q4_K_8x8
+CPU miss path weights: CPU_REPACK
+layer 12: 352 decode tokens (stream), 3694 prefill tokens (static profile)
+fp64 reference done (5.3 s since start)
+
+config                             hit%    med_us    p95_us   gpu_med   cpu_med  wait_med    admit     maxrel check
+gpu_ref                           100.0      40.8      43.9      40.8       0.0       0.0      0.0   1.38e-02 ok
+cpu_all                             0.0     114.2     129.6       0.0     114.2       0.0      0.0   2.39e-02 ok
+hybrid_static_overlap_K8           44.2     112.7     144.8       0.0      80.3       1.4      0.0   2.25e-02 ok
+hybrid_static_serial_K8            44.2     111.0     140.6      34.7      77.1       0.0      0.0   2.25e-02 ok
+hybrid_lru_overlap_K8              47.0      91.3     142.0       0.0      62.8       1.2    148.0   2.20e-02 ok
+upload_lru_K8                      47.0     171.6     306.0     146.9       0.0       0.0      0.0   1.38e-02 ok
+hybrid_static_overlap_K12          60.0      76.9     128.4       0.0      50.4       0.9      0.0   2.25e-02 ok
+hybrid_static_serial_K12           60.0      82.4     130.3      37.7      48.9       0.0      0.0   2.25e-02 ok
+hybrid_lru_overlap_K12             65.3      87.8     162.1       0.0      57.1       1.0     99.2   2.08e-02 ok
+upload_lru_K12                     65.3     107.5     242.8      94.3       0.0       0.0      0.0   1.38e-02 ok
+hybrid_static_overlap_K16          77.9      63.2      91.3       0.0      37.1       1.0      0.0   1.92e-02 ok
+hybrid_static_serial_K16           77.9      75.0      95.5      38.4      35.6       0.0      0.0   1.92e-02 ok
+hybrid_lru_overlap_K16             79.5      57.1     120.2       0.0      29.3       1.1     59.4   1.95e-02 ok
+upload_lru_K16                     79.5      71.1     205.6      62.7       0.0       0.0      0.0   1.38e-02 ok
+hybrid_static_overlap_K24          95.7      39.2      57.3       0.0       0.0      13.8      0.0   1.74e-02 ok
+hybrid_static_serial_K24           95.7      39.4      68.0      37.9       0.0       0.0      0.0   1.74e-02 ok
+hybrid_lru_overlap_K24             94.8      39.4      63.8       0.0       0.0      14.0     15.7   1.95e-02 ok
+upload_lru_K24                     94.8      38.0     103.3      38.0       0.0       0.0      0.0   1.38e-02 ok
+hybrid_static_overlap_K32         100.0      38.2      41.5       0.0       0.0      14.0      0.0   1.38e-02 ok,bitwise==gpu_ref
+hybrid_static_serial_K32          100.0      38.7      44.1      37.7       0.0       0.0      0.0   1.38e-02 ok,bitwise==gpu_ref
+synth_overlap_m0                  100.0      38.8      39.8       0.0       0.0      14.3      0.0   1.44e-02 ok,bitwise==gpu_ref
+synth_serial_m0                   100.0      37.9      40.2      36.9       0.0       0.0      0.0   1.44e-02 ok,bitwise==gpu_ref
+synth_overlap_m1                   87.5      48.3      64.6       0.0      23.0       0.9      0.0   1.79e-02 ok
+synth_serial_m1                    87.5      62.1      68.8      38.3      22.8       0.0      0.0   1.79e-02 ok
+synth_overlap_m2                   75.0      60.0      80.5       0.0      34.0       1.0      0.0   1.99e-02 ok
+synth_serial_m2                    75.0      70.3      80.0      38.4      31.1       0.0      0.0   1.99e-02 ok
+synth_overlap_m3                   62.5      80.4      93.2       0.0      48.8       1.3      0.0   2.14e-02 ok
+synth_serial_m3                    62.5      82.4      94.3      30.8      50.2       0.0      0.0   2.14e-02 ok
+synth_overlap_m4                   50.0      77.6      94.3       0.0      51.2       1.0      0.0   2.12e-02 ok
+synth_serial_m4                    50.0      75.7      93.4      28.3      46.5       0.0      0.0   2.12e-02 ok
+synth_overlap_m5                   37.5      80.3      98.8       0.0      54.0       1.0      0.0   2.26e-02 ok
+synth_serial_m5                    37.5      83.0     102.9      27.6      54.5       0.0      0.0   2.26e-02 ok
+synth_overlap_m6                   25.0     102.0     117.1       0.0      76.0       1.1      0.0   2.43e-02 ok
+synth_serial_m6                    25.0     104.4     116.4      26.3      76.9       0.0      0.0   2.43e-02 ok
+synth_overlap_m7                   12.5     115.1     136.2       0.0      85.1       1.2      0.0   2.36e-02 ok
+synth_serial_m7                    12.5     127.2     157.3      30.1      93.7       0.0      0.0   2.36e-02 ok
+synth_overlap_m8                    0.0     113.1     125.2       0.0     111.7       0.0      0.0   2.32e-02 ok,bitwise==cpu_all
+synth_serial_m8                     0.0     109.1     119.5       0.0     108.2       0.0      0.0   2.32e-02 ok,bitwise==cpu_all
+cpu_only_n1                         0.0      24.4      34.7       0.0      24.4       0.0      0.0        nan n/a
+gpu_full_only_n1                    0.0      28.0      33.5      28.0       0.0       0.0      0.0        nan n/a
+cpu_only_n2                         0.0      35.7      48.1       0.0      35.7       0.0      0.0        nan n/a
+gpu_full_only_n2                    0.0      24.9      29.5      24.9       0.0       0.0      0.0        nan n/a
+cpu_only_n3                         0.0      48.9      59.1       0.0      48.9       0.0      0.0        nan n/a
+gpu_full_only_n3                    0.0      26.7      32.5      26.7       0.0       0.0      0.0        nan n/a
+cpu_only_n4                         0.0      63.6      77.5       0.0      63.6       0.0      0.0        nan n/a
+gpu_full_only_n4                    0.0      27.5      30.5      27.5       0.0       0.0      0.0        nan n/a
+cpu_only_n5                         0.0      74.4      93.4       0.0      74.4       0.0      0.0        nan n/a
+gpu_full_only_n5                    0.0      31.4      37.6      31.4       0.0       0.0      0.0        nan n/a
+cpu_only_n6                         0.0      67.2      90.5       0.0      67.2       0.0      0.0        nan n/a
+gpu_full_only_n6                    0.0      37.7      38.8      37.7       0.0       0.0      0.0        nan n/a
+cpu_only_n7                         0.0      71.4      98.9       0.0      71.4       0.0      0.0        nan n/a
+gpu_full_only_n7                    0.0      37.9      40.7      37.9       0.0       0.0      0.0        nan n/a
+cpu_only_n8                         0.0      76.8     106.8       0.0      76.8       0.0      0.0        nan n/a
+gpu_full_only_n8                    0.0      37.8      42.9      37.8       0.0       0.0      0.0        nan n/a
+endpoint rel-L2 vs fp64: gpu_ref median 1.17e-02 max 1.38e-02 | cpu_all median 1.85e-02 max 2.39e-02
+H2D one expert: pinned median 37.9 us p95 38.9 | pageable median 93.2 us
+ALL CHECKS OK; wrote /out/r1_L12_t8_repack.json; wall 8.7 s

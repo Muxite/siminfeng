@@ -1,0 +1,143 @@
+{
+ "job": "job-1809133e7e",
+ "attempt": "att-2",
+ "image_id": "sha256:395d01bb47eb23d5e967129c6ebd2b5969365401621e16dd3db33e50fa7462e3",
+ "token_sha": "5829c608db63a7ef2c923a2715cb58e9fa2d13568c8b140567f7eaae61910739",
+ "execution": {
+  "status": "completed"
+ },
+ "quality": {
+  "tests": {
+   "ppl2#0": {
+    "exit_code": 0,
+    "elapsed_s": 2.812,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": 3087,
+     "gpu_baseline_mib": 31,
+     "gpu_delta_mib": 3056,
+     "host_cgroup_peak_mib": 522.4,
+     "samples": 8,
+     "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"
+    },
+    "ok": true,
+    "ppl": 7.5325,
+    "ppl_stderr": 0.84642
+   },
+   "gen_smoke#1": {
+    "exit_code": 0,
+    "elapsed_s": 2.164,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": 9155,
+     "gpu_baseline_mib": 31,
+     "gpu_delta_mib": 9124,
+     "host_cgroup_peak_mib": 382.7,
+     "samples": 6,
+     "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"
+    },
+    "ok": true,
+    "chars": 113,
+    "head": "The capital of France is Paris.\nParagraph 0 states that \"Paris is the capital of France.\"\nParagraph 0 states that"
+   },
+   "tg_ctrl#2": {
+    "exit_code": 0,
+    "elapsed_s": 3.98,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": 2881,
+     "gpu_baseline_mib": 31,
+     "gpu_delta_mib": 2850,
+     "host_cgroup_peak_mib": 209.2,
+     "samples": 12,
+     "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"
+    },
+    "ok": true,
+    "samples": [
+     {
+      "n_prompt": 0,
+      "n_gen": 128,
+      "avg_ts": 599.598744,
+      "samples_ts": [
+       591.016,
+       600.234,
+       600.505,
+       600.672,
+       600.525,
+       601.059,
+       600.138,
+       600.622,
+       600.3,
+       600.918
+      ]
+     }
+    ]
+   },
+   "tg_ctrl#3": {
+    "exit_code": 0,
+    "elapsed_s": 3.822,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": 2881,
+     "gpu_baseline_mib": 31,
+     "gpu_delta_mib": 2850,
+     "host_cgroup_peak_mib": 209.4,
+     "samples": 11,
+     "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"
+    },
+    "ok": true,
+    "samples": [
+     {
+      "n_prompt": 0,
+      "n_gen": 128,
+      "avg_ts": 599.746933,
+      "samples_ts": [
+       590.584,
+       600.86,
+       600.806,
+       600.956,
+       600.515,
+       602.142,
+       598.087,
+       601.108,
+       601.141,
+       601.271
+      ]
+     }
+    ]
+   }
+  },
+  "all_ok": true
+ },
+ "performance": {
+  "gpu_post": {
+   "gpu": "31 MiB, 2955 MHz, 41, 147.99 W",
+   "compute_apps": []
+  },
+  "exclusive_before_after": true,
+  "note": "exclusivity = no compute apps visible at end; during-run interference not observed by lab"
+ },
+ "evidence": {
+  "files": {
+   "gen_smoke#1.stderr": "1f720591aa2d1ce7ba54ac316ec5d52c9eb59fe18f67417827ae8af335f54e8d",
+   "gen_smoke#1.stdout": "13c57efd69b4c39f484750de97c5e3469791434cb7a9ce8bf1c553c027ff8491",
+   "ppl2#0.stderr": "05be7a2c232873c0dc6db08a45e305bfa0d63436905eb1a8dfb589fd1d163498",
+   "ppl2#0.stdout": "71f3aee0e0b4a2393b4a15e262210c293952383a85d04a12aba405760075e098",
+   "tg_ctrl#2.stderr": "73a312d30daf97d8271780101ed61300d1fa650c0d5524855f1149a7c656616b",
+   "tg_ctrl#2.stdout": "3e60159202d3805f92d2f82bd24116ad97f863bb4905bee0ee11911cc7514876",
+   "tg_ctrl#3.stderr": "73a312d30daf97d8271780101ed61300d1fa650c0d5524855f1149a7c656616b",
+   "tg_ctrl#3.stdout": "0c370a4a798144c9f25e1bd5d4ca03cb99d6900cec3a54d3511e1bbb81b8e24c"
+  },
+  "coverage": {
+   "tests_expected": 4,
+   "tests_started": 4,
+   "tests_completed_cleanly": 4,
+   "interrupted": false,
+   "note": "incomplete data is never scored; affected comparisons invalid"
+  }
+ },
+ "cleanup": {
+  "owned_containers_left": [],
+  "confirmed": true
+ }
+}

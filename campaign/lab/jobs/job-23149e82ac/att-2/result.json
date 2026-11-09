@@ -1,0 +1,100 @@
+{
+ "job": "job-23149e82ac",
+ "attempt": "att-2",
+ "image_id": "sha256:395d01bb47eb23d5e967129c6ebd2b5969365401621e16dd3db33e50fa7462e3",
+ "token_sha": "9304626ecb459f17c4124aa0f13ee0fe6d191ac8412315ee552f87c2446095ec",
+ "execution": {
+  "status": "completed"
+ },
+ "quality": {
+  "tests": {
+   "ppl20#0": {
+    "exit_code": 0,
+    "elapsed_s": 3.603,
+    "ok": true,
+    "ppl": 10.015,
+    "ppl_stderr": 0.36978
+   },
+   "gen_smoke#1": {
+    "exit_code": 0,
+    "elapsed_s": 2.103,
+    "ok": true,
+    "chars": 113,
+    "head": "The capital of France is Paris.\nParagraph 0 states that \"Paris is the capital of France.\"\nParagraph 0 states that"
+   },
+   "bench_tg128#2": {
+    "exit_code": 0,
+    "elapsed_s": 3.904,
+    "ok": true,
+    "samples": [
+     {
+      "n_prompt": 0,
+      "n_gen": 128,
+      "avg_ts": 599.037705,
+      "samples_ts": [
+       589.275,
+       599.661,
+       600.069,
+       599.779,
+       601.106,
+       600.35,
+       600.43,
+       600.646,
+       599.34,
+       599.721
+      ]
+     }
+    ]
+   },
+   "bench_pp512#3": {
+    "exit_code": 0,
+    "elapsed_s": 2.406,
+    "ok": true,
+    "samples": [
+     {
+      "n_prompt": 512,
+      "n_gen": 0,
+      "avg_ts": 17734.174874,
+      "samples_ts": [
+       14743.3,
+       18065.3,
+       18059.5,
+       18118.1,
+       18071.8,
+       18119.7,
+       18072.3,
+       18097.9,
+       18014.8,
+       17979.1
+      ]
+     }
+    ]
+   }
+  },
+  "all_ok": true
+ },
+ "performance": {
+  "gpu_post": {
+   "gpu": "31 MiB, 2940 MHz, 45, 100.82 W",
+   "compute_apps": []
+  },
+  "exclusive_before_after": true,
+  "note": "exclusivity = no compute apps visible at end; during-run interference not observed by lab"
+ },
+ "evidence": {
+  "files": {
+   "bench_pp512#3.stderr": "73a312d30daf97d8271780101ed61300d1fa650c0d5524855f1149a7c656616b",
+   "bench_pp512#3.stdout": "b4b296143989756de4dd22fce7e8547be67a33d97186aeed1d16e7bab719b2d1",
+   "bench_tg128#2.stderr": "73a312d30daf97d8271780101ed61300d1fa650c0d5524855f1149a7c656616b",
+   "bench_tg128#2.stdout": "57ba253580cc56f2691010d0ec72a44f62d2d18e302767ca71891c56e11031b9",
+   "gen_smoke#1.stderr": "aa8873126a3617fa1e0be87bd3e9604b4567ca3aca365e497412bdf691c52d85",
+   "gen_smoke#1.stdout": "13c57efd69b4c39f484750de97c5e3469791434cb7a9ce8bf1c553c027ff8491",
+   "ppl20#0.stderr": "bea9f4b4088e573d8acc41950c62ef7b5587c39dfb2c7937c313b323e924d4c7",
+   "ppl20#0.stdout": "9ed65d93c5f4e5b966ed0b8c6c7360eef2f0f0c376e59f91da5b4c709bb079aa"
+  }
+ },
+ "cleanup": {
+  "owned_containers_left": [],
+  "confirmed": true
+ }
+}

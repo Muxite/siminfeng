@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""Claude Code hook sink: append raw hook payload (stdin JSON) + UTC ts to evidence/claude-code.jsonl under flock. Never fails the tool call."""
+import sys, os, json, fcntl, datetime as dt
+try:
+    raw = sys.stdin.read()
+    try: payload = json.loads(raw)
+    except Exception: payload = {"unparsed": raw[:4000]}
+    ev = payload.get("hook_event_name") or (sys.argv[1] if len(sys.argv) > 1 else "unknown")
+    ti = payload.get("tool_input")
+    if isinstance(ti, dict):  # redact obvious secrets in command text only; keep raw otherwise
+        pass
+    rec = {"ts": dt.datetime.now(dt.timezone.utc).isoformat(), "kind": "claude_hook", "event": ev, "payload": payload}
+    root = os.environ.get("CAMPAIGN_ROOT", "/home/muk/projects/siminfeng/campaign")
+    fd = os.open(os.path.join(root, "evidence", "claude-code.jsonl"), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    fcntl.flock(fd, fcntl.LOCK_EX); os.write(fd, (json.dumps(rec, sort_keys=True) + "\n").encode()); os.close(fd)
+except Exception as e:
+    sys.stderr.write(f"cc_hook error: {e}\n")
+sys.exit(0)

@@ -1,0 +1,7 @@
+# D011 — Bandwidth screen (ncu) and Q8_0 decode profile; engine candidate selected
+Evidence: artifacts/profiles/tg_matmul_ncu.{ncu-rep,csv} (ncu 2025.1.1, SYS_ADMIN, profiling-only timings, NOT inference speed); q8_tg128_{node,graph}.{nsys-rep,sqlite}.
+BF16 (D008): MoE expert matvec (grid 512x8, 16.8 MB, 25 us) = 75% DRAM peak (~665 GB/s, spec peak 896 GB/s is a published value, not measured here); attention projections (1-2 MB, 4-6 us) only 30-44% => latency-bound; mul_mat_f 63%. => BF16 kernel-level headroom small (<~7% overall); weight bytes are the lever (confirmed by Q8_0 +32% decode, D009).
+Q8_0 decode: graph exec median 1171 us + gap 178 us => 741 tok/s (profiled graph-level; unprofiled screen 794). 633 kernels/token (vs 487 BF16): +146 quantize_q8_1/token = 14.4% of kernel time, avg 1.6 us each.
+Kernel order in a layer shows 3 separate quantize_q8_1 of the same normed activation before the q, k, v matvecs (artifacts/profiles/q8_tg128_node.sqlite).
+Selected engine candidate C1 (H-fuse-q8): reuse one q8_1 quantization of an activation across consecutive consumers. Prediction: remove ~2 quantize launches/layer (~48/token, ~53 us of 1171) => ~3-4.5% decode. Success criterion (frozen before assessment): >= +2% decode on matched counterbalanced A/B (A/A bound 0.5-2%), outputs bit-identical (mean KLD 0, top-1 100% vs unpatched Q8_0), no PPL change. If <2% or non-identical => rejected, reported as such.
+Not chosen now: BF16 kernel tuning (<=7% ceiling), graph-opt env (rejected D008), fusing norm+quantize (larger change, defer).

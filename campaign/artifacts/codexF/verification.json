@@ -1,0 +1,109 @@
+{
+  "source_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+  "source_status_before": "",
+  "source_status_unchanged": true,
+  "patch_sha256": "2b7f7b436cf503b8b301da77dc66e54607b6ab706fb017a79d9c7713165884a2",
+  "steps": [
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/home/muk/projects/siminfeng/campaign/ref/llama.cpp",
+        "rev-parse",
+        "HEAD"
+      ],
+      "cwd": "/home/muk/projects/siminfeng/campaign",
+      "exit_code": 0,
+      "stdout": "31288c9c66e59377f7788d920678a565bb89dd37\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/home/muk/projects/siminfeng/campaign/ref/llama.cpp",
+        "status",
+        "--porcelain",
+        "--untracked-files=no"
+      ],
+      "cwd": "/home/muk/projects/siminfeng/campaign",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "apply",
+        "--check",
+        "/home/muk/projects/siminfeng/campaign/cc/routing_trace/routing-trace.patch"
+      ],
+      "cwd": "/home/muk/projects/siminfeng/campaign/artifacts/codexF/verification-tree",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "apply",
+        "/home/muk/projects/siminfeng/campaign/cc/routing_trace/routing-trace.patch"
+      ],
+      "cwd": "/home/muk/projects/siminfeng/campaign/artifacts/codexF/verification-tree",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "g++",
+        "--version"
+      ],
+      "cwd": "/home/muk/projects/siminfeng/campaign",
+      "exit_code": 0,
+      "stdout": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "g++",
+        "-fsyntax-only",
+        "-std=c++17",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-I/home/muk/projects/siminfeng/campaign/artifacts/codexF/verification-tree/ggml/include",
+        "-I/home/muk/projects/siminfeng/campaign/artifacts/codexF/verification-tree/include",
+        "-I/home/muk/projects/siminfeng/campaign/artifacts/codexF/verification-tree/common",
+        "-I/home/muk/projects/siminfeng/campaign/artifacts/codexF/verification-tree/tools",
+        "/home/muk/projects/siminfeng/campaign/artifacts/codexF/verification-tree/examples/routing-trace/routing-trace.cpp"
+      ],
+      "cwd": "/home/muk/projects/siminfeng/campaign",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/home/muk/projects/siminfeng/campaign/ref/llama.cpp",
+        "status",
+        "--porcelain",
+        "--untracked-files=no"
+      ],
+      "cwd": "/home/muk/projects/siminfeng/campaign",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "not_verified": [
+    "full CMake build/link",
+    "CUDA compilation",
+    "model execution",
+    "real device transfers",
+    "numerical equivalence",
+    "Docker/Build CC image"
+  ]
+}

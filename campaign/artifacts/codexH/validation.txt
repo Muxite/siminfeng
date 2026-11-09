@@ -1,0 +1,46 @@
+$ git -C ref/llama.cpp rev-parse HEAD
+31288c9c66e59377f7788d920678a565bb89dd37
+exit=0
+
+$ git -C ref/llama.cpp status --porcelain
+exit=0
+
+Archive copy: all three original files match reference bytes.
+
+$ git apply --check --verbose --whitespace=error /home/muk/projects/siminfeng/campaign/cc/q8_reuse/q8-activation-reuse.patch
+Checking patch ggml/src/ggml-cuda/common.cuh...
+Checking patch ggml/src/ggml-cuda/ggml-cuda.cu...
+Checking patch ggml/src/ggml-cuda/mmvq.cu...
+exit=0
+
+$ git apply --stat /home/muk/projects/siminfeng/campaign/cc/q8_reuse/q8-activation-reuse.patch
+ ggml/src/ggml-cuda/common.cuh   |   28 +++++++++++++++
+ ggml/src/ggml-cuda/ggml-cuda.cu |   71 +++++++++++++++++++++++++++++++++++++++
+ ggml/src/ggml-cuda/mmvq.cu      |   17 +++++++--
+ 3 files changed, 112 insertions(+), 4 deletions(-)
+exit=0
+
+$ git apply /home/muk/projects/siminfeng/campaign/cc/q8_reuse/q8-activation-reuse.patch
+exit=0
+
+Applied files match edited work files byte-for-byte.
+
+$ git apply --check --reverse --verbose /home/muk/projects/siminfeng/campaign/cc/q8_reuse/q8-activation-reuse.patch
+Checking patch ggml/src/ggml-cuda/mmvq.cu...
+Checking patch ggml/src/ggml-cuda/ggml-cuda.cu...
+Checking patch ggml/src/ggml-cuda/common.cuh...
+exit=0
+
+$ python3 /home/muk/projects/siminfeng/campaign/artifacts/codexH/host_check.py
+PASS: host cache identity, overwrite, window, lifetime and fallback checks; enabled=1
+PASS: host cache identity, overwrite, window, lifetime and fallback checks; enabled=0
+PASS: host cache identity, overwrite, window, lifetime and fallback checks; enabled=1
+PASS: host cache identity, overwrite, window, lifetime and fallback checks; enabled=1
+exit=0
+
+$ git -C ref/llama.cpp status --porcelain
+exit=0
+
+Patch SHA256: 9943dee44b930f4febd23dce91fcb9c50ff67625ede5fb3fcc8126ea734a0675
+
+No Docker/CUDA execution. nvcc is not installed. GPU numeric, capture and performance validation: PENDING.

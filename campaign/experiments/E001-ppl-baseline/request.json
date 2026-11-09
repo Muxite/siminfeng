@@ -1,0 +1,15 @@
+{
+  "experiment_id": "E001",
+  "question": "How repeatable is 2-chunk WikiText-2 PPL (ctx 512) for Granite-3.1-1b-a400m BF16 on llama.cpp CUDA? (A/A, calibrates the 1% smoke gate)",
+  "source_claim": null,
+  "kind": "A/A",
+  "baseline": {"engine_image": "ghcr.io/ggml-org/llama.cpp@sha256:395d01bb47eb23d5e967129c6ebd2b5969365401621e16dd3db33e50fa7462e3", "engine_commit": "31288c9c6"},
+  "candidate": null,
+  "model": {"gguf": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-bf16.gguf", "gguf_sha256": "af76ade03d516a82111cac78441e7882fb0392f3099f354dc55340477ff8f050", "hf_revision": "0da7a48b0276d500ce5922fd2b33944091fc6c09"},
+  "workload": {"tool": "llama-perplexity", "data": "/home/muk/models/campaign/data/wikitext/wikitext-2-raw/wiki.test.raw", "data_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08", "args": ["-c", "512", "--chunks", "2", "-ngl", "99"]},
+  "resources": {"cpus": 8, "memory": "16g", "pids": 512, "timeout_s": 300, "gpu_wait_s": 600},
+  "quality_policy": {"metric": "PPL", "gate": "none (calibration run); candidates later judged vs frozen A/A spread, provisional rel diff <= 1%"},
+  "measurement_policy": {"unscored": true, "note": "PPL run only; no timing claims"},
+  "expected_outputs": ["stdout", "stderr", "parsed.json", "manifest.json"],
+  "completion": "container exit 0 AND PPL parsed AND manifest hashed AND container removed"
+}

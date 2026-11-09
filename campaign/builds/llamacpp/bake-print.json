@@ -1,0 +1,40 @@
+{
+  "group": {
+    "default": {
+      "targets": [
+        "engine"
+      ]
+    }
+  },
+  "target": {
+    "engine": {
+      "attest": [
+        {
+          "mode": "max",
+          "type": "provenance"
+        }
+      ],
+      "context": "../../ref/llama.cpp",
+      "dockerfile": "cwd:///Dockerfile",
+      "args": {
+        "BASE_DEVEL": "nvidia/cuda:12.8.1-devel-ubuntu24.04",
+        "BASE_DEVEL_DIGEST": "sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66",
+        "BASE_RUNTIME": "nvidia/cuda:12.8.1-runtime-ubuntu24.04",
+        "BASE_RUNTIME_DIGEST": "",
+        "PATCH_SHA256": "",
+        "SOURCE_COMMIT": ""
+      },
+      "tags": [
+        "campaign/llamacpp:local"
+      ],
+      "platforms": [
+        "linux/amd64"
+      ],
+      "output": [
+        {
+          "type": "docker"
+        }
+      ]
+    }
+  }
+}

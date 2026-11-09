@@ -1,0 +1,35 @@
+calibration: miss cost 33.3 us/expert, 0.836 MiB/expert-slot, base token 1.42 ms
+static --n-cpu-moe (measured): n6: 1056 MiB 336 t/s, n12: 894 MiB 212 t/s, n18: 734 MiB 161 t/s, n24: 576 MiB 128 t/s
+
+PREDICTION (decode, cold-start hit rates; NOT measured at expert granularity)
+trace  pol  slots      hit   GPU MiB    tg serial   tg overlap   | static layer-offload at similar MiB (measured)
+prose  LRU      4    20.8%       656        154          198   | n18: 734 MiB 161 t/s
+prose  LRU      8    49.1%       736        214          307   | n18: 734 MiB 161 t/s
+prose  LRU     12    59.3%       817        249          385   | n12: 894 MiB 212 t/s
+prose  LRU     16    69.7%       897        298          517   | n12: 894 MiB 212 t/s
+prose  LRU     24    87.8%      1058        454          704   | n6: 1056 MiB 336 t/s
+prose  LFU      4    20.1%       656        153          196   | n18: 734 MiB 161 t/s
+prose  LFU      8    44.1%       736        200          280   | n18: 734 MiB 161 t/s
+prose  LFU     12    59.7%       817        250          388   | n12: 894 MiB 212 t/s
+prose  LFU     16    72.2%       897        313          562   | n12: 894 MiB 212 t/s
+prose  LFU     24    89.3%      1058        476          704   | n6: 1056 MiB 336 t/s
+code   LRU      4    15.9%       656        147          186   | n18: 734 MiB 161 t/s
+code   LRU      8    36.4%       736        182          246   | n18: 734 MiB 161 t/s
+code   LRU     12    58.7%       817        246          379   | n12: 894 MiB 212 t/s
+code   LRU     16    78.5%       897        358          704   | n12: 894 MiB 212 t/s
+code   LRU     24    93.5%      1058        545          704   | n6: 1056 MiB 336 t/s
+code   LFU      4    22.5%       656        157          202   | n18: 734 MiB 161 t/s
+code   LFU      8    48.6%       736        212          304   | n18: 734 MiB 161 t/s
+code   LFU     12    65.8%       817        277          458   | n12: 894 MiB 212 t/s
+code   LFU     16    80.9%       897        379          704   | n12: 894 MiB 212 t/s
+code   LFU     24    94.2%      1058        558          704   | n6: 1056 MiB 336 t/s
+chat   LRU      4    19.8%       656        153          195   | n18: 734 MiB 161 t/s
+chat   LRU      8    44.7%       736        202          283   | n18: 734 MiB 161 t/s
+chat   LRU     12    58.6%       817        246          377   | n12: 894 MiB 212 t/s
+chat   LRU     16    72.2%       897        313          562   | n12: 894 MiB 212 t/s
+chat   LRU     24    91.0%      1058        501          704   | n6: 1056 MiB 336 t/s
+chat   LFU      4    19.1%       656        152          193   | n18: 734 MiB 161 t/s
+chat   LFU      8    34.5%       736        178          239   | n18: 734 MiB 161 t/s
+chat   LFU     12    52.1%       817        223          326   | n12: 894 MiB 212 t/s
+chat   LFU     16    67.5%       897        286          481   | n12: 894 MiB 212 t/s
+chat   LFU     24    92.2%      1058        521          704   | n6: 1056 MiB 336 t/s

@@ -1,0 +1,7 @@
+{"ts": "2026-11-09T18:55:10.732764+00:00", "attempt": "a1", "exp": "E001", "state": "queued"}
+{"ts": "2026-11-09T18:55:10.732817+00:00", "attempt": "a1", "exp": "E001", "state": "preparing"}
+{"ts": "2026-11-09T18:55:12.252840+00:00", "attempt": "a1", "exp": "E001", "state": "queued", "detail": "waiting for GPU admission lock"}
+{"ts": "2026-11-09T18:55:12.283730+00:00", "attempt": "a1", "exp": "E001", "state": "running", "cmd": ["docker", "run", "--rm", "--name", "campaign-c1-e001-a1", "--label", "campaign=c1", "--label", "attempt=a1", "--label", "experiment=E001", "--gpus", "all", "--cpus", "8", "--memory", "16g", "--pids-limit", "512", "-v", "/home/muk/models/campaign/gguf:/m:ro", "-v", "/home/muk/models/campaign/data/wikitext/wikitext-2-raw:/d:ro", "--entrypoint", "/app/llama-perplexity", "ghcr.io/ggml-org/llama.cpp@sha256:395d01bb47eb23d5e967129c6ebd2b5969365401621e16dd3db33e50fa7462e3", "-m", "/m/granite-3.1-1b-a400m-instruct-bf16.gguf", "-f", "/d/wiki.test.raw", "-c", "512", "--chunks", "2", "-ngl", "99"], "gpu_wait_s": 0.0, "gpu_pre": "31 MiB, 30, 300 MHz", "inputs_verified": true}
+{"ts": "2026-11-09T18:55:15.076594+00:00", "attempt": "a1", "exp": "E001", "state": "assessing", "exit_code": 0, "elapsed_s": 2.769}
+{"ts": "2026-11-09T18:55:15.077173+00:00", "attempt": "a1", "exp": "E001", "state": "exporting"}
+{"ts": "2026-11-09T18:55:15.096265+00:00", "attempt": "a1", "exp": "E001", "state": "terminal", "result_sha256": "2341c8b193d0c780e1547fe15e85962e70457915b0835f3f2d21dfd937873a9e"}

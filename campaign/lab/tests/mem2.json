@@ -1,0 +1,209 @@
+{
+ "mem_bf16": {
+  "tool": "llama-bench",
+  "parser": "bench_json",
+  "model_file": "granite-3.1-1b-a400m-instruct-bf16.gguf",
+  "args": [
+   "-p",
+   "512",
+   "-n",
+   "128",
+   "-r",
+   "5",
+   "-o",
+   "json",
+   "-ngl",
+   "99"
+  ]
+ },
+ "mem_q8": {
+  "tool": "llama-bench",
+  "parser": "bench_json",
+  "model_file": "granite-3.1-1b-a400m-instruct-Q8_0.gguf",
+  "args": [
+   "-p",
+   "512",
+   "-n",
+   "128",
+   "-r",
+   "5",
+   "-o",
+   "json",
+   "-ngl",
+   "99"
+  ]
+ },
+ "kl_q8": {
+  "tool": "llama-perplexity",
+  "needs_data": true,
+  "parser": "kl",
+  "model_file": "granite-3.1-1b-a400m-instruct-Q8_0.gguf",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+  ],
+  "args": [
+   "-c",
+   "512",
+   "--chunks",
+   "20",
+   "-ngl",
+   "99",
+   "--kl-divergence-base",
+   "/out/bf16.kl",
+   "--kl-divergence"
+  ]
+ },
+ "mem_q4km": {
+  "tool": "llama-bench",
+  "parser": "bench_json",
+  "model_file": "granite-3.1-1b-a400m-instruct-Q4_K_M.gguf",
+  "args": [
+   "-p",
+   "512",
+   "-n",
+   "128",
+   "-r",
+   "5",
+   "-o",
+   "json",
+   "-ngl",
+   "99"
+  ]
+ },
+ "kl_q4km": {
+  "tool": "llama-perplexity",
+  "needs_data": true,
+  "parser": "kl",
+  "model_file": "granite-3.1-1b-a400m-instruct-Q4_K_M.gguf",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+  ],
+  "args": [
+   "-c",
+   "512",
+   "--chunks",
+   "20",
+   "-ngl",
+   "99",
+   "--kl-divergence-base",
+   "/out/bf16.kl",
+   "--kl-divergence"
+  ]
+ },
+ "mem_mixE4K": {
+  "tool": "llama-bench",
+  "parser": "bench_json",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "args": [
+   "-p",
+   "512",
+   "-n",
+   "128",
+   "-r",
+   "5",
+   "-o",
+   "json",
+   "-ngl",
+   "99"
+  ]
+ },
+ "kl_mixE4K": {
+  "tool": "llama-perplexity",
+  "needs_data": true,
+  "parser": "kl",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+  ],
+  "args": [
+   "-c",
+   "512",
+   "--chunks",
+   "20",
+   "-ngl",
+   "99",
+   "--kl-divergence-base",
+   "/out/bf16.kl",
+   "--kl-divergence"
+  ]
+ },
+ "mem_mixE3K": {
+  "tool": "llama-bench",
+  "parser": "bench_json",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE3K.gguf",
+  "args": [
+   "-p",
+   "512",
+   "-n",
+   "128",
+   "-r",
+   "5",
+   "-o",
+   "json",
+   "-ngl",
+   "99"
+  ]
+ },
+ "kl_mixE3K": {
+  "tool": "llama-perplexity",
+  "needs_data": true,
+  "parser": "kl",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE3K.gguf",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+  ],
+  "args": [
+   "-c",
+   "512",
+   "--chunks",
+   "20",
+   "-ngl",
+   "99",
+   "--kl-divergence-base",
+   "/out/bf16.kl",
+   "--kl-divergence"
+  ]
+ },
+ "mem_mixE2K": {
+  "tool": "llama-bench",
+  "parser": "bench_json",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE2K.gguf",
+  "args": [
+   "-p",
+   "512",
+   "-n",
+   "128",
+   "-r",
+   "5",
+   "-o",
+   "json",
+   "-ngl",
+   "99"
+  ]
+ },
+ "kl_mixE2K": {
+  "tool": "llama-perplexity",
+  "needs_data": true,
+  "parser": "kl",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE2K.gguf",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/kl:/out:ro"
+  ],
+  "args": [
+   "-c",
+   "512",
+   "--chunks",
+   "20",
+   "-ngl",
+   "99",
+   "--kl-divergence-base",
+   "/out/bf16.kl",
+   "--kl-divergence"
+  ]
+ }
+}

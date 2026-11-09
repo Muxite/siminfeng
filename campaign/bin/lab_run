@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""lab_run REQUEST.json ATTEMPT_ID  — minimal single-attempt lifecycle runner (discovery tool, not a platform).
+States appended to experiments/<id>/attempts/<attempt>/state.jsonl: queued, preparing, running, assessing, exporting, terminal | uncertain.
+Separately recorded in terminal result: execution / quality / performance / evidence / cleanup.
+Duplicate invocation of a terminal attempt is a no-op. A retry must use a NEW attempt id."""
+import json, sys, os, re, subprocess, hashlib, fcntl, time, datetime as dt
+REQ, ATT = sys.argv[1], sys.argv[2]
+req = json.load(open(REQ)); root = os.path.dirname(os.path.abspath(REQ))
+adir = os.path.join(root, "attempts", ATT); os.makedirs(adir, exist_ok=True)
+sp = os.path.join(adir, "state.jsonl")
+now = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+def state(s, **kw):
+    with open(sp, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX); f.write(json.dumps(dict(ts=now(), attempt=ATT, exp=req["experiment_id"], state=s, **kw)) + "\n")
+def sha(p):
+    h = hashlib.sha256(); 
+    with open(p, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""): h.update(b)
+    return h.hexdigest()
+if os.path.exists(sp):
+    last = [json.loads(l) for l in open(sp)][-1]
+    if last["state"] == "terminal": print("duplicate: attempt already terminal, no-op"); sys.exit(0)
+    state("uncertain", reason="state file exists without terminal; refusing to re-run under same attempt id (reconcile first)"); print("UNCERTAIN"); sys.exit(2)
+state("queued")
+state("preparing")
+w, m = req["workload"], req["model"]; res = req["resources"]
+ok_in = sha(m["gguf"]) == m["gguf_sha256"] and sha(w["data"]) == w["data_sha256"]   # input identity check
+cname = f"campaign-c1-{req['experiment_id']}-{ATT}".lower()
+labels = ["--label", "campaign=c1", "--label", f"attempt={ATT}", "--label", f"experiment={req['experiment_id']}"]
+cmd = ["docker", "run", "--rm", "--name", cname, *labels, "--gpus", "all", "--cpus", str(res["cpus"]), "--memory", res["memory"], "--pids-limit", str(res["pids"]),
+       "-v", f"{os.path.dirname(m['gguf'])}:/m:ro", "-v", f"{os.path.dirname(w['data'])}:/d:ro", "--entrypoint", "/app/" + w["tool"],
+       req["baseline"]["engine_image"], "-m", "/m/" + os.path.basename(m["gguf"]), "-f", "/d/" + os.path.basename(w["data"]), *w["args"]]
+gpu_wait = 0.0  # GPU lock removed by user decision; no admission control
+pre = subprocess.run(["nvidia-smi", "--query-gpu=memory.used,temperature.gpu,clocks.sm", "--format=csv,noheader"], capture_output=True, text=True).stdout.strip()
+state("running", cmd=cmd, gpu_wait_s=gpu_wait, gpu_pre=pre, inputs_verified=ok_in)
+out, err = os.path.join(adir, "stdout.txt"), os.path.join(adir, "stderr.txt"); t0 = time.monotonic(); timed_out = False
+with open(out, "w") as o, open(err, "w") as e:
+    p = subprocess.Popen(cmd, stdout=o, stderr=e, start_new_session=True)
+    try: rc = p.wait(timeout=res["timeout_s"])
+    except subprocess.TimeoutExpired:
+        timed_out = True; state("running", detail="timeout: cancel requested"); subprocess.run(["docker", "kill", cname], capture_output=True); rc = p.wait(); 
+elapsed = round(time.monotonic() - t0, 3)
+post = subprocess.run(["nvidia-smi", "--query-gpu=memory.used,temperature.gpu,clocks.sm", "--format=csv,noheader"], capture_output=True, text=True).stdout.strip()
+state("assessing", exit_code=rc, elapsed_s=elapsed)
+txt = open(out).read() + open(err).read(); mm = re.search(r"Final estimate: PPL = ([\d.]+) \+/- ([\d.]+)", txt)
+parsed = {"ppl": float(mm.group(1)) if mm else None, "ppl_stderr": float(mm.group(2)) if mm else None}
+json.dump(parsed, open(os.path.join(adir, "parsed.json"), "w"))
+state("exporting")
+leftover = subprocess.run(["docker", "ps", "-aq", "--filter", f"label=attempt={ATT}"], capture_output=True, text=True).stdout.split()
+files = {f: sha(os.path.join(adir, f)) for f in ("stdout.txt", "stderr.txt", "parsed.json")}
+result = dict(attempt=ATT, exp=req["experiment_id"],
+  execution=dict(status="timeout_killed" if timed_out else ("completed" if rc == 0 else "failed"), exit_code=rc, elapsed_s=elapsed),
+  quality=dict(assessed=bool(mm) and rc == 0, **parsed, gate="calibration run: not gated"),
+  performance=dict(observed=False, note="unscored; gpu_wait_s=%s, gpu_pre=%s, gpu_post=%s" % (gpu_wait, pre, post)),
+  evidence=dict(complete=all(os.path.getsize(os.path.join(adir, f)) > 0 for f in ("stdout.txt", "parsed.json")), files=files, inputs_verified=ok_in),
+  cleanup=dict(owned_containers_left=leftover, confirmed=not leftover))
+json.dump(result, open(os.path.join(adir, "result.json"), "w"), indent=1)
+state("terminal", result_sha256=sha(os.path.join(adir, "result.json")))
+print(json.dumps(result))

@@ -1,0 +1,85 @@
+{
+ "job": "job-ae22189fe6",
+ "attempt": "att-1",
+ "image_id": "sha256:95a69c0e81d07ba4284784e18d1a5581b364f9359cd7b969586a55b1ee565cf4",
+ "token_sha": "f3cea55ef5829ffdbbd598f0f04c76ddb04861777f6f9019ba4ac79cd6930b84",
+ "execution": {
+  "status": "completed"
+ },
+ "quality": {
+  "tests": {
+   "trace_prose#0": {
+    "exit_code": 0,
+    "elapsed_s": 3.132,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": 3193,
+     "gpu_baseline_mib": 31,
+     "gpu_delta_mib": 3162,
+     "host_cgroup_peak_mib": 596.8,
+     "samples": 9,
+     "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"
+    },
+    "ok": true
+   },
+   "trace_code#1": {
+    "exit_code": 0,
+    "elapsed_s": 2.801,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": 3193,
+     "gpu_baseline_mib": 31,
+     "gpu_delta_mib": 3162,
+     "host_cgroup_peak_mib": 599.0,
+     "samples": 8,
+     "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"
+    },
+    "ok": true
+   },
+   "trace_chat#2": {
+    "exit_code": 0,
+    "elapsed_s": 2.487,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": 3191,
+     "gpu_baseline_mib": 31,
+     "gpu_delta_mib": 3160,
+     "host_cgroup_peak_mib": 502.8,
+     "samples": 7,
+     "method": "nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"
+    },
+    "ok": true
+   }
+  },
+  "all_ok": true
+ },
+ "performance": {
+  "gpu_post": {
+   "gpu": "31 MiB, 2955 MHz, 39, 85.06 W",
+   "compute_apps": []
+  },
+  "exclusive_before_after": true,
+  "note": "exclusivity = no compute apps visible at end; during-run interference not observed by lab"
+ },
+ "evidence": {
+  "files": {
+   "trace_chat#2.stderr": "f412a5ddd5b18d992b6ca4737af73cca036025478d0023a37e87c47753183f80",
+   "trace_chat#2.stdout": "4e33762f921771dc7886309c23aff2fce8ef52c25f0200694a18790f55c806da",
+   "trace_code#1.stderr": "071bcb07b675a41d37bad4dd9f131f2f5587a4dc530039f2dd0443788ab92194",
+   "trace_code#1.stdout": "e00d1d32684f0b55cfbd56522d419ded3c3839076015562c91ad8b35bc77382d",
+   "trace_prose#0.stderr": "301c84b7c7fe5eef9bf9f850e0e3a2f285597c0d31836cedf2007fc6489e3a88",
+   "trace_prose#0.stdout": "915c8b675095da462e93c6aa7756ce173ab5e545ea744845baffe84768d61881"
+  },
+  "coverage": {
+   "tests_expected": 3,
+   "tests_started": 3,
+   "tests_completed_cleanly": 3,
+   "interrupted": false,
+   "note": "incomplete data is never scored; affected comparisons invalid"
+  }
+ },
+ "cleanup": {
+  "owned_containers_left": [],
+  "confirmed": true
+ }
+}

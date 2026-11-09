@@ -1,0 +1,6 @@
+# D003 — Goal addition: reverse-engineer Strata's methodology to build something similar
+- Source: user message mid-session: "one of the goals ... is reverse engineering strata to determine how to build something similar (the methodology behind it). we are allowed other inference engines as inputs that we can take inspiration from to determine what tools and what components must be built".
+- Consequence: (1) the Strata map is organised as "what would we have to build to reproduce this mechanism", not only "how it works"; (2) other engines are comparison inputs for a component/tool taxonomy; llama.cpp is first (already our reference executor), others (vLLM, ik_llama/ktransformers-style offload, etc.) only if the budget allows and only from source/docs; (3) deliverable gets a "build-it-ourselves" section: per mechanism, minimal component, required tools, and what test proves it.
+- Also still in scope: the "how Strata was *developed*" methodology (its bench/, tools/, tests/, docs claims-with-measurements style, tuning/ dirs) — treated as factory evidence.
+- Alternatives: keep scope as originally written (rejected: user stated otherwise).
+- Uncertainty: licensing/attribution of reusing Strata ideas — flag in final report; we study mechanisms, not copy code.

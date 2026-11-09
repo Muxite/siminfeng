@@ -1,0 +1,2496 @@
+{
+  "header": "SIMULATION on a logical trace: no residency/transfer semantics; Granite fully fits GPU memory.",
+  "schema_version": 1,
+  "assumptions": {
+    "experts": 32,
+    "top_k": 8,
+    "capacities_per_layer": [
+      4,
+      8,
+      12,
+      16,
+      24
+    ],
+    "initial_state": "cold per phase, layer and sequence; no prefill warming of decode",
+    "hit_accounting": "all eight lookups use token-entry slots; then update in array order",
+    "LFU": "resident counts start at 1 on admission, reset on eviction; LRU breaks ties",
+    "overlap": "intersection size / 8, adjacent positions only, within sequence and phase",
+    "entropy": "Shannon bits of unweighted expert selection counts (maximum 5 bits)",
+    "overall": "request-weighted hit rate; weights do not affect hit counting"
+  },
+  "phases": {
+    "prefill": {
+      "records": 0,
+      "layers": {},
+      "overall": {
+        "LRU": {
+          "4": {
+            "hits": 0,
+            "requests": 0,
+            "hit_rate": null
+          },
+          "8": {
+            "hits": 0,
+            "requests": 0,
+            "hit_rate": null
+          },
+          "12": {
+            "hits": 0,
+            "requests": 0,
+            "hit_rate": null
+          },
+          "16": {
+            "hits": 0,
+            "requests": 0,
+            "hit_rate": null
+          },
+          "24": {
+            "hits": 0,
+            "requests": 0,
+            "hit_rate": null
+          }
+        },
+        "LFU": {
+          "4": {
+            "hits": 0,
+            "requests": 0,
+            "hit_rate": null
+          },
+          "8": {
+            "hits": 0,
+            "requests": 0,
+            "hit_rate": null
+          },
+          "12": {
+            "hits": 0,
+            "requests": 0,
+            "hit_rate": null
+          },
+          "16": {
+            "hits": 0,
+            "requests": 0,
+            "hit_rate": null
+          },
+          "24": {
+            "hits": 0,
+            "requests": 0,
+            "hit_rate": null
+          }
+        }
+      }
+    },
+    "decode": {
+      "records": 48000,
+      "layers": {
+        "0": {
+          "tokens": 2000,
+          "histogram": [
+            485,
+            483,
+            513,
+            468,
+            521,
+            528,
+            516,
+            491,
+            488,
+            480,
+            514,
+            475,
+            492,
+            486,
+            510,
+            529,
+            495,
+            440,
+            530,
+            504,
+            502,
+            472,
+            535,
+            496,
+            524,
+            508,
+            502,
+            528,
+            484,
+            505,
+            509,
+            487
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3980,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1949,
+                "requests": 16000,
+                "hit_rate": 0.1218125
+              },
+              "8": {
+                "hits": 3980,
+                "requests": 16000,
+                "hit_rate": 0.24875
+              },
+              "12": {
+                "hits": 6029,
+                "requests": 16000,
+                "hit_rate": 0.3768125
+              },
+              "16": {
+                "hits": 7958,
+                "requests": 16000,
+                "hit_rate": 0.497375
+              },
+              "24": {
+                "hits": 11964,
+                "requests": 16000,
+                "hit_rate": 0.74775
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2027,
+                "requests": 16000,
+                "hit_rate": 0.1266875
+              },
+              "8": {
+                "hits": 4067,
+                "requests": 16000,
+                "hit_rate": 0.2541875
+              },
+              "12": {
+                "hits": 6086,
+                "requests": 16000,
+                "hit_rate": 0.380375
+              },
+              "16": {
+                "hits": 8068,
+                "requests": 16000,
+                "hit_rate": 0.50425
+              },
+              "24": {
+                "hits": 12000,
+                "requests": 16000,
+                "hit_rate": 0.75
+              }
+            }
+          },
+          "entropy_bits": 4.998694996742735,
+          "mean_overlap_experts": 1.9909954977488744,
+          "mean_overlap_fraction": 0.2488744372186093
+        },
+        "1": {
+          "tokens": 2000,
+          "histogram": [
+            512,
+            464,
+            503,
+            482,
+            503,
+            489,
+            490,
+            495,
+            501,
+            478,
+            519,
+            543,
+            496,
+            511,
+            548,
+            453,
+            529,
+            520,
+            504,
+            444,
+            500,
+            509,
+            472,
+            538,
+            506,
+            516,
+            501,
+            482,
+            504,
+            487,
+            507,
+            494
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3960,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 2002,
+                "requests": 16000,
+                "hit_rate": 0.125125
+              },
+              "8": {
+                "hits": 3960,
+                "requests": 16000,
+                "hit_rate": 0.2475
+              },
+              "12": {
+                "hits": 5988,
+                "requests": 16000,
+                "hit_rate": 0.37425
+              },
+              "16": {
+                "hits": 7915,
+                "requests": 16000,
+                "hit_rate": 0.4946875
+              },
+              "24": {
+                "hits": 11954,
+                "requests": 16000,
+                "hit_rate": 0.747125
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1981,
+                "requests": 16000,
+                "hit_rate": 0.1238125
+              },
+              "8": {
+                "hits": 4033,
+                "requests": 16000,
+                "hit_rate": 0.2520625
+              },
+              "12": {
+                "hits": 5955,
+                "requests": 16000,
+                "hit_rate": 0.3721875
+              },
+              "16": {
+                "hits": 7987,
+                "requests": 16000,
+                "hit_rate": 0.4991875
+              },
+              "24": {
+                "hits": 11877,
+                "requests": 16000,
+                "hit_rate": 0.7423125
+              }
+            }
+          },
+          "entropy_bits": 4.99846380530167,
+          "mean_overlap_experts": 1.9809904952476238,
+          "mean_overlap_fraction": 0.24762381190595298
+        },
+        "2": {
+          "tokens": 2000,
+          "histogram": [
+            489,
+            496,
+            529,
+            500,
+            530,
+            508,
+            508,
+            461,
+            515,
+            532,
+            485,
+            482,
+            499,
+            512,
+            482,
+            505,
+            524,
+            479,
+            494,
+            473,
+            527,
+            503,
+            507,
+            494,
+            471,
+            481,
+            498,
+            513,
+            489,
+            493,
+            505,
+            516
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 4015,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 2013,
+                "requests": 16000,
+                "hit_rate": 0.1258125
+              },
+              "8": {
+                "hits": 4015,
+                "requests": 16000,
+                "hit_rate": 0.2509375
+              },
+              "12": {
+                "hits": 5984,
+                "requests": 16000,
+                "hit_rate": 0.374
+              },
+              "16": {
+                "hits": 8005,
+                "requests": 16000,
+                "hit_rate": 0.5003125
+              },
+              "24": {
+                "hits": 12010,
+                "requests": 16000,
+                "hit_rate": 0.750625
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1953,
+                "requests": 16000,
+                "hit_rate": 0.1220625
+              },
+              "8": {
+                "hits": 3923,
+                "requests": 16000,
+                "hit_rate": 0.2451875
+              },
+              "12": {
+                "hits": 6011,
+                "requests": 16000,
+                "hit_rate": 0.3756875
+              },
+              "16": {
+                "hits": 7969,
+                "requests": 16000,
+                "hit_rate": 0.4980625
+              },
+              "24": {
+                "hits": 11920,
+                "requests": 16000,
+                "hit_rate": 0.745
+              }
+            }
+          },
+          "entropy_bits": 4.99907486055555,
+          "mean_overlap_experts": 2.008504252126063,
+          "mean_overlap_fraction": 0.2510630315157579
+        },
+        "3": {
+          "tokens": 2000,
+          "histogram": [
+            485,
+            509,
+            483,
+            511,
+            504,
+            487,
+            501,
+            499,
+            515,
+            496,
+            506,
+            510,
+            518,
+            507,
+            495,
+            498,
+            487,
+            487,
+            514,
+            514,
+            519,
+            497,
+            486,
+            508,
+            479,
+            486,
+            479,
+            495,
+            514,
+            499,
+            511,
+            501
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3914,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1939,
+                "requests": 16000,
+                "hit_rate": 0.1211875
+              },
+              "8": {
+                "hits": 3914,
+                "requests": 16000,
+                "hit_rate": 0.244625
+              },
+              "12": {
+                "hits": 5872,
+                "requests": 16000,
+                "hit_rate": 0.367
+              },
+              "16": {
+                "hits": 7951,
+                "requests": 16000,
+                "hit_rate": 0.4969375
+              },
+              "24": {
+                "hits": 12070,
+                "requests": 16000,
+                "hit_rate": 0.754375
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1977,
+                "requests": 16000,
+                "hit_rate": 0.1235625
+              },
+              "8": {
+                "hits": 3948,
+                "requests": 16000,
+                "hit_rate": 0.24675
+              },
+              "12": {
+                "hits": 5950,
+                "requests": 16000,
+                "hit_rate": 0.371875
+              },
+              "16": {
+                "hits": 7936,
+                "requests": 16000,
+                "hit_rate": 0.496
+              },
+              "24": {
+                "hits": 11962,
+                "requests": 16000,
+                "hit_rate": 0.747625
+              }
+            }
+          },
+          "entropy_bits": 4.9995968531060475,
+          "mean_overlap_experts": 1.9579789894947475,
+          "mean_overlap_fraction": 0.24474737368684343
+        },
+        "4": {
+          "tokens": 2000,
+          "histogram": [
+            465,
+            511,
+            503,
+            519,
+            481,
+            518,
+            516,
+            453,
+            493,
+            515,
+            487,
+            483,
+            490,
+            520,
+            482,
+            534,
+            456,
+            516,
+            490,
+            504,
+            505,
+            510,
+            496,
+            511,
+            492,
+            490,
+            506,
+            518,
+            516,
+            486,
+            507,
+            527
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 4029,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1999,
+                "requests": 16000,
+                "hit_rate": 0.1249375
+              },
+              "8": {
+                "hits": 4029,
+                "requests": 16000,
+                "hit_rate": 0.2518125
+              },
+              "12": {
+                "hits": 5980,
+                "requests": 16000,
+                "hit_rate": 0.37375
+              },
+              "16": {
+                "hits": 8023,
+                "requests": 16000,
+                "hit_rate": 0.5014375
+              },
+              "24": {
+                "hits": 12034,
+                "requests": 16000,
+                "hit_rate": 0.752125
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1935,
+                "requests": 16000,
+                "hit_rate": 0.1209375
+              },
+              "8": {
+                "hits": 4011,
+                "requests": 16000,
+                "hit_rate": 0.2506875
+              },
+              "12": {
+                "hits": 5951,
+                "requests": 16000,
+                "hit_rate": 0.3719375
+              },
+              "16": {
+                "hits": 7956,
+                "requests": 16000,
+                "hit_rate": 0.49725
+              },
+              "24": {
+                "hits": 11928,
+                "requests": 16000,
+                "hit_rate": 0.7455
+              }
+            }
+          },
+          "entropy_bits": 4.998916810138166,
+          "mean_overlap_experts": 2.0155077538769386,
+          "mean_overlap_fraction": 0.2519384692346173
+        },
+        "5": {
+          "tokens": 2000,
+          "histogram": [
+            481,
+            492,
+            530,
+            515,
+            516,
+            512,
+            529,
+            486,
+            468,
+            490,
+            502,
+            494,
+            480,
+            490,
+            502,
+            503,
+            492,
+            518,
+            505,
+            483,
+            506,
+            492,
+            493,
+            495,
+            515,
+            493,
+            483,
+            501,
+            482,
+            519,
+            515,
+            518
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3975,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 2017,
+                "requests": 16000,
+                "hit_rate": 0.1260625
+              },
+              "8": {
+                "hits": 3975,
+                "requests": 16000,
+                "hit_rate": 0.2484375
+              },
+              "12": {
+                "hits": 5982,
+                "requests": 16000,
+                "hit_rate": 0.373875
+              },
+              "16": {
+                "hits": 7950,
+                "requests": 16000,
+                "hit_rate": 0.496875
+              },
+              "24": {
+                "hits": 11975,
+                "requests": 16000,
+                "hit_rate": 0.7484375
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2023,
+                "requests": 16000,
+                "hit_rate": 0.1264375
+              },
+              "8": {
+                "hits": 4057,
+                "requests": 16000,
+                "hit_rate": 0.2535625
+              },
+              "12": {
+                "hits": 5985,
+                "requests": 16000,
+                "hit_rate": 0.3740625
+              },
+              "16": {
+                "hits": 7952,
+                "requests": 16000,
+                "hit_rate": 0.497
+              },
+              "24": {
+                "hits": 11984,
+                "requests": 16000,
+                "hit_rate": 0.749
+              }
+            }
+          },
+          "entropy_bits": 4.999339057836294,
+          "mean_overlap_experts": 1.9884942471235618,
+          "mean_overlap_fraction": 0.24856178089044523
+        },
+        "6": {
+          "tokens": 2000,
+          "histogram": [
+            510,
+            509,
+            465,
+            480,
+            491,
+            482,
+            487,
+            485,
+            508,
+            524,
+            518,
+            514,
+            487,
+            496,
+            529,
+            508,
+            493,
+            510,
+            514,
+            527,
+            482,
+            507,
+            519,
+            477,
+            539,
+            502,
+            478,
+            495,
+            470,
+            498,
+            511,
+            485
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 4078,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 2032,
+                "requests": 16000,
+                "hit_rate": 0.127
+              },
+              "8": {
+                "hits": 4078,
+                "requests": 16000,
+                "hit_rate": 0.254875
+              },
+              "12": {
+                "hits": 6035,
+                "requests": 16000,
+                "hit_rate": 0.3771875
+              },
+              "16": {
+                "hits": 8038,
+                "requests": 16000,
+                "hit_rate": 0.502375
+              },
+              "24": {
+                "hits": 11980,
+                "requests": 16000,
+                "hit_rate": 0.74875
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1984,
+                "requests": 16000,
+                "hit_rate": 0.124
+              },
+              "8": {
+                "hits": 4014,
+                "requests": 16000,
+                "hit_rate": 0.250875
+              },
+              "12": {
+                "hits": 5989,
+                "requests": 16000,
+                "hit_rate": 0.3743125
+              },
+              "16": {
+                "hits": 8047,
+                "requests": 16000,
+                "hit_rate": 0.5029375
+              },
+              "24": {
+                "hits": 11980,
+                "requests": 16000,
+                "hit_rate": 0.74875
+              }
+            }
+          },
+          "entropy_bits": 4.9990559056797395,
+          "mean_overlap_experts": 2.0400200100050023,
+          "mean_overlap_fraction": 0.2550025012506253
+        },
+        "7": {
+          "tokens": 2000,
+          "histogram": [
+            496,
+            526,
+            508,
+            496,
+            461,
+            464,
+            467,
+            519,
+            474,
+            531,
+            509,
+            498,
+            508,
+            467,
+            514,
+            516,
+            514,
+            535,
+            522,
+            484,
+            524,
+            504,
+            476,
+            440,
+            512,
+            504,
+            504,
+            500,
+            502,
+            503,
+            505,
+            517
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3997,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 2000,
+                "requests": 16000,
+                "hit_rate": 0.125
+              },
+              "8": {
+                "hits": 3997,
+                "requests": 16000,
+                "hit_rate": 0.2498125
+              },
+              "12": {
+                "hits": 6016,
+                "requests": 16000,
+                "hit_rate": 0.376
+              },
+              "16": {
+                "hits": 8031,
+                "requests": 16000,
+                "hit_rate": 0.5019375
+              },
+              "24": {
+                "hits": 12008,
+                "requests": 16000,
+                "hit_rate": 0.7505
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2035,
+                "requests": 16000,
+                "hit_rate": 0.1271875
+              },
+              "8": {
+                "hits": 3987,
+                "requests": 16000,
+                "hit_rate": 0.2491875
+              },
+              "12": {
+                "hits": 5989,
+                "requests": 16000,
+                "hit_rate": 0.3743125
+              },
+              "16": {
+                "hits": 7990,
+                "requests": 16000,
+                "hit_rate": 0.499375
+              },
+              "24": {
+                "hits": 12032,
+                "requests": 16000,
+                "hit_rate": 0.752
+              }
+            }
+          },
+          "entropy_bits": 4.998556595770061,
+          "mean_overlap_experts": 1.9994997498749374,
+          "mean_overlap_fraction": 0.24993746873436717
+        },
+        "8": {
+          "tokens": 2000,
+          "histogram": [
+            504,
+            477,
+            478,
+            473,
+            513,
+            517,
+            482,
+            518,
+            485,
+            548,
+            495,
+            490,
+            510,
+            510,
+            497,
+            489,
+            521,
+            494,
+            482,
+            492,
+            513,
+            486,
+            515,
+            483,
+            495,
+            493,
+            487,
+            539,
+            477,
+            508,
+            508,
+            521
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3979,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1978,
+                "requests": 16000,
+                "hit_rate": 0.123625
+              },
+              "8": {
+                "hits": 3979,
+                "requests": 16000,
+                "hit_rate": 0.2486875
+              },
+              "12": {
+                "hits": 6002,
+                "requests": 16000,
+                "hit_rate": 0.375125
+              },
+              "16": {
+                "hits": 7991,
+                "requests": 16000,
+                "hit_rate": 0.4994375
+              },
+              "24": {
+                "hits": 11942,
+                "requests": 16000,
+                "hit_rate": 0.746375
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1932,
+                "requests": 16000,
+                "hit_rate": 0.12075
+              },
+              "8": {
+                "hits": 3945,
+                "requests": 16000,
+                "hit_rate": 0.2465625
+              },
+              "12": {
+                "hits": 6003,
+                "requests": 16000,
+                "hit_rate": 0.3751875
+              },
+              "16": {
+                "hits": 7957,
+                "requests": 16000,
+                "hit_rate": 0.4973125
+              },
+              "24": {
+                "hits": 11973,
+                "requests": 16000,
+                "hit_rate": 0.7483125
+              }
+            }
+          },
+          "entropy_bits": 4.99906441522086,
+          "mean_overlap_experts": 1.9904952476238118,
+          "mean_overlap_fraction": 0.24881190595297648
+        },
+        "9": {
+          "tokens": 2000,
+          "histogram": [
+            491,
+            468,
+            507,
+            547,
+            493,
+            482,
+            511,
+            472,
+            488,
+            514,
+            487,
+            489,
+            481,
+            519,
+            489,
+            476,
+            511,
+            504,
+            492,
+            496,
+            500,
+            550,
+            498,
+            500,
+            505,
+            445,
+            530,
+            517,
+            530,
+            502,
+            495,
+            511
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 4063,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 2029,
+                "requests": 16000,
+                "hit_rate": 0.1268125
+              },
+              "8": {
+                "hits": 4063,
+                "requests": 16000,
+                "hit_rate": 0.2539375
+              },
+              "12": {
+                "hits": 6048,
+                "requests": 16000,
+                "hit_rate": 0.378
+              },
+              "16": {
+                "hits": 8049,
+                "requests": 16000,
+                "hit_rate": 0.5030625
+              },
+              "24": {
+                "hits": 11956,
+                "requests": 16000,
+                "hit_rate": 0.74725
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2022,
+                "requests": 16000,
+                "hit_rate": 0.126375
+              },
+              "8": {
+                "hits": 4051,
+                "requests": 16000,
+                "hit_rate": 0.2531875
+              },
+              "12": {
+                "hits": 6048,
+                "requests": 16000,
+                "hit_rate": 0.378
+              },
+              "16": {
+                "hits": 8078,
+                "requests": 16000,
+                "hit_rate": 0.504875
+              },
+              "24": {
+                "hits": 11995,
+                "requests": 16000,
+                "hit_rate": 0.7496875
+              }
+            }
+          },
+          "entropy_bits": 4.998675805037654,
+          "mean_overlap_experts": 2.0325162581290646,
+          "mean_overlap_fraction": 0.25406453226613307
+        },
+        "10": {
+          "tokens": 2000,
+          "histogram": [
+            503,
+            520,
+            516,
+            501,
+            516,
+            481,
+            476,
+            504,
+            517,
+            488,
+            465,
+            541,
+            507,
+            486,
+            466,
+            502,
+            501,
+            521,
+            472,
+            497,
+            486,
+            502,
+            542,
+            486,
+            488,
+            516,
+            494,
+            447,
+            522,
+            496,
+            515,
+            526
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3899,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1943,
+                "requests": 16000,
+                "hit_rate": 0.1214375
+              },
+              "8": {
+                "hits": 3899,
+                "requests": 16000,
+                "hit_rate": 0.2436875
+              },
+              "12": {
+                "hits": 5859,
+                "requests": 16000,
+                "hit_rate": 0.3661875
+              },
+              "16": {
+                "hits": 7902,
+                "requests": 16000,
+                "hit_rate": 0.493875
+              },
+              "24": {
+                "hits": 12035,
+                "requests": 16000,
+                "hit_rate": 0.7521875
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1983,
+                "requests": 16000,
+                "hit_rate": 0.1239375
+              },
+              "8": {
+                "hits": 3989,
+                "requests": 16000,
+                "hit_rate": 0.2493125
+              },
+              "12": {
+                "hits": 6059,
+                "requests": 16000,
+                "hit_rate": 0.3786875
+              },
+              "16": {
+                "hits": 7999,
+                "requests": 16000,
+                "hit_rate": 0.4999375
+              },
+              "24": {
+                "hits": 12073,
+                "requests": 16000,
+                "hit_rate": 0.7545625
+              }
+            }
+          },
+          "entropy_bits": 4.998672370185534,
+          "mean_overlap_experts": 1.9504752376188095,
+          "mean_overlap_fraction": 0.24380940470235118
+        },
+        "11": {
+          "tokens": 2000,
+          "histogram": [
+            517,
+            501,
+            527,
+            507,
+            534,
+            484,
+            492,
+            496,
+            503,
+            475,
+            550,
+            467,
+            483,
+            486,
+            512,
+            486,
+            511,
+            510,
+            532,
+            489,
+            498,
+            503,
+            492,
+            466,
+            491,
+            475,
+            519,
+            517,
+            509,
+            519,
+            479,
+            470
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 4007,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 2003,
+                "requests": 16000,
+                "hit_rate": 0.1251875
+              },
+              "8": {
+                "hits": 4007,
+                "requests": 16000,
+                "hit_rate": 0.2504375
+              },
+              "12": {
+                "hits": 6033,
+                "requests": 16000,
+                "hit_rate": 0.3770625
+              },
+              "16": {
+                "hits": 7980,
+                "requests": 16000,
+                "hit_rate": 0.49875
+              },
+              "24": {
+                "hits": 11967,
+                "requests": 16000,
+                "hit_rate": 0.7479375
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1999,
+                "requests": 16000,
+                "hit_rate": 0.1249375
+              },
+              "8": {
+                "hits": 4014,
+                "requests": 16000,
+                "hit_rate": 0.250875
+              },
+              "12": {
+                "hits": 5999,
+                "requests": 16000,
+                "hit_rate": 0.3749375
+              },
+              "16": {
+                "hits": 8039,
+                "requests": 16000,
+                "hit_rate": 0.5024375
+              },
+              "24": {
+                "hits": 11943,
+                "requests": 16000,
+                "hit_rate": 0.7464375
+              }
+            }
+          },
+          "entropy_bits": 4.998800889962281,
+          "mean_overlap_experts": 2.0045022511255626,
+          "mean_overlap_fraction": 0.2505627813906953
+        },
+        "12": {
+          "tokens": 2000,
+          "histogram": [
+            489,
+            513,
+            495,
+            528,
+            512,
+            504,
+            502,
+            500,
+            490,
+            495,
+            493,
+            507,
+            485,
+            507,
+            475,
+            460,
+            499,
+            519,
+            495,
+            498,
+            468,
+            474,
+            515,
+            477,
+            516,
+            498,
+            517,
+            506,
+            504,
+            510,
+            507,
+            542
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 4026,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1952,
+                "requests": 16000,
+                "hit_rate": 0.122
+              },
+              "8": {
+                "hits": 4026,
+                "requests": 16000,
+                "hit_rate": 0.251625
+              },
+              "12": {
+                "hits": 6035,
+                "requests": 16000,
+                "hit_rate": 0.3771875
+              },
+              "16": {
+                "hits": 8042,
+                "requests": 16000,
+                "hit_rate": 0.502625
+              },
+              "24": {
+                "hits": 11951,
+                "requests": 16000,
+                "hit_rate": 0.7469375
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1911,
+                "requests": 16000,
+                "hit_rate": 0.1194375
+              },
+              "8": {
+                "hits": 4021,
+                "requests": 16000,
+                "hit_rate": 0.2513125
+              },
+              "12": {
+                "hits": 5998,
+                "requests": 16000,
+                "hit_rate": 0.374875
+              },
+              "16": {
+                "hits": 7987,
+                "requests": 16000,
+                "hit_rate": 0.4991875
+              },
+              "24": {
+                "hits": 11963,
+                "requests": 16000,
+                "hit_rate": 0.7476875
+              }
+            }
+          },
+          "entropy_bits": 4.999155304443187,
+          "mean_overlap_experts": 2.0140070035017508,
+          "mean_overlap_fraction": 0.25175087543771885
+        },
+        "13": {
+          "tokens": 2000,
+          "histogram": [
+            474,
+            489,
+            536,
+            502,
+            500,
+            478,
+            477,
+            515,
+            528,
+            470,
+            520,
+            504,
+            488,
+            499,
+            512,
+            491,
+            487,
+            500,
+            487,
+            501,
+            510,
+            500,
+            500,
+            480,
+            499,
+            491,
+            497,
+            539,
+            480,
+            487,
+            494,
+            565
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3963,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1995,
+                "requests": 16000,
+                "hit_rate": 0.1246875
+              },
+              "8": {
+                "hits": 3963,
+                "requests": 16000,
+                "hit_rate": 0.2476875
+              },
+              "12": {
+                "hits": 5973,
+                "requests": 16000,
+                "hit_rate": 0.3733125
+              },
+              "16": {
+                "hits": 8040,
+                "requests": 16000,
+                "hit_rate": 0.5025
+              },
+              "24": {
+                "hits": 11944,
+                "requests": 16000,
+                "hit_rate": 0.7465
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2032,
+                "requests": 16000,
+                "hit_rate": 0.127
+              },
+              "8": {
+                "hits": 4021,
+                "requests": 16000,
+                "hit_rate": 0.2513125
+              },
+              "12": {
+                "hits": 5968,
+                "requests": 16000,
+                "hit_rate": 0.373
+              },
+              "16": {
+                "hits": 7994,
+                "requests": 16000,
+                "hit_rate": 0.499625
+              },
+              "24": {
+                "hits": 11994,
+                "requests": 16000,
+                "hit_rate": 0.749625
+              }
+            }
+          },
+          "entropy_bits": 4.998837996730086,
+          "mean_overlap_experts": 1.9824912456228114,
+          "mean_overlap_fraction": 0.24781140570285143
+        },
+        "14": {
+          "tokens": 2000,
+          "histogram": [
+            469,
+            455,
+            461,
+            481,
+            481,
+            462,
+            521,
+            506,
+            506,
+            515,
+            515,
+            508,
+            524,
+            503,
+            515,
+            529,
+            503,
+            481,
+            500,
+            492,
+            472,
+            493,
+            501,
+            539,
+            484,
+            494,
+            513,
+            529,
+            489,
+            513,
+            536,
+            510
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 4098,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 2087,
+                "requests": 16000,
+                "hit_rate": 0.1304375
+              },
+              "8": {
+                "hits": 4098,
+                "requests": 16000,
+                "hit_rate": 0.256125
+              },
+              "12": {
+                "hits": 6158,
+                "requests": 16000,
+                "hit_rate": 0.384875
+              },
+              "16": {
+                "hits": 8196,
+                "requests": 16000,
+                "hit_rate": 0.51225
+              },
+              "24": {
+                "hits": 12145,
+                "requests": 16000,
+                "hit_rate": 0.7590625
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2049,
+                "requests": 16000,
+                "hit_rate": 0.1280625
+              },
+              "8": {
+                "hits": 4045,
+                "requests": 16000,
+                "hit_rate": 0.2528125
+              },
+              "12": {
+                "hits": 6021,
+                "requests": 16000,
+                "hit_rate": 0.3763125
+              },
+              "16": {
+                "hits": 8087,
+                "requests": 16000,
+                "hit_rate": 0.5054375
+              },
+              "24": {
+                "hits": 12081,
+                "requests": 16000,
+                "hit_rate": 0.7550625
+              }
+            }
+          },
+          "entropy_bits": 4.998629515769156,
+          "mean_overlap_experts": 2.050025012506253,
+          "mean_overlap_fraction": 0.25625312656328164
+        },
+        "15": {
+          "tokens": 2000,
+          "histogram": [
+            504,
+            514,
+            512,
+            515,
+            474,
+            502,
+            465,
+            481,
+            471,
+            500,
+            517,
+            471,
+            533,
+            507,
+            509,
+            506,
+            482,
+            482,
+            494,
+            483,
+            488,
+            527,
+            494,
+            499,
+            524,
+            484,
+            486,
+            515,
+            545,
+            503,
+            519,
+            494
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3938,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1950,
+                "requests": 16000,
+                "hit_rate": 0.121875
+              },
+              "8": {
+                "hits": 3938,
+                "requests": 16000,
+                "hit_rate": 0.246125
+              },
+              "12": {
+                "hits": 5881,
+                "requests": 16000,
+                "hit_rate": 0.3675625
+              },
+              "16": {
+                "hits": 7874,
+                "requests": 16000,
+                "hit_rate": 0.492125
+              },
+              "24": {
+                "hits": 11878,
+                "requests": 16000,
+                "hit_rate": 0.742375
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2017,
+                "requests": 16000,
+                "hit_rate": 0.1260625
+              },
+              "8": {
+                "hits": 4042,
+                "requests": 16000,
+                "hit_rate": 0.252625
+              },
+              "12": {
+                "hits": 6097,
+                "requests": 16000,
+                "hit_rate": 0.3810625
+              },
+              "16": {
+                "hits": 8069,
+                "requests": 16000,
+                "hit_rate": 0.5043125
+              },
+              "24": {
+                "hits": 11996,
+                "requests": 16000,
+                "hit_rate": 0.74975
+              }
+            }
+          },
+          "entropy_bits": 4.998952408169121,
+          "mean_overlap_experts": 1.969984992496248,
+          "mean_overlap_fraction": 0.246248124062031
+        },
+        "16": {
+          "tokens": 2000,
+          "histogram": [
+            526,
+            508,
+            491,
+            500,
+            498,
+            469,
+            503,
+            534,
+            533,
+            488,
+            496,
+            500,
+            495,
+            503,
+            488,
+            474,
+            498,
+            501,
+            480,
+            484,
+            508,
+            490,
+            521,
+            473,
+            496,
+            514,
+            532,
+            473,
+            509,
+            488,
+            551,
+            476
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 4055,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 2049,
+                "requests": 16000,
+                "hit_rate": 0.1280625
+              },
+              "8": {
+                "hits": 4055,
+                "requests": 16000,
+                "hit_rate": 0.2534375
+              },
+              "12": {
+                "hits": 6031,
+                "requests": 16000,
+                "hit_rate": 0.3769375
+              },
+              "16": {
+                "hits": 7950,
+                "requests": 16000,
+                "hit_rate": 0.496875
+              },
+              "24": {
+                "hits": 11954,
+                "requests": 16000,
+                "hit_rate": 0.747125
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2019,
+                "requests": 16000,
+                "hit_rate": 0.1261875
+              },
+              "8": {
+                "hits": 3960,
+                "requests": 16000,
+                "hit_rate": 0.2475
+              },
+              "12": {
+                "hits": 6052,
+                "requests": 16000,
+                "hit_rate": 0.37825
+              },
+              "16": {
+                "hits": 8026,
+                "requests": 16000,
+                "hit_rate": 0.501625
+              },
+              "24": {
+                "hits": 12010,
+                "requests": 16000,
+                "hit_rate": 0.750625
+              }
+            }
+          },
+          "entropy_bits": 4.998888796177703,
+          "mean_overlap_experts": 2.028514257128564,
+          "mean_overlap_fraction": 0.2535642821410705
+        },
+        "17": {
+          "tokens": 2000,
+          "histogram": [
+            486,
+            480,
+            504,
+            487,
+            497,
+            512,
+            530,
+            516,
+            506,
+            491,
+            474,
+            508,
+            505,
+            505,
+            505,
+            559,
+            497,
+            516,
+            517,
+            510,
+            499,
+            503,
+            491,
+            482,
+            465,
+            490,
+            496,
+            462,
+            507,
+            503,
+            493,
+            504
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3929,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 2005,
+                "requests": 16000,
+                "hit_rate": 0.1253125
+              },
+              "8": {
+                "hits": 3929,
+                "requests": 16000,
+                "hit_rate": 0.2455625
+              },
+              "12": {
+                "hits": 5962,
+                "requests": 16000,
+                "hit_rate": 0.372625
+              },
+              "16": {
+                "hits": 7938,
+                "requests": 16000,
+                "hit_rate": 0.496125
+              },
+              "24": {
+                "hits": 11942,
+                "requests": 16000,
+                "hit_rate": 0.746375
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2038,
+                "requests": 16000,
+                "hit_rate": 0.127375
+              },
+              "8": {
+                "hits": 4094,
+                "requests": 16000,
+                "hit_rate": 0.255875
+              },
+              "12": {
+                "hits": 6086,
+                "requests": 16000,
+                "hit_rate": 0.380375
+              },
+              "16": {
+                "hits": 8083,
+                "requests": 16000,
+                "hit_rate": 0.5051875
+              },
+              "24": {
+                "hits": 11991,
+                "requests": 16000,
+                "hit_rate": 0.7494375
+              }
+            }
+          },
+          "entropy_bits": 4.99906079830961,
+          "mean_overlap_experts": 1.9654827413706852,
+          "mean_overlap_fraction": 0.24568534267133565
+        },
+        "18": {
+          "tokens": 2000,
+          "histogram": [
+            453,
+            512,
+            507,
+            461,
+            512,
+            525,
+            481,
+            543,
+            484,
+            506,
+            526,
+            544,
+            505,
+            510,
+            499,
+            506,
+            533,
+            498,
+            495,
+            504,
+            502,
+            504,
+            494,
+            467,
+            513,
+            487,
+            476,
+            512,
+            468,
+            510,
+            475,
+            488
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3992,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1978,
+                "requests": 16000,
+                "hit_rate": 0.123625
+              },
+              "8": {
+                "hits": 3992,
+                "requests": 16000,
+                "hit_rate": 0.2495
+              },
+              "12": {
+                "hits": 6015,
+                "requests": 16000,
+                "hit_rate": 0.3759375
+              },
+              "16": {
+                "hits": 8011,
+                "requests": 16000,
+                "hit_rate": 0.5006875
+              },
+              "24": {
+                "hits": 11978,
+                "requests": 16000,
+                "hit_rate": 0.748625
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1963,
+                "requests": 16000,
+                "hit_rate": 0.1226875
+              },
+              "8": {
+                "hits": 3934,
+                "requests": 16000,
+                "hit_rate": 0.245875
+              },
+              "12": {
+                "hits": 5848,
+                "requests": 16000,
+                "hit_rate": 0.3655
+              },
+              "16": {
+                "hits": 7901,
+                "requests": 16000,
+                "hit_rate": 0.4938125
+              },
+              "24": {
+                "hits": 11932,
+                "requests": 16000,
+                "hit_rate": 0.74575
+              }
+            }
+          },
+          "entropy_bits": 4.998626488491147,
+          "mean_overlap_experts": 1.9969984992496248,
+          "mean_overlap_fraction": 0.2496248124062031
+        },
+        "19": {
+          "tokens": 2000,
+          "histogram": [
+            482,
+            483,
+            491,
+            492,
+            507,
+            475,
+            490,
+            519,
+            482,
+            482,
+            542,
+            499,
+            494,
+            503,
+            462,
+            536,
+            524,
+            538,
+            514,
+            518,
+            503,
+            499,
+            461,
+            492,
+            499,
+            499,
+            512,
+            511,
+            506,
+            481,
+            520,
+            484
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3968,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1991,
+                "requests": 16000,
+                "hit_rate": 0.1244375
+              },
+              "8": {
+                "hits": 3968,
+                "requests": 16000,
+                "hit_rate": 0.248
+              },
+              "12": {
+                "hits": 5941,
+                "requests": 16000,
+                "hit_rate": 0.3713125
+              },
+              "16": {
+                "hits": 7931,
+                "requests": 16000,
+                "hit_rate": 0.4956875
+              },
+              "24": {
+                "hits": 11940,
+                "requests": 16000,
+                "hit_rate": 0.74625
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1921,
+                "requests": 16000,
+                "hit_rate": 0.1200625
+              },
+              "8": {
+                "hits": 3986,
+                "requests": 16000,
+                "hit_rate": 0.249125
+              },
+              "12": {
+                "hits": 5911,
+                "requests": 16000,
+                "hit_rate": 0.3694375
+              },
+              "16": {
+                "hits": 7919,
+                "requests": 16000,
+                "hit_rate": 0.4949375
+              },
+              "24": {
+                "hits": 11901,
+                "requests": 16000,
+                "hit_rate": 0.7438125
+              }
+            }
+          },
+          "entropy_bits": 4.998870994407681,
+          "mean_overlap_experts": 1.984992496248124,
+          "mean_overlap_fraction": 0.2481240620310155
+        },
+        "20": {
+          "tokens": 2000,
+          "histogram": [
+            500,
+            482,
+            549,
+            504,
+            483,
+            468,
+            493,
+            514,
+            478,
+            504,
+            498,
+            484,
+            506,
+            498,
+            483,
+            525,
+            525,
+            473,
+            522,
+            523,
+            496,
+            535,
+            499,
+            489,
+            480,
+            519,
+            510,
+            488,
+            492,
+            481,
+            483,
+            516
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 4034,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 2026,
+                "requests": 16000,
+                "hit_rate": 0.126625
+              },
+              "8": {
+                "hits": 4034,
+                "requests": 16000,
+                "hit_rate": 0.252125
+              },
+              "12": {
+                "hits": 6003,
+                "requests": 16000,
+                "hit_rate": 0.3751875
+              },
+              "16": {
+                "hits": 7958,
+                "requests": 16000,
+                "hit_rate": 0.497375
+              },
+              "24": {
+                "hits": 11964,
+                "requests": 16000,
+                "hit_rate": 0.74775
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2008,
+                "requests": 16000,
+                "hit_rate": 0.1255
+              },
+              "8": {
+                "hits": 4055,
+                "requests": 16000,
+                "hit_rate": 0.2534375
+              },
+              "12": {
+                "hits": 6085,
+                "requests": 16000,
+                "hit_rate": 0.3803125
+              },
+              "16": {
+                "hits": 8083,
+                "requests": 16000,
+                "hit_rate": 0.5051875
+              },
+              "24": {
+                "hits": 12008,
+                "requests": 16000,
+                "hit_rate": 0.7505
+              }
+            }
+          },
+          "entropy_bits": 4.998950137244884,
+          "mean_overlap_experts": 2.018009004502251,
+          "mean_overlap_fraction": 0.2522511255627814
+        },
+        "21": {
+          "tokens": 2000,
+          "histogram": [
+            487,
+            499,
+            528,
+            520,
+            517,
+            503,
+            496,
+            472,
+            511,
+            500,
+            480,
+            484,
+            516,
+            459,
+            479,
+            484,
+            514,
+            523,
+            485,
+            528,
+            498,
+            503,
+            512,
+            488,
+            519,
+            505,
+            480,
+            499,
+            506,
+            522,
+            511,
+            472
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3946,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1937,
+                "requests": 16000,
+                "hit_rate": 0.1210625
+              },
+              "8": {
+                "hits": 3946,
+                "requests": 16000,
+                "hit_rate": 0.246625
+              },
+              "12": {
+                "hits": 5965,
+                "requests": 16000,
+                "hit_rate": 0.3728125
+              },
+              "16": {
+                "hits": 7964,
+                "requests": 16000,
+                "hit_rate": 0.49775
+              },
+              "24": {
+                "hits": 11941,
+                "requests": 16000,
+                "hit_rate": 0.7463125
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 1939,
+                "requests": 16000,
+                "hit_rate": 0.1211875
+              },
+              "8": {
+                "hits": 3928,
+                "requests": 16000,
+                "hit_rate": 0.2455
+              },
+              "12": {
+                "hits": 5919,
+                "requests": 16000,
+                "hit_rate": 0.3699375
+              },
+              "16": {
+                "hits": 7971,
+                "requests": 16000,
+                "hit_rate": 0.4981875
+              },
+              "24": {
+                "hits": 12030,
+                "requests": 16000,
+                "hit_rate": 0.751875
+              }
+            }
+          },
+          "entropy_bits": 4.999084624835353,
+          "mean_overlap_experts": 1.9739869934967484,
+          "mean_overlap_fraction": 0.24674837418709356
+        },
+        "22": {
+          "tokens": 2000,
+          "histogram": [
+            502,
+            506,
+            544,
+            525,
+            502,
+            520,
+            516,
+            486,
+            497,
+            480,
+            505,
+            454,
+            512,
+            513,
+            501,
+            478,
+            524,
+            503,
+            516,
+            468,
+            501,
+            490,
+            496,
+            487,
+            483,
+            494,
+            513,
+            496,
+            519,
+            507,
+            474,
+            488
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3907,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1954,
+                "requests": 16000,
+                "hit_rate": 0.122125
+              },
+              "8": {
+                "hits": 3907,
+                "requests": 16000,
+                "hit_rate": 0.2441875
+              },
+              "12": {
+                "hits": 5900,
+                "requests": 16000,
+                "hit_rate": 0.36875
+              },
+              "16": {
+                "hits": 7961,
+                "requests": 16000,
+                "hit_rate": 0.4975625
+              },
+              "24": {
+                "hits": 11978,
+                "requests": 16000,
+                "hit_rate": 0.748625
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2005,
+                "requests": 16000,
+                "hit_rate": 0.1253125
+              },
+              "8": {
+                "hits": 4024,
+                "requests": 16000,
+                "hit_rate": 0.2515
+              },
+              "12": {
+                "hits": 5999,
+                "requests": 16000,
+                "hit_rate": 0.3749375
+              },
+              "16": {
+                "hits": 7976,
+                "requests": 16000,
+                "hit_rate": 0.4985
+              },
+              "24": {
+                "hits": 11990,
+                "requests": 16000,
+                "hit_rate": 0.749375
+              }
+            }
+          },
+          "entropy_bits": 4.999032769363858,
+          "mean_overlap_experts": 1.9544772386193097,
+          "mean_overlap_fraction": 0.2443096548274137
+        },
+        "23": {
+          "tokens": 2000,
+          "histogram": [
+            497,
+            488,
+            536,
+            495,
+            497,
+            526,
+            543,
+            474,
+            493,
+            479,
+            470,
+            478,
+            508,
+            491,
+            509,
+            490,
+            500,
+            516,
+            504,
+            459,
+            527,
+            483,
+            489,
+            482,
+            530,
+            504,
+            518,
+            508,
+            508,
+            501,
+            490,
+            507
+          ],
+          "overlap_pairs": 1999,
+          "overlap_experts_sum": 3922,
+          "cache": {
+            "LRU": {
+              "4": {
+                "hits": 1974,
+                "requests": 16000,
+                "hit_rate": 0.123375
+              },
+              "8": {
+                "hits": 3922,
+                "requests": 16000,
+                "hit_rate": 0.245125
+              },
+              "12": {
+                "hits": 5899,
+                "requests": 16000,
+                "hit_rate": 0.3686875
+              },
+              "16": {
+                "hits": 7889,
+                "requests": 16000,
+                "hit_rate": 0.4930625
+              },
+              "24": {
+                "hits": 11935,
+                "requests": 16000,
+                "hit_rate": 0.7459375
+              }
+            },
+            "LFU": {
+              "4": {
+                "hits": 2008,
+                "requests": 16000,
+                "hit_rate": 0.1255
+              },
+              "8": {
+                "hits": 4082,
+                "requests": 16000,
+                "hit_rate": 0.255125
+              },
+              "12": {
+                "hits": 6040,
+                "requests": 16000,
+                "hit_rate": 0.3775
+              },
+              "16": {
+                "hits": 8071,
+                "requests": 16000,
+                "hit_rate": 0.5044375
+              },
+              "24": {
+                "hits": 11988,
+                "requests": 16000,
+                "hit_rate": 0.74925
+              }
+            }
+          },
+          "entropy_bits": 4.998936845049665,
+          "mean_overlap_experts": 1.9619809904952477,
+          "mean_overlap_fraction": 0.24524762381190596
+        }
+      },
+      "overall": {
+        "LRU": {
+          "4": {
+            "hits": 47802,
+            "requests": 384000,
+            "hit_rate": 0.124484375
+          },
+          "8": {
+            "hits": 95674,
+            "requests": 384000,
+            "hit_rate": 0.24915104166666666
+          },
+          "12": {
+            "hits": 143591,
+            "requests": 384000,
+            "hit_rate": 0.37393489583333334
+          },
+          "16": {
+            "hits": 191547,
+            "requests": 384000,
+            "hit_rate": 0.4988203125
+          },
+          "24": {
+            "hits": 287445,
+            "requests": 384000,
+            "hit_rate": 0.7485546875
+          }
+        },
+        "LFU": {
+          "4": {
+            "hits": 47761,
+            "requests": 384000,
+            "hit_rate": 0.12437760416666667
+          },
+          "8": {
+            "hits": 96231,
+            "requests": 384000,
+            "hit_rate": 0.2506015625
+          },
+          "12": {
+            "hits": 144049,
+            "requests": 384000,
+            "hit_rate": 0.3751276041666667
+          },
+          "16": {
+            "hits": 192145,
+            "requests": 384000,
+            "hit_rate": 0.5003776041666667
+          },
+          "24": {
+            "hits": 287551,
+            "requests": 384000,
+            "hit_rate": 0.7488307291666667
+          }
+        }
+      }
+    }
+  }
+}

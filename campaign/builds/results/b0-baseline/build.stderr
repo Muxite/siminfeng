@@ -1,0 +1,21 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load local bake definitions
+#1 reading /home/muk/projects/siminfeng/campaign/builds/llamacpp/docker-bake.hcl 1.11kB / 1.11kB done
+#1 DONE 0.0s
+Your build is requesting privileges for following possibly insecure capabilities:
+
+ - Read access to path /
+ - Read access to path ../results/b0-baseline/staging-_d38i1ck/source
+
+Pass "--allow=fs.read=/ --allow=fs.read=../results/b0-baseline/staging-_d38i1ck/source" to grant requested privileges.
+
+Your full command with requested privileges:
+
+docker buildx bake --allow=fs.read=/ --allow=fs.read=../results/b0-baseline/staging-_d38i1ck/source --file /home/muk/projects/siminfeng/campaign/builds/llamacpp/docker-bake.hcl --metadata-file /home/muk/projects/siminfeng/campaign/builds/results/b0-baseline/buildx-metadata.json --progress plain engine
+
+To disable filesystem entitlements checks, you can set BUILDX_BAKE_ENTITLEMENTS_FS=0 .
+
+ERROR: additional privileges requested
+
+build: Command exited 1: ['docker', 'buildx', 'bake', '--file', '/home/muk/projects/siminfeng/campaign/builds/llamacpp/docker-bake.hcl', '--metadata-file', '/home/muk/projects/siminfeng/campaign/builds/results/b0-baseline/buildx-metadata.json', '--progress', 'plain', 'engine']

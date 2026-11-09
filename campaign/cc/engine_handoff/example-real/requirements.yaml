@@ -1,0 +1,30 @@
+handoff_id: granite-b0-smoke-1
+release:
+  role: inference-engine
+inputs:
+  model:
+    repository: ibm-granite/granite-3.1-1b-a400m-instruct
+    revision: 0da7a48b0276d500ce5922fd2b33944091fc6c09
+    manifest: /home/muk/models/campaign/granite-3.1-1b-a400m-instruct/config.json
+    manifest_sha256: f1b64813debfabeb9cc20f1a13ed8248da6774fe54e532d19912d4b3f2ab335d
+  workload:
+    artifact: /home/muk/projects/siminfeng/campaign/cc/engine_handoff/example-real/workload.json
+sandbox_requirements:
+  gpu:
+    vendor: nvidia
+    count: 1
+  required_runtime_compatibility: CUDA runtime 12.8 (image nvidia/cuda:12.8.1-runtime);
+    host driver >= 570
+  resource_limits:
+    cpus: 8
+    memory: 16g
+    pids: 512
+    timeout_s: 300
+  network_after_staging: none
+tests:
+  requested:
+  - generation-smoke
+  policy_reference: campaign decisions D005/D010 (ppl tripwire, paired KL)
+  profiling:
+    requested: false
+    tool_and_version: null

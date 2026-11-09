@@ -1,0 +1,13 @@
+config,desc,class,gpu_mib,host_mib,tg_ts,pp_ts,kld,top1_pct,ppl_ratio,notes
+bf16,Granite BF16 baseline,transferable,2984,,564,17172,0,100,1,"t/s measured under CPU load from concurrent build: unscored; clean baseline tg 599 pp 17.7k (D008)"
+q8,uniform Q8_0,transferable,1794,,783,41393,0.003389,97.039,1.006678,"job-aa57700ee5"
+q4km,uniform Q4_K_M,transferable,1222,,708,39498,0.077526,85.588,1.060338,
+mixE4K,experts Q4_K / rest Q8_0,transferable,1218,,640,39111,0.040017,90.471,1.029231,"same memory as Q4_K_M with half the KLD"
+mixE3K,experts Q3_K / rest Q8_0,transferable,1064,,733,38426,0.135039,81.804,1.100427,
+mixE2K,experts Q2_K / rest Q8_0,transferable,948,,841,35602,0.771232,58.804,2.090146,"quality collapse"
+mixE4K+cpu6,mixE4K with 6 layers' experts on CPU (static),discrete-only,1056,408,336,18017,0.040017,90.471,1.029231,"job-36b7630119; quality carried from n0 (same weights; CPU/GPU kernels differ slightly, NOT re-measured)"
+mixE4K+cpu12,mixE4K 12 layers on CPU,discrete-only,894,408,212,11741,0.040017,90.471,1.029231,"job-36b7630119; quality carried"
+mixE4K+cpu18,mixE4K 18 layers on CPU,discrete-only,734,409,161,8744,0.040017,90.471,1.029231,"job-36b7630119; quality carried"
+mixE4K+cpu24,mixE4K all experts on CPU,discrete-only,576,411,128,7105,0.040017,90.471,1.029231,"job-36b7630119; attention+embeddings only on GPU; quality carried"
+q8+cpu12,Q8_0 12 layers on CPU,discrete-only,1184,403,146,7102,0.003389,97.039,1.006678,"job-36b7630119; quality carried"
+q8+cpu24,Q8_0 all experts on CPU,discrete-only,576,406,81,4089,0.003389,97.039,1.006678,"job-36b7630119; quality carried"

@@ -1,0 +1,309 @@
+#include "arg.h"
+#include "common.h"
+#include "ggml-backend.h"
+#include "llama.h"
+
+#include <algorithm>
+#include <climits>
+#include <clocale>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <fstream>
+#include <iomanip>
+#include <limits>
+#include <locale>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+struct trace_layer {
+    std::vector<int32_t> experts;
+    std::vector<float> weights;
+    int weight_stage = -1;
+};
+
+struct routing_trace {
+    std::ofstream out;
+    std::vector<trace_layer> layers;
+    std::string error;
+    llama_pos pos = 0;
+    int32_t n_tokens = 0;
+    const char * phase = "prefill";
+    bool active = false;
+
+    void begin(llama_pos start, int32_t count, const char * name) {
+        pos = start;
+        n_tokens = count;
+        phase = name;
+        for (auto & layer : layers) {
+            layer = trace_layer{};
+        }
+        active = true;
+    }
+
+    void finish() {
+        active = false;
+        if (!error.empty()) {
+            throw std::runtime_error(error);
+        }
+        const size_t count = size_t(n_tokens) * 8;
+        for (const auto & layer : layers) {
+            if (layer.experts.size() != count || layer.weights.size() != count) {
+                throw std::runtime_error("incomplete routing tensors: require top-8 MoE in every layer");
+            }
+        }
+        for (int32_t token = 0; token < n_tokens; ++token) {
+            for (size_t il = 0; il < layers.size(); ++il) {
+                const auto & layer = layers[il];
+                const size_t off = size_t(token) * 8;
+                out << "{\"seq\":0,\"pos\":" << pos + token << ",\"layer\":" << il << ",\"experts\":[";
+                for (int k = 0; k < 8; ++k) {
+                    out << (k ? "," : "") << layer.experts[off + k];
+                }
+                out << "],\"weights\":[";
+                for (int k = 0; k < 8; ++k) {
+                    out << (k ? "," : "") << layer.weights[off + k];
+                }
+                out << "],\"phase\":\"" << phase << "\"}\n";
+            }
+        }
+        out.flush();
+        if (!out) {
+            throw std::runtime_error("failed writing trace");
+        }
+    }
+};
+
+static int tensor_layer(const char * name, const char * prefix) {
+    const size_t len = std::strlen(prefix);
+    if (std::strncmp(name, prefix, len) != 0 || name[len] == '\0') {
+        return -1;
+    }
+    int layer = 0;
+    for (const char * p = name + len; *p; ++p) {
+        if (*p < '0' || *p > '9' || layer > (INT_MAX - (*p - '0')) / 10) {
+            return -1;
+        }
+        layer = layer * 10 + (*p - '0');
+    }
+    return layer;
+}
+
+static bool trace_eval(ggml_tensor * t, bool ask, void * user_data) {
+    auto & trace = *static_cast<routing_trace *>(user_data);
+    if (!trace.active) {
+        return ask ? false : true;
+    }
+    static const char * weight_names[] = {
+        "ffn_moe_weights-", "ffn_moe_weights_softmax-",
+        "ffn_moe_weights_norm-", "ffn_moe_weights_scaled-",
+    };
+    int il = tensor_layer(t->name, "ffn_moe_topk-");
+    const bool ids = il >= 0;
+    int stage = -1;
+    if (!ids) {
+        for (int i = 0; i < 4; ++i) {
+            il = tensor_layer(t->name, weight_names[i]);
+            if (il >= 0) {
+                stage = i;
+                break;
+            }
+        }
+    }
+    if (ask) {
+        return il >= 0;
+    }
+    if (il < 0 || !trace.error.empty()) {
+        return true;
+    }
+    // Do not throw through the backend callback or stop a partially computed graph.
+    try {
+        if (size_t(il) >= trace.layers.size()) {
+            throw std::runtime_error("routing layer index exceeds model layer count");
+        }
+        const bool shape_ids = t->ne[0] == 8 && t->ne[1] == trace.n_tokens && t->ne[2] == 1 && t->ne[3] == 1;
+        const bool shape_weights_2d = shape_ids;
+        const bool shape_weights_3d = t->ne[0] == 1 && t->ne[1] == 8 && t->ne[2] == trace.n_tokens && t->ne[3] == 1;
+        if ((ids && (t->type != GGML_TYPE_I32 || !shape_ids)) ||
+            (!ids && (t->type != GGML_TYPE_F32 || (!shape_weights_2d && !shape_weights_3d)))) {
+            throw std::runtime_error(std::string("unsupported routing tensor shape/type: ") + t->name);
+        }
+        if (!t->buffer || !t->data) {
+            throw std::runtime_error("routing tensor has no backing buffer");
+        }
+        auto & layer = trace.layers[il];
+        if (ids && !layer.experts.empty()) {
+            throw std::runtime_error("duplicate topk tensor: unexpected physical batch splitting");
+        }
+        if (!ids && stage <= layer.weight_stage) {
+            throw std::runtime_error("duplicate or reordered weight tensor");
+        }
+        // Top-k can be a strided view of the full argsort. Read elements using nb[].
+        const size_t expert_stride = ids || shape_weights_2d ? t->nb[0] : t->nb[1];
+        const size_t token_stride = ids || shape_weights_2d ? t->nb[1] : t->nb[2];
+        std::vector<uint8_t> copy;
+        const uint8_t * data = static_cast<const uint8_t *>(t->data);
+        if (!ggml_backend_buffer_is_host(t->buffer)) {
+            copy.resize(ggml_nbytes(t));
+            ggml_backend_tensor_get(t, copy.data(), 0, copy.size());
+            data = copy.data();
+        }
+        if (ids) {
+            layer.experts.resize(size_t(trace.n_tokens) * 8);
+        } else {
+            layer.weights.resize(size_t(trace.n_tokens) * 8);
+            layer.weight_stage = stage;
+        }
+        for (int32_t token = 0; token < trace.n_tokens; ++token) {
+            for (int k = 0; k < 8; ++k) {
+                const size_t offset = size_t(token) * token_stride + size_t(k) * expert_stride;
+                if (offset > ggml_nbytes(t) || ggml_nbytes(t) - offset < sizeof(float)) {
+                    throw std::runtime_error("routing tensor stride outside buffer");
+                }
+                const size_t index = size_t(token) * 8 + k;
+                if (ids) {
+                    int32_t value;
+                    std::memcpy(&value, data + offset, sizeof(value));
+                    if (value < 0 || value >= 32) {
+                        throw std::runtime_error("expert ID outside [0,32)");
+                    }
+                    for (int j = 0; j < k; ++j) {
+                        if (layer.experts[size_t(token) * 8 + j] == value) {
+                            throw std::runtime_error("duplicate expert ID");
+                        }
+                    }
+                    layer.experts[index] = value;
+                } else {
+                    float value;
+                    std::memcpy(&value, data + offset, sizeof(value));
+                    if (!std::isfinite(value) || value < 0.0f) {
+                        throw std::runtime_error("invalid routing weight");
+                    }
+                    layer.weights[index] = value;
+                }
+            }
+        }
+    } catch (const std::exception & e) {
+        trace.error = e.what();
+    }
+    return true;
+}
+
+static void trace_decode(llama_context * ctx, common_batch & batch, routing_trace & trace,
+                         llama_pos pos, const char * phase) {
+    trace.begin(pos, batch.size(), phase);
+    const int result = llama_process(ctx, LLAMA_PROCESS_TYPE_DECODE, batch.get());
+    llama_synchronize(ctx);
+    if (result != 0) {
+        trace.active = false;
+        throw std::runtime_error("llama_process failed: " + std::to_string(result));
+    }
+    trace.finish();
+}
+
+static void run(common_params & params, routing_trace & trace) {
+    auto init = common_init_from_params(params);
+    auto * ctx = init->context();
+    auto * model = init->model();
+    if (!ctx || !model || llama_model_has_encoder(model) || !llama_model_has_decoder(model)) {
+        throw std::runtime_error("require a decoder-only model and valid context");
+    }
+    trace.layers.resize(llama_model_n_layer(model));
+    if (trace.layers.empty()) {
+        throw std::runtime_error("model has no layers");
+    }
+    const auto * vocab = llama_model_get_vocab(model);
+    const auto tokens = common_tokenize(ctx, params.prompt, llama_vocab_get_add_bos(vocab), true);
+    if (tokens.empty() || tokens.size() + uint64_t(params.n_predict) > llama_n_ctx(ctx) ||
+        tokens.size() + uint64_t(params.n_predict) > INT_MAX) {
+        throw std::runtime_error("empty prompt or prompt plus generation exceeds context/position limit");
+    }
+    const int32_t chunk = int32_t(std::min(llama_n_batch(ctx), llama_n_ubatch(ctx)));
+    if (chunk <= 0) {
+        throw std::runtime_error("invalid batch capacity");
+    }
+    common_batch batch(ctx);
+    for (size_t start = 0; start < tokens.size(); start += chunk) {
+        batch.clear();
+        const size_t end = std::min(tokens.size(), start + chunk);
+        for (size_t i = start; i < end; ++i) {
+            // All outputs prevent last-layer pruning of non-final prompt tokens.
+            batch.add(tokens[i], llama_pos(i), 0, true);
+        }
+        trace_decode(ctx, batch, trace, llama_pos(start), "prefill");
+    }
+    // Argmax of raw logits: common sampling options do not affect generation.
+    for (int32_t i = 0; i < params.n_predict; ++i) {
+        const float * logits = llama_get_logits_ith(ctx, -1);
+        if (!logits) {
+            throw std::runtime_error("missing logits");
+        }
+        const int32_t n_vocab = llama_vocab_n_tokens(vocab);
+        const llama_token token = llama_token(std::max_element(logits, logits + n_vocab) - logits);
+        const std::string piece = common_token_to_piece(ctx, token, true);
+        std::fwrite(piece.data(), 1, piece.size(), stdout);
+        const llama_pos pos = llama_pos(tokens.size() + i);
+        batch.clear();
+        batch.add(token, pos, 0, true);
+        trace_decode(ctx, batch, trace, pos, "decode");
+    }
+    std::fputc('\n', stdout);
+}
+
+static void usage(int, char ** argv) {
+    std::fprintf(stderr, "Usage: %s --trace-out PATH -m MODEL [-p PROMPT | -f FILE] -n N [-ngl N] [-c N]\n"
+                         "Greedy; exactly N generated tokens are evaluated, including EOG. Default N=32.\n", argv[0]);
+}
+
+int main(int argc, char ** argv) {
+    std::setlocale(LC_NUMERIC, "C");
+    common_init();
+    common_params params;
+    params.n_predict = 32;
+    std::vector<char *> args = { argv[0] };
+    std::string trace_path;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--trace-out") == 0) {
+            if (++i >= argc || !trace_path.empty()) {
+                usage(argc, argv);
+                return 1;
+            }
+            trace_path = argv[i];
+        } else {
+            args.push_back(argv[i]);
+        }
+    }
+    const int common_argc = int(args.size());
+    args.push_back(nullptr);
+    if (!common_params_parse(common_argc, args.data(), params, LLAMA_EXAMPLE_COMMON, usage)) {
+        return 1;
+    }
+    if (trace_path.empty() || params.n_predict < 0 || params.n_parallel != 1 || params.embedding) {
+        usage(argc, argv);
+        return 1;
+    }
+    routing_trace trace;
+    trace.out.open(trace_path);
+    trace.out.imbue(std::locale::classic());
+    trace.out << std::setprecision(std::numeric_limits<float>::max_digits10);
+    if (!trace.out) {
+        std::fprintf(stderr, "cannot open trace output: %s\n", trace_path.c_str());
+        return 1;
+    }
+    params.cb_eval = trace_eval;
+    params.cb_eval_user_data = &trace;
+    params.warmup = false;
+    params.sampling.backend_sampling = false;
+    llama_backend_init();
+    llama_numa_init(params.numa);
+    int result = 0;
+    try {
+        run(params, trace);
+    } catch (const std::exception & e) {
+        std::fprintf(stderr, "routing trace failed: %s\n", e.what());
+        result = 1;
+    }
+    llama_backend_free();
+    return result;
+}
