@@ -1,0 +1,22 @@
+Completed within the allowed write locations.
+
+[Recipe](/home/muk/projects/siminfeng/campaign/cc/pap/make_pap.sh), [README](/home/muk/projects/siminfeng/campaign/cc/pap/README.md), and [manifest with SHA256 hashes and verified per-layer types](/home/muk/projects/siminfeng/campaign/artifacts/codexPAP/MANIFEST.json).
+
+| Model | Bytes |
+|---|---:|
+| pap12_q3.gguf | 738,044,192 |
+| pap12_q2.gguf | 676,702,496 |
+| pap18_q3.gguf | 697,936,160 |
+| pap18_q2.gguf | 605,923,616 |
+| pap24_q3.gguf | 657,828,128 |
+| pap24_q2.gguf | 535,144,736 |
+| pap24_q3_noimat.gguf | 657,827,808 |
+| mix4_imat.gguf | 818,260,256 |
+
+Imatrix: **16,787,104 bytes**, computed from WikiText-2 TRAIN using 100×512 tokens and six CPU threads. All 72 expert tensors cover all 32 experts. SHA256: `106f834b2452b33a0a4eed7d69270a60c5b2330879f2c292a5331bc8450f77a9`.
+
+[Exact lab definitions](/home/muk/projects/siminfeng/campaign/artifacts/codexPAP/lab-tests-pap.json): **13 placement-matched decode tests and nine KLD tests**, verified against the supplied templates.
+
+CPU `pap12_q3` sanity completed over 20×512 reference tokens: **KLD 0.072459 ± 0.002828**, PPL ratio **1.074062**.
+
+Gap: GPU tests remain unexecuted; throughput, runtime memory, other variants’ quality, and imatrix improvement remain unmeasured.

@@ -1,0 +1,8 @@
+The scheduler sizes its hash table for nodes alone, although it stores both nodes and leaves. Quantized-KV rotations raise Granite’s graph to 2,065 tensors, exceeding its 2,053 slots. The patch doubles the sizing input to match ggml’s graph allocation; this is a generic capacity defect.
+
+[Patch](/home/muk/projects/siminfeng/campaign/cc/kv_quant_fix/kv-quant-fix.patch) SHA-256:
+`dd0e4ffd3ffa1e414353f70addf67312816d167ebb1e9518cc75b543b86e8e6c`
+
+[Evidence](/home/muk/projects/siminfeng/campaign/artifacts/codexKVB/ROOTCAUSE.md): q8/q4 fail before and pass after; q8 passes at 32K; f16 output remains byte-identical; the independent capacity regression passes. Patch application against the pinned source succeeds.
+
+[Build CC command and GPU checks](/home/muk/projects/siminfeng/campaign/cc/kv_quant_fix/README.md) are ready. Open risks: CUDA and multi-GPU behavior remain unverified; scheduler metadata allocation increases, including for f16.

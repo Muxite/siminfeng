@@ -1,0 +1,14 @@
+--- a/ggml/src/ggml-backend.cpp
++++ b/ggml/src/ggml-backend.cpp
+@@ -1972,9 +1972,8 @@
+     sched->n_backends = n_backends;
+     sched->n_copies = parallel ? GGML_SCHED_MAX_COPIES : 1;
+ 
+-    // initialize hash table
+-    // FIXME: needs to be size*2 to account for leafs (do it in graph_split instead)
+-    sched->hash_set    = ggml_hash_set_new(graph_size);
++    // The hash table holds both nodes and leafs, as in ggml_new_graph_custom.
++    sched->hash_set    = ggml_hash_set_new(graph_size * 2);
+     sched->hv_tensor_backend_ids = (int *) malloc(sched->hash_set.size * sizeof(sched->hv_tensor_backend_ids[0]));
+     sched->hv_tensor_copies      = (ggml_tensor **) malloc(sched->hash_set.size * sched->n_backends * sched->n_copies * sizeof(struct ggml_tensor *));
+ 
