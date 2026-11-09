@@ -38,7 +38,12 @@ def last_state(adir):
 def load_tests():
     t = {}
     import glob as g
-    for f in sorted(g.glob(os.path.join(LAB, "tests", "*.json"))): t.update(json.load(open(f)))
+    src = {}
+    for f in sorted(g.glob(os.path.join(LAB, "tests", "*.json"))):
+        for k, v in json.load(open(f)).items():
+            # Test names are global: a silent dict.update overwrite would let a submission hash the wrong definition.
+            if k in t and t[k] != v: sys.exit(f"test name collision: {k!r} defined differently in {src[k]} and {f}")
+            t[k] = v; src.setdefault(k, f)
     return t
 TESTS = load_tests()
 def assess(test, out, err, rc):
