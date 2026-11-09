@@ -1,0 +1,10 @@
+Written within the permitted directories:
+
+- [gpubudget.c](cc/gpu_budget/gpubudget.c), [build.sh](cc/gpu_budget/build.sh), [test_budget.cu](cc/gpu_budget/test_budget.cu), [run_test.sh](cc/gpu_budget/run_test.sh), and [README.md](cc/gpu_budget/README.md).
+- Mock fixtures and passing [verification results](artifacts/codexL/host-verification.txt).
+
+Coverage: runtime malloc, async malloc, pitched/3D/managed allocation, free/async free, and memory info; driver `cuMemAlloc_v2`, `cuMemAllocAsync`, `cuMemFree_v2`, `cuMemFreeAsync`, and `cuMemGetInfo_v2`.
+
+Risks: VMM and internal CUDA overhead are uncovered; async frees synchronize. This llama.cpp revision requires compiling with `-DGGML_CUDA_NO_VMM=ON`; the environment variable alone is ineffective.
+
+Host mock tests pass. CUDA compilation and GPU execution remain for the orchestrator; no Docker or network was used.

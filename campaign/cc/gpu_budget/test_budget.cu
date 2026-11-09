@@ -60,6 +60,7 @@ int main() {
         if (over == cudaSuccess) cudaFreeAsync(q, stream);
         if (rc == cudaSuccess) check("cudaFreeAsync returns budget after completion", cudaFreeAsync(p, stream) == cudaSuccess);
         check("Meminfo after cudaFreeAsync: free=250 MiB", info(250 * MiB));
+        p = nullptr;
         check("Async budget can be reused", cudaMallocAsync(&p, 100 * MiB, stream) == cudaSuccess);
         if (p) check("Free reused async allocation", cudaFreeAsync(p, stream) == cudaSuccess);
         check("Destroy stream", cudaStreamDestroy(stream) == cudaSuccess);

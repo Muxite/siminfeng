@@ -5,6 +5,8 @@ here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd -- "$here/../../.." && pwd)"
 out="$here/out"
 mkdir -p "$out"
+export TMPDIR="$out/.tmp"
+mkdir -p "$TMPDIR"
 gcc -std=c99 -O2 -g -fPIC -shared -Wall -Wextra -Werror \
   -I"$here" "$root/cc/gpu_budget/gpubudget.c" -ldl -pthread -Wl,-z,defs -o "$out/libgpubudget.so"
 gcc -std=c99 -fPIC -shared -Wall -Wextra -Werror -I"$here" "$here/fake_cuda.c" -o "$out/libfakecuda.so"

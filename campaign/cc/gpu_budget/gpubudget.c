@@ -126,7 +126,12 @@ cudaError_t CUDARTAPI cudaMalloc(void **ptr, size_t bytes) {
 }
 cudaError_t CUDARTAPI cudaMallocManaged(void **ptr, size_t bytes, unsigned flags) {
     RBEGIN(cudaMallocManaged, (ptr, bytes, flags));
-    if (!count_managed) { cudaError_t rc = real(ptr, bytes, flags); leave(); return rc; }
+    if (!count_managed) {
+        cudaError_t rc = real(ptr, bytes, flags);
+        event(rc ? "error" : "alloc", "cudaMallocManaged",
+              !rc && ptr ? (uintptr_t)*ptr : 0, bytes, rc);
+        leave(); return rc;
+    }
     struct allocation *node;
     if (!prepare(bytes, "cudaMallocManaged", &node)) { leave(); return cudaErrorMemoryAllocation; }
     cudaError_t rc = real(ptr, bytes, flags);

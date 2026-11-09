@@ -5,6 +5,8 @@ src_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 out_dir="${1:-/out}"
 cuda_dir="${CUDA_HOME:-/usr/local/cuda}"
 mkdir -p -- "$out_dir"
+export TMPDIR="$out_dir/.tmp"
+mkdir -p -- "$TMPDIR"
 "${CC:-gcc}" -std=c99 -O2 -g -fPIC -shared -Wall -Wextra -Werror \
   -I"$cuda_dir/include" "$src_dir/gpubudget.c" \
   -Wl,-z,defs -Wl,-soname,libgpubudget.so -ldl -pthread \
