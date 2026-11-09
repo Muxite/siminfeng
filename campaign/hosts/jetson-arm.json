@@ -1,0 +1,264 @@
+{
+  "schema": "host-inventory/0",
+  "host_id": "jetson-arm",
+  "probed_at": "2026-11-09T23:10:48Z",
+  "facts": {
+    "identity": {
+      "host_id": {
+        "cmd": "(task constant)",
+        "value": "jetson-arm"
+      },
+      "hostname": {
+        "cmd": "hostname",
+        "value": "satay"
+      },
+      "uname": {
+        "cmd": "uname -a",
+        "value": "Linux satay 5.15.199-tegra #1 SMP PREEMPT Thu Jul 16 11:27:38 PDT 2026 aarch64 aarch64 aarch64 GNU/Linux"
+      },
+      "os_pretty_name": {
+        "cmd": "grep PRETTY_NAME /etc/os-release",
+        "value": "Ubuntu 22.04.5 LTS"
+      },
+      "nv_tegra_release": {
+        "cmd": "head -1 /etc/nv_tegra_release",
+        "value": "# R36 (release), REVISION: 5.2, GCID: 46426093, BOARD: generic, EABI: aarch64, DATE: Thu Jul 16 18:56:22 UTC 2026"
+      },
+      "device_model": {
+        "cmd": "tr -d '\\0' < /proc/device-tree/model",
+        "value": "NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super"
+      },
+      "device_compatible": {
+        "cmd": "tr '\\0' ' ' < /proc/device-tree/compatible",
+        "value": "nvidia,p3768-0000+p3767-0005-super nvidia,p3767-0005 nvidia,tegra234"
+      }
+    },
+    "cpu": {
+      "model_name": {
+        "cmd": "lscpu",
+        "value": "Cortex-A78AE"
+      },
+      "cpus": {
+        "cmd": "lscpu CPU(s)",
+        "value": "6 (1 thread/core, 3 cores/cluster, 2 clusters, NUMA nodes 1)"
+      },
+      "max_mhz": {
+        "cmd": "lscpu CPU max MHz",
+        "value": "1728.0000"
+      },
+      "cache": {
+        "cmd": "lscpu",
+        "value": "L1d 384 KiB (6), L1i 384 KiB (6), L2 1.5 MiB (6), L3 4 MiB (2)"
+      },
+      "features": {
+        "cmd": "grep -m1 Features /proc/cpuinfo",
+        "value": "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp uscat ilrcpc flagm paca pacg"
+      },
+      "sve": {
+        "cmd": "grep Features /proc/cpuinfo | grep -w sve",
+        "value": "absent (no sve in Features line)"
+      }
+    },
+    "memory": {
+      "MemTotal": {
+        "cmd": "grep MemTotal /proc/meminfo",
+        "value": "7789756 kB"
+      },
+      "SwapTotal": {
+        "cmd": "grep SwapTotal /proc/meminfo",
+        "value": "3894864 kB"
+      },
+      "swapon": {
+        "cmd": "swapon --show",
+        "value": "6 x /dev/zram0-5, 633.9M each, PRIO 5, 0B used"
+      },
+      "zramctl": {
+        "cmd": "zramctl",
+        "value": "6 devices, lzo-rle, DISKSIZE 633.9M each, [SWAP]"
+      }
+    },
+    "storage": {
+      "df_root": {
+        "cmd": "df -h /",
+        "value": "/dev/nvme0n1p1 116G size, 22G used, 88G avail, 20% use, mounted on /"
+      },
+      "lsblk": {
+        "cmd": "lsblk -d -o NAME,SIZE,MODEL",
+        "value": "nvme0n1 119.2G 'X15 Lite SSD 128GB' (plus zram0-5 and loop0)"
+      }
+    },
+    "packages": {
+      "nvidia-jetpack": {
+        "cmd": "dpkg -l | grep nvidia-jetpack",
+        "value": "6.2.3+b81"
+      },
+      "nvidia-l4t-core": {
+        "cmd": "dpkg -l | grep nvidia-l4t-core",
+        "value": "36.5.2-20260716114719"
+      },
+      "cuda-toolkit-12-6": {
+        "cmd": "dpkg -l | grep cuda-toolkit-12",
+        "value": "12.6.11-1"
+      },
+      "cuda-nsight-compute-12-6": {
+        "cmd": "dpkg -l | grep cuda-nsight-compute-12",
+        "value": "12.6.11-1"
+      },
+      "libcudnn9-cuda-12": {
+        "cmd": "dpkg -l | grep libcudnn9-cuda-12",
+        "value": "9.3.0.75-1 (cuDNN for CUDA 12.6)"
+      },
+      "tensorrt": {
+        "cmd": "dpkg -l | grep tensorrt",
+        "value": "10.3.0.30-1+cuda12.5 (tensorrt, tensorrt-libs)"
+      },
+      "nsight-compute-2024.3.1": {
+        "cmd": "dpkg -l | grep nsight-compute",
+        "value": "2024.3.1.2-1"
+      },
+      "nsight-systems-2024.5.4": {
+        "cmd": "dpkg -l | grep nsight-systems",
+        "value": "2024.5.4.34-245434855735v0"
+      },
+      "nvidia-container-toolkit": {
+        "cmd": "dpkg -l | grep nvidia-container",
+        "value": "1.16.2-1 (libnvidia-container1 and -tools 1.16.2-1)"
+      }
+    },
+    "cuda": {
+      "nvcc_version": {
+        "cmd": "/usr/local/cuda/bin/nvcc --version",
+        "value": "Cuda compilation tools, release 12.6, V12.6.68"
+      },
+      "list_gpu_arch_tail5": {
+        "cmd": "/usr/local/cuda/bin/nvcc --list-gpu-arch | tail -5",
+        "value": "compute_80, compute_86, compute_87, compute_89, compute_90"
+      }
+    },
+    "profilers": {
+      "nsys": {
+        "cmd": "nsys --version",
+        "value": "NVIDIA Nsight Systems version 2024.5.4.34-245434855735v0"
+      },
+      "nsight_compute_dir": {
+        "cmd": "ls /opt/nvidia/nsight-compute/",
+        "value": "2024.3.1"
+      },
+      "ncu": {
+        "cmd": "/opt/nvidia/nsight-compute/*/ncu --version",
+        "value": "NVIDIA (R) Nsight Compute Version 2024.3.1.0 (build 34702747)"
+      },
+      "which_ncu": {
+        "cmd": "which ncu",
+        "value": "not on PATH (command not found); versioned binary under /opt/nvidia/nsight-compute/2024.3.1/"
+      }
+    },
+    "power_thermal": {
+      "nvpmodel_q": {
+        "cmd": "nvpmodel -q",
+        "value": "NV Power Mode: MAXN_SUPER; mode id 2"
+      },
+      "gpu_cur_freq": {
+        "cmd": "cat /sys/devices/platform/17000000.gpu/devfreq/17000000.gpu/cur_freq",
+        "value": "306000000"
+      },
+      "gpu_max_freq": {
+        "cmd": "cat .../devfreq/17000000.gpu/max_freq",
+        "value": "1020000000"
+      },
+      "gpu_min_freq": {
+        "cmd": "cat .../devfreq/17000000.gpu/min_freq",
+        "value": "306000000"
+      },
+      "gpu_available_frequencies": {
+        "cmd": "cat .../devfreq/17000000.gpu/available_frequencies",
+        "value": "306000000 408000000 510000000 612000000 714000000 816000000 918000000 1020000000"
+      },
+      "gpu_governor": {
+        "cmd": "cat .../devfreq/17000000.gpu/governor",
+        "value": "nvhost_podgov"
+      },
+      "thermal_zones": {
+        "cmd": "cat /sys/class/thermal/thermal_zone*/{type,temp}",
+        "value": "cpu-thermal 48406; gpu-thermal 48968; cv0/cv1/cv2-thermal no data available; soc0-thermal 49312; soc1-thermal 48562; soc2-thermal 48093; tj-thermal 49375 (millideg C)"
+      },
+      "emc_rate_debugfs": {
+        "cmd": "cat /sys/kernel/debug/bpmp/debug/clk/emc/rate 2>&1",
+        "value": "cat: /sys/kernel/debug/bpmp/debug/clk/emc/rate: Permission denied"
+      }
+    },
+    "containers": {
+      "which_docker_podman": {
+        "cmd": "which docker podman",
+        "value": "neither found (exit 1)"
+      },
+      "nvidia_container_runtime_config_head20": {
+        "cmd": "cat /etc/nvidia-container-runtime/config.toml | head -20",
+        "value": "present; accept-nvidia-visible-devices-envvar-when-unprivileged = true (default), supported-driver-capabilities = compat32,compute,display,graphics,ngx,utility,video, [nvidia-container-cli] ldconfig = @/sbin/ldconfig.real, load-kmods = true, log-level = info"
+      }
+    },
+    "toolchain_and_kernel": {
+      "python3": {
+        "cmd": "python3 --version",
+        "value": "Python 3.10.12"
+      },
+      "perf_event_paranoid": {
+        "cmd": "cat /proc/sys/kernel/perf_event_paranoid",
+        "value": "2"
+      },
+      "nvhost_nvmap_devices": {
+        "cmd": "ls -l /dev/nvhost* /dev/nvmap | head",
+        "value": "crw-rw---- root:video for nvhost-as-gpu, nvhost-ctrl-gpu, nvhost-ctrl-isp, nvhost-ctrl-isp-thi, nvhost-ctrl-nvcsi, nvhost-ctrl-vi0, nvhost-ctrl-vi0-thi, nvhost-ctrl-vi1, nvhost-ctrl-vi1-thi; nvhost-ctxsw-gpu is root:debug (head truncated; /dev/nvmap not in output)"
+      },
+      "nvidia_driver_version": {
+        "cmd": "cat /proc/driver/nvidia/version",
+        "value": "NVRM version: NVIDIA UNIX Open Kernel Module for aarch64 540.5.0 Release Build (Thu Jul 16 11:39:50 PDT 2026); next line 'GCC version:  collect2: error: ld returned 1 exit status' (verbatim output)"
+      },
+      "nvidia_params_profiling": {
+        "cmd": "cat /proc/driver/nvidia/params | grep -i profil",
+        "value": "RmProfilingAdminOnly: 1 (the parameter name as shown; NVreg_RestrictProfilingToAdminUsers string not present verbatim)"
+      }
+    }
+  },
+  "cuda_smoke": {
+    "cmd": "nvcc -arch=sm_87 -o /tmp/claude-1000/j1/hello hello.cu && /tmp/claude-1000/j1/hello",
+    "compile_exit": 0,
+    "run_exit": 0,
+    "result": "PASS",
+    "output": [
+      "name: Orin",
+      "compute capability: 8.7",
+      "totalGlobalMem: 7976710144 bytes",
+      "integrated: 1",
+      "canMapHostMemory: 1",
+      "unifiedAddressing: 1",
+      "concurrentManagedAccess: 0",
+      "pageableMemoryAccess: 0",
+      "mismatches: 0 / 1024",
+      "PASS"
+    ],
+    "device_props": {
+      "name": "Orin",
+      "major": 8,
+      "minor": 7,
+      "totalGlobalMem": 7976710144,
+      "integrated": 1,
+      "canMapHostMemory": 1,
+      "unifiedAddressing": 1,
+      "concurrentManagedAccess": 0,
+      "pageableMemoryAccess": 0
+    }
+  },
+  "notes": [
+    "hostname is 'satay'; host_id 'jetson-arm' is the campaign label set by the task, not the kernel hostname.",
+    "/sys/kernel/debug/bpmp/debug/clk/emc/rate: Permission denied, so EMC rate is not readable without privilege.",
+    "ncu is not on PATH; the Nsight Compute 2024.3.1 binary lives under /opt/nvidia/nsight-compute/2024.3.1/.",
+    "No docker or podman installed; nvidia-container-toolkit 1.16.2 is installed.",
+    "perf_event_paranoid=2 and RmProfilingAdminOnly=1, so hardware counter profiling is likely restricted to privileged users; not tested (ncu not run).",
+    "/dev/nvhost* nodes are group video (nvhost-ctxsw-gpu is group debug); current user's group membership was not checked.",
+    "GPU devfreq is pinned at min 306 MHz while cur_freq reads 306 MHz; max 1020 MHz (MAXN_SUPER); governor nvhost_podgov.",
+    "Power mode was queried only (nvpmodel -q); no mode or jetson_clocks changes were made.",
+    "Installed JetPack meta 6.2.3 (dpkg) on L4T R36.5.2; the TensorRT package is 10.3.0.30 built for cuda12.5 while the toolkit is CUDA 12.6.",
+    "nvidia_driver_version output contains a stray 'collect2: error: ld returned 1 exit status' line from the version command; recorded verbatim, not investigated."
+  ]
+}

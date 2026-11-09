@@ -1,0 +1,7 @@
+# D021 — Jetson lane start: per-host evidence streams; run_op non-UTF-8 echo crash (2026-11-09, host jetson-arm)
+- Context: the Jetson clone at f0e676b (== origin/main) ran the same `.claude/settings.json` hook, which appended Jetson events to the git-tracked `evidence/claude-code.jsonl` — host conflation and guaranteed merge conflicts with x86.
+- Change: `bin/cc_hook` and `bin/run_op` read host id from untracked `~/.config/siminfeng/host_id`; any host other than `x86-main` (or unset, = legacy x86 behaviour unchanged) writes to `evidence/<host_id>/`. Records carry `host_id`. The 4 Jetson lines already appended were moved to `evidence/jetson-arm/claude-code.jsonl`.
+- Fixture run (ops in evidence/jetson-arm/opus-jetson.jsonl, task J-EV1): success, nonzero exit, non-UTF-8 stdout, background child (captured as `survivors`), timeout (status=timeout) all recorded.
+- Defect found: run_op recorded the non-UTF-8 outcome correctly but then crashed echoing stdout as text, returning exit 1 for a command that exited 0 (same class as D020's lab runner bug, different file). Fix: echo raw bytes via `sys.stdout.buffer`. Regression re-run: bytes `\xff\xfe bad` passed through, rc=0.
+- Limits: the hook still logs full tool payloads (no secret redaction beyond what existed); `survivors` lists descendants only at outcome time.
+- x86 action requested: none required (default unchanged); adopt `evidence/<host>/` for new hosts.

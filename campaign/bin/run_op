@@ -6,9 +6,16 @@ Does NOT observe: grandchildren's own argv (only pgid membership at start/end), 
 import argparse, fcntl, hashlib, json, os, signal, subprocess, sys, time, uuid, datetime as dt
 ROOT = os.environ.get("CAMPAIGN_ROOT", os.path.expanduser("~/projects/siminfeng/campaign"))
 ENV_ALLOW = ["CAMPAIGN_ID", "CUDA_VISIBLE_DEVICES", "PATH", "LANG"]
+def evdir(root):
+    """D021: per-host evidence dir. Host id from ~/.config/siminfeng/host_id (untracked); legacy x86 stream stays at evidence/."""
+    try: h = open(os.path.expanduser("~/.config/siminfeng/host_id")).read().strip()
+    except Exception: h = "x86-main"
+    d = os.path.join(root, "evidence") if h in ("", "x86-main") else os.path.join(root, "evidence", h)
+    os.makedirs(d, exist_ok=True); return d, h
 def now(): return dt.datetime.now(dt.timezone.utc).isoformat()
 def emit(agent, rec):
-    path = os.path.join(ROOT, "evidence", f"{agent}.jsonl")
+    d, host = evdir(ROOT); rec.setdefault("host_id", host)
+    path = os.path.join(d, f"{agent}.jsonl")
     line = (json.dumps(rec, sort_keys=True) + "\n").encode()
     fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
     try:
@@ -61,6 +68,7 @@ def main():
          elapsed_s=round(time.monotonic() - t0, 3), pgid=pgid,
          stdout=dict(path=outp, sha256=sha(outp), bytes=os.path.getsize(outp)),
          stderr=dict(path=errp, sha256=sha(errp), bytes=os.path.getsize(errp))))
-    sys.stdout.write(open(outp).read()); sys.stderr.write(open(errp).read())
+    sys.stdout.flush(); sys.stdout.buffer.write(open(outp, 'rb').read()); sys.stdout.buffer.flush()  # D021: raw bytes, never decode
+    sys.stderr.buffer.write(open(errp, 'rb').read())
     sys.exit(code if code is not None else 1)
 main()
