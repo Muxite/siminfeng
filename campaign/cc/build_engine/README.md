@@ -1,8 +1,8 @@
 # build_engine
 
-Use this capability to turn a clean, identified local llama.cpp checkout and an optional Git patch into a local, runtime-only CUDA image and an evidence directory. It targets linux/amd64 and CUDA architecture 120 (RTX 5070 Ti). Model weights are supplied separately at runtime.
+Use this capability to turn a clean, identified local llama.cpp checkout and an optional Git patch into a local, runtime-only CUDA image and an evidence directory. The default target `x86-5070ti` uses linux/amd64 and CUDA architecture 120 (RTX 5070 Ti); `--target jetson-orin` uses linux/arm64 and sm_87. Model weights are supplied separately at runtime.
 
-Requires Python 3.12+ (stdlib only), Git, Docker daemon access, and Docker Buildx/Bake. pytest is needed only for tests. No GPU is needed to compile or collect hashes. The builder installs Ubuntu build packages with apt; an actual build needs cached packages/base layers or repository/registry access. This implementation does not download source, patches, models, or web UI assets. The existing `campaign/cuda-tools:c1` image is not used as the builder because the required builder base is the digest-pinned NVIDIA devel image.
+Requires Python 3.10+ (stdlib only), Git, Docker daemon access, and Docker Buildx/Bake. pytest is needed only for tests. No GPU is needed to compile or collect hashes. The builder installs Ubuntu build packages with apt; an actual build needs cached packages/base layers or repository/registry access. This implementation does not download source, patches, models, or web UI assets. The existing `campaign/cuda-tools:c1` image is not used as the builder because the required builder base is the digest-pinned NVIDIA devel image.
 
 ## Run
 
@@ -24,7 +24,7 @@ The image contains only the seven requested tools in `/app`, their generated sha
 
 ## Outputs and failure handling
 
-`build-record.json` uses schema version 1. It records status, failure stage/error, requested and resolved commit, Git tree ID and dirty status, patch SHA256 or null, tag/platform, recipe SHA256 and sizes, base references/digests, Docker and Buildx versions, CMake flags, Buildx metadata, image config ID/RepoDigests/Created/Architecture/Os, tool SHA256 values, saved archive SHA256/bytes, build duration and total duration. Fields remain null or empty when a failure occurs before collection. `build_wall_seconds` measures the Bake invocation, including export; `wall_seconds` covers the whole attempt.
+`build-record.json` uses schema version 1 for amd64 and version 2 for Jetson. It records status, failure stage/error, requested and resolved commit, Git tree ID and dirty status, patch SHA256 or null, tag/platform, recipe SHA256 and sizes, base references/digests, Docker and Buildx versions, CMake flags, Buildx metadata, image config ID/RepoDigests/Created/Architecture/Os, tool SHA256 values, saved archive SHA256/bytes, build duration and total duration. Fields remain null or empty when a failure occurs before collection. `build_wall_seconds` measures the Bake invocation, including export; `wall_seconds` covers the whole attempt.
 
 The other files are:
 
@@ -52,3 +52,69 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
 Tests use temporary Git repositories and mocked Docker subprocesses. They cover patch rejection, successful patch isolation, successful record schema, build failure logs/metadata, dirty or mismatched source, archive/tool hashing, provenance versus SBOM, and refusing to overwrite evidence. They use no network, GPU, or real build.
 
 This evidence does not prove bitwise reproducibility, runtime correctness, model accuracy, GPU compatibility/performance, or the absence of vulnerabilities. Apt package versions, compiler behavior, timestamps, and upstream build scripts can vary. Base digests and input hashes identify inputs; they do not establish equivalence to an upstream image. The orchestrator must perform the real build and runtime checks. No full build was performed for T-D.
+
+
+## Jetson Orin target
+
+Requires an Orin host with L4T 36, JetPack >=6.1 (qualified toolchain: JetPack
+6.2.3, nvcc 12.6.68), native GCC, CMake, Ninja, Git, Docker and Buildx.
+ccache is optional and enables C, C++ and CUDA compiler launchers when found.
+Python 3.10 is supported, including safe snapshot extraction on versions without
+`tarfile` extraction filters. No packages are installed by this target.
+
+Compilation is host-native to use the device's JetPack CUDA toolchain and avoid
+pulling the roughly 9 GB l4t-jetpack development image. Source verification,
+archive isolation and patch checking are the same as for amd64. CMake configures
+`<out>/build` with Ninja, Release/shared libraries, CUDA architecture 87,
+`GGML_NATIVE=OFF`, `GGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16`,
+`LLAMA_CURL=OFF` and `LLAMA_BUILD_TESTS=OFF`. `BUILD_JOBS` defaults to 3 and
+must be a positive integer. The seven standard tools and any `--extra-target`
+executables are compiled. Generated `lib*.so*` files retain their symlinks, and
+GCC's libgomp.so.1 is copied into the runtime context alongside the tools.
+
+Run from the campaign directory, after any other native build has finished:
+
+```bash
+DOCKER_CMD_PREFIX='sg docker -c' BUILD_JOBS=3 python3 cc/build_engine/build_engine.py \
+  --target jetson-orin --source ref/llama.cpp \
+  --commit 31288c9c66e59377f7788d920678a565bb89dd37 \
+  --tag campaign/llamacpp:jetson-c1 --out cc/build_engine/results/jetson-c1
+```
+
+Use a fresh output directory for each attempt. `DOCKER_CMD_PREFIX` is optional;
+when set, it is parsed as a launcher and receives the entire shell-quoted Docker
+command as one final argument. `sg docker -c` is needed in this login session
+because its group membership predates the Docker group change. Every Docker
+invocation, including version queries, inspection, hashing and saving, uses it.
+Native build and Git commands do not use this prefix.
+
+Buildx packages only the prebuilt runtime context with `--platform linux/arm64
+--load`. The default base is
+`nvcr.io/nvidia/l4t-cuda:12.6.11-runtime@sha256:49853e9fe2a0305efa51fcbb3426eea1bca658085f2d26bb40347711434849b1`.
+`BASE_RUNTIME` may override its digest using the same image name/tag;
+`BASE_DEVEL` is unused. The Dockerfile clears the entrypoint, sets
+`LD_LIBRARY_PATH=/app`, and sets `NVIDIA_VISIBLE_DEVICES=all` and
+`NVIDIA_DRIVER_CAPABILITIES=compute,utility` per D022. GPU execution still needs
+`--runtime nvidia`; tool hashing explicitly uses `--runtime runc` with no network
+or GPU request.
+
+Schema 2 adds `target_profile`, `builder: "host-native"`, `toolchain` (nvcc,
+GCC, CMake, Ninja, first `/etc/nv_tegra_release` line and nvidia-jetpack dpkg
+version), and `target_requirements` (linux/arm64, L4T major 36, sm_87,
+JetPack >=6.1, NVIDIA runtime with explicit visibility). Source commit/tree,
+patch SHA256, toolchain and target profile are also image labels. The native
+build directory remains as evidence; its temporary source snapshot and runtime
+context are removed on success or failure. Rebuilding requires a fresh attempt.
+`build_wall_seconds` covers native compilation plus image packaging. Failures
+retain logs, partial toolchain identity, available Buildx metadata and the usual
+`failure_stage` field.
+
+Mocked tests verify commands, source isolation, records, packaging inputs,
+Docker launcher quoting and failure reporting on Python 3.10. No real build or
+Docker invocation was performed for J-T1. Toolchain identities and target
+requirements are recorded, not checked against a compatibility matrix. Image
+architecture and shipped file hashes are checked during a real attempt; ABI
+compatibility, dynamic library closure, GPU execution, memory use, performance,
+model correctness and reproducibility still require the orchestrator's real
+build and runtime checks. Wait for the existing native compile to finish before
+running this command on the 8 GB device.

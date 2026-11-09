@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import io
 import json
+import shlex
 from pathlib import Path
 import subprocess
 import sys
@@ -73,10 +74,33 @@ def test_patch_check_failure(source, tmp_path):
 def mock_docker(monkeypatch):
     real_run = subprocess.run
     calls = []
-    state = {"fail_build": False, "staged_content": None}
+    state = {"fail_build": False, "staged_content": None, "jetson": False, "native_calls": [], "prefix_calls": []}
 
     def fake(command, **kwargs):
+        if command[:3] == ["sg", "docker", "-c"]:
+            state["prefix_calls"].append(command)
+            command = shlex.split(command[3])
         if command[0] != "docker":
+            if state["jetson"] and command[0] in ("cmake", "ninja", "nvcc", "gcc", "head", "dpkg-query"):
+                state["native_calls"].append(command)
+                result = "test toolchain"
+                if command[:2] == ["gcc", "-print-file-name=libgomp.so.1"]:
+                    library = state["libgomp"]
+                    result = str(library)
+                if command[:2] == ["cmake", "--build"]:
+                    if state["fail_build"]:
+                        kwargs["stderr"].write(b"native compile failed\n")
+                        return subprocess.CompletedProcess(command, 42)
+                    binaries = Path(command[2]) / "bin"
+                    binaries.mkdir(parents=True)
+                    for tool in command[command.index("--target") + 1:]:
+                        (binaries / tool).write_text("binary")
+                    (binaries / "libggml.so.0").write_text("library")
+                    (binaries / "libggml.so").symlink_to("libggml.so.0")
+                if "-S" in command:
+                    state["staged_content"] = (Path(command[command.index("-S") + 1]) / "input.txt").read_text()
+                kwargs["stdout"].write(result.encode())
+                return subprocess.CompletedProcess(command, 0)
             return real_run(command, **kwargs)
         calls.append(command)
         stdout, stderr = kwargs["stdout"], kwargs["stderr"]
@@ -86,6 +110,13 @@ def mock_docker(monkeypatch):
             result = '{"Client":{"Version":"test"},"Server":{"Version":"test"}}'
         elif command[1:3] == ["buildx", "version"]:
             result = "buildx unit-test"
+        elif command[1:3] == ["buildx", "build"]:
+            app = Path(command[-1]) / "app"
+            assert (app / "libggml.so").is_symlink()
+            assert (app / "libggml.so.0").read_text() == "library"
+            assert (app / "libgomp.so.1").exists()
+            assert set(p.name for p in app.iterdir()) == set(engine.TOOLS) | {"libggml.so", "libggml.so.0", "libgomp.so.1"}
+            Path(command[command.index("--metadata-file") + 1]).write_text('{"native": true}')
         elif command[1:3] == ["buildx", "bake"]:
             env = kwargs["env"]
             staged = Path(kwargs["cwd"])
@@ -106,7 +137,7 @@ def mock_docker(monkeypatch):
                 result = json.dumps([{"RepoDigests": ["nvidia/cuda@sha256:" + "2" * 64]}])
             else:
                 result = json.dumps([{"Id": "sha256:" + "1" * 64, "RepoDigests": [],
-                                      "Created": "2026-01-01T00:00:00Z", "Architecture": "amd64", "Os": "linux"}])
+                                      "Created": "2026-01-01T00:00:00Z", "Architecture": "arm64" if state["jetson"] else "amd64", "Os": "linux"}])
         elif command[1] == "run":
             assert "--network=none" in command
             assert "--rm" in command
@@ -121,6 +152,8 @@ def mock_docker(monkeypatch):
         stdout.write(result.encode())
         return subprocess.CompletedProcess(command, code)
 
+    monkeypatch.delenv("DOCKER_CMD_PREFIX", raising=False)
+    monkeypatch.delenv("BUILD_JOBS", raising=False)
     monkeypatch.delenv("BASE_DEVEL", raising=False)
     monkeypatch.delenv("BASE_RUNTIME", raising=False)
     monkeypatch.setattr(subprocess, "run", fake)
@@ -231,3 +264,95 @@ def test_empty_output_required(source, tmp_path):
     with pytest.raises(ValueError, match="empty"):
         engine.build(args)
     assert (out / "build-record.json").read_text() == "keep"
+
+
+@pytest.mark.parametrize("ccache,prefix", [(False, ""), (True, "sg docker -c")])
+def test_jetson_success(source, tmp_path, mock_docker, monkeypatch, ccache, prefix):
+    calls, state = mock_docker
+    state["jetson"] = True
+    state["libgomp"] = tmp_path / "libgomp.so.1"
+    state["libgomp"].write_text("openmp")
+    monkeypatch.setattr(engine.shutil, "which", lambda name: "/usr/bin/ccache" if ccache else None)
+    monkeypatch.setenv("DOCKER_CMD_PREFIX", prefix)
+    monkeypatch.setenv("BUILD_JOBS", "2")
+    args = arguments(source, tmp_path)
+    args.target = "jetson-orin"
+    args.tag = "campaign/test:quoted;literal"
+    assert engine.build(args) == 0
+    result = record(args)
+    assert result["schema_version"] == 2
+    assert result["target_profile"] == "jetson-orin"
+    assert result["builder"] == "host-native"
+    assert result["platform"] == "linux/arm64"
+    assert result["target_requirements"] == {
+        "platform": "linux/arm64", "l4t_major": 36, "cuda_arch": "sm_87",
+        "jetpack": ">=6.1", "runtime": "nvidia (NVIDIA_VISIBLE_DEVICES required)"}
+    assert set(result["toolchain"]) == {"nvcc", "gcc", "cmake", "ninja", "nv_tegra_release", "nvidia-jetpack"}
+    assert result["base_images"]["runtime"]["reference"] == engine.JETSON_RUNTIME
+    assert "devel" not in result["base_images"]
+    configure = next(c for c in state["native_calls"] if "-S" in c)
+    assert configure[configure.index("-G") + 1] == "Ninja"
+    assert configure[configure.index("-B") + 1] == str(Path(args.out) / "build")
+    assert set(engine.JETSON_FLAGS) <= set(configure)
+    launchers = ["-DCMAKE_" + lang + "_COMPILER_LAUNCHER=ccache" for lang in ("C", "CXX", "CUDA")]
+    assert all((flag in configure) == ccache for flag in launchers)
+    assert result["cmake_flags"] == engine.JETSON_FLAGS + (launchers if ccache else [])
+    compile_cmd = next(c for c in state["native_calls"] if c[:2] == ["cmake", "--build"])
+    assert compile_cmd[3:] == ["-j2", "--target", *engine.TOOLS]
+    image_cmd = next(c for c in calls if c[1:3] == ["buildx", "build"])
+    assert image_cmd[image_cmd.index("--platform") + 1] == "linux/arm64"
+    assert "--load" in image_cmd
+    build_args = dict(image_cmd[i + 1].split("=", 1) for i, v in enumerate(image_cmd) if v == "--build-arg")
+    assert build_args == {"BASE_RUNTIME": engine.JETSON_RUNTIME, "SOURCE_COMMIT": args.commit,
+                          "SOURCE_TREE": result["source"]["tree"], "PATCH_SHA256": "",
+                          "TOOLCHAIN": json.dumps(result["toolchain"], sort_keys=True), "TARGET_PROFILE": "jetson-orin"}
+    hash_cmd = next(c for c in calls if c[1] == "run")
+    assert hash_cmd[hash_cmd.index("--runtime") + 1] == "runc"
+    assert bool(state["prefix_calls"]) == bool(prefix)
+    if prefix:
+        assert len(state["prefix_calls"]) == len(calls)
+    assert state["staged_content"] == "original\n"
+    assert not list(Path(args.out).glob("staging-*"))
+
+
+def test_jetson_native_failure(source, tmp_path, mock_docker, monkeypatch):
+    calls, state = mock_docker
+    state.update(jetson=True, fail_build=True)
+    monkeypatch.setattr(engine.shutil, "which", lambda name: None)
+    args = arguments(source, tmp_path)
+    args.target = "jetson-orin"
+    assert engine.build(args) == 1
+    result = record(args)
+    assert result["failure_stage"] == "build"
+    assert result["toolchain"]["nvcc"]
+    assert result["build_wall_seconds"] >= 0
+    assert not any(c[1:3] == ["buildx", "build"] for c in calls)
+    assert "native compile failed" in (Path(args.out) / "build.stderr").read_text()
+
+
+def test_jetson_dockerfile():
+    text = (engine.JETSON_RECIPES / "Dockerfile").read_text()
+    assert "ARG BASE_RUNTIME=" + engine.JETSON_RUNTIME in text
+    for fragment in ("FROM ${BASE_RUNTIME}", "COPY app/ /app/", "LD_LIBRARY_PATH=/app",
+                     "NVIDIA_VISIBLE_DEVICES=all", "NVIDIA_DRIVER_CAPABILITIES=compute,utility",
+                     "ENTRYPOINT []", "${SOURCE_TREE}", "${SOURCE_COMMIT}", "${PATCH_SHA256}",
+                     "${TOOLCHAIN}", "${TARGET_PROFILE}"):
+        assert fragment in text
+
+
+def test_snapshot_python310_fallback(tmp_path, monkeypatch):
+    monkeypatch.delattr(tarfile, "data_filter", raising=False)
+    path = tmp_path / "source.tar"
+    make_tar(path, {"file": "content"})
+    dest = tmp_path / "extracted"
+    dest.mkdir()
+    with tarfile.open(path) as archive:
+        engine.extract_snapshot(archive, dest)
+    assert json.loads((dest / "file").read_text()) == "content"
+    with tarfile.open(path, "w") as archive:
+        link = tarfile.TarInfo("escape")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "../outside"
+        archive.addfile(link)
+    with tarfile.open(path) as archive, pytest.raises(ValueError, match="Unsafe archive link"):
+        engine.extract_snapshot(archive, dest)

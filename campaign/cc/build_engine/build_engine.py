@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import shlex
 import os
 from pathlib import Path
 import re
@@ -24,6 +25,89 @@ CMAKE_FLAGS = ["-DCMAKE_BUILD_TYPE=Release", "-DGGML_CUDA=ON",
 DEFAULT_DEVEL = ("nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:"
                  "520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66")
 DEFAULT_RUNTIME = "nvidia/cuda:12.8.1-runtime-ubuntu24.04"
+
+JETSON_RECIPES = RECIPES.parent / "llamacpp-jetson"
+JETSON_RUNTIME = ("nvcr.io/nvidia/l4t-cuda:12.6.11-runtime@sha256:"
+                  "49853e9fe2a0305efa51fcbb3426eea1bca658085f2d26bb40347711434849b1")
+JETSON_FLAGS = ["-DCMAKE_BUILD_TYPE=Release", "-DGGML_CUDA=ON",
+                "-DCMAKE_CUDA_ARCHITECTURES=87", "-DGGML_NATIVE=OFF",
+                "-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16", "-DLLAMA_CURL=OFF",
+                "-DLLAMA_BUILD_TESTS=OFF", "-DBUILD_SHARED_LIBS=ON"]
+
+
+def docker_command(command):
+    """Prefix is a launcher, e.g. DOCKER_CMD_PREFIX='sg docker -c'."""
+    prefix = shlex.split(os.environ.get("DOCKER_CMD_PREFIX", ""))
+    return prefix + [shlex.join(command)] if prefix else command
+
+
+def extract_snapshot(archive, destination):
+    # Python 3.10 lacks extractall(filter=...). Validate every member first.
+    root = destination.resolve()
+    for member in archive.getmembers():
+        path = (root / member.name).resolve()
+        if not path.is_relative_to(root) or member.isdev() or member.isfifo():
+            raise ValueError("Unsafe archive member: " + member.name)
+        if member.issym() or member.islnk():
+            target = ((path.parent if member.issym() else root) / member.linkname).resolve()
+            if not target.is_relative_to(root):
+                raise ValueError("Unsafe archive link: " + member.name)
+    if hasattr(tarfile, "data_filter"):
+        archive.extractall(destination, filter="data")
+    else:
+        # Git archives contain no hardlinks; rejecting them also avoids link chains.
+        if any(m.islnk() for m in archive.getmembers()):
+            raise ValueError("Archive hardlinks unsupported on Python 3.10")
+        # Extract files before symlinks so no member can traverse an archive link.
+        members = archive.getmembers()
+        links = {m.name.rstrip("/") for m in members if m.issym()}
+        if any(parent.as_posix() in links for m in members for parent in Path(m.name).parents):
+            raise ValueError("Archive member traverses a symlink")
+        archive.extractall(destination, members=[m for m in members if not m.issym()])
+        archive.extractall(destination, members=[m for m in members if m.issym()])
+
+
+def jetson_build(run, staged, out, record, args):
+    for name, command in (
+        ("nvcc", ["nvcc", "--version"]), ("gcc", ["gcc", "--version"]),
+        ("cmake", ["cmake", "--version"]), ("ninja", ["ninja", "--version"]),
+        ("nv_tegra_release", ["head", "-n", "1", "/etc/nv_tegra_release"]),
+        ("nvidia-jetpack", ["dpkg-query", "-W", "-f=${Version}", "nvidia-jetpack"])):
+        record["toolchain"][name] = run(command).strip()
+    flags = list(JETSON_FLAGS)
+    if shutil.which("ccache"):
+        flags += ["-DCMAKE_" + lang + "_COMPILER_LAUNCHER=ccache" for lang in ("C", "CXX", "CUDA")]
+    record["cmake_flags"] = flags
+    jobs = os.environ.get("BUILD_JOBS", "3")
+    if not jobs.isdigit() or int(jobs) < 1:
+        raise ValueError("BUILD_JOBS must be a positive integer")
+    tools = TOOLS + tuple(getattr(args, "extra_target", []) or [])
+    run(["cmake", "-S", str(staged), "-B", str(out / "build"), "-G", "Ninja", *flags], capture=False)
+    run(["cmake", "--build", str(out / "build"), "-j" + jobs, "--target", *tools], capture=False)
+    context = staged.parent / "runtime"
+    app = context / "app"
+    app.mkdir(parents=True)
+    binaries = out / "build" / "bin"
+    for tool in tools:
+        shutil.copy2(binaries / tool, app / tool)
+    libraries = list(binaries.glob("lib*.so*"))
+    if not libraries:
+        raise ValueError("No generated shared libraries")
+    for library in libraries:
+        shutil.copy2(library, app / library.name, follow_symlinks=False)
+    # GCC's OpenMP runtime is needed by the host-built CPU backend.
+    libgomp = Path(run(["gcc", "-print-file-name=libgomp.so.1"]).strip())
+    shutil.copy2(libgomp, app / "libgomp.so.1")
+    command = ["docker", "buildx", "build", "--platform", "linux/arm64", "--load",
+               "--tag", args.tag, "--file", str(JETSON_RECIPES / "Dockerfile"),
+               "--metadata-file", str(out / "buildx-metadata.json"), "--provenance=mode=max"]
+    for key, value in {"BASE_RUNTIME": record["base_images"]["runtime"]["reference"],
+                       "SOURCE_COMMIT": record["source"]["commit"], "SOURCE_TREE": record["source"]["tree"],
+                       "PATCH_SHA256": record["patch_sha256"] or "",
+                       "TOOLCHAIN": json.dumps(record["toolchain"], sort_keys=True),
+                       "TARGET_PROFILE": "jetson-orin"}.items():
+        command += ["--build-arg", key + "=" + value]
+    run(command + [str(context)], capture=False)
 
 
 def file_digest(path):
@@ -155,7 +239,13 @@ def build(args, runner=None):
         raise ValueError("--out must be an empty directory")
     for name in ("build.stdout", "build.stderr"):
         (out / name).touch()
-    run = runner or Runner(out)
+    raw_run = runner or Runner(out)
+
+    def run(command, **kwargs):
+        return raw_run(docker_command(command) if command[0] == "docker" else command, **kwargs)
+
+    jetson = getattr(args, "target", "x86-5070ti") == "jetson-orin"
+    recipes = JETSON_RECIPES if jetson else RECIPES
     started = time.monotonic()
     record = {
         "schema_version": 1, "status": "failed", "failure_stage": None,
@@ -169,10 +259,16 @@ def build(args, runner=None):
         "provenance": {"retained": False, "reason": "Archive not inspected"},
         "build_wall_seconds": None,
     }
+    if jetson:
+        record.update(schema_version=2, target_profile="jetson-orin", builder="host-native",
+                      toolchain={}, platform="linux/arm64", cmake_flags=list(JETSON_FLAGS),
+                      target_requirements={"platform": "linux/arm64", "l4t_major": 36,
+                                           "cuda_arch": "sm_87", "jetpack": ">=6.1",
+                                           "runtime": "nvidia (NVIDIA_VISIBLE_DEVICES required)"})
     stage = "recipes"
     try:
-        record["recipes"] = {name: file_digest(RECIPES / name)
-                             for name in ("Dockerfile", "docker-bake.hcl")}
+        record["recipes"] = {name: file_digest(recipes / name)
+                             for name in (("Dockerfile",) if jetson else ("Dockerfile", "docker-bake.hcl"))}
         stage = "verify_source"
         source = Path(args.source).resolve()
         git_env = os.environ.copy()
@@ -206,7 +302,7 @@ def build(args, runner=None):
             staged = temporary / "source"
             staged.mkdir()
             with tarfile.open(snapshot) as archive:
-                archive.extractall(staged, filter="data")
+                extract_snapshot(archive, staged)
             if args.patch:
                 stage = "patch_check"
                 patch = temporary / "input.patch"
@@ -228,27 +324,36 @@ def build(args, runner=None):
             record["versions"]["docker"] = run(["docker", "version", "--format", "{{json .}}"])
             record["versions"]["buildx"] = run(["docker", "buildx", "version"]).strip()
             stage = "base_images"
-            record["base_images"]["devel"] = resolve_base(
-                run, os.environ.get("BASE_DEVEL", DEFAULT_DEVEL), "devel")
-            record["base_images"]["runtime"] = resolve_base(
-                run, os.environ.get("BASE_RUNTIME", DEFAULT_RUNTIME), "runtime")
+            if jetson:
+                runtime = os.environ.get("BASE_RUNTIME", JETSON_RUNTIME)
+                if not re.fullmatch(r"nvcr.io/nvidia/l4t-cuda:12\.6\.11-runtime@sha256:[0-9a-f]{64}", runtime):
+                    raise ValueError("Expected digest-pinned Jetson l4t-cuda 12.6.11 runtime")
+                record["base_images"]["runtime"] = {"reference": runtime, "digest": runtime.split("@")[1]}
+            else:
+                record["base_images"]["devel"] = resolve_base(
+                    run, os.environ.get("BASE_DEVEL", DEFAULT_DEVEL), "devel")
+                record["base_images"]["runtime"] = resolve_base(
+                    run, os.environ.get("BASE_RUNTIME", DEFAULT_RUNTIME), "runtime")
             env = os.environ.copy()
             env.update(TAG=args.tag, SOURCE_DIR=str(staged), SOURCE_COMMIT=head, EXTRA_TARGETS=" ".join(getattr(args, "extra_target", []) or []),
                        PATCH_SHA256=record["patch_sha256"] or "",
-                       BASE_DEVEL=record["base_images"]["devel"]["reference"],
+                       BASE_DEVEL=record["base_images"].get("devel", {}).get("reference", ""),
                        BASE_RUNTIME=record["base_images"]["runtime"]["reference"],
                        BUILDX_METADATA_PROVENANCE="max")
             stage = "build"
             build_started = time.monotonic()
             try:
-                # Stage the recipe INSIDE the build context so Bake needs no filesystem entitlements (no fs.read=/).
-                recipe_dir = staged / ".campaign-recipe"; recipe_dir.mkdir(exist_ok=True)
-                for name in ("Dockerfile", "docker-bake.hcl"):
-                    shutil.copy2(RECIPES / name, recipe_dir / name)
-                env["SOURCE_DIR"] = "."
-                run(["docker", "buildx", "bake", "--file", str(recipe_dir / "docker-bake.hcl"),
-                     "--metadata-file", str(out / "buildx-metadata.json"), "--progress", "plain", "engine"],
-                    cwd=staged, env=env, capture=False)
+                if jetson:
+                    jetson_build(run, staged, out, record, args)
+                else:
+                    # Stage the recipe INSIDE the build context so Bake needs no filesystem entitlements (no fs.read=/).
+                    recipe_dir = staged / ".campaign-recipe"; recipe_dir.mkdir(exist_ok=True)
+                    for name in ("Dockerfile", "docker-bake.hcl"):
+                        shutil.copy2(RECIPES / name, recipe_dir / name)
+                    env["SOURCE_DIR"] = "."
+                    run(["docker", "buildx", "bake", "--file", str(recipe_dir / "docker-bake.hcl"),
+                         "--metadata-file", str(out / "buildx-metadata.json"), "--progress", "plain", "engine"],
+                        cwd=staged, env=env, capture=False)
             finally:
                 record["build_wall_seconds"] = time.monotonic() - build_started
                 if (out / "buildx-metadata.json").exists():
@@ -258,12 +363,12 @@ def build(args, runner=None):
         info = json.loads(run(["docker", "image", "inspect", args.tag]))[0]
         record["image"] = {key: info.get(key) for key in
                            ("Id", "RepoDigests", "Created", "Architecture", "Os")}
-        if info.get("Architecture") != "amd64" or info.get("Os") != "linux":
-            raise ValueError("Built image is not linux/amd64")
+        if info.get("Architecture") != ("arm64" if jetson else "amd64") or info.get("Os") != "linux":
+            raise ValueError("Built image is not " + record["platform"])
         # Use the immutable config ID after resolving the tag exactly once.
         image_id = info["Id"]
         stage = "hash_tools"
-        hashes = run(["docker", "run", "--rm", "--network=none", "--read-only",
+        hashes = run(["docker", "run", *(["--runtime", "runc"] if jetson else []), "--rm", "--network=none", "--read-only",
                       "--entrypoint", "/bin/sh", image_id, "-c",
                       "find /app -type f -print0 | sort -z | xargs -0 /usr/bin/sha256sum"])
         for line in hashes.splitlines():
@@ -301,6 +406,7 @@ def build(args, runner=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--target", choices=("x86-5070ti", "jetson-orin"), default="x86-5070ti")
     parser.add_argument("--source", required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--patch")
