@@ -1,0 +1,26 @@
+Implemented within `cc/build_engine/**` and `artifacts/codexN/**`:
+
+- Validated repeatable CMake defines, recipe hashing, schema 2 records, and image labels.
+- Added linkage checks with raw outputs, explicit unavailable results, and fatal/optional failure handling.
+- Updated recipes, documentation, and tests.
+
+Validation:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q cc/build_engine/test_build_engine.py --basetemp=cc/build_engine/.pytest-tmp -o cache_dir=cc/build_engine/.pytest_cache
+```
+
+**76 passed.** Diff whitespace check passed.
+
+Orchestrator command:
+
+```bash
+python3 cc/build_engine/build_engine.py \
+  --source ref/llama.cpp --commit 31288c9c66e59377f7788d920678a565bb89dd37 \
+  --tag campaign/llamacpp:no-vmm \
+  --out artifacts/codexN/no-vmm-build \
+  --cmake-define GGML_CUDA_NO_VMM=ON \
+  --linkage
+```
+
+Gaps: no network or Docker execution performed. Actual CUDA linkage and shim interception remain unverified. Missing runtime inspection tools produce an explicit unavailable result and fail this command.

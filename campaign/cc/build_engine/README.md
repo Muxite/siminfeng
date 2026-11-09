@@ -6,7 +6,7 @@ Requires Python 3.12+ (stdlib only), Git, Docker daemon access, and Docker Build
 
 ## Run
 
-Run from the campaign directory. Give every attempt a new or empty output directory. While executing assignment T-D, keep outputs under `cc/build_engine/` or `builds/llamacpp/`.
+Run from the campaign directory. Give every attempt a new or empty output directory. For assignment T-N, keep outputs under `cc/build_engine/` or `artifacts/codexN/`. The CLI uses the Dockerfile and Bake recipe in `cc/build_engine/recipes/`; it does not modify or use the older recipes under `builds/llamacpp/`.
 
 ```bash
 # Supply the real runtime image digest from trusted/local image evidence.
@@ -22,9 +22,34 @@ To add a patch, save a unified Git diff to a file and add `--patch path/to/chang
 
 The image contains only the seven requested tools in `/app`, their generated shared libraries and the OpenMP runtime, on top of the CUDA runtime base. It has no compiler, source checkout, or weights. Its entrypoint is cleared, so invoke tools by full path, for example `/app/llama-bench`. Release/shared CUDA compilation uses the flags in `build-record.json`; CPU-native tuning, tests, downloaded UI, and OpenSSL are disabled. `LLAMA_CURL=OFF` is passed as requested, although this checkout treats LLAMA_CURL as deprecated. Source and patch identity are recorded as image labels; binaries' built-in Git version may say `unknown` because `.git` is not staged.
 
+## Engine variants and linkage
+
+Use repeatable `--cmake-define KEY=VALUE` options. Keys must match `^[A-Z0-9_]+$`; values must be nonempty and contain only ASCII letters, digits, or `_./:+,@%=-`. Whitespace, shell metacharacters, empty values, duplicate keys (even with identical values), and all built-in keys are rejected before output creation. This also reserves the built-in compiler-launcher and executable-linker flags. Definitions are sorted by key, passed as the `CMAKE_DEFINES` build argument as space-separated `-DKEY=VALUE` words, and stored in the runtime image label `campaign.cmake.defines` in that same format. The CLI overwrites inherited `CMAKE_DEFINES` environment values.
+
+`recipes` records the SHA256 and size of each recipe file. `recipe_sha256` hashes canonical JSON (sorted keys, compact separators) containing those file identities, all built-in flags, the definitions, and extra targets. Definition values therefore change recipe identity even when recipe bytes are unchanged; reordering definitions does not.
+
+For the GPU budget shim, build with VMM disabled at compile time. From the campaign root, with a clean source checkout at the shown commit and local base images available:
+
+```bash
+python3 cc/build_engine/build_engine.py \
+  --source ref/llama.cpp --commit 31288c9c66e59377f7788d920678a565bb89dd37 \
+  --tag campaign/llamacpp:no-vmm \
+  --out artifacts/codexN/no-vmm-build \
+  --cmake-define GGML_CUDA_NO_VMM=ON \
+  --linkage
+```
+
+`--linkage` enables a final check after saving the image and collecting provenance. It runs one additional `docker run --rm --network=none --read-only --entrypoint /bin/sh` against the built image's config ID, with a 60-second client timeout and no GPU. It discovers `/app/libggml-cuda.so` or a versioned `/app/libggml-cuda.so.*`, runs `ldd`, and selects `readelf -Ws` or, if unavailable, `nm -D`. A pass requires a dynamic `libcudart.so*` dependency and undefined imports of exactly `cudaMalloc`, `cudaFree`, and `cudaMemGetInfo` (including versioned symbols). Other CUDA API names and defined symbols do not satisfy the check. `ldd` showing `libcudart.so.12 => not found` still establishes a dynamic dependency; this check does not establish that runtime dependencies resolve on the GPU host.
+
+The record's `linkage` object contains `status` (`not_requested`, `passed`, `failed`, or `unavailable`), the discovered library, config ID, `libcudart_dynamic`, `undefined_imports`, each tool's return code/reason, and output paths. Missing tools, a missing library, nonzero tool exits, Docker failures, timeouts, and malformed probe output are `unavailable`; unavailable measurements are JSON null rather than false. Runtime images may lack both readelf and nm: the check explicitly records this rather than installing tools or silently claiming imports are absent.
+
+A failed or unavailable requested check sets top-level `failure_stage="linkage"` and exits 1, while preserving the saved archive and other evidence. `--linkage-optional` enables the same check (even without `--linkage`) but permits a failed/unavailable result with overall success and exit 0; inspect `linkage.status` in that case. With neither flag, linkage is `not_requested`.
+
+The probe saves `linkage.raw.txt` (framed stdout), `linkage.stderr.txt` (Docker/probe stderr), `linkage.ldd.txt`, and `linkage.symbols.txt`. Tool stderr is merged into its corresponding raw tool output. On a Docker error or malformed probe, only the first two files may be available. This ELF check does not prove allocation interception, actual pool selection, or GPU execution; the orchestrator must verify `NO_VMM = 1` and allocation events under the budget shim.
+
 ## Outputs and failure handling
 
-`build-record.json` uses schema version 1. It records status, failure stage/error, requested and resolved commit, Git tree ID and dirty status, patch SHA256 or null, tag/platform, recipe SHA256 and sizes, base references/digests, Docker and Buildx versions, CMake flags, Buildx metadata, image config ID/RepoDigests/Created/Architecture/Os, tool SHA256 values, saved archive SHA256/bytes, build duration and total duration. Fields remain null or empty when a failure occurs before collection. `build_wall_seconds` measures the Bake invocation, including export; `wall_seconds` covers the whole attempt.
+`build-record.json` uses schema version 2. Version 1 evidence remains untouched; this capability has no build-record reader. Schema 2 adds `cmake_defines`, `recipe_sha256`, and `linkage`; `cmake_flags` includes all built-in and extra definitions. It records status, failure stage/error, requested and resolved commit, Git tree ID and dirty status, patch SHA256 or null, tag/platform, recipe SHA256 and sizes, base references/digests, Docker and Buildx versions, CMake flags, Buildx metadata, image config ID/RepoDigests/Created/Architecture/Os, tool SHA256 values, saved archive SHA256/bytes, build duration and total duration. Fields remain null or empty when a failure occurs before collection. `build_wall_seconds` measures the Bake invocation, including export; `wall_seconds` covers the whole attempt.
 
 The other files are:
 
@@ -32,13 +57,13 @@ The other files are:
 - `buildx-metadata.json`: Buildx metadata, when the build produces it; retained even when the build exits nonzero.
 - `engine-image.docker.tar`: `docker save` of the built immutable image config ID, on success. Its bytes and SHA256 are recorded after saving.
 
-The CLI exits 0 only after all evidence collection succeeds, otherwise nonzero. Failures include source mismatch/dirty tree, unsupported submodules, malformed or inapplicable patch, unavailable Docker/base image, build/export failure, incorrect architecture, missing binaries, save failure, or malformed archive. A failure after building can leave the tagged local image and partial evidence; inspect `failure_stage` and retry in a fresh output directory. Invalid CLI arguments, an unwritable output path, or a nonempty output directory fail before a record can be created. Existing evidence is never overwritten. The CLI does not push, prune, mount the Docker socket in an image, or operate on unrelated containers. A single short-lived `docker run --rm --network=none --read-only --entrypoint /usr/bin/sha256sum` container hashes the tools without requesting a GPU. Subsequent hashing and saving use the immutable config ID so a later tag change cannot change the evidence target.
+The CLI exits 0 only after all required evidence collection succeeds, otherwise nonzero; `--linkage-optional` permits a recorded linkage failure. Failures include source mismatch/dirty tree, unsupported submodules, malformed or inapplicable patch, unavailable Docker/base image, build/export failure, incorrect architecture, missing binaries, save failure, or malformed archive. A failure after building can leave the tagged local image and partial evidence; inspect `failure_stage` and retry in a fresh output directory. Invalid CLI arguments, an unwritable output path, or a nonempty output directory fail before a record can be created. Existing evidence is never overwritten. The CLI does not push, prune, mount the Docker socket in an image, or operate on unrelated containers. A short-lived `docker run --rm --network=none --read-only --entrypoint /bin/sh` container hashes the tools and libraries without requesting a GPU. Hashing, saving, and optional linkage inspection use the immutable `containerimage.config.digest` from Buildx metadata, because Docker image inspection can report an OCI index digest as `Id`. Missing config metadata is an explicit inspection failure.
 
 Bake requests maximum provenance and saves metadata separately. This does not imply provenance survives image loading and `docker save`. The archive inspector checks `index.json` and reachable OCI manifests for actual in-toto SLSA provenance statements. A classic Docker archive without an OCI index records `retained: false`; an SBOM or an attestation annotation alone does not count. A save or inspection failure leaves provenance unconfirmed. No signature or attestation trust verification is performed.
 
 ## Validation without a build
 
-From `builds/llamacpp/`, run `docker buildx bake --print`; the retained `bake-print.json` is the validated default expansion. Its runtime digest is intentionally empty until supplied; print mode validates Bake syntax, not base availability or compilation. For a direct Bake build, supply digest-pinned BASE_DEVEL and BASE_RUNTIME plus SOURCE_DIR, SOURCE_COMMIT and PATCH_SHA256, and use a prepared staging snapshot. Prefer the CLI, which verifies those inputs. Bake uses `BAKE_CMD_CONTEXT` to locate the recipe Dockerfile outside the source context; invoke it from the recipe directory.
+The CLI stages its recipes in `.campaign-recipe/` inside the archived source context. Bake receives digest-pinned base references, source and patch identity, extra targets, and extra definitions from the CLI. Prefer the CLI for validation and evidence collection; direct builds using the older `builds/llamacpp/` recipes do not support these variant options.
 
 From the campaign directory, run:
 
@@ -49,6 +74,6 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
   -o cache_dir=cc/build_engine/.pytest_cache
 ```
 
-Tests use temporary Git repositories and mocked Docker subprocesses. They cover patch rejection, successful patch isolation, successful record schema, build failure logs/metadata, dirty or mismatched source, archive/tool hashing, provenance versus SBOM, and refusing to overwrite evidence. They use no network, GPU, or real build.
+Tests use temporary Git repositories and mocked Docker subprocesses. They cover patch rejection, successful patch isolation, successful record schema, build failure logs/metadata, dirty or mismatched source, archive/tool hashing, provenance versus SBOM, and refusing to overwrite evidence. They also cover define validation, variant recipe identity/build arguments/labels, schema 2, captured ELF linkage fixtures, shell tool selection, config-ID versus index-ID targeting, and fatal/optional linkage failures. They use no network, GPU, or real engine build.
 
-This evidence does not prove bitwise reproducibility, runtime correctness, model accuracy, GPU compatibility/performance, or the absence of vulnerabilities. Apt package versions, compiler behavior, timestamps, and upstream build scripts can vary. Base digests and input hashes identify inputs; they do not establish equivalence to an upstream image. The orchestrator must perform the real build and runtime checks. No full build was performed for T-D.
+This evidence does not prove bitwise reproducibility, runtime correctness, model accuracy, GPU compatibility/performance, or the absence of vulnerabilities. Apt package versions, compiler behavior, timestamps, and upstream build scripts can vary. Base digests and input hashes identify inputs; they do not establish equivalence to an upstream image. The orchestrator must perform the real build and runtime checks. No Docker execution or network access was performed for T-N.

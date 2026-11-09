@@ -1,0 +1,61 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.8.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+GPU budget test: cap=250 MiB, reserve=0, managed=1
+CHECK                                                          | RESULT
+CUDA initialization                                            | PASS
+Initial meminfo: total=250 MiB, free=250 MiB                   | PASS
+cudaMalloc first 100 MiB                                       | PASS
+cudaMalloc second 100 MiB                                      | PASS
+Meminfo after 200 MiB: free=50 MiB                             | PASS
+Third 100 MiB returns cudaErrorMemoryAllocation                | PASS
+Denied allocation leaves accounting unchanged                  | PASS
+Free first allocation                                          | PASS
+Freed budget permits another 100 MiB                           | PASS
+Meminfo after reallocation: free=50 MiB                        | PASS
+Free second allocation                                         | PASS
+Free replacement allocation                                    | PASS
+Meminfo after frees: free=250 MiB                              | PASS
+Create stream for async allocation test                        | PASS
+cudaMallocAsync 200 MiB                                        | PASS
+Async allocation charged before stream completion              | PASS
+Async allocation above cap denied                              | PASS
+cudaFreeAsync returns budget after completion                  | PASS
+Meminfo after cudaFreeAsync: free=250 MiB                      | PASS
+Async budget can be reused                                     | PASS
+Free reused async allocation                                   | PASS
+Destroy stream                                                 | PASS
+cudaMallocPitch succeeds with valid aligned pitch              | PASS
+Pitch padding counts against cap                               | PASS
+Free pitched allocation                                        | PASS
+cudaMalloc3D succeeds                                          | PASS
+3D padded storage counts against cap                           | PASS
+Free 3D allocation                                             | PASS
+cudaMallocManaged succeeds                                     | PASS
+Managed allocation charged at requested size                   | PASS
+Free managed allocation                                        | PASS
+Driver cuMemAlloc_v2 succeeds                                  | PASS
+Runtime sees driver allocation                                 | PASS
+cuMemGetInfo_v2 reports shared accounting                      | PASS
+Driver allocation above cap returns OUT_OF_MEMORY              | PASS
+Driver cuMemFree_v2 returns budget                             | PASS
+Create driver stream                                           | PASS
+Driver cuMemAllocAsync succeeds                                | PASS
+Runtime sees driver async allocation                           | PASS
+Driver async allocation above cap denied                       | PASS
+Driver cuMemFreeAsync returns budget                           | PASS
+Destroy driver stream                                          | PASS
+Final meminfo: free=250 MiB                                    | PASS
+PASS (0 failed checks)

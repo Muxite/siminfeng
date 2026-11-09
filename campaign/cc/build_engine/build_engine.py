@@ -13,17 +13,125 @@ import tempfile
 import time
 from datetime import datetime, timezone
 
-RECIPES = Path(__file__).resolve().parents[2] / "builds" / "llamacpp"
+RECIPES = Path(__file__).resolve().parent / "recipes"
 TOOLS = ("llama-bench", "llama-perplexity", "llama-completion", "llama-server",
          "llama-eval-callback", "llama-cli", "llama-tokenize")
 CMAKE_FLAGS = ["-DCMAKE_BUILD_TYPE=Release", "-DGGML_CUDA=ON",
                "-DCMAKE_CUDA_ARCHITECTURES=120", "-DLLAMA_CURL=OFF",
                "-DBUILD_SHARED_LIBS=ON", "-DGGML_NATIVE=OFF",
                "-DLLAMA_BUILD_TESTS=OFF", "-DLLAMA_BUILD_UI=OFF",
-               "-DLLAMA_USE_PREBUILT_UI=OFF", "-DLLAMA_OPENSSL=OFF"]
+               "-DLLAMA_USE_PREBUILT_UI=OFF", "-DLLAMA_OPENSSL=OFF",
+               "-DCMAKE_C_COMPILER_LAUNCHER=ccache", "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+               "-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache",
+               "-DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined"]
 DEFAULT_DEVEL = ("nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:"
                  "520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66")
 DEFAULT_RUNTIME = "nvidia/cuda:12.8.1-runtime-ubuntu24.04"
+
+
+def validate_defines(items):
+    """Return canonical definitions; allow only literal, single shell words."""
+    builtins = {flag[2:].split("=", 1)[0] for flag in CMAKE_FLAGS}
+    defines = {}
+    for item in items:
+        key, separator, value = item.partition("=")
+        if not separator or not re.fullmatch(r"[A-Z0-9_]+", key):
+            raise ValueError("--cmake-define requires KEY=VALUE with KEY matching ^[A-Z0-9_]+$")
+        if not re.fullmatch(r"[A-Za-z0-9_./:+,@%=-]+", value):
+            raise ValueError("--cmake-define VALUE must be nonempty and contain only letters, digits, _./:+,@%=-")
+        if key in builtins or key in defines:
+            raise ValueError("Duplicate or built-in CMake definition: " + key)
+        defines[key] = value
+    return dict(sorted(defines.items()))
+
+
+def recipe_identity(defines, extra_targets=()):
+    recipes = {name: file_digest(RECIPES / name)
+               for name in ("Dockerfile", "docker-bake.hcl")}
+    inputs = {"recipes": recipes, "cmake_defines": defines,
+              "cmake_flags": CMAKE_FLAGS, "extra_targets": list(extra_targets)}
+    digest = hashlib.sha256(json.dumps(inputs, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return recipes, digest
+
+
+LINKAGE_SYMBOLS = ("cudaMalloc", "cudaFree", "cudaMemGetInfo")
+LINKAGE_SCRIPT = r'''
+library=""
+for candidate in /app/libggml-cuda.so /app/libggml-cuda.so.*; do
+    if [ -f "$candidate" ]; then library="$candidate"; break; fi
+done
+printf '__CAMPAIGN_LIBRARY__%s\n' "$library"
+printf '__CAMPAIGN_LDD_BEGIN__\n'
+if [ -z "$library" ]; then
+    echo 'CUDA backend library not found in /app'; ldd_rc=125
+elif command -v ldd >/dev/null 2>&1; then
+    ldd "$library" 2>&1; ldd_rc=$?
+else
+    echo 'ldd unavailable in runtime image'; ldd_rc=127
+fi
+printf '__CAMPAIGN_LDD_END__%s\n' "$ldd_rc"
+symbol_tool=unavailable
+if command -v readelf >/dev/null 2>&1; then symbol_tool=readelf
+elif command -v nm >/dev/null 2>&1; then symbol_tool=nm; fi
+printf '__CAMPAIGN_SYMBOLS_BEGIN__%s\n' "$symbol_tool"
+if [ -z "$library" ]; then
+    echo 'CUDA backend library not found in /app'; symbols_rc=125
+elif [ "$symbol_tool" = readelf ]; then
+    readelf -Ws "$library" 2>&1; symbols_rc=$?
+elif [ "$symbol_tool" = nm ]; then
+    nm -D "$library" 2>&1; symbols_rc=$?
+else
+    echo 'readelf and nm unavailable in runtime image'; symbols_rc=127
+fi
+printf '__CAMPAIGN_SYMBOLS_END__%s\n' "$symbols_rc"
+'''
+
+
+def parse_linkage(ldd_text, symbols_text, *, symbol_tool="readelf",
+                  ldd_returncode=0, symbols_returncode=0):
+    dynamic = None if ldd_returncode else bool(re.search(r"\blibcudart\.so(?:\.[\w.]+)?\b", ldd_text))
+    imports = {name: None for name in LINKAGE_SYMBOLS}
+    if not symbols_returncode and symbol_tool in ("readelf", "nm"):
+        for name in imports:
+            if symbol_tool == "readelf":
+                pattern = r"\bUND\s+" + name + r"(?:@\S+)?(?:\s|$)"
+            else:
+                pattern = r"^\s*(?:[0-9a-fA-F]+\s+)?[Uwv]\s+" + name + r"(?:@\S+)?(?:\s|$)"
+            imports[name] = bool(re.search(pattern, symbols_text, re.MULTILINE))
+    unavailable = bool(ldd_returncode or symbols_returncode or symbol_tool not in ("readelf", "nm"))
+    passed = dynamic is True and all(value is True for value in imports.values())
+    return {"status": "unavailable" if unavailable else "passed" if passed else "failed",
+            "libcudart_dynamic": dynamic, "undefined_imports": imports,
+            "ldd": {"returncode": ldd_returncode,
+                    "reason": ldd_text.strip() if ldd_returncode else None},
+            "symbols": {"tool": symbol_tool, "returncode": symbols_returncode,
+                        "reason": symbols_text.strip() if symbols_returncode or symbol_tool == "unavailable" else None}}
+
+
+def collect_linkage(run, out, image_id):
+    result = {"status": "unavailable", "image_config_id": image_id,
+              "libcudart_dynamic": None, "undefined_imports": dict.fromkeys(LINKAGE_SYMBOLS),
+              "raw_output": "linkage.raw.txt", "stderr_output": "linkage.stderr.txt"}
+    try:
+        run(["docker", "run", "--rm", "--network=none", "--read-only",
+             "--entrypoint", "/bin/sh", image_id, "-c", LINKAGE_SCRIPT],
+            stdout_path=out / "linkage.raw.txt", stderr_path=out / "linkage.stderr.txt", timeout=60)
+        raw = (out / "linkage.raw.txt").read_text()
+        match = re.fullmatch(r"__CAMPAIGN_LIBRARY__([^\n]*)\n__CAMPAIGN_LDD_BEGIN__\n(.*?)"
+                             r"__CAMPAIGN_LDD_END__(\d+)\n__CAMPAIGN_SYMBOLS_BEGIN__(\w+)\n(.*?)"
+                             r"__CAMPAIGN_SYMBOLS_END__(\d+)\n", raw, re.DOTALL)
+        if not match:
+            raise ValueError("Malformed linkage probe output; see linkage.raw.txt and linkage.stderr.txt")
+        library, ldd, ldd_rc, tool, symbols, symbols_rc = match.groups()
+        (out / "linkage.ldd.txt").write_text(ldd)
+        (out / "linkage.symbols.txt").write_text(symbols)
+        result.update(parse_linkage(ldd, symbols, symbol_tool=tool,
+                                   ldd_returncode=int(ldd_rc), symbols_returncode=int(symbols_rc)))
+        result.update(library=library or None, ldd_output="linkage.ldd.txt",
+                      symbols_output="linkage.symbols.txt")
+    except Exception as exc:
+        result.update(status="unavailable", reason=str(exc))
+    return result
 
 
 def file_digest(path):
@@ -103,10 +211,16 @@ class Runner:
     def __init__(self, out):
         self.out = out
 
-    def __call__(self, command, *, cwd=None, env=None, stdout_path=None, capture=True):
+    def __call__(self, command, *, cwd=None, env=None, stdout_path=None, capture=True,
+                 stderr_path=None, timeout=None):
         # Spool process output to files: full compiler logs never accumulate in RAM.
         with tempfile.TemporaryFile(dir=self.out) as stdout, tempfile.TemporaryFile(dir=self.out) as stderr:
-            result = subprocess.run(command, cwd=cwd, env=env, stdout=stdout, stderr=stderr)
+            expired = None
+            try:
+                result = subprocess.run(command, cwd=cwd, env=env, stdout=stdout, stderr=stderr,
+                                        **({"timeout": timeout} if timeout is not None else {}))
+            except subprocess.TimeoutExpired as exc:
+                expired = exc
             stdout.seek(0)
             stderr.seek(0)
             with (self.out / "build.stdout").open("ab") as log:
@@ -117,6 +231,12 @@ class Runner:
                     copy_stream(stdout, log)
             with (self.out / "build.stderr").open("ab") as log:
                 copy_stream(stderr, log)
+            if stderr_path:
+                stderr.seek(0)
+                with Path(stderr_path).open("wb") as target:
+                    copy_stream(stderr, target)
+            if expired:
+                raise expired
             if result.returncode:
                 raise RuntimeError(f"Command exited {result.returncode}: {command!r}")
             if stdout_path or not capture:
@@ -148,6 +268,8 @@ def resolve_base(run, value, kind):
 
 
 def build(args, runner=None):
+    defines = validate_defines(getattr(args, "cmake_define", []) or [])
+    define_flags = [f"-D{key}={value}" for key, value in defines.items()]
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     # Never overwrite evidence from an earlier attempt.
@@ -158,12 +280,14 @@ def build(args, runner=None):
     run = runner or Runner(out)
     started = time.monotonic()
     record = {
-        "schema_version": 1, "status": "failed", "failure_stage": None,
+        "schema_version": 2, "status": "failed", "failure_stage": None,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "source": {"path": str(Path(args.source).resolve()), "requested_commit": args.commit,
                    "commit": None, "tree": None, "dirty": None, "status_porcelain": None},
         "patch_sha256": None, "extra_targets": list(getattr(args, "extra_target", []) or []), "tag": args.tag, "platform": "linux/amd64",
-        "cmake_flags": CMAKE_FLAGS,
+        "cmake_flags": CMAKE_FLAGS + define_flags, "cmake_defines": defines,
+        "recipe_sha256": None,
+        "linkage": {"status": "not_requested"},
         "recipes": {}, "base_images": {}, "versions": {},
         "image": None, "tools": {}, "app_files": {}, "archive": None, "buildx_metadata": None,
         "provenance": {"retained": False, "reason": "Archive not inspected"},
@@ -171,8 +295,7 @@ def build(args, runner=None):
     }
     stage = "recipes"
     try:
-        record["recipes"] = {name: file_digest(RECIPES / name)
-                             for name in ("Dockerfile", "docker-bake.hcl")}
+        record["recipes"], record["recipe_sha256"] = recipe_identity(defines, record["extra_targets"])
         stage = "verify_source"
         source = Path(args.source).resolve()
         git_env = os.environ.copy()
@@ -234,6 +357,7 @@ def build(args, runner=None):
                 run, os.environ.get("BASE_RUNTIME", DEFAULT_RUNTIME), "runtime")
             env = os.environ.copy()
             env.update(TAG=args.tag, SOURCE_DIR=str(staged), SOURCE_COMMIT=head, EXTRA_TARGETS=" ".join(getattr(args, "extra_target", []) or []),
+                       CMAKE_DEFINES=" ".join(define_flags),
                        PATCH_SHA256=record["patch_sha256"] or "",
                        BASE_DEVEL=record["base_images"]["devel"]["reference"],
                        BASE_RUNTIME=record["base_images"]["runtime"]["reference"],
@@ -260,8 +384,11 @@ def build(args, runner=None):
                            ("Id", "RepoDigests", "Created", "Architecture", "Os")}
         if info.get("Architecture") != "amd64" or info.get("Os") != "linux":
             raise ValueError("Built image is not linux/amd64")
-        # Use the immutable config ID after resolving the tag exactly once.
-        image_id = info["Id"]
+        # Docker's Id may be an OCI index digest. Buildx identifies the actual config.
+        image_id = (record["buildx_metadata"] or {}).get("engine", {}).get("containerimage.config.digest")
+        if not isinstance(image_id, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
+            raise ValueError("Buildx metadata lacks an immutable image config digest")
+        record["image"]["config_digest"] = image_id
         stage = "hash_tools"
         hashes = run(["docker", "run", "--rm", "--network=none", "--read-only",
                       "--entrypoint", "/bin/sh", image_id, "-c",
@@ -279,14 +406,22 @@ def build(args, runner=None):
         image_tar = out / "engine-image.docker.tar"
         run(["docker", "save", "--output", str(image_tar), image_id])
         record["archive"] = {"path": image_tar.name, **file_digest(image_tar)}
-        record["image"].update({"docker_reported_id": info["Id"], **{"config_digest": None, "index_digest": None}})
+        record["image"].update({"docker_reported_id": info["Id"], "index_digest": None})
         ids = archive_identities(image_tar)
-        record["image"]["config_digest"], record["image"]["index_digest"] = ids["config_digest"], ids["index_digest"]
+        if ids["config_digest"] and ids["config_digest"] != image_id:
+            raise ValueError("Saved archive config digest differs from Buildx metadata")
+        record["image"]["index_digest"] = ids["index_digest"]
         record["image"]["index_manifests"] = ids["index_manifests"]
         record["image"]["docker_id_in_archive_index"] = info["Id"] in ids.get("index_entry_digests", [])
         record["image"]["id_note"] = "Id/docker_reported_id is whatever `docker image inspect` returned (containerd store: an index digest). config_digest is the image config digest. They are different objects."
         stage = "inspect_provenance"
         record["provenance"] = archive_provenance(image_tar)
+        if getattr(args, "linkage", False) or getattr(args, "linkage_optional", False):
+            stage = "linkage"
+            record["linkage"] = collect_linkage(run, out, image_id)
+            record["linkage"]["optional"] = bool(getattr(args, "linkage_optional", False))
+            if record["linkage"]["status"] != "passed" and not getattr(args, "linkage_optional", False):
+                raise RuntimeError("Linkage check " + record["linkage"]["status"] + "; see linkage evidence")
         record.update(status="success", failure_stage=None)
     except Exception as exc:
         record.update(status="failed", failure_stage=stage, error=str(exc))
@@ -305,6 +440,10 @@ def main():
     parser.add_argument("--commit", required=True)
     parser.add_argument("--patch")
     parser.add_argument("--extra-target", action="append", default=[], help="extra CMake executable target to build and ship in /app (e.g. llama-routing-trace added by a patch)")
+    parser.add_argument("--cmake-define", action="append", default=[], metavar="KEY=VALUE",
+                        help="additional CMake definition (repeatable; built-in flags cannot be overridden)")
+    parser.add_argument("--linkage", action="store_true", help="check dynamic cudart linkage and CUDA imports after building; failures are fatal")
+    parser.add_argument("--linkage-optional", action="store_true", help="enable linkage check but allow failed/unavailable checks")
     parser.add_argument("--tag", required=True)
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
