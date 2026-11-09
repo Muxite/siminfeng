@@ -1,0 +1,182 @@
+{
+ "kv_gen32k_f16": {
+  "tool": "llama-completion",
+  "parser": "completion",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+  ],
+  "args": [
+   "-f",
+   "/tin/prose.txt",
+   "-n",
+   "96",
+   "-c",
+   "32768",
+   "--temp",
+   "0",
+   "-s",
+   "1",
+   "-ngl",
+   "99",
+   "-no-cnv",
+   "--no-warmup",
+   "-fa",
+   "on",
+   "-ctk",
+   "f16",
+   "-ctv",
+   "f16"
+  ]
+ },
+ "kv_ppl4k_f16": {
+  "tool": "llama-perplexity",
+  "parser": "ppl",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "needs_data": true,
+  "args": [
+   "-c",
+   "4096",
+   "--chunks",
+   "6",
+   "-ngl",
+   "99",
+   "-fa",
+   "on",
+   "-ctk",
+   "f16",
+   "-ctv",
+   "f16"
+  ]
+ },
+ "kv_gen32k_q8_0": {
+  "tool": "llama-completion",
+  "parser": "completion",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+  ],
+  "args": [
+   "-f",
+   "/tin/prose.txt",
+   "-n",
+   "96",
+   "-c",
+   "32768",
+   "--temp",
+   "0",
+   "-s",
+   "1",
+   "-ngl",
+   "99",
+   "-no-cnv",
+   "--no-warmup",
+   "-fa",
+   "on",
+   "-ctk",
+   "q8_0",
+   "-ctv",
+   "q8_0"
+  ]
+ },
+ "kv_ppl4k_q8_0": {
+  "tool": "llama-perplexity",
+  "parser": "ppl",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "needs_data": true,
+  "args": [
+   "-c",
+   "4096",
+   "--chunks",
+   "6",
+   "-ngl",
+   "99",
+   "-fa",
+   "on",
+   "-ctk",
+   "q8_0",
+   "-ctv",
+   "q8_0"
+  ]
+ },
+ "kv_gen32k_q4_0": {
+  "tool": "llama-completion",
+  "parser": "completion",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+  ],
+  "args": [
+   "-f",
+   "/tin/prose.txt",
+   "-n",
+   "96",
+   "-c",
+   "32768",
+   "--temp",
+   "0",
+   "-s",
+   "1",
+   "-ngl",
+   "99",
+   "-no-cnv",
+   "--no-warmup",
+   "-fa",
+   "on",
+   "-ctk",
+   "q4_0",
+   "-ctv",
+   "q4_0"
+  ]
+ },
+ "kv_ppl4k_q4_0": {
+  "tool": "llama-perplexity",
+  "parser": "ppl",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "needs_data": true,
+  "args": [
+   "-c",
+   "4096",
+   "--chunks",
+   "6",
+   "-ngl",
+   "99",
+   "-fa",
+   "on",
+   "-ctk",
+   "q4_0",
+   "-ctv",
+   "q4_0"
+  ]
+ },
+ "kv_gen32k_f16_nofa": {
+  "tool": "llama-completion",
+  "parser": "completion",
+  "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "docker_args": [
+   "-v",
+   "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+  ],
+  "args": [
+   "-f",
+   "/tin/prose.txt",
+   "-n",
+   "96",
+   "-c",
+   "32768",
+   "--temp",
+   "0",
+   "-s",
+   "1",
+   "-ngl",
+   "99",
+   "-no-cnv",
+   "--no-warmup",
+   "-fa",
+   "off"
+  ]
+ }
+}

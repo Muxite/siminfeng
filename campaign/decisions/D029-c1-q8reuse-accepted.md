@@ -1,0 +1,6 @@
+# D029 — C1 q8_reuse ACCEPTED: first full-engine computation-preserving gain (+2.1% Q8_0 decode), x86-main
+Protocol D026 (frozen, commit 474be3b before results). Job job-34c09bec98 (image llamacpp-q8reuse2, run_ref sha256:bd78b473..., config 111ddae8...; patch 9943dee4...), same binary GGML_CUDA_Q8_REUSE=0 vs 1, 2 ABBA cycles, 36/36 clean, host monitor 38 samples no compiler, load 2.7-5.0.
+llama-bench tg128 median t/s [range]: Q8_0 OFF 791.3 [789-792] ON 807.6 [806-808] = +2.06% (criterion >= +2%: MET, ranges disjoint). mixE4K OFF 702.9 ON 715.4 = +1.78% (below 2% -> mixE4K track "consistent but sub-threshold").
+llama-completion decode (chat, 160 tok): Q8_0 758.4 -> 777.0 (+2.45%); mixE4K 677.6 -> 691.2 (+2.0%). Prefill unchanged within noise.
+Correctness: CUDA test-backend-ops MUL_MAT 2445/2445 OK; greedy text sha identical base/OFF/ON (Q8_0 65894776, mixE4K 950b46b1); PPL identical (Q8_0 9.653, mixE4K 9.9806, -ub 1).
+Classification: full-engine code gain, computation-preserving, discrete RTX 5070 Ti, Granite, batch-1 decode. Small: it's a launch/redundancy cleanup (D011 predicted 3-4.5%). Not memory-reducing; stacks with every memory technique. Component CC: cc/q8_reuse (integration: env switch, CUDA mmvq path, applies to 31288c9c6).

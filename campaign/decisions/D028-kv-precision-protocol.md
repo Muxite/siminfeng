@@ -1,0 +1,4 @@
+# D028 — KV-cache precision as a memory lever (protocol frozen before results)
+Question: at long context, how much GPU memory does KV quantization save on Granite mixE4K, at what quality and speed cost? KV/token f16 = 24 layers x 2 x 8 kv-heads x 64 x 2 B = 48 KiB -> 1.5 GiB at 32k ctx (> mixE4K weights 779 MiB).
+Image: llamacpp-b0 (unpatched 31288c9c6). Tests lab/tests/kv1.json: decode/prefill at -c 32768 with the 1560-token prose prompt (-n 96) for KV f16/q8_0/q4_0 with -fa on, plus f16 -fa off control; 3 alternating rounds; PPL wikitext -c 4096 --chunks 6 per KV type.
+Accept a KV type as "same accuracy" if PPL within +1% of f16 (-fa on) AND greedy text identical or (if not) KLD check pending; report GPU delta MiB (nvidia-smi), prefill & decode t/s medians. Classification: representation (KV) trade-off — not an engine code gain.

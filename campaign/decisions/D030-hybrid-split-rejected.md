@@ -1,0 +1,6 @@
+# D030 — T-R hybrid expert split REJECTED as implemented (slower than static layer offload at equal GPU MiB)
+Protocol D027 (+amendment 1). Job job-d1fb4e9879 (image llamacpp-hsplit1 run_ref sha256:6e91ace0...), same binary for all, 27/27 clean, 3 alternating rounds.
+Decode median t/s (GPU delta MiB): n18: static 149.8 (902) | static+flags 144.5 | split 125.3 (910) = -16%.  n12: 189.8 | 198.8 | split 160.8 (1072) = -19%.  n6: 309.1 | 311.5 | split 211.9 (1234) = -32%. Prefill also lower (split 211-252 vs static 269-322).
+Quality gate not reached (rejected on speed first); CUDA unit-test mismatch still open (amendment 1).
+Key observation: the deficit GROWS as more experts are hot (n18 -> n6), so CPU expert compute is not the bottleneck; candidates: (1) per-slot GPU dispatch (patch issues one MUL_MAT_ID per selected slot to avoid duplicate null IDs in mmid.cu -> up to 8x kernels per projection), (2) 24 GPU<->CPU handoffs/token (every layer has a cold part) vs K for static, (3) router-order GET_ROWS/transposes. Next discriminating experiment: nsys timeline split-n12 vs static-n12 (kernel count/token, sync count, CPU-busy intervals).
+Lesson (methodology): single-layer harness predicted ~330 t/s at ~897 MiB (D019); the integrated graph pays per-layer fixed costs the harness did not model. Harness wins are hypotheses until integrated (prompt §13 confirmed).
