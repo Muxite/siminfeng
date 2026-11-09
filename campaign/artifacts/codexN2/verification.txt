@@ -1,0 +1,38 @@
+T-N2 identity regression
+
+Changed cc/build_engine/build_engine.py, test_build_engine.py, README.md.
+Only writes: cc/build_engine/** and artifacts/codexN2/**.
+
+Save the immutable Docker-reported ID before hashing/linkage. Derive the
+linux/amd64 config digest from saved bytes, following OCI indexes/manifests
+and verifying referenced JSON SHA256 values, or hashing a classic Docker
+archive config. Reject missing/ambiguous configs and metadata mismatches.
+All docker run probes use the derived config ID, never an index or repo@digest.
+
+Record identity fields:
+- Id and docker_reported_id: unchanged observation from docker image inspect.
+- config_digest: archive-derived linux/amd64 config SHA256; runtime probe ID.
+- manifest_digest: selected OCI platform image manifest digest, else null.
+- index_digest: original OCI index from archive/typed Buildx metadata, else null.
+- index_manifests: archive catalog descriptors.
+- docker_id_in_archive_index: whether inspect ID appears in catalog descriptors.
+- id_note: explanation of distinct objects.
+- archive.sha256/bytes: independent identity of delivered tar bytes.
+
+Verification:
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q cc/build_engine/test_build_engine.py --basetemp=artifacts/codexN2/pytest-tmp -o cache_dir=artifacts/codexN2/pytest-cache
+89 passed in 1.04s (full output: pytest-result.txt).
+git diff --check -- cc/build_engine: passed.
+
+Regression coverage: exact real Buildx metadata with classic archive;
+real metadata structure with content-addressed synthetic OCI digests;
+linux/amd64 selection with arm64 and attestation entries; hashing/linkage
+use config ID after save; optional metadata presence/absence; config/index
+mismatches; missing/corrupt/ambiguous/wrong-platform configs; config-style
+Docker inspect ID and OCI manifest-versus-index metadata.
+
+Gaps: no Docker commands, real build, or live runtime validation were run.
+Synthetic OCI bytes necessarily have different digests than the real image;
+the exact real metadata fixture is also exercised unchanged separately.
+Classic archives cannot independently confirm a metadata index/manifest digest
+when those OCI objects are absent; config identity is still derived from bytes.

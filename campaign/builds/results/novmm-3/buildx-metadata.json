@@ -1,0 +1,1165 @@
+{
+  "engine": {
+    "buildx.build.provenance": {
+      "builder": {
+        "id": ""
+      },
+      "buildType": "https://mobyproject.org/buildkit@v1",
+      "materials": [
+        {
+          "uri": "pkg:docker/nvidia/cuda@12.8.1-devel-ubuntu24.04?digest=sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66\u0026platform=linux%2Famd64",
+          "digest": {
+            "sha256": "520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66"
+          }
+        },
+        {
+          "uri": "pkg:docker/nvidia/cuda@12.8.1-runtime-ubuntu24.04?digest=sha256:ebef3c171eeef0298e4eb2e4be843105edf3b8b0ac45e0b43acee358e8046867\u0026platform=linux%2Famd64",
+          "digest": {
+            "sha256": "ebef3c171eeef0298e4eb2e4be843105edf3b8b0ac45e0b43acee358e8046867"
+          }
+        }
+      ],
+      "invocation": {
+        "configSource": {
+          "entryPoint": "Dockerfile"
+        },
+        "parameters": {
+          "frontend": "dockerfile.v0",
+          "args": {
+            "build-arg:BASE_DEVEL": "nvidia/cuda:12.8.1-devel-ubuntu24.04",
+            "build-arg:BASE_DEVEL_DIGEST": "sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66",
+            "build-arg:BASE_RUNTIME": "nvidia/cuda:12.8.1-runtime-ubuntu24.04",
+            "build-arg:BASE_RUNTIME_DIGEST": "sha256:ebef3c171eeef0298e4eb2e4be843105edf3b8b0ac45e0b43acee358e8046867",
+            "build-arg:CMAKE_DEFINES": "-DGGML_CUDA_NO_VMM=ON",
+            "build-arg:EXTRA_TARGETS": "",
+            "build-arg:PATCH_SHA256": "",
+            "build-arg:SOURCE_COMMIT": "31288c9c66e59377f7788d920678a565bb89dd37"
+          },
+          "locals": [
+            {
+              "name": "context"
+            },
+            {
+              "name": "dockerfile"
+            }
+          ],
+          "root": {
+            "configSource": {
+              "path": "Dockerfile"
+            },
+            "request": {
+              "args": {
+                "build-arg:BASE_DEVEL": "nvidia/cuda:12.8.1-devel-ubuntu24.04",
+                "build-arg:BASE_DEVEL_DIGEST": "sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66",
+                "build-arg:BASE_RUNTIME": "nvidia/cuda:12.8.1-runtime-ubuntu24.04",
+                "build-arg:BASE_RUNTIME_DIGEST": "sha256:ebef3c171eeef0298e4eb2e4be843105edf3b8b0ac45e0b43acee358e8046867",
+                "build-arg:CMAKE_DEFINES": "-DGGML_CUDA_NO_VMM=ON",
+                "build-arg:EXTRA_TARGETS": "",
+                "build-arg:PATCH_SHA256": "",
+                "build-arg:SOURCE_COMMIT": "31288c9c66e59377f7788d920678a565bb89dd37",
+                "vcs:localdir:context": "campaign/builds/results/novmm-3/staging-e8qvb31a/source",
+                "vcs:localdir:dockerfile": "campaign/builds/results/novmm-3/staging-e8qvb31a/source/.campaign-recipe",
+                "vcs:revision": "8b594a222b9d9efda1e0042c13afa4ff0256548f",
+                "vcs:source": "git@github.com:Muxite/siminfeng.git"
+              }
+            }
+          },
+          "compatibilityVersion": 30
+        },
+        "environment": {
+          "dockerfileVersion": "1.27.0",
+          "platform": "linux/amd64"
+        }
+      },
+      "buildConfig": {
+        "llbDefinition": [
+          {
+            "id": "step0",
+            "op": {
+              "Op": {
+                "source": {
+                  "identifier": "docker-image://docker.io/nvidia/cuda:12.8.1-runtime-ubuntu24.04@sha256:ebef3c171eeef0298e4eb2e4be843105edf3b8b0ac45e0b43acee358e8046867",
+                  "attrs": {
+                    "image.resolvemode": "local"
+                  }
+                }
+              },
+              "platform": {
+                "Architecture": "amd64",
+                "OS": "linux"
+              },
+              "constraints": {}
+            }
+          },
+          {
+            "id": "step1",
+            "op": {
+              "Op": {
+                "source": {
+                  "identifier": "docker-image://docker.io/nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66",
+                  "attrs": {
+                    "image.resolvemode": "local"
+                  }
+                }
+              },
+              "platform": {
+                "Architecture": "amd64",
+                "OS": "linux"
+              },
+              "constraints": {}
+            }
+          },
+          {
+            "id": "step2",
+            "op": {
+              "Op": {
+                "exec": {
+                  "meta": {
+                    "args": [
+                      "/bin/sh",
+                      "-c",
+                      "apt-get update \u0026\u0026 apt-get install -y --no-install-recommends     build-essential cmake git libgomp1 ccache \u0026\u0026 rm -rf /var/lib/apt/lists/*"
+                    ],
+                    "env": [
+                      "PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                      "NVARCH=x86_64",
+                      "NVIDIA_REQUIRE_CUDA=cuda\u003e=12.8 brand=unknown,driver\u003e=470,driver\u003c471 brand=grid,driver\u003e=470,driver\u003c471 brand=tesla,driver\u003e=470,driver\u003c471 brand=nvidia,driver\u003e=470,driver\u003c471 brand=quadro,driver\u003e=470,driver\u003c471 brand=quadrortx,driver\u003e=470,driver\u003c471 brand=nvidiartx,driver\u003e=470,driver\u003c471 brand=vapps,driver\u003e=470,driver\u003c471 brand=vpc,driver\u003e=470,driver\u003c471 brand=vcs,driver\u003e=470,driver\u003c471 brand=vws,driver\u003e=470,driver\u003c471 brand=cloudgaming,driver\u003e=470,driver\u003c471 brand=unknown,driver\u003e=535,driver\u003c536 brand=grid,driver\u003e=535,driver\u003c536 brand=tesla,driver\u003e=535,driver\u003c536 brand=nvidia,driver\u003e=535,driver\u003c536 brand=quadro,driver\u003e=535,driver\u003c536 brand=quadrortx,driver\u003e=535,driver\u003c536 brand=nvidiartx,driver\u003e=535,driver\u003c536 brand=vapps,driver\u003e=535,driver\u003c536 brand=vpc,driver\u003e=535,driver\u003c536 brand=vcs,driver\u003e=535,driver\u003c536 brand=vws,driver\u003e=535,driver\u003c536 brand=cloudgaming,driver\u003e=535,driver\u003c536 brand=unknown,driver\u003e=550,driver\u003c551 brand=grid,driver\u003e=550,driver\u003c551 brand=tesla,driver\u003e=550,driver\u003c551 brand=nvidia,driver\u003e=550,driver\u003c551 brand=quadro,driver\u003e=550,driver\u003c551 brand=quadrortx,driver\u003e=550,driver\u003c551 brand=nvidiartx,driver\u003e=550,driver\u003c551 brand=vapps,driver\u003e=550,driver\u003c551 brand=vpc,driver\u003e=550,driver\u003c551 brand=vcs,driver\u003e=550,driver\u003c551 brand=vws,driver\u003e=550,driver\u003c551 brand=cloudgaming,driver\u003e=550,driver\u003c551 brand=unknown,driver\u003e=560,driver\u003c561 brand=grid,driver\u003e=560,driver\u003c561 brand=tesla,driver\u003e=560,driver\u003c561 brand=nvidia,driver\u003e=560,driver\u003c561 brand=quadro,driver\u003e=560,driver\u003c561 brand=quadrortx,driver\u003e=560,driver\u003c561 brand=nvidiartx,driver\u003e=560,driver\u003c561 brand=vapps,driver\u003e=560,driver\u003c561 brand=vpc,driver\u003e=560,driver\u003c561 brand=vcs,driver\u003e=560,driver\u003c561 brand=vws,driver\u003e=560,driver\u003c561 brand=cloudgaming,driver\u003e=560,driver\u003c561 brand=unknown,driver\u003e=565,driver\u003c566 brand=grid,driver\u003e=565,driver\u003c566 brand=tesla,driver\u003e=565,driver\u003c566 brand=nvidia,driver\u003e=565,driver\u003c566 brand=quadro,driver\u003e=565,driver\u003c566 brand=quadrortx,driver\u003e=565,driver\u003c566 brand=nvidiartx,driver\u003e=565,driver\u003c566 brand=vapps,driver\u003e=565,driver\u003c566 brand=vpc,driver\u003e=565,driver\u003c566 brand=vcs,driver\u003e=565,driver\u003c566 brand=vws,driver\u003e=565,driver\u003c566 brand=cloudgaming,driver\u003e=565,driver\u003c566",
+                      "NV_CUDA_CUDART_VERSION=12.8.90-1",
+                      "CUDA_VERSION=12.8.1",
+                      "LD_LIBRARY_PATH=/usr/local/cuda/lib64",
+                      "NVIDIA_VISIBLE_DEVICES=all",
+                      "NVIDIA_DRIVER_CAPABILITIES=compute,utility",
+                      "NV_CUDA_LIB_VERSION=12.8.1-1",
+                      "NV_NVTX_VERSION=12.8.90-1",
+                      "NV_LIBNPP_VERSION=12.3.3.100-1",
+                      "NV_LIBNPP_PACKAGE=libnpp-12-8=12.3.3.100-1",
+                      "NV_LIBCUSPARSE_VERSION=12.5.8.93-1",
+                      "NV_LIBCUBLAS_PACKAGE_NAME=libcublas-12-8",
+                      "NV_LIBCUBLAS_VERSION=12.8.4.1-1",
+                      "NV_LIBCUBLAS_PACKAGE=libcublas-12-8=12.8.4.1-1",
+                      "NV_LIBNCCL_PACKAGE_NAME=libnccl2",
+                      "NV_LIBNCCL_PACKAGE_VERSION=2.25.1-1",
+                      "NCCL_VERSION=2.25.1-1",
+                      "NV_LIBNCCL_PACKAGE=libnccl2=2.25.1-1+cuda12.8",
+                      "NVIDIA_PRODUCT_NAME=CUDA",
+                      "NV_CUDA_CUDART_DEV_VERSION=12.8.90-1",
+                      "NV_NVML_DEV_VERSION=12.8.90-1",
+                      "NV_LIBCUSPARSE_DEV_VERSION=12.5.8.93-1",
+                      "NV_LIBNPP_DEV_VERSION=12.3.3.100-1",
+                      "NV_LIBNPP_DEV_PACKAGE=libnpp-dev-12-8=12.3.3.100-1",
+                      "NV_LIBCUBLAS_DEV_VERSION=12.8.4.1-1",
+                      "NV_LIBCUBLAS_DEV_PACKAGE_NAME=libcublas-dev-12-8",
+                      "NV_LIBCUBLAS_DEV_PACKAGE=libcublas-dev-12-8=12.8.4.1-1",
+                      "NV_CUDA_NSIGHT_COMPUTE_VERSION=12.8.1-1",
+                      "NV_CUDA_NSIGHT_COMPUTE_DEV_PACKAGE=cuda-nsight-compute-12-8=12.8.1-1",
+                      "NV_NVPROF_VERSION=12.8.90-1",
+                      "NV_NVPROF_DEV_PACKAGE=cuda-nvprof-12-8=12.8.90-1",
+                      "NV_LIBNCCL_DEV_PACKAGE_NAME=libnccl-dev",
+                      "NV_LIBNCCL_DEV_PACKAGE_VERSION=2.25.1-1",
+                      "NV_LIBNCCL_DEV_PACKAGE=libnccl-dev=2.25.1-1+cuda12.8",
+                      "LIBRARY_PATH=/usr/local/cuda/lib64/stubs"
+                    ],
+                    "cwd": "/",
+                    "removeMountStubsRecursive": true
+                  },
+                  "mounts": [
+                    {
+                      "dest": "/"
+                    }
+                  ]
+                }
+              },
+              "platform": {
+                "Architecture": "amd64",
+                "OS": "linux"
+              },
+              "constraints": {}
+            },
+            "inputs": [
+              "step1:0"
+            ]
+          },
+          {
+            "id": "step3",
+            "op": {
+              "Op": {
+                "file": {
+                  "actions": [
+                    {
+                      "input": 0,
+                      "secondaryInput": -1,
+                      "output": 0,
+                      "Action": {
+                        "mkdir": {
+                          "path": "/src",
+                          "mode": 493,
+                          "makeParents": true,
+                          "timestamp": -1
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "constraints": {}
+            },
+            "inputs": [
+              "step2:0"
+            ]
+          },
+          {
+            "id": "step4",
+            "op": {
+              "Op": {
+                "source": {
+                  "identifier": "local://context",
+                  "attrs": {
+                    "local.sharedkeyhint": "context"
+                  }
+                }
+              },
+              "constraints": {}
+            }
+          },
+          {
+            "id": "step5",
+            "op": {
+              "Op": {
+                "file": {
+                  "actions": [
+                    {
+                      "input": 0,
+                      "secondaryInput": 1,
+                      "output": 0,
+                      "Action": {
+                        "copy": {
+                          "src": "/",
+                          "dest": "/src/",
+                          "mode": -1,
+                          "followSymlink": true,
+                          "dirCopyContents": true,
+                          "createDestPath": true,
+                          "allowWildcard": true,
+                          "allowEmptyWildcard": true,
+                          "timestamp": -1
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "constraints": {}
+            },
+            "inputs": [
+              "step3:0",
+              "step4:0"
+            ]
+          },
+          {
+            "id": "step6",
+            "op": {
+              "Op": {
+                "exec": {
+                  "meta": {
+                    "args": [
+                      "/bin/sh",
+                      "-c",
+                      "cmake -S . -B /build     -DCMAKE_BUILD_TYPE=Release     -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=120     -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON     -DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF     -DLLAMA_BUILD_UI=OFF -DLLAMA_USE_PREBUILT_UI=OFF -DLLAMA_OPENSSL=OFF     -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache     -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined     ${CMAKE_DEFINES}     \u0026\u0026 cmake --build /build --parallel 10 --target     llama-bench llama-perplexity llama-completion llama-server     llama-eval-callback llama-cli llama-tokenize ${EXTRA_TARGETS} \u0026\u0026 ccache -s"
+                    ],
+                    "env": [
+                      "PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                      "NVARCH=x86_64",
+                      "NVIDIA_REQUIRE_CUDA=cuda\u003e=12.8 brand=unknown,driver\u003e=470,driver\u003c471 brand=grid,driver\u003e=470,driver\u003c471 brand=tesla,driver\u003e=470,driver\u003c471 brand=nvidia,driver\u003e=470,driver\u003c471 brand=quadro,driver\u003e=470,driver\u003c471 brand=quadrortx,driver\u003e=470,driver\u003c471 brand=nvidiartx,driver\u003e=470,driver\u003c471 brand=vapps,driver\u003e=470,driver\u003c471 brand=vpc,driver\u003e=470,driver\u003c471 brand=vcs,driver\u003e=470,driver\u003c471 brand=vws,driver\u003e=470,driver\u003c471 brand=cloudgaming,driver\u003e=470,driver\u003c471 brand=unknown,driver\u003e=535,driver\u003c536 brand=grid,driver\u003e=535,driver\u003c536 brand=tesla,driver\u003e=535,driver\u003c536 brand=nvidia,driver\u003e=535,driver\u003c536 brand=quadro,driver\u003e=535,driver\u003c536 brand=quadrortx,driver\u003e=535,driver\u003c536 brand=nvidiartx,driver\u003e=535,driver\u003c536 brand=vapps,driver\u003e=535,driver\u003c536 brand=vpc,driver\u003e=535,driver\u003c536 brand=vcs,driver\u003e=535,driver\u003c536 brand=vws,driver\u003e=535,driver\u003c536 brand=cloudgaming,driver\u003e=535,driver\u003c536 brand=unknown,driver\u003e=550,driver\u003c551 brand=grid,driver\u003e=550,driver\u003c551 brand=tesla,driver\u003e=550,driver\u003c551 brand=nvidia,driver\u003e=550,driver\u003c551 brand=quadro,driver\u003e=550,driver\u003c551 brand=quadrortx,driver\u003e=550,driver\u003c551 brand=nvidiartx,driver\u003e=550,driver\u003c551 brand=vapps,driver\u003e=550,driver\u003c551 brand=vpc,driver\u003e=550,driver\u003c551 brand=vcs,driver\u003e=550,driver\u003c551 brand=vws,driver\u003e=550,driver\u003c551 brand=cloudgaming,driver\u003e=550,driver\u003c551 brand=unknown,driver\u003e=560,driver\u003c561 brand=grid,driver\u003e=560,driver\u003c561 brand=tesla,driver\u003e=560,driver\u003c561 brand=nvidia,driver\u003e=560,driver\u003c561 brand=quadro,driver\u003e=560,driver\u003c561 brand=quadrortx,driver\u003e=560,driver\u003c561 brand=nvidiartx,driver\u003e=560,driver\u003c561 brand=vapps,driver\u003e=560,driver\u003c561 brand=vpc,driver\u003e=560,driver\u003c561 brand=vcs,driver\u003e=560,driver\u003c561 brand=vws,driver\u003e=560,driver\u003c561 brand=cloudgaming,driver\u003e=560,driver\u003c561 brand=unknown,driver\u003e=565,driver\u003c566 brand=grid,driver\u003e=565,driver\u003c566 brand=tesla,driver\u003e=565,driver\u003c566 brand=nvidia,driver\u003e=565,driver\u003c566 brand=quadro,driver\u003e=565,driver\u003c566 brand=quadrortx,driver\u003e=565,driver\u003c566 brand=nvidiartx,driver\u003e=565,driver\u003c566 brand=vapps,driver\u003e=565,driver\u003c566 brand=vpc,driver\u003e=565,driver\u003c566 brand=vcs,driver\u003e=565,driver\u003c566 brand=vws,driver\u003e=565,driver\u003c566 brand=cloudgaming,driver\u003e=565,driver\u003c566",
+                      "NV_CUDA_CUDART_VERSION=12.8.90-1",
+                      "CUDA_VERSION=12.8.1",
+                      "LD_LIBRARY_PATH=/usr/local/cuda/lib64",
+                      "NVIDIA_VISIBLE_DEVICES=all",
+                      "NVIDIA_DRIVER_CAPABILITIES=compute,utility",
+                      "NV_CUDA_LIB_VERSION=12.8.1-1",
+                      "NV_NVTX_VERSION=12.8.90-1",
+                      "NV_LIBNPP_VERSION=12.3.3.100-1",
+                      "NV_LIBNPP_PACKAGE=libnpp-12-8=12.3.3.100-1",
+                      "NV_LIBCUSPARSE_VERSION=12.5.8.93-1",
+                      "NV_LIBCUBLAS_PACKAGE_NAME=libcublas-12-8",
+                      "NV_LIBCUBLAS_VERSION=12.8.4.1-1",
+                      "NV_LIBCUBLAS_PACKAGE=libcublas-12-8=12.8.4.1-1",
+                      "NV_LIBNCCL_PACKAGE_NAME=libnccl2",
+                      "NV_LIBNCCL_PACKAGE_VERSION=2.25.1-1",
+                      "NCCL_VERSION=2.25.1-1",
+                      "NV_LIBNCCL_PACKAGE=libnccl2=2.25.1-1+cuda12.8",
+                      "NVIDIA_PRODUCT_NAME=CUDA",
+                      "NV_CUDA_CUDART_DEV_VERSION=12.8.90-1",
+                      "NV_NVML_DEV_VERSION=12.8.90-1",
+                      "NV_LIBCUSPARSE_DEV_VERSION=12.5.8.93-1",
+                      "NV_LIBNPP_DEV_VERSION=12.3.3.100-1",
+                      "NV_LIBNPP_DEV_PACKAGE=libnpp-dev-12-8=12.3.3.100-1",
+                      "NV_LIBCUBLAS_DEV_VERSION=12.8.4.1-1",
+                      "NV_LIBCUBLAS_DEV_PACKAGE_NAME=libcublas-dev-12-8",
+                      "NV_LIBCUBLAS_DEV_PACKAGE=libcublas-dev-12-8=12.8.4.1-1",
+                      "NV_CUDA_NSIGHT_COMPUTE_VERSION=12.8.1-1",
+                      "NV_CUDA_NSIGHT_COMPUTE_DEV_PACKAGE=cuda-nsight-compute-12-8=12.8.1-1",
+                      "NV_NVPROF_VERSION=12.8.90-1",
+                      "NV_NVPROF_DEV_PACKAGE=cuda-nvprof-12-8=12.8.90-1",
+                      "NV_LIBNCCL_DEV_PACKAGE_NAME=libnccl-dev",
+                      "NV_LIBNCCL_DEV_PACKAGE_VERSION=2.25.1-1",
+                      "NV_LIBNCCL_DEV_PACKAGE=libnccl-dev=2.25.1-1+cuda12.8",
+                      "LIBRARY_PATH=/usr/local/cuda/lib64/stubs",
+                      "EXTRA_TARGETS=",
+                      "CMAKE_DEFINES=-DGGML_CUDA_NO_VMM=ON"
+                    ],
+                    "cwd": "/src",
+                    "removeMountStubsRecursive": true
+                  },
+                  "mounts": [
+                    {
+                      "dest": "/"
+                    },
+                    {
+                      "input": -1,
+                      "dest": "/root/.ccache",
+                      "output": -1,
+                      "mountType": 3,
+                      "cacheOpt": {
+                        "ID": "/llamacpp-ccache"
+                      }
+                    }
+                  ]
+                }
+              },
+              "platform": {
+                "Architecture": "amd64",
+                "OS": "linux"
+              },
+              "constraints": {}
+            },
+            "inputs": [
+              "step5:0"
+            ]
+          },
+          {
+            "id": "step7",
+            "op": {
+              "Op": {
+                "exec": {
+                  "meta": {
+                    "args": [
+                      "/bin/sh",
+                      "-c",
+                      "mkdir /runtime \u0026\u0026     for tool in llama-bench llama-perplexity llama-completion llama-server         llama-eval-callback llama-cli llama-tokenize ${EXTRA_TARGETS}; do         cp /build/bin/\"$tool\" /runtime/;     done \u0026\u0026     cp -a /build/bin/*.so* /runtime/ \u0026\u0026     cp -L /usr/lib/x86_64-linux-gnu/libgomp.so.1 /runtime/"
+                    ],
+                    "env": [
+                      "PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                      "NVARCH=x86_64",
+                      "NVIDIA_REQUIRE_CUDA=cuda\u003e=12.8 brand=unknown,driver\u003e=470,driver\u003c471 brand=grid,driver\u003e=470,driver\u003c471 brand=tesla,driver\u003e=470,driver\u003c471 brand=nvidia,driver\u003e=470,driver\u003c471 brand=quadro,driver\u003e=470,driver\u003c471 brand=quadrortx,driver\u003e=470,driver\u003c471 brand=nvidiartx,driver\u003e=470,driver\u003c471 brand=vapps,driver\u003e=470,driver\u003c471 brand=vpc,driver\u003e=470,driver\u003c471 brand=vcs,driver\u003e=470,driver\u003c471 brand=vws,driver\u003e=470,driver\u003c471 brand=cloudgaming,driver\u003e=470,driver\u003c471 brand=unknown,driver\u003e=535,driver\u003c536 brand=grid,driver\u003e=535,driver\u003c536 brand=tesla,driver\u003e=535,driver\u003c536 brand=nvidia,driver\u003e=535,driver\u003c536 brand=quadro,driver\u003e=535,driver\u003c536 brand=quadrortx,driver\u003e=535,driver\u003c536 brand=nvidiartx,driver\u003e=535,driver\u003c536 brand=vapps,driver\u003e=535,driver\u003c536 brand=vpc,driver\u003e=535,driver\u003c536 brand=vcs,driver\u003e=535,driver\u003c536 brand=vws,driver\u003e=535,driver\u003c536 brand=cloudgaming,driver\u003e=535,driver\u003c536 brand=unknown,driver\u003e=550,driver\u003c551 brand=grid,driver\u003e=550,driver\u003c551 brand=tesla,driver\u003e=550,driver\u003c551 brand=nvidia,driver\u003e=550,driver\u003c551 brand=quadro,driver\u003e=550,driver\u003c551 brand=quadrortx,driver\u003e=550,driver\u003c551 brand=nvidiartx,driver\u003e=550,driver\u003c551 brand=vapps,driver\u003e=550,driver\u003c551 brand=vpc,driver\u003e=550,driver\u003c551 brand=vcs,driver\u003e=550,driver\u003c551 brand=vws,driver\u003e=550,driver\u003c551 brand=cloudgaming,driver\u003e=550,driver\u003c551 brand=unknown,driver\u003e=560,driver\u003c561 brand=grid,driver\u003e=560,driver\u003c561 brand=tesla,driver\u003e=560,driver\u003c561 brand=nvidia,driver\u003e=560,driver\u003c561 brand=quadro,driver\u003e=560,driver\u003c561 brand=quadrortx,driver\u003e=560,driver\u003c561 brand=nvidiartx,driver\u003e=560,driver\u003c561 brand=vapps,driver\u003e=560,driver\u003c561 brand=vpc,driver\u003e=560,driver\u003c561 brand=vcs,driver\u003e=560,driver\u003c561 brand=vws,driver\u003e=560,driver\u003c561 brand=cloudgaming,driver\u003e=560,driver\u003c561 brand=unknown,driver\u003e=565,driver\u003c566 brand=grid,driver\u003e=565,driver\u003c566 brand=tesla,driver\u003e=565,driver\u003c566 brand=nvidia,driver\u003e=565,driver\u003c566 brand=quadro,driver\u003e=565,driver\u003c566 brand=quadrortx,driver\u003e=565,driver\u003c566 brand=nvidiartx,driver\u003e=565,driver\u003c566 brand=vapps,driver\u003e=565,driver\u003c566 brand=vpc,driver\u003e=565,driver\u003c566 brand=vcs,driver\u003e=565,driver\u003c566 brand=vws,driver\u003e=565,driver\u003c566 brand=cloudgaming,driver\u003e=565,driver\u003c566",
+                      "NV_CUDA_CUDART_VERSION=12.8.90-1",
+                      "CUDA_VERSION=12.8.1",
+                      "LD_LIBRARY_PATH=/usr/local/cuda/lib64",
+                      "NVIDIA_VISIBLE_DEVICES=all",
+                      "NVIDIA_DRIVER_CAPABILITIES=compute,utility",
+                      "NV_CUDA_LIB_VERSION=12.8.1-1",
+                      "NV_NVTX_VERSION=12.8.90-1",
+                      "NV_LIBNPP_VERSION=12.3.3.100-1",
+                      "NV_LIBNPP_PACKAGE=libnpp-12-8=12.3.3.100-1",
+                      "NV_LIBCUSPARSE_VERSION=12.5.8.93-1",
+                      "NV_LIBCUBLAS_PACKAGE_NAME=libcublas-12-8",
+                      "NV_LIBCUBLAS_VERSION=12.8.4.1-1",
+                      "NV_LIBCUBLAS_PACKAGE=libcublas-12-8=12.8.4.1-1",
+                      "NV_LIBNCCL_PACKAGE_NAME=libnccl2",
+                      "NV_LIBNCCL_PACKAGE_VERSION=2.25.1-1",
+                      "NCCL_VERSION=2.25.1-1",
+                      "NV_LIBNCCL_PACKAGE=libnccl2=2.25.1-1+cuda12.8",
+                      "NVIDIA_PRODUCT_NAME=CUDA",
+                      "NV_CUDA_CUDART_DEV_VERSION=12.8.90-1",
+                      "NV_NVML_DEV_VERSION=12.8.90-1",
+                      "NV_LIBCUSPARSE_DEV_VERSION=12.5.8.93-1",
+                      "NV_LIBNPP_DEV_VERSION=12.3.3.100-1",
+                      "NV_LIBNPP_DEV_PACKAGE=libnpp-dev-12-8=12.3.3.100-1",
+                      "NV_LIBCUBLAS_DEV_VERSION=12.8.4.1-1",
+                      "NV_LIBCUBLAS_DEV_PACKAGE_NAME=libcublas-dev-12-8",
+                      "NV_LIBCUBLAS_DEV_PACKAGE=libcublas-dev-12-8=12.8.4.1-1",
+                      "NV_CUDA_NSIGHT_COMPUTE_VERSION=12.8.1-1",
+                      "NV_CUDA_NSIGHT_COMPUTE_DEV_PACKAGE=cuda-nsight-compute-12-8=12.8.1-1",
+                      "NV_NVPROF_VERSION=12.8.90-1",
+                      "NV_NVPROF_DEV_PACKAGE=cuda-nvprof-12-8=12.8.90-1",
+                      "NV_LIBNCCL_DEV_PACKAGE_NAME=libnccl-dev",
+                      "NV_LIBNCCL_DEV_PACKAGE_VERSION=2.25.1-1",
+                      "NV_LIBNCCL_DEV_PACKAGE=libnccl-dev=2.25.1-1+cuda12.8",
+                      "LIBRARY_PATH=/usr/local/cuda/lib64/stubs",
+                      "EXTRA_TARGETS=",
+                      "CMAKE_DEFINES=-DGGML_CUDA_NO_VMM=ON"
+                    ],
+                    "cwd": "/src",
+                    "removeMountStubsRecursive": true
+                  },
+                  "mounts": [
+                    {
+                      "dest": "/"
+                    }
+                  ]
+                }
+              },
+              "platform": {
+                "Architecture": "amd64",
+                "OS": "linux"
+              },
+              "constraints": {}
+            },
+            "inputs": [
+              "step6:0"
+            ]
+          },
+          {
+            "id": "step8",
+            "op": {
+              "Op": {
+                "file": {
+                  "actions": [
+                    {
+                      "input": 0,
+                      "secondaryInput": 1,
+                      "output": 0,
+                      "Action": {
+                        "copy": {
+                          "src": "/runtime",
+                          "dest": "/app/",
+                          "mode": -1,
+                          "followSymlink": true,
+                          "dirCopyContents": true,
+                          "createDestPath": true,
+                          "allowWildcard": true,
+                          "allowEmptyWildcard": true,
+                          "timestamp": -1
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "constraints": {}
+            },
+            "inputs": [
+              "step0:0",
+              "step7:0"
+            ]
+          },
+          {
+            "id": "step9",
+            "op": {
+              "Op": {
+                "file": {
+                  "actions": [
+                    {
+                      "input": 0,
+                      "secondaryInput": -1,
+                      "output": 0,
+                      "Action": {
+                        "mkdir": {
+                          "path": "/app",
+                          "mode": 493,
+                          "makeParents": true,
+                          "timestamp": -1
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "constraints": {}
+            },
+            "inputs": [
+              "step8:0"
+            ]
+          },
+          {
+            "id": "step10",
+            "op": {
+              "Op": {}
+            },
+            "inputs": [
+              "step9:0"
+            ]
+          }
+        ],
+        "digestMapping": {
+          "sha256:00c6695a96998b74804b317d8a1039bec8a91e7e4d294939d55d62373536ff00": "step0",
+          "sha256:0c7c0f4ff39cf78882ead1fd6907aff99829f582a4eb3711e6288f5c08232d4d": "step10",
+          "sha256:2248ca572a024f3c7b32f87bc1c359d3aaa91aad4c7e635557bb431364dd9dff": "step6",
+          "sha256:2f235b55c7afdf45c3d5bc421b19160bfe1d052be8c0d32262932f523427f5f0": "step5",
+          "sha256:41351bf434191e3a9a28b34c3eb55cf2c160f2ee1912a434e6141c8d30ab316e": "step1",
+          "sha256:631415f87489ca5530c857031462e4fc83b7d649bacad7d9369ce12f634eabb2": "step3",
+          "sha256:7a8af5bb18fbccc0c21938eeaaca4bd90aff820b059603a5a60e052251cc27d9": "step7",
+          "sha256:93efc89cca9701e1f637a2f35c1a97b725201a727d6c0111203ed4eb315d3587": "step8",
+          "sha256:d294490b61756e2be46416e903bf1c6f49d7be108ec9a80f67c93c604fb1facb": "step2",
+          "sha256:d5c069b6e7c0d40ad8984a4f34570124c03abf751c02f3bb423daac63b7134f0": "step9",
+          "sha256:f69d76e995076d29339f556350c74c1b5b582dda1b87c063755378e2a500a6fd": "step4"
+        }
+      },
+      "metadata": {
+        "buildInvocationID": "t1a3k6eudjpxvzav5rxex3the",
+        "buildStartedOn": "2026-11-09T22:29:59.314863941Z",
+        "buildFinishedOn": "2026-11-09T22:29:59.481948158Z",
+        "completeness": {
+          "parameters": true,
+          "environment": true,
+          "materials": false
+        },
+        "reproducible": false,
+        "https://mobyproject.org/buildkit@v1#metadata": {
+          "vcs": {
+            "localdir:context": "campaign/builds/results/novmm-3/staging-e8qvb31a/source",
+            "localdir:dockerfile": "campaign/builds/results/novmm-3/staging-e8qvb31a/source/.campaign-recipe",
+            "revision": "8b594a222b9d9efda1e0042c13afa4ff0256548f",
+            "source": "git@github.com:Muxite/siminfeng.git"
+          },
+          "source": {
+            "locations": {
+              "step0": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 36
+                        },
+                        "end": {
+                          "line": 36
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step1": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 6
+                        },
+                        "end": {
+                          "line": 6
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step2": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 7
+                        },
+                        "end": {
+                          "line": 7
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 8
+                        },
+                        "end": {
+                          "line": 8
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step3": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 9
+                        },
+                        "end": {
+                          "line": 9
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step4": {},
+              "step5": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 12
+                        },
+                        "end": {
+                          "line": 12
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step6": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 14
+                        },
+                        "end": {
+                          "line": 14
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 15
+                        },
+                        "end": {
+                          "line": 15
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 16
+                        },
+                        "end": {
+                          "line": 16
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 17
+                        },
+                        "end": {
+                          "line": 17
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 18
+                        },
+                        "end": {
+                          "line": 18
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 19
+                        },
+                        "end": {
+                          "line": 19
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 20
+                        },
+                        "end": {
+                          "line": 20
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 21
+                        },
+                        "end": {
+                          "line": 21
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 22
+                        },
+                        "end": {
+                          "line": 22
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 23
+                        },
+                        "end": {
+                          "line": 23
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 24
+                        },
+                        "end": {
+                          "line": 24
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 25
+                        },
+                        "end": {
+                          "line": 25
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 26
+                        },
+                        "end": {
+                          "line": 26
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step7": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 28
+                        },
+                        "end": {
+                          "line": 28
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 29
+                        },
+                        "end": {
+                          "line": 29
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 30
+                        },
+                        "end": {
+                          "line": 30
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 31
+                        },
+                        "end": {
+                          "line": 31
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 32
+                        },
+                        "end": {
+                          "line": 32
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 33
+                        },
+                        "end": {
+                          "line": 33
+                        }
+                      },
+                      {
+                        "start": {
+                          "line": 34
+                        },
+                        "end": {
+                          "line": 34
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step8": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 43
+                        },
+                        "end": {
+                          "line": 43
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "step9": {
+                "locations": [
+                  {
+                    "ranges": [
+                      {
+                        "start": {
+                          "line": 45
+                        },
+                        "end": {
+                          "line": 45
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "infos": [
+              {
+                "filename": "Dockerfile",
+                "language": "Dockerfile",
+                "data": "QVJHIEJBU0VfREVWRUw9bnZpZGlhL2N1ZGE6MTIuOC4xLWRldmVsLXVidW50dTI0LjA0CkFSRyBCQVNFX0RFVkVMX0RJR0VTVApBUkcgQkFTRV9SVU5USU1FPW52aWRpYS9jdWRhOjEyLjguMS1ydW50aW1lLXVidW50dTI0LjA0CkFSRyBCQVNFX1JVTlRJTUVfRElHRVNUCgpGUk9NICR7QkFTRV9ERVZFTH1AJHtCQVNFX0RFVkVMX0RJR0VTVH0gQVMgYnVpbGRlcgpSVU4gYXB0LWdldCB1cGRhdGUgJiYgYXB0LWdldCBpbnN0YWxsIC15IC0tbm8taW5zdGFsbC1yZWNvbW1lbmRzIFwKICAgIGJ1aWxkLWVzc2VudGlhbCBjbWFrZSBnaXQgbGliZ29tcDEgY2NhY2hlICYmIHJtIC1yZiAvdmFyL2xpYi9hcHQvbGlzdHMvKgpXT1JLRElSIC9zcmMKQVJHIEVYVFJBX1RBUkdFVFM9IiIKQVJHIENNQUtFX0RFRklORVM9IiIKQ09QWSAuIC4KIyBjY2FjaGUgbGl2ZXMgaW4gYSBCdWlsZEtpdCBjYWNoZSBtb3VudDogY2FuZGlkYXRlIHJlYnVpbGRzIHJlY29tcGlsZSBvbmx5IHdoYXQgYSBwYXRjaCB0b3VjaGVzLgpSVU4gLS1tb3VudD10eXBlPWNhY2hlLGlkPWxsYW1hY3BwLWNjYWNoZSx0YXJnZXQ9L3Jvb3QvLmNjYWNoZSBcCiAgICBjbWFrZSAtUyAuIC1CIC9idWlsZCBcCiAgICAtRENNQUtFX0JVSUxEX1RZUEU9UmVsZWFzZSBcCiAgICAtREdHTUxfQ1VEQT1PTiAtRENNQUtFX0NVREFfQVJDSElURUNUVVJFUz0xMjAgXAogICAgLURMTEFNQV9DVVJMPU9GRiAtREJVSUxEX1NIQVJFRF9MSUJTPU9OIFwKICAgIC1ER0dNTF9OQVRJVkU9T0ZGIC1ETExBTUFfQlVJTERfVEVTVFM9T0ZGIFwKICAgIC1ETExBTUFfQlVJTERfVUk9T0ZGIC1ETExBTUFfVVNFX1BSRUJVSUxUX1VJPU9GRiAtRExMQU1BX09QRU5TU0w9T0ZGIFwKICAgIC1EQ01BS0VfQ19DT01QSUxFUl9MQVVOQ0hFUj1jY2FjaGUgLURDTUFLRV9DWFhfQ09NUElMRVJfTEFVTkNIRVI9Y2NhY2hlIC1EQ01BS0VfQ1VEQV9DT01QSUxFUl9MQVVOQ0hFUj1jY2FjaGUgXAogICAgLURDTUFLRV9FWEVfTElOS0VSX0ZMQUdTPS1XbCwtLWFsbG93LXNobGliLXVuZGVmaW5lZCBcCiAgICAke0NNQUtFX0RFRklORVN9IFwKICAgICYmIGNtYWtlIC0tYnVpbGQgL2J1aWxkIC0tcGFyYWxsZWwgMTAgLS10YXJnZXQgXAogICAgbGxhbWEtYmVuY2ggbGxhbWEtcGVycGxleGl0eSBsbGFtYS1jb21wbGV0aW9uIGxsYW1hLXNlcnZlciBcCiAgICBsbGFtYS1ldmFsLWNhbGxiYWNrIGxsYW1hLWNsaSBsbGFtYS10b2tlbml6ZSAke0VYVFJBX1RBUkdFVFN9ICYmIGNjYWNoZSAtcwojIFByZXNlcnZlIFNPTkFNRSBzeW1saW5rcy4gSW5jbHVkZSB0aGUgT3Blbk1QIHJ1bnRpbWUgZnJvbSB0aGUgYnVpbGRlci4KUlVOIG1rZGlyIC9ydW50aW1lICYmIFwKICAgIGZvciB0b29sIGluIGxsYW1hLWJlbmNoIGxsYW1hLXBlcnBsZXhpdHkgbGxhbWEtY29tcGxldGlvbiBsbGFtYS1zZXJ2ZXIgXAogICAgICAgIGxsYW1hLWV2YWwtY2FsbGJhY2sgbGxhbWEtY2xpIGxsYW1hLXRva2VuaXplICR7RVhUUkFfVEFSR0VUU307IGRvIFwKICAgICAgICBjcCAvYnVpbGQvYmluLyIkdG9vbCIgL3J1bnRpbWUvOyBcCiAgICBkb25lICYmIFwKICAgIGNwIC1hIC9idWlsZC9iaW4vKi5zbyogL3J1bnRpbWUvICYmIFwKICAgIGNwIC1MIC91c3IvbGliL3g4Nl82NC1saW51eC1nbnUvbGliZ29tcC5zby4xIC9ydW50aW1lLwoKRlJPTSAke0JBU0VfUlVOVElNRX1AJHtCQVNFX1JVTlRJTUVfRElHRVNUfSBBUyBydW50aW1lCkFSRyBTT1VSQ0VfQ09NTUlUCkFSRyBQQVRDSF9TSEEyNTYKQVJHIENNQUtFX0RFRklORVM9IiIKTEFCRUwgb3JnLm9wZW5jb250YWluZXJzLmltYWdlLnJldmlzaW9uPSIke1NPVVJDRV9DT01NSVR9IiBcCiAgICAgIGNhbXBhaWduLnBhdGNoLnNoYTI1Nj0iJHtQQVRDSF9TSEEyNTZ9IiBcCiAgICAgIGNhbXBhaWduLmNtYWtlLmRlZmluZXM9IiR7Q01BS0VfREVGSU5FU30iCkNPUFkgLS1mcm9tPWJ1aWxkZXIgL3J1bnRpbWUvIC9hcHAvCkVOViBMRF9MSUJSQVJZX1BBVEg9L2FwcDovdXNyL2xvY2FsL252aWRpYS9saWI6L3Vzci9sb2NhbC9udmlkaWEvbGliNjQKV09SS0RJUiAvYXBwCiMgQ2xlYXIgdGhlIENVREEgYmFzZSdzIGluaGVyaXRlZCBlbnRyeXBvaW50IGFzIHdlbGwuCkVOVFJZUE9JTlQgW10KQ01EIFsiL2FwcC9sbGFtYS1jbGkiLCAiLS1oZWxwIl0K",
+                "llbDefinition": [
+                  {
+                    "id": "step0",
+                    "op": {
+                      "Op": {
+                        "source": {
+                          "identifier": "local://dockerfile",
+                          "attrs": {
+                            "local.differ": "none",
+                            "local.followpaths": "[\"Dockerfile\",\"Dockerfile.dockerignore\",\"dockerfile\"]",
+                            "local.sharedkeyhint": "dockerfile"
+                          }
+                        }
+                      },
+                      "constraints": {}
+                    }
+                  },
+                  {
+                    "id": "step1",
+                    "op": {
+                      "Op": {}
+                    },
+                    "inputs": [
+                      "step0:0"
+                    ]
+                  }
+                ],
+                "digestMapping": {
+                  "sha256:62aa34d4c436ce61c3ed0ae0321863cb69cb598261ba4245a8b51a921448c3fe": "step0",
+                  "sha256:c3ec4d23009f0cc43ea68ff4b163a68bf3ec03462700083ed8278f5dfdf5b375": "step1"
+                }
+              }
+            ]
+          },
+          "layers": {
+            "step0:0": [
+              [
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:5a7813e071bfadf18aaa6ca8318be4824a9b6297b3240f2cc84c1db6f4113040",
+                  "size": 29754290
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:a102f36d092c0e9e0bef8c97854f606af9156aa36ab408e6fa4b88e27124a7e6",
+                  "size": 6947129
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:05ec76e31584ec109785cc7045bd88df0240411233c2fcdad66b621c662034c0",
+                  "size": 64290636
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:398182656c471d6ecca3c2d6d30e97193b40ffc8028a94515093960322f3d64e",
+                  "size": 183
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:73389fbd088f5ed5d9fd258baced59de092978b4f483920ea6d074522a105119",
+                  "size": 6885
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:cbb9175a9bc5f6553f8c0c5025ea9521898b8a3956ee24798dc35c24c6185053",
+                  "size": 2058008382
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:3d6ab8c799cda2f4c6a6277b0e24dd2231c5de83b0316968b7cce81156bb8be0",
+                  "size": 59618
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:7209097bfb98d6f8b422984480f1fddead5ea62f8900ff6b6548e060b71aca76",
+                  "size": 1684
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:545a3ada5b6bc612a11c13a659775d67eeda5a61615e7f49c76ecd24adcad626",
+                  "size": 1524
+                }
+              ]
+            ],
+            "step1:0": [
+              [
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:5a7813e071bfadf18aaa6ca8318be4824a9b6297b3240f2cc84c1db6f4113040",
+                  "size": 29754290
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:a102f36d092c0e9e0bef8c97854f606af9156aa36ab408e6fa4b88e27124a7e6",
+                  "size": 6947129
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:05ec76e31584ec109785cc7045bd88df0240411233c2fcdad66b621c662034c0",
+                  "size": 64290636
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:398182656c471d6ecca3c2d6d30e97193b40ffc8028a94515093960322f3d64e",
+                  "size": 183
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:73389fbd088f5ed5d9fd258baced59de092978b4f483920ea6d074522a105119",
+                  "size": 6885
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:cbb9175a9bc5f6553f8c0c5025ea9521898b8a3956ee24798dc35c24c6185053",
+                  "size": 2058008382
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:3d6ab8c799cda2f4c6a6277b0e24dd2231c5de83b0316968b7cce81156bb8be0",
+                  "size": 59618
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:7209097bfb98d6f8b422984480f1fddead5ea62f8900ff6b6548e060b71aca76",
+                  "size": 1684
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:545a3ada5b6bc612a11c13a659775d67eeda5a61615e7f49c76ecd24adcad626",
+                  "size": 1524
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:abf026459f528efac0543168ff07d7037e9415fe3eb956b82f8fd617c7d2db1f",
+                  "size": 3002837213
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:93e2721b7dddc8fb00723395d1865e71805c41b3d8f166c6753b2cb7e92b0da6",
+                  "size": 89517
+                }
+              ]
+            ],
+            "step8:0": [
+              [
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:5a7813e071bfadf18aaa6ca8318be4824a9b6297b3240f2cc84c1db6f4113040",
+                  "size": 29754290
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:a102f36d092c0e9e0bef8c97854f606af9156aa36ab408e6fa4b88e27124a7e6",
+                  "size": 6947129
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:05ec76e31584ec109785cc7045bd88df0240411233c2fcdad66b621c662034c0",
+                  "size": 64290636
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:398182656c471d6ecca3c2d6d30e97193b40ffc8028a94515093960322f3d64e",
+                  "size": 183
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:73389fbd088f5ed5d9fd258baced59de092978b4f483920ea6d074522a105119",
+                  "size": 6885
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:cbb9175a9bc5f6553f8c0c5025ea9521898b8a3956ee24798dc35c24c6185053",
+                  "size": 2058008382
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:3d6ab8c799cda2f4c6a6277b0e24dd2231c5de83b0316968b7cce81156bb8be0",
+                  "size": 59618
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:7209097bfb98d6f8b422984480f1fddead5ea62f8900ff6b6548e060b71aca76",
+                  "size": 1684
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:545a3ada5b6bc612a11c13a659775d67eeda5a61615e7f49c76ecd24adcad626",
+                  "size": 1524
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:3218a5fcc99f2e1b3f58d6e6e2255150457b9cec427122721acc1faf6f358cad",
+                  "size": 50887811
+                }
+              ]
+            ],
+            "step9:0": [
+              [
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:5a7813e071bfadf18aaa6ca8318be4824a9b6297b3240f2cc84c1db6f4113040",
+                  "size": 29754290
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:a102f36d092c0e9e0bef8c97854f606af9156aa36ab408e6fa4b88e27124a7e6",
+                  "size": 6947129
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:05ec76e31584ec109785cc7045bd88df0240411233c2fcdad66b621c662034c0",
+                  "size": 64290636
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:398182656c471d6ecca3c2d6d30e97193b40ffc8028a94515093960322f3d64e",
+                  "size": 183
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:73389fbd088f5ed5d9fd258baced59de092978b4f483920ea6d074522a105119",
+                  "size": 6885
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:cbb9175a9bc5f6553f8c0c5025ea9521898b8a3956ee24798dc35c24c6185053",
+                  "size": 2058008382
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:3d6ab8c799cda2f4c6a6277b0e24dd2231c5de83b0316968b7cce81156bb8be0",
+                  "size": 59618
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:7209097bfb98d6f8b422984480f1fddead5ea62f8900ff6b6548e060b71aca76",
+                  "size": 1684
+                },
+                {
+                  "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                  "digest": "sha256:545a3ada5b6bc612a11c13a659775d67eeda5a61615e7f49c76ecd24adcad626",
+                  "size": 1524
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:3218a5fcc99f2e1b3f58d6e6e2255150457b9cec427122721acc1faf6f358cad",
+                  "size": 50887811
+                },
+                {
+                  "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+                  "digest": "sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1",
+                  "size": 32
+                }
+              ]
+            ]
+          },
+          "sysUsage": [
+            {
+              "timestamp": "2026-11-09T22:29:59.556178594Z",
+              "cpuStat": {
+                "user": 727875.26,
+                "nice": 74.09,
+                "system": 247157.24,
+                "idle": 10171448.55,
+                "iowait": 8466.73,
+                "irq": 0,
+                "softirq": 8890.12,
+                "steal": 0,
+                "guest": 506.52,
+                "guestNice": 0
+              },
+              "procStat": {
+                "contextSwitches": 26247901721,
+                "processCreated": 47320569,
+                "processesRunning": 5
+              },
+              "memoryStat": {
+                "total": 49253284,
+                "free": 1016944,
+                "available": 38744084,
+                "buffers": 605672,
+                "cached": 34949244,
+                "active": 14629628,
+                "inactive": 28816028,
+                "swap": 8388604,
+                "dirty": 404440,
+                "writeback": 0,
+                "slab": 3790536
+              },
+              "cpuPressure": {
+                "some": {
+                  "avg10": 0.28,
+                  "avg60": 0.74,
+                  "avg300": 0.6,
+                  "total": 6876494645
+                },
+                "full": {
+                  "avg10": 0,
+                  "avg60": 0,
+                  "avg300": 0,
+                  "total": 0
+                }
+              },
+              "memoryPressure": {
+                "some": {
+                  "avg10": 0,
+                  "avg60": 0,
+                  "avg300": 0,
+                  "total": 78270994
+                },
+                "full": {
+                  "avg10": 0,
+                  "avg60": 0,
+                  "avg300": 0,
+                  "total": 76947120
+                }
+              },
+              "ioPressure": {
+                "some": {
+                  "avg10": 0.01,
+                  "avg60": 0.22,
+                  "avg300": 0.15,
+                  "total": 873428900
+                },
+                "full": {
+                  "avg10": 0.01,
+                  "avg60": 0.21,
+                  "avg300": 0.14,
+                  "total": 814093406
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "buildx.build.ref": "default/default/yuuqixqrfe4b6frv9gby4v5dz",
+    "containerimage.descriptor": {
+      "mediaType": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:0018f8dd2ec9179c45170609d477e3e41a34563d50b32522574a300607c42209",
+      "size": 856
+    },
+    "containerimage.digest": "sha256:0018f8dd2ec9179c45170609d477e3e41a34563d50b32522574a300607c42209",
+    "image.name": "docker.io/campaign/llamacpp:novmm3"
+  }
+}

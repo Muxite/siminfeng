@@ -1,0 +1,9 @@
+# D024 — T-O static hot-expert mode (moe-cache prefill, no admission) REJECTED: mechanism never engages (x86-main)
+Claim category: failed candidate (engine code) + methodology. Evidence: evidence/claude-code.jsonl task X4; artifacts/x4-shot/correct/{off,lru384,hot325,hot487}.{out,err}; image llamacpp-shot2 (run_ref sha256:7040afcd..., config sha256:8edec18d..., patch cc/moe_static_hot/static-hot.patch sha256 0d91a155...). Build record shot-2 status=failed at stage linkage (symbol tools unavailable in runtime image; ldd OK) — binaries otherwise identified (tools hashed, archive saved).
+Same binary, chat prompt, -n 160, -c 4096, temp 0, seed 1, -ngl 99 --n-cpu-moe 24 (UNTIMED: host load ~6 from a Codex CPU job, so speeds are indicative only):
+  off (no cache) 102 t/s, text sha 76dc9422 | LRU 384 161 t/s, text sha 950b46b1 (= all-GPU reference D022 m1_static_n0) | static 325 100 t/s, 76dc9422 | static 487 111 t/s, 76dc9422.
+Interpretation: static mode returns no slot map -> scheduler keeps MUL_MAT_ID on the CPU (weights host-resident); the copy-callback fallback only acts when the op is placed on the GPU (artifacts/codexO/moe-cache-map.md predicted "cache acceleration not promised"). Output identical to the CPU path, speed ≈ off: the prefilled banks are allocated but unused.
+Method lessons (-> methodology CC):
+ - Greedy-output fingerprint: at temp 0, CPU-computed and GPU-computed experts give different text for this model; text sha256 identifies which backend actually computed the experts. Cheap engagement check before spending a timing window.
+ - "Compiles + default path unchanged" (T-O's verification) did not test that the new path engages; every candidate needs an engagement observation (counter, log, or fingerprint) as its first GPU test.
+Next: T-R (expert-granular hybrid split, CPU computes cold experts) is the remaining candidate for the untested quadrant.

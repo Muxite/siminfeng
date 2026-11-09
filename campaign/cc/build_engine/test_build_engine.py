@@ -14,6 +14,41 @@ import build_engine as engine
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
+CONFIG = {"os": "linux", "architecture": "amd64", "config": {}}
+CONFIG_ID = "sha256:" + hashlib.sha256(json.dumps(CONFIG).encode()).hexdigest()
+
+
+def classic_archive():
+    return {"manifest.json": [{"Config": CONFIG_ID.split(":")[1] + ".json", "Layers": []}],
+            CONFIG_ID.split(":")[1] + ".json": CONFIG}
+
+
+def oci_archive():
+    """Construct real content-addressed index -> platform manifest -> config bytes."""
+    objects = {}
+
+    def add(doc, media_type, **extra):
+        raw = json.dumps(doc).encode()
+        digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+        objects["blobs/sha256/" + digest.split(":")[1]] = doc
+        return {"digest": digest, "mediaType": media_type, "size": len(raw), **extra}
+
+    def image(config):
+        config_desc = add(config, "application/vnd.oci.image.config.v1+json")
+        return add({"schemaVersion": 2, "config": config_desc, "layers": []},
+                   "application/vnd.oci.image.manifest.v1+json",
+                   platform={"os": config["os"], "architecture": config["architecture"]})
+
+    arm = image({**CONFIG, "architecture": "arm64"})
+    amd = image(CONFIG)
+    attestation = add({"schemaVersion": 2, "layers": []}, "application/vnd.oci.image.manifest.v1+json",
+                      platform={"os": "unknown", "architecture": "unknown"},
+                      annotations={"vnd.docker.reference.type": "attestation-manifest"})
+    index = add({"schemaVersion": 2, "manifests": [arm, attestation, amd]},
+                "application/vnd.oci.image.index.v1+json")
+    objects["index.json"] = {"schemaVersion": 2, "manifests": [index, amd]}
+    return objects, index["digest"], amd["digest"]
+
 
 def linkage_output(ldd=None, symbols=None, tool="readelf", ldd_rc=0, symbols_rc=0):
     return ("__CAMPAIGN_LIBRARY__/app/libggml-cuda.so.0\n__CAMPAIGN_LDD_BEGIN__\n"
@@ -111,21 +146,23 @@ def mock_docker(monkeypatch):
             state["bake"] = (staged / ".campaign-recipe" / "docker-bake.hcl").read_text()
             result = "full compiler stdout\n"
             stderr.write(b"full compiler stderr\n")
-            metadata = {"engine": {"containerimage.config.digest": "sha256:" + "1" * 64}}
+            metadata = state.get("metadata", {"engine": {"containerimage.config.digest": CONFIG_ID}})
             Path(command[command.index("--metadata-file") + 1]).write_text(json.dumps(metadata))
             code = 42 if state["fail_build"] else 0
         elif command[1:3] == ["image", "inspect"]:
             if command[-1].startswith("nvidia/"):
                 result = json.dumps([{"RepoDigests": ["nvidia/cuda@sha256:" + "2" * 64]}])
             else:
-                result = json.dumps([{"Id": "sha256:" + "9" * 64, "RepoDigests": [],
+                result = json.dumps([{"Id": state.get("inspect_id", "sha256:" + "9" * 64), "RepoDigests": [],
                                       "Created": "2026-01-01T00:00:00Z", "Architecture": "amd64", "Os": "linux"}])
         elif command[1] == "run":
             assert "--network=none" in command
             assert "--rm" in command
             assert "--read-only" in command
             assert "/bin/sh" in command
-            assert "sha256:" + "1" * 64 in command   # hashed by immutable id, not by tag
+            # runtime probes use Docker's own immutable reported ID (containerd store rejects
+            # `docker run <config digest>`, observed novmm-2/shot-1 exit 125), never a tag
+            assert state.get("inspect_id", "sha256:" + "9" * 64) in command
             if command[-1] == engine.LINKAGE_SCRIPT:
                 assert kwargs["timeout"] == 60
                 result = state.get("linkage_output", linkage_output())
@@ -138,8 +175,8 @@ def mock_docker(monkeypatch):
                 assert "sha256sum" in command[-1]
                 result = "".join("a" * 64 + "  /app/" + tool + "\n" for tool in engine.TOOLS) + "b" * 64 + "  /app/libggml.so.0\n"
         elif command[1] == "save":
-            assert command[-1] == "sha256:" + "1" * 64
-            make_tar(command[command.index("--output") + 1], {"manifest.json": []})
+            assert command[-1] == state.get("inspect_id", "sha256:" + "9" * 64)
+            make_tar(command[command.index("--output") + 1], state.get("archive", classic_archive()))
         else:
             pytest.fail("Unexpected Docker command: " + repr(command))
         stdout.write(result.encode())
@@ -167,7 +204,7 @@ def test_record_schema_and_success(source, tmp_path, mock_docker):
     assert result["cmake_defines"] == {}
     assert result["recipe_sha256"] == engine.recipe_identity({})[1]
     assert result["linkage"] == {"status": "not_requested"}
-    assert result["image"]["config_digest"] == "sha256:" + "1" * 64
+    assert result["image"]["config_digest"] == CONFIG_ID
     assert {"Id", "RepoDigests", "Created", "Architecture", "Os", "docker_reported_id", "config_digest", "index_digest"} <= set(result["image"])
     assert set(result["tools"]) == {"/app/" + tool for tool in engine.TOOLS}
     assert "/app/libggml.so.0" in result["app_files"] and "/app/libggml.so.0" not in result["tools"]   # libraries hashed too
@@ -359,7 +396,7 @@ def test_linkage_build_success_and_raw_outputs(source, tmp_path, mock_docker):
     assert engine.build(args) == 0
     linkage = record(args)["linkage"]
     assert linkage["status"] == "passed"
-    assert linkage["image_config_id"] == "sha256:" + "1" * 64
+    assert linkage["image_config_id"] == CONFIG_ID
     assert linkage["library"] == "/app/libggml-cuda.so.0"
     assert (Path(args.out) / linkage["ldd_output"]).read_text() == (FIXTURES / "ldd.txt").read_text()
     assert (Path(args.out) / linkage["symbols_output"]).read_text() == (FIXTURES / "readelf.txt").read_text()
@@ -431,3 +468,114 @@ def test_probe_shell_missing_library_or_all_tools(tmp_path, library_exists):
     assert f"__CAMPAIGN_LDD_END__{code}\n" in result.stdout
     assert f"__CAMPAIGN_SYMBOLS_END__{code}\n" in result.stdout
     assert ("ldd unavailable" if library_exists else "CUDA backend library not found") in result.stdout
+
+
+@pytest.mark.parametrize("oci", [False, True])
+def test_containerd_real_metadata_without_config(source, tmp_path, mock_docker, oci):
+    metadata = json.loads((FIXTURES / "buildx-metadata-containerd-real.json").read_text())
+    assert "containerimage.config.digest" not in metadata["engine"]
+    state = mock_docker[1]
+    if oci:
+        objects, index_id, manifest_id = oci_archive()
+        state["archive"] = objects
+        # Synthetic archive bytes have their own digests; retain all real metadata
+        # structure, including the absence of containerimage.config.digest.
+        metadata["engine"]["containerimage.digest"] = index_id
+        metadata["engine"]["containerimage.descriptor"]["digest"] = index_id
+    else:
+        # Exercise the exact real metadata, with the classic Docker-save format.
+        index_id = metadata["engine"]["containerimage.digest"]
+        manifest_id = None
+    state.update(metadata=metadata, inspect_id=index_id)
+    args = arguments(source, tmp_path)
+    args.linkage = True
+    assert engine.build(args) == 0
+    result = record(args)
+    image = result["image"]
+    assert image["Id"] == image["docker_reported_id"] == image["index_digest"] == index_id
+    assert image["config_digest"] == CONFIG_ID != index_id
+    assert image["manifest_digest"] == manifest_id
+    assert image["docker_id_in_archive_index"] is oci
+    assert result["linkage"]["status"] == "passed"
+    assert result["linkage"]["image_config_id"] == CONFIG_ID
+    calls = mock_docker[0]
+    save_position = next(i for i, cmd in enumerate(calls) if cmd[1] == "save")
+    runs = [(i, cmd) for i, cmd in enumerate(calls) if cmd[1] == "run"]
+    assert len(runs) == 2
+    for position, cmd in runs:
+        assert position > save_position
+        assert cmd[cmd.index("/bin/sh") + 1] == index_id
+        assert not any("@sha256:" in arg for arg in cmd)
+
+
+@pytest.mark.parametrize("metadata_config", [CONFIG_ID, "sha256:" + "f" * 64, "bad"])
+def test_archive_cross_checks_metadata_config(source, tmp_path, mock_docker, metadata_config):
+    objects, index_id, _ = oci_archive()
+    mock_docker[1].update(archive=objects, inspect_id=index_id,
+                          metadata={"engine": {"containerimage.config.digest": metadata_config}})
+    args = arguments(source, tmp_path)
+    assert engine.build(args) == (0 if metadata_config == CONFIG_ID else 1)
+    if metadata_config != CONFIG_ID:
+        result = record(args)
+        assert result["failure_stage"] == "inspect_image_identity"
+        assert "differs from Buildx metadata" in result["error"]
+        assert result["archive"]
+        assert not any(cmd[1] == "run" for cmd in mock_docker[0])
+
+
+@pytest.mark.parametrize("failure", ["missing_config", "tampered_config", "wrong_platform", "ambiguous"])
+def test_archive_rejects_unusable_identity(tmp_path, failure):
+    objects, _, _ = oci_archive()
+    config_name = "blobs/sha256/" + CONFIG_ID.split(":")[1]
+    if failure == "missing_config":
+        del objects[config_name]
+    elif failure == "tampered_config":
+        objects[config_name] = {**CONFIG, "config": {"changed": True}}
+    elif failure == "wrong_platform":
+        objects = classic_archive()
+        objects[CONFIG_ID.split(":")[1] + ".json"] = {**CONFIG, "architecture": "arm64"}
+    else:
+        objects = classic_archive()
+        objects["manifest.json"].append({"Config": "other.json"})
+        objects["other.json"] = {**CONFIG, "config": {"different": True}}
+    path = tmp_path / "invalid.tar"
+    make_tar(path, objects)
+    with pytest.raises(ValueError, match="Missing|mismatch|exactly one"):
+        engine.archive_identities(path)
+
+
+def test_archive_cross_checks_metadata_index(source, tmp_path, mock_docker):
+    objects, index_id, _ = oci_archive()
+    metadata = json.loads((FIXTURES / "buildx-metadata-containerd-real.json").read_text())
+    mock_docker[1].update(archive=objects, inspect_id=index_id, metadata=metadata)
+    args = arguments(source, tmp_path)
+    assert engine.build(args) == 1
+    assert record(args)["failure_stage"] == "inspect_image_identity"
+    assert "index digest differs" in record(args)["error"]
+    assert not any(cmd[1] == "run" for cmd in mock_docker[0])
+
+
+@pytest.mark.parametrize("oci", [False, True])
+def test_archive_identity_without_any_metadata(source, tmp_path, mock_docker, oci):
+    state = mock_docker[1]
+    state.update(metadata={}, inspect_id=CONFIG_ID)
+    index_id = None
+    if oci:
+        objects, index_id, _ = oci_archive()
+        state.update(archive=objects, inspect_id=index_id)
+    args = arguments(source, tmp_path)
+    assert engine.build(args) == 0
+    assert record(args)["image"]["config_digest"] == CONFIG_ID
+    assert record(args)["image"]["index_digest"] == index_id
+
+
+def test_metadata_platform_manifest_is_not_index(source, tmp_path, mock_docker):
+    objects, index_id, manifest_id = oci_archive()
+    mock_docker[1].update(archive=objects, inspect_id=index_id, metadata={"engine": {
+        "containerimage.digest": manifest_id,
+        "containerimage.descriptor": {"digest": manifest_id,
+                                      "mediaType": "application/vnd.oci.image.manifest.v1+json"}}})
+    args = arguments(source, tmp_path)
+    assert engine.build(args) == 0
+    assert record(args)["image"]["index_digest"] == index_id
+    assert record(args)["image"]["manifest_digest"] == manifest_id

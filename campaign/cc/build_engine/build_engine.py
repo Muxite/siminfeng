@@ -145,21 +145,74 @@ def file_digest(path):
 
 
 def archive_identities(path):
-    """Distinct identities from a `docker save` archive: config digest (image config), top-level index digest (what the containerd store
-    reports as `Id`), and image-manifest digests. Never conflate them: only the config digest is the classic image ID."""
-    out = {"config_digest": None, "index_digest": None, "index_manifests": []}
-    with tarfile.open(path) as t:
-        names = t.getnames()
-        if "manifest.json" in names:
-            m = json.load(t.extractfile("manifest.json"))
-            if m and m[0].get("Config", "").startswith("blobs/sha256/"):
-                out["config_digest"] = "sha256:" + m[0]["Config"].split("/")[-1]
+    """Read the linux/amd64 config through OCI indexes or a classic Docker manifest.
+
+    index.json is an archive catalog, not necessarily the original image index.
+    Its descriptors may include both an image index and a platform manifest.
+    """
+    out = {"config_digest": None, "index_digest": None, "index_manifests": [],
+           "index_entry_digests": [], "manifest_digest": None}
+    configs, manifests, indexes = set(), set(), set()
+    with tarfile.open(path) as archive:
+        names = {member.name.removeprefix("./"): member for member in archive}
+
+        def read(name, digest=None):
+            member = names.get(name)
+            if member is None or not member.isfile():
+                raise ValueError("Missing image archive object: " + name)
+            raw = archive.extractfile(member).read()
+            actual = "sha256:" + hashlib.sha256(raw).hexdigest()
+            if digest is not None and actual != digest:
+                raise ValueError("Image archive digest mismatch: " + name)
+            return json.loads(raw), actual
+
+        def blob(digest):
+            if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                raise ValueError("Invalid image archive digest: " + str(digest))
+            return read("blobs/sha256/" + digest.split(":")[1], digest)[0]
+
+        seen = set()
+
+        def visit(desc):
+            if desc.get("annotations", {}).get("vnd.docker.reference.type") == "attestation-manifest":
+                return
+            platform = desc.get("platform", {})
+            if platform and (platform.get("os"), platform.get("architecture")) != ("linux", "amd64"):
+                return
+            digest = desc.get("digest")
+            if digest in seen:
+                return
+            seen.add(digest)
+            doc = blob(digest)
+            if "manifests" in doc:
+                indexes.add(digest)
+                for child in doc["manifests"]:
+                    visit(child)
+            elif "config" in doc:
+                config_id = doc["config"]["digest"]
+                config = blob(config_id)
+                if (config.get("os"), config.get("architecture")) == ("linux", "amd64"):
+                    configs.add(config_id)
+                    manifests.add(digest)
+
         if "index.json" in names:
-            raw = t.extractfile("index.json").read()
-            idx = json.loads(raw)
-            out["index_manifests"] = [{"digest": d.get("digest"), "mediaType": d.get("mediaType")} for d in idx.get("manifests", [])]
-            out["index_digest"] = out["index_manifests"][0]["digest"] if len(out["index_manifests"]) == 1 else None
-            out["index_entry_digests"] = [d["digest"] for d in out["index_manifests"]]   # may include an attestation manifest next to the image manifest
+            catalog, _ = read("index.json")
+            out["index_manifests"] = [{"digest": d.get("digest"), "mediaType": d.get("mediaType")}
+                                      for d in catalog.get("manifests", [])]
+            out["index_entry_digests"] = [d["digest"] for d in out["index_manifests"]]
+            for descriptor in catalog.get("manifests", []):
+                visit(descriptor)
+        elif "manifest.json" in names:
+            entries, _ = read("manifest.json")
+            for entry in entries:
+                config, digest = read(entry["Config"])
+                if (config.get("os"), config.get("architecture")) == ("linux", "amd64"):
+                    configs.add(digest)
+        if len(configs) != 1:
+            raise ValueError("Saved archive must identify exactly one linux/amd64 image config")
+        out["config_digest"] = configs.pop()
+        out["manifest_digest"] = next(iter(manifests)) if len(manifests) == 1 else None
+        out["index_digest"] = next(iter(indexes)) if len(indexes) == 1 else None
     return out
 
 
@@ -384,14 +437,53 @@ def build(args, runner=None):
                            ("Id", "RepoDigests", "Created", "Architecture", "Os")}
         if info.get("Architecture") != "amd64" or info.get("Os") != "linux":
             raise ValueError("Built image is not linux/amd64")
-        # Docker's Id may be an OCI index digest. Buildx identifies the actual config.
-        image_id = (record["buildx_metadata"] or {}).get("engine", {}).get("containerimage.config.digest")
-        if not isinstance(image_id, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
-            raise ValueError("Buildx metadata lacks an immutable image config digest")
-        record["image"]["config_digest"] = image_id
+        # Save the inspected immutable local object before any runtime probe. With
+        # containerd this can be an index ID; it must never be used as a config ID.
+        reported_id = info["Id"]
+        if not isinstance(reported_id, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", reported_id):
+            raise ValueError("Docker inspect lacks an immutable image ID")
+        record["image"]["docker_reported_id"] = reported_id
+        stage = "save_image"
+        image_tar = out / "engine-image.docker.tar"
+        run(["docker", "save", "--output", str(image_tar), reported_id])
+        record["archive"] = {"path": image_tar.name, **file_digest(image_tar)}
+        stage = "inspect_image_identity"
+        ids = archive_identities(image_tar)
+        record["image"].update({key: ids[key] for key in
+                               ("config_digest", "index_digest", "manifest_digest", "index_manifests")})
+        record["image"]["docker_id_in_archive_index"] = reported_id in ids["index_entry_digests"]
+        metadata = (record["buildx_metadata"] or {}).get("engine", {})
+        metadata_config = metadata.get("containerimage.config.digest")
+        image_id = ids["config_digest"]
+        if metadata_config is not None and metadata_config != image_id:
+            raise ValueError("Saved archive config digest differs from Buildx metadata")
+        descriptor = metadata.get("containerimage.descriptor") or {}
+        metadata_digest = metadata.get("containerimage.digest") or descriptor.get("digest")
+        if metadata_digest is not None:
+            if not isinstance(metadata_digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", metadata_digest):
+                raise ValueError("Invalid Buildx image digest")
+            if descriptor.get("digest") and descriptor["digest"] != metadata_digest:
+                raise ValueError("Buildx image descriptor and digest disagree")
+            media_type = descriptor.get("mediaType", "")
+            is_index = "index" in media_type or "manifest.list" in media_type
+            expected = ids["index_digest"] if is_index or not media_type else ids["manifest_digest"]
+            if expected and metadata_digest != expected:
+                kind = "index" if is_index or not media_type else "manifest"
+                raise ValueError("Saved archive " + kind + " digest differs from Buildx metadata")
+            if is_index:
+                record["image"]["index_digest"] = metadata_digest
+        record["image"]["id_note"] = (
+            "Id/docker_reported_id is the Docker inspect ID (possibly an OCI index digest). "
+            "config_digest is the archive-derived linux/amd64 config ID; run_ref (= Docker ID) is what local docker run accepts; "
+            "manifest_digest and index_digest identify distinct OCI objects.")
+        # Observed (novmm-2/shot-1, containerd store): `docker run <config digest>` exits 125;
+        # Docker only resolves its own reported ID locally. Probes run by that ID, which must
+        # be the index/manifest that the saved archive contains; config_digest stays the identity.
+        run_ref = reported_id
+        record["image"]["run_ref"] = run_ref
         stage = "hash_tools"
         hashes = run(["docker", "run", "--rm", "--network=none", "--read-only",
-                      "--entrypoint", "/bin/sh", image_id, "-c",
+                      "--entrypoint", "/bin/sh", run_ref, "-c",
                       "find /app -type f -print0 | sort -z | xargs -0 /usr/bin/sha256sum"])
         for line in hashes.splitlines():
             digest, name = line.split(maxsplit=1)
@@ -402,23 +494,12 @@ def build(args, runner=None):
         if not required <= set(record["app_files"]):
             raise ValueError("Missing tool hashes: " + ", ".join(sorted(required - set(record["app_files"]))))
         record["tools"] = {k: v for k, v in record["app_files"].items() if k in required}
-        stage = "save_image"
-        image_tar = out / "engine-image.docker.tar"
-        run(["docker", "save", "--output", str(image_tar), image_id])
-        record["archive"] = {"path": image_tar.name, **file_digest(image_tar)}
-        record["image"].update({"docker_reported_id": info["Id"], "index_digest": None})
-        ids = archive_identities(image_tar)
-        if ids["config_digest"] and ids["config_digest"] != image_id:
-            raise ValueError("Saved archive config digest differs from Buildx metadata")
-        record["image"]["index_digest"] = ids["index_digest"]
-        record["image"]["index_manifests"] = ids["index_manifests"]
-        record["image"]["docker_id_in_archive_index"] = info["Id"] in ids.get("index_entry_digests", [])
-        record["image"]["id_note"] = "Id/docker_reported_id is whatever `docker image inspect` returned (containerd store: an index digest). config_digest is the image config digest. They are different objects."
         stage = "inspect_provenance"
         record["provenance"] = archive_provenance(image_tar)
         if getattr(args, "linkage", False) or getattr(args, "linkage_optional", False):
             stage = "linkage"
-            record["linkage"] = collect_linkage(run, out, image_id)
+            record["linkage"] = collect_linkage(run, out, run_ref)
+            record["linkage"].update(image_config_id=image_id, run_ref=run_ref)
             record["linkage"]["optional"] = bool(getattr(args, "linkage_optional", False))
             if record["linkage"]["status"] != "passed" and not getattr(args, "linkage_optional", False):
                 raise RuntimeError("Linkage check " + record["linkage"]["status"] + "; see linkage evidence")
