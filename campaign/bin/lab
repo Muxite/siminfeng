@@ -42,6 +42,38 @@ def load_tests():
     return t
 TESTS = load_tests()
 def assess(test, out, err, rc):
+    """Decode only for parsing; preserve diagnostics and contain parser failures."""
+    invalid_utf8 = False
+    try:
+        decoded = []
+        for value in (out, err):
+            if isinstance(value, bytes):
+                try: value = value.decode("utf-8")
+                except UnicodeDecodeError:
+                    invalid_utf8 = True
+                    value = value.decode("utf-8", errors="replace")
+                # Match the universal newlines of the previous text-mode reads.
+                value = value.replace("\r\n", "\n").replace("\r", "\n")
+            decoded.append(value)
+        result = _parse_assessment(test, *decoded, rc)
+    except Exception as exc:
+        result = dict(ok=False, assessment_error=f"{type(exc).__name__}: {exc}")
+    if invalid_utf8:
+        # Generated text may legitimately end/split inside a multibyte char (byte-level tokens).
+        # Flag always; fail closed only for parsers that extract numbers from the text.
+        result.update(invalid_utf8=True, decode_replacements=sum(v.count("\ufffd") for v in decoded))
+        if TESTS.get(test, {}).get("parser") != "completion": result["ok"] = False
+    return result
+
+def assess_files(test, out_path, err_path, rc):
+    """Read subprocess evidence without modifying it, including on failure."""
+    try:
+        with open(out_path, "rb") as out, open(err_path, "rb") as err:
+            return assess(test, out.read(), err.read(), rc)
+    except Exception as exc:
+        return dict(ok=False, assessment_error=f"{type(exc).__name__}: {exc}")
+
+def _parse_assessment(test, out, err, rc):
     txt = out + "\n" + err
     if TESTS[test].get("parser") == "ppl":
         m = re.search(r"Final estimate: PPL = ([\d.]+) \+/- ([\d.]+)", txt)
@@ -60,7 +92,8 @@ def assess(test, out, err, rc):
         return dict(ok=rc == 0 and len(out.strip()) > 20, chars=len(out.strip()), head=out.strip()[:120])
     if TESTS[test].get("parser") == "bench_json":
         try: rows = json.loads(out[out.index("["):out.rindex("]") + 1])
-        except Exception: return dict(ok=False, parse_error=True)
+        except Exception as exc:
+            return dict(ok=False, parse_error=True, assessment_error=f"{type(exc).__name__}: {exc}")
         return dict(ok=rc == 0 and bool(rows), samples=[dict(n_prompt=r["n_prompt"], n_gen=r["n_gen"], avg_ts=r["avg_ts"], samples_ts=r.get("samples_ts")) for r in rows])
     return dict(ok=rc == 0)
 
@@ -190,7 +223,7 @@ def cmd_run(a):
                 time.sleep(0.3)
             rc = p.wait()
         died = (not cancelled) and (not interrupted) and rc in (137, 143)   # SIGKILL/SIGTERM not requested by us: sandbox/container terminated externally (or OOM)
-        results[f"{t}#{ti}"] = dict(exit_code=rc, elapsed_s=round(time.monotonic()-ts,3), partial=died, mem=dict(gpu_peak_mib=peak_gpu, gpu_baseline_mib=base_gpu, gpu_delta_mib=peak_gpu-base_gpu, host_cgroup_peak_mib=round(peak_host/2**20,1), io_read_mib=round(io_rbytes/2**20,1), samples=nsamp, method="nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"), **assess(t, open(o, errors="replace").read(), open(e, errors="replace").read(), rc))
+        results[f"{t}#{ti}"] = dict(exit_code=rc, elapsed_s=round(time.monotonic()-ts,3), partial=died, mem=dict(gpu_peak_mib=peak_gpu, gpu_baseline_mib=base_gpu, gpu_delta_mib=peak_gpu-base_gpu, host_cgroup_peak_mib=round(peak_host/2**20,1), io_read_mib=round(io_rbytes/2**20,1), samples=nsamp, method="nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"), **assess_files(t, o, e, rc))
         if died: sandbox_died = True; S("sandbox_terminated", test=t, exit_code=rc, last_durable_bytes=os.path.getsize(o), last_durable_mtime=dt.datetime.fromtimestamp(os.path.getmtime(o), dt.timezone.utc).isoformat())
         if cancelled or interrupted or died: break
     post = gpu_state()
