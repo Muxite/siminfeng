@@ -1,0 +1,18 @@
+Completed within the allowed write locations.
+
+Files: [plan.py](cc/moe_planner/plan.py), [calibration.json](cc/moe_planner/calibration.json), [PLANNER.md](cc/moe_planner/PLANNER.md), [test_plan.py](cc/moe_planner/test_plan.py).
+
+**Pytest: 27 passed**, including D022 leave-one-out validation, budget checks, and the real lab loader.
+
+For **900 MiB at ctx4096 on x86-main**, the top prediction is mixE4K with `--n-cpu-moe 19`:
+
+- GPU: **875.867 MiB**, plus **2 MiB** residual guard
+- Decode: **149.633 tokens/s**
+- Host working-set estimate: **1178.695 MiB**
+- Warm TTFT proxy: **236.666 ms**
+
+[Example plan and exact flags](artifacts/codexPL/plan-900.json) · [15 emitted lab tests](artifacts/codexPL/lab-tests.json)
+
+Maximum decode errors, fitted / leave-one-out: static **7.20% / 16.25%**; LRU **10.33% / 39.27%**.
+
+Gaps remain in combined placement/KV quality, actual TTFT, host working-set calibration, and hybrid CUDA correctness. Strict KLD constraints fail closed when combined quality is unknown. No GPU workload was launched.

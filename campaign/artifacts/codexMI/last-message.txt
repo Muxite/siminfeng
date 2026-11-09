@@ -1,0 +1,21 @@
+Implemented within the allowed write locations:
+
+- [Inspector and CLI](/home/muk/projects/siminfeng/campaign/cc/model_inspect/inspect_model.py)
+- [Tests](/home/muk/projects/siminfeng/campaign/cc/model_inspect/test_inspect_model.py) and [documentation](/home/muk/projects/siminfeng/campaign/cc/model_inspect/README.md)
+- JSON reports and [Granite comparison](/home/muk/projects/siminfeng/campaign/artifacts/codexMI/granite-comparison.md)
+
+**Pytest: 35 passed, no skips**, in 23.45 seconds. Header-only access was verified; no tensor payloads were loaded.
+
+Granite: 24 layers, 32 experts, top-8.
+
+| Variant | Weights MiB | Expert share | Active MiB/token |
+| --- | ---: | ---: | ---: |
+| BF16 | 2,547.20 | 90.45% | 819.20 |
+| Q8_0 | 1,354.69 | 90.35% | 436.69 |
+| Q4_K_M | 782.12 | 89.18% | 258.99 |
+| mixE4K | 778.69 | 83.22% | 292.69 |
+| Hybrid split | 798.95 | 83.64% | 297.77 |
+
+Hybrid storage includes 20.25 MiB of null experts; JSON also reports active bytes excluding null padding.
+
+Gaps: non-Granite validation uses synthetic fixtures and naming checks. GPU floors are weight accounting estimates, excluding KV and runtime allocations; backend cache-type support was not exercised.
