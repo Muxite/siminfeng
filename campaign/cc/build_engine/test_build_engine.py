@@ -11,6 +11,7 @@ import tarfile
 import pytest
 
 import build_engine as engine
+from test_host_linkage import fixture_elf, layer_bytes
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -18,9 +19,11 @@ CONFIG = {"os": "linux", "architecture": "amd64", "config": {}}
 CONFIG_ID = "sha256:" + hashlib.sha256(json.dumps(CONFIG).encode()).hexdigest()
 
 
-def classic_archive():
-    return {"manifest.json": [{"Config": CONFIG_ID.split(":")[1] + ".json", "Layers": []}],
-            CONFIG_ID.split(":")[1] + ".json": CONFIG}
+def classic_archive(payload=True):
+    layers = {} if payload is None else {"backend/layer.tar": layer_bytes([
+        ("app/libggml-cuda.so.0", fixture_elf(payload))])}
+    return {"manifest.json": [{"Config": CONFIG_ID.split(":")[1] + ".json", "Layers": list(layers)}],
+            CONFIG_ID.split(":")[1] + ".json": CONFIG, **layers}
 
 
 def oci_archive():
@@ -28,14 +31,15 @@ def oci_archive():
     objects = {}
 
     def add(doc, media_type, **extra):
-        raw = json.dumps(doc).encode()
+        raw = doc if isinstance(doc, bytes) else json.dumps(doc).encode()
         digest = "sha256:" + hashlib.sha256(raw).hexdigest()
         objects["blobs/sha256/" + digest.split(":")[1]] = doc
         return {"digest": digest, "mediaType": media_type, "size": len(raw), **extra}
 
     def image(config):
         config_desc = add(config, "application/vnd.oci.image.config.v1+json")
-        return add({"schemaVersion": 2, "config": config_desc, "layers": []},
+        return add({"schemaVersion": 2, "config": config_desc, "layers": [add(layer_bytes([
+            ("app/libggml-cuda.so.0", fixture_elf())]), "application/vnd.oci.image.layer.v1.tar")]},
                    "application/vnd.oci.image.manifest.v1+json",
                    platform={"os": config["os"], "architecture": config["architecture"]})
 
@@ -84,7 +88,7 @@ def record(args):
 def make_tar(path, objects):
     with tarfile.open(path, "w") as archive:
         for name, obj in objects.items():
-            data = json.dumps(obj).encode()
+            data = obj if isinstance(obj, bytes) else json.dumps(obj).encode()
             member = tarfile.TarInfo(name)
             member.size = len(data)
             archive.addfile(member, io.BytesIO(data))
@@ -399,38 +403,40 @@ def test_linkage_build_success_and_raw_outputs(source, tmp_path, mock_docker):
     assert linkage["image_config_id"] == CONFIG_ID
     assert linkage["library"] == "/app/libggml-cuda.so.0"
     assert (Path(args.out) / linkage["ldd_output"]).read_text() == (FIXTURES / "ldd.txt").read_text()
-    assert (Path(args.out) / linkage["symbols_output"]).read_text() == (FIXTURES / "readelf.txt").read_text()
+    assert json.loads((Path(args.out) / linkage["symbols_output"]).read_text())["symbols"]["tool"] == "python-elf"
+    assert linkage["dt_needed"] == ["libcudart.so.12"]
     assert (Path(args.out) / "linkage.stderr.txt").read_text() == "probe diagnostic\n"
 
 
 @pytest.mark.parametrize("optional", [False, True])
-@pytest.mark.parametrize("failure", ["missing_tools", "missing_imports", "docker", "malformed", "timeout"])
+@pytest.mark.parametrize("failure", ["missing_library", "missing_imports", "docker", "malformed", "timeout"])
 def test_linkage_failure_policy(source, tmp_path, mock_docker, optional, failure):
     args = arguments(source, tmp_path)
     args.linkage = not optional
     args.linkage_optional = optional  # this flag alone also enables the check
     state = mock_docker[1]
-    if failure == "missing_tools":
-        state["linkage_output"] = linkage_output(symbols="readelf and nm unavailable\n",
-                                                 tool="unavailable", symbols_rc=127)
+    if failure == "missing_library":
+        state["archive"] = classic_archive(payload=None)
     elif failure == "missing_imports":
-        state["linkage_output"] = linkage_output(symbols="no CUDA imports\n")
+        state["archive"] = classic_archive(payload=False)
     elif failure == "docker":
         state["linkage_code"] = 125
     elif failure == "timeout":
         state["linkage_timeout"] = True
     else:
         state["linkage_output"] = "unexpected probe output\n"
-    assert engine.build(args) == (0 if optional else 1)
+    host_passes = failure in ("docker", "malformed", "timeout")
+    success = optional or host_passes
+    assert engine.build(args) == (0 if success else 1)
     result = record(args)
-    assert result["status"] == ("success" if optional else "failed")
-    assert result["failure_stage"] == (None if optional else "linkage")
-    assert result["linkage"]["status"] == ("failed" if failure == "missing_imports" else "unavailable")
+    assert result["status"] == ("success" if success else "failed")
+    assert result["failure_stage"] == (None if success else "linkage")
+    assert result["linkage"]["status"] == ("passed" if host_passes else "failed" if failure == "missing_imports" else "unavailable")
     assert result["archive"]  # all other evidence survives even a fatal linkage failure
     assert (Path(args.out) / "linkage.raw.txt").exists()
     if failure == "timeout":
         assert (Path(args.out) / "linkage.raw.txt").read_text() == "partial probe output\n"
-        assert "timed out" in result["linkage"]["reason"]
+        assert "timed out" in result["linkage"]["ldd_probe_reason"]
 
 
 @pytest.mark.parametrize("tool", ["readelf", "nm", "unavailable"])
@@ -451,8 +457,9 @@ def test_probe_shell_tool_selection_and_versioned_library(tmp_path, tool):
     result = subprocess.run(["/bin/sh", "-c", script], env={**os.environ, "PATH": str(bin_dir)},
                             capture_output=True, text=True, check=True)
     assert f"__CAMPAIGN_LIBRARY__{app}/libggml-cuda.so.0\n" in result.stdout
-    assert f"__CAMPAIGN_SYMBOLS_BEGIN__{tool}\n" in result.stdout
-    assert f"__CAMPAIGN_SYMBOLS_END__{127 if tool == 'unavailable' else 0}\n" in result.stdout
+    assert "__CAMPAIGN_SYMBOLS_BEGIN__host\n" in result.stdout
+    assert "__CAMPAIGN_SYMBOLS_END__0\n" in result.stdout
+    assert (FIXTURES / "readelf.txt").read_text() not in result.stdout
 
 
 @pytest.mark.parametrize("library_exists", [False, True])
@@ -466,7 +473,7 @@ def test_probe_shell_missing_library_or_all_tools(tmp_path, library_exists):
                             capture_output=True, text=True, check=True)
     code = 127 if library_exists else 125
     assert f"__CAMPAIGN_LDD_END__{code}\n" in result.stdout
-    assert f"__CAMPAIGN_SYMBOLS_END__{code}\n" in result.stdout
+    assert "__CAMPAIGN_SYMBOLS_END__0\n" in result.stdout
     assert ("ldd unavailable" if library_exists else "CUDA backend library not found") in result.stdout
 
 
@@ -579,3 +586,19 @@ def test_metadata_platform_manifest_is_not_index(source, tmp_path, mock_docker):
     assert engine.build(args) == 0
     assert record(args)["image"]["index_digest"] == index_id
     assert record(args)["image"]["manifest_digest"] == manifest_id
+
+
+@pytest.mark.parametrize("ldd_rc", [0, 127])
+def test_host_linkage_passes_without_runtime_symbol_tools(source, tmp_path, mock_docker, ldd_rc):
+    args = arguments(source, tmp_path)
+    args.linkage = True
+    mock_docker[1]["linkage_output"] = linkage_output(
+        ldd="ldd unavailable\n" if ldd_rc else None, ldd_rc=ldd_rc,
+        tool="unavailable", symbols="readelf and nm unavailable\n", symbols_rc=127)
+    assert engine.build(args) == 0
+    result = record(args)["linkage"]
+    assert result["status"] == "passed"
+    assert result["symbols"]["tool"] == "python-elf"
+    assert result["ldd"]["returncode"] == ldd_rc
+    assert result["ldd_libcudart_dynamic"] is (None if ldd_rc else True)
+    assert result["libcudart_dynamic"] is True

@@ -1,0 +1,16 @@
+Implemented host-side archive streaming, whiteout merging, symlink resolution, and pure Python ELF inspection. Updated linkage integration, documentation, and tests; retained in-image `ldd` evidence. Writes stayed within the allowed locations.
+
+Pytest: **113 passed**, including the original 89 test cases.
+
+Both real archives: **passed**; `DT_NEEDED` includes `libcudart.so.12`.
+
+| Undefined import | novmm-3 | shot-2 |
+|---|---|---|
+| cudaMalloc | yes | yes |
+| cudaFree | yes | yes |
+| cudaMallocAsync | no | no |
+| cudaFreeAsync | no | no |
+| cudaMemGetInfo | yes | yes |
+| cuMemCreate | no | yes |
+
+Full outputs: [verification.txt](/home/muk/projects/siminfeng/campaign/artifacts/codexN3/verification.txt). No Docker or network used.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build a local CUDA engine and record evidence; uses only the Python stdlib."""
 import argparse
+from host_linkage import collect_host_linkage
 import hashlib
 import json
 import shutil
@@ -70,25 +71,15 @@ else
     echo 'ldd unavailable in runtime image'; ldd_rc=127
 fi
 printf '__CAMPAIGN_LDD_END__%s\n' "$ldd_rc"
-symbol_tool=unavailable
-if command -v readelf >/dev/null 2>&1; then symbol_tool=readelf
-elif command -v nm >/dev/null 2>&1; then symbol_tool=nm; fi
-printf '__CAMPAIGN_SYMBOLS_BEGIN__%s\n' "$symbol_tool"
-if [ -z "$library" ]; then
-    echo 'CUDA backend library not found in /app'; symbols_rc=125
-elif [ "$symbol_tool" = readelf ]; then
-    readelf -Ws "$library" 2>&1; symbols_rc=$?
-elif [ "$symbol_tool" = nm ]; then
-    nm -D "$library" 2>&1; symbols_rc=$?
-else
-    echo 'readelf and nm unavailable in runtime image'; symbols_rc=127
-fi
-printf '__CAMPAIGN_SYMBOLS_END__%s\n' "$symbols_rc"
+# Symbols and DT_NEEDED are inspected from the saved archive on the host.
+printf '__CAMPAIGN_SYMBOLS_BEGIN__host\n'
+printf '__CAMPAIGN_SYMBOLS_END__0\n'
 '''
 
 
 def parse_linkage(ldd_text, symbols_text, *, symbol_tool="readelf",
                   ldd_returncode=0, symbols_returncode=0):
+    """Parse legacy captured tool output; host ELF evidence supersedes its status."""
     dynamic = None if ldd_returncode else bool(re.search(r"\blibcudart\.so(?:\.[\w.]+)?\b", ldd_text))
     imports = {name: None for name in LINKAGE_SYMBOLS}
     if not symbols_returncode and symbol_tool in ("readelf", "nm"):
@@ -108,10 +99,11 @@ def parse_linkage(ldd_text, symbols_text, *, symbol_tool="readelf",
                         "reason": symbols_text.strip() if symbols_returncode or symbol_tool == "unavailable" else None}}
 
 
-def collect_linkage(run, out, image_id):
+def collect_linkage(run, out, image_id, archive):
     result = {"status": "unavailable", "image_config_id": image_id,
               "libcudart_dynamic": None, "undefined_imports": dict.fromkeys(LINKAGE_SYMBOLS),
-              "raw_output": "linkage.raw.txt", "stderr_output": "linkage.stderr.txt"}
+              "raw_output": "linkage.raw.txt", "stderr_output": "linkage.stderr.txt",
+              "ldd": {"returncode": None, "reason": None}}
     try:
         run(["docker", "run", "--rm", "--network=none", "--read-only",
              "--entrypoint", "/bin/sh", image_id, "-c", LINKAGE_SCRIPT],
@@ -124,13 +116,22 @@ def collect_linkage(run, out, image_id):
             raise ValueError("Malformed linkage probe output; see linkage.raw.txt and linkage.stderr.txt")
         library, ldd, ldd_rc, tool, symbols, symbols_rc = match.groups()
         (out / "linkage.ldd.txt").write_text(ldd)
-        (out / "linkage.symbols.txt").write_text(symbols)
         result.update(parse_linkage(ldd, symbols, symbol_tool=tool,
                                    ldd_returncode=int(ldd_rc), symbols_returncode=int(symbols_rc)))
-        result.update(library=library or None, ldd_output="linkage.ldd.txt",
+        result.update(library=library or None, ldd_library=library or None, ldd_output="linkage.ldd.txt",
                       symbols_output="linkage.symbols.txt")
     except Exception as exc:
         result.update(status="unavailable", reason=str(exc))
+        result["ldd"]["reason"] = str(exc)
+    # Host ELF evidence determines status even when the in-image ldd probe fails.
+    # Retain its diagnostics independently; ldd cannot establish DT_NEEDED itself.
+    result["ldd_libcudart_dynamic"] = result.get("libcudart_dynamic")
+    host = collect_host_linkage(archive, temp_parent=out)
+    if "reason" in result:
+        result["ldd_probe_reason"] = result.pop("reason")
+    result.update(host)
+    (out / "linkage.symbols.txt").write_text(json.dumps(host, indent=2, sort_keys=True) + "\n")
+    result["symbols_output"] = "linkage.symbols.txt"
     return result
 
 
@@ -498,7 +499,7 @@ def build(args, runner=None):
         record["provenance"] = archive_provenance(image_tar)
         if getattr(args, "linkage", False) or getattr(args, "linkage_optional", False):
             stage = "linkage"
-            record["linkage"] = collect_linkage(run, out, run_ref)
+            record["linkage"] = collect_linkage(run, out, run_ref, image_tar)
             record["linkage"].update(image_config_id=image_id, run_ref=run_ref)
             record["linkage"]["optional"] = bool(getattr(args, "linkage_optional", False))
             if record["linkage"]["status"] != "passed" and not getattr(args, "linkage_optional", False):

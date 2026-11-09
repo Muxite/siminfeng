@@ -1,0 +1,99 @@
+T-N3 verification
+
+Writes: cc/build_engine/** and artifacts/codexN3/** only.
+No Docker or network used. Layer streaming/whiteout logic adapted from cc/engine_handoff/engine_handoff.py; that file was not modified.
+
+Command: PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider cc/build_engine
+........................................................................ [ 63%]
+.........................................                                [100%]
+113 passed in 1.39s
+
+Real archive checks: host_linkage.collect_host_linkage(archive, temp_parent="artifacts/codexN3").
+Pure Python ELF reader; no readelf/nm dependency; only the resolved CUDA backend copied to a temporary file, then removed.
+The ldd data below is pre-existing in-image evidence, read from the build record; no container was launched for this assignment.
+
+novmm-3
+{
+  "status": "passed",
+  "library": "/app/libggml-cuda.so",
+  "resolved_library": "/app/libggml-cuda.so.0.27.0",
+  "dt_needed": [
+    "libggml-base.so.0",
+    "libcudart.so.12",
+    "libcublas.so.12",
+    "libnccl.so.2",
+    "libstdc++.so.6",
+    "libm.so.6",
+    "libgcc_s.so.1",
+    "libc.so.6",
+    "ld-linux-x86-64.so.2"
+  ],
+  "libcudart_dynamic": true,
+  "undefined_imports": {
+    "cudaMalloc": true,
+    "cudaFree": true,
+    "cudaMallocAsync": false,
+    "cudaFreeAsync": false,
+    "cudaMemGetInfo": true,
+    "cuMemCreate": false
+  },
+  "symbols": {
+    "tool": "python-elf",
+    "location": "host",
+    "returncode": 0,
+    "reason": null
+  },
+  "image_config_id": "sha256:0b78d876baa669c8461804b6d7788256c2e99ccfa2ae95e854cc1cce305676f8",
+  "archive": "builds/results/novmm-3/engine-image.docker.tar",
+  "elapsed_seconds": 18.264,
+  "existing_in_image_ldd": {
+    "source": "builds/results/novmm-3/build-record.json#linkage",
+    "libcudart_dynamic": true,
+    "returncode": 0,
+    "reason": null
+  }
+}
+
+shot-2
+{
+  "status": "passed",
+  "library": "/app/libggml-cuda.so",
+  "resolved_library": "/app/libggml-cuda.so.0.27.0",
+  "dt_needed": [
+    "libggml-base.so.0",
+    "libcudart.so.12",
+    "libcublas.so.12",
+    "libcuda.so.1",
+    "libnccl.so.2",
+    "libstdc++.so.6",
+    "libm.so.6",
+    "libgcc_s.so.1",
+    "libc.so.6",
+    "ld-linux-x86-64.so.2"
+  ],
+  "libcudart_dynamic": true,
+  "undefined_imports": {
+    "cudaMalloc": true,
+    "cudaFree": true,
+    "cudaMallocAsync": false,
+    "cudaFreeAsync": false,
+    "cudaMemGetInfo": true,
+    "cuMemCreate": true
+  },
+  "symbols": {
+    "tool": "python-elf",
+    "location": "host",
+    "returncode": 0,
+    "reason": null
+  },
+  "image_config_id": "sha256:8edec18d1562277bba0fbb01bd8f8ffc4e6868c8ac83a3acf35b66e75664e932",
+  "archive": "builds/results/shot-2/engine-image.docker.tar",
+  "elapsed_seconds": 18.209,
+  "existing_in_image_ldd": {
+    "source": "builds/results/shot-2/build-record.json#linkage",
+    "libcudart_dynamic": true,
+    "returncode": 0,
+    "reason": null
+  }
+}
+
