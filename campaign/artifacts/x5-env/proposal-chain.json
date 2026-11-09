@@ -1,0 +1,186 @@
+{
+  "attempt_id": "att-1",
+  "campaign_id": "c2-resume",
+  "dispatchable": true,
+  "evidence": {
+    "controller_outside_test_sandbox": true,
+    "durable_destination_ref": "lab/export/job-ad883810b3/att-1",
+    "outputs": [
+      "stdout",
+      "stderr",
+      "state.jsonl",
+      "result.json"
+    ]
+  },
+  "experiment_id": "M1",
+  "format": "campaign-job-proposal/0",
+  "inputs": {
+    "data_files": {},
+    "model_files": {
+      "granite-3.1-1b-a400m-instruct-mixE4K.gguf": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6"
+    },
+    "mounts": {
+      "prompt-0": {
+        "chat.txt": "65d188967378a61add25e0f98c35cd2bce2b02235451b09f6735d5512b3486b0"
+      }
+    },
+    "tests": {
+      "m1_static_n0": "b31e4d5c49470036e6142c2538af958086cb6130b6de5dea727e5a409ee74078",
+      "m1_static_n12": "5da1f5982fdf24a2d18197226b4fa65961f4598f11330992ae21b0bb365d5b5b"
+    }
+  },
+  "invocation": {
+    "mounts": [
+      {
+        "access": "ro",
+        "role": "model"
+      },
+      {
+        "access": "rw",
+        "role": "results"
+      },
+      {
+        "access": "ro",
+        "role": "prompt-0",
+        "target": "/tin"
+      }
+    ],
+    "tests": [
+      {
+        "argv": [
+          "/app/llama-completion",
+          "-m",
+          "/m/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+          "-f",
+          "/tin/chat.txt",
+          "-n",
+          "160",
+          "-c",
+          "4096",
+          "--temp",
+          "0",
+          "-s",
+          "1",
+          "-ngl",
+          "99",
+          "-no-cnv",
+          "--no-warmup",
+          "--n-cpu-moe",
+          "12"
+        ],
+        "cold_cache": null,
+        "environment": {},
+        "occurrence": 0,
+        "test": "m1_static_n12"
+      },
+      {
+        "argv": [
+          "/app/llama-completion",
+          "-m",
+          "/m/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+          "-f",
+          "/tin/chat.txt",
+          "-n",
+          "160",
+          "-c",
+          "4096",
+          "--temp",
+          "0",
+          "-s",
+          "1",
+          "-ngl",
+          "99",
+          "-no-cnv",
+          "--no-warmup"
+        ],
+        "cold_cache": null,
+        "environment": {},
+        "occurrence": 1,
+        "test": "m1_static_n0"
+      }
+    ]
+  },
+  "policy": {
+    "capture_bytes": 8388608,
+    "gpu_jobs_on_host": 1,
+    "memory": {
+      "accounting_method": "cgroup-v2-memory",
+      "budget_bytes": 17179869184,
+      "domain": "host-ram",
+      "guarantee": "cgroup-host"
+    },
+    "wall_time_s": 900
+  },
+  "release": {
+    "build_record_ref": "builds/results/b0-baseline-5/build-record.json",
+    "cmake_defines": {
+      "BUILD_SHARED_LIBS": "ON",
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_CUDA_ARCHITECTURES": "120",
+      "CMAKE_CUDA_COMPILER_LAUNCHER": "ccache",
+      "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+      "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+      "CMAKE_EXE_LINKER_FLAGS": "-Wl,--allow-shlib-undefined",
+      "GGML_CUDA": "ON",
+      "GGML_CUDA_NO_VMM": "ON",
+      "GGML_NATIVE": "OFF",
+      "LLAMA_BUILD_TESTS": "OFF",
+      "LLAMA_BUILD_UI": "OFF",
+      "LLAMA_CURL": "OFF",
+      "LLAMA_OPENSSL": "OFF",
+      "LLAMA_USE_PREBUILT_UI": "OFF"
+    },
+    "executables_sha256": {
+      "/app/libggml-base.so.0.27.0": "d321c076cdd5dcaf93adcd476a76f3a9766d57a0bd8c579e290b2563feb4247e",
+      "/app/libggml-cpu.so.0.27.0": "773cb86dc4beaa94c6ae4ea0ce604e91870704eedf67311d8d13b032fed48f08",
+      "/app/libggml-cuda.so.0.27.0": "86b2b1d5ec751f5b7a1694cd8742d0967281137b73eb8ec5f2bded7f382b2341",
+      "/app/libggml.so.0.27.0": "d3e024373df3fe152fb7aa63f5ba061c3e4645a801f2e08b463af3aa791ccc7c",
+      "/app/libgomp.so.1": "135f3c8f006d2fe5e68e51281c7974cb991a03de3bfb3593d68d174dfcf854d1",
+      "/app/libllama-bench-impl.so": "8066ff0aa702c07472bfebc136b8a43dca2dcad5f69f2dae6c7c21f44998b11d",
+      "/app/libllama-cli-impl.so": "93927124ca3ba2953422feb7b28e52e2a337469e84220e213332a75be2d54076",
+      "/app/libllama-common.so.0.7.0": "0e0ffb8ab4b30fb36168abce9271ab052ae5e0a96a12f7738a8ed01927e3b32b",
+      "/app/libllama-completion-impl.so": "0ceb47a1ffec1bbdc0417534ffee2d0a5f4c0c97f4828dff289c0a79cdcd1f18",
+      "/app/libllama-perplexity-impl.so": "57188b2496a626d6ff067d3ae587dbe5a25e8e3a129d2549428127d576ad3e1b",
+      "/app/libllama-server-impl.so": "b049c665239d7382389fec724185c0ad6cf49b3194eb27423d606b97843f2c47",
+      "/app/libllama.so.0.7.0": "5a992918773bb801a043a2d52358dbd250273e326e335d4298356f6013824904",
+      "/app/libmtmd.so.0.7.0": "bef2ace7ee57ae4e53a8faafe35b22dae60295919ddbc67f75782e3c13f688ce",
+      "/app/llama-bench": "5e0ab8edefe81093fc8df5d489d629b8a02a755c5dbdae4db18cbe9035be04d6",
+      "/app/llama-cli": "64b0d6833da5b7d3b3604067bef2fc01f9c42e50ed3e6e24aaf918ec20c9ac04",
+      "/app/llama-completion": "e019cf44193545e8316015b4bae16dc19c709c460a0bfd5a4a386e56391400c3",
+      "/app/llama-eval-callback": "bb3f8b38288100ee248cfa2a4b5a9e5e86cf85b8e12a101ac96a536202cb5471",
+      "/app/llama-perplexity": "aa7ec61d95fb674005cca2f65b74a82d4588bb5b1bbdedf61f9a294da01d99dc",
+      "/app/llama-server": "3a385482c21a40febee7ef9be8727d3724a594e6c51b3afa127711a259ac257a",
+      "/app/llama-tokenize": "684063b67410fb7fd87b777f9b86b355daef251f71269d5fb49d57cef1b45486"
+    },
+    "image_config_id": "sha256:0b78d876baa669c8461804b6d7788256c2e99ccfa2ae95e854cc1cce305676f8",
+    "index_digest": "sha256:d0be4084616777e3252ad3c98733fc668e029562b43cc67174f4d72ece90c39b",
+    "patch_sha256": null,
+    "role": "engine",
+    "source": {
+      "commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+      "tree": "158a7ade930818efdb06c5561920a8d018d404ba"
+    },
+    "transport": {
+      "bytes": 2210029568,
+      "kind": "docker-archive",
+      "sha256": "9dc43cf8e01ad24ce23d60378f1f5c47e6fe5a8028f0b4a67e8f3b6a08295210"
+    }
+  },
+  "request_id": "job-61a2897cda",
+  "target": {
+    "host_id": "x86-main",
+    "platform": "linux/amd64",
+    "platform_compat": {
+      "cuda_arch": [
+        "sm_120"
+      ],
+      "driver_min": null,
+      "jetpack_l4t": null
+    },
+    "required_capabilities": [
+      "docker",
+      "nvidia-runtime"
+    ]
+  },
+  "unresolved": []
+}

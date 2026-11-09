@@ -174,6 +174,7 @@ def test_missing_required_data_is_rejected(lab):
 def make_legacy(jdir):
     job = json.loads((jdir / "job.json").read_text())
     del job["spec"]["inputs"]
+    job["spec"].pop("test_definitions", None)  # legacy jobs predate embedded definitions too
     job["spec_sha256"] = "legacy-preserved"
     (jdir / "job.json").chmod(0o644)
     (jdir / "job.json").write_text(json.dumps(job))

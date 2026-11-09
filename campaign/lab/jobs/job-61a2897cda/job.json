@@ -1,0 +1,94 @@
+{
+ "job": "job-61a2897cda",
+ "submitted": "2026-11-09T22:40:02.680337+00:00",
+ "spec": {
+  "image": "llamacpp-novmm4",
+  "image_id": "sha256:d0be4084616777e3252ad3c98733fc668e029562b43cc67174f4d72ece90c39b",
+  "model": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "model_sha256": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6",
+  "data": null,
+  "data_sha256": null,
+  "tests": [
+   "m1_static_n12",
+   "m1_static_n0"
+  ],
+  "resources": {
+   "cpus": "8",
+   "memory": "16g",
+   "pids": "512",
+   "timeout_s": "300",
+   "gpu_wait_s": "600"
+  },
+  "key": "X5-chain-novmm4-smoke-2",
+  "inputs": {
+   "model_files": {
+    "granite-3.1-1b-a400m-instruct-mixE4K.gguf": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6"
+   },
+   "mounts": {
+    "/home/muk/projects/siminfeng/campaign/artifacts/traces/in": {
+     "chat.txt": "65d188967378a61add25e0f98c35cd2bce2b02235451b09f6735d5512b3486b0"
+    }
+   },
+   "data_files": {},
+   "tests": {
+    "m1_static_n12": "5da1f5982fdf24a2d18197226b4fa65961f4598f11330992ae21b0bb365d5b5b",
+    "m1_static_n0": "b31e4d5c49470036e6142c2538af958086cb6130b6de5dea727e5a409ee74078"
+   }
+  },
+  "test_definitions": {
+   "m1_static_n12": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "12"
+    ]
+   },
+   "m1_static_n0": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup"
+    ]
+   }
+  }
+ },
+ "spec_sha256": "9f5eed970edad4460556c14d3f6870c077d43c1b91650b17c57e5c1452ecab37"
+}

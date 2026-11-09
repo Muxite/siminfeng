@@ -254,6 +254,9 @@ def cmd_submit(a):
             print(f"duplicate submission: existing {jid} (legacy inputs unverified)"); return
     try:
         spec["inputs"] = collect_inputs(spec)
+        # Immutable copy of the definitions actually hashed: the job is self-contained and an
+        # envelope can bind argv without reading mutable lab/tests/*.json (T-S seam, c2-resume).
+        spec["test_definitions"] = {t: TESTS[t] for t in dict.fromkeys(spec["tests"])}
     except (OSError, ValueError) as exc:
         sys.exit(f"input rejected: {exc}")
     if os.path.exists(p):
@@ -291,7 +294,7 @@ def cmd_run(a):
     S("running", admission="none (gpu lock removed by user decision)", gpu_pre=gpu_state())
     results = {}; cancelled = False; interrupted = False; sandbox_died = False
     for ti, tfull in enumerate(spec["tests"]):
-        t = tfull; td = TESTS[t]; cname = f"lab-{CID}-{a.job}-{att}-{t}-{ti}".lower()
+        t = tfull; td = spec.get("test_definitions", TESTS)[t]; cname = f"lab-{CID}-{a.job}-{att}-{t}-{ti}".lower()
         cmd = ["docker","run","--rm","--name",cname,"--label",f"campaign={CID}","--label",f"lab_job={a.job}","--label",f"lab_attempt={att}","--label",f"lab_token={token}",
                *sum([["-e", f"{k}={v}"] for k, v in td.get("env", {}).items()], []),"--gpus","all","--cpus",res["cpus"],"--memory",td.get("memory", res["memory"]),"--memory-swap",td.get("memory", res["memory"]),"--pids-limit",res["pids"],"-v",f"{os.path.dirname(spec['model'])}:/m:ro",*td.get("docker_args", [])]
         if spec.get("data"): cmd += ["-v", f"{os.path.dirname(spec['data'])}:/d:ro"]
