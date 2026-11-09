@@ -1,0 +1,41 @@
+Completed [ANALYSIS.md](/home/muk/projects/siminfeng/campaign/artifacts/codexPROF/ANALYSIS.md), the [reusable tool](/home/muk/projects/siminfeng/campaign/cc/nsys_decode/analyze_nsys.py), and synthetic SQLite tests. **3 tests passed.** Writes stayed within the allowed locations.
+
+Means over 154 decode tokens, after discarding five warmup tokens:
+
+| Per token | Static | Split |
+|---|---:|---:|
+| Wall time | 5.346 ms | 7.378 ms |
+| CUDA graph launches | 13 | 25 |
+| Direct kernel launches | 0 | 0 |
+| Stream synchronizations | 110 | 194 |
+| Memcpy calls | 46 | 82 |
+| D2H bytes | 246,156 | 295,692 |
+| H2D bytes | 406,048 | 799,264 |
+| GPU busy coverage | 1.060 ms | 2.545 ms |
+| GPU idle time | 4.286 ms | 4.833 ms |
+
+**Graphs are reused successfully.** Split’s extra **2.032 ms/token** divides into:
+
+- **1.446 ms:** additional GPU graph execution.
+- **0.371 ms:** exposed synchronization/transfers.
+- **0.214 ms:** remaining host-side time while GPU idle.
+- **0:** observed graph capture loss.
+
+Graph-level tracing hides steady-state kernel details. The first decode’s visible kernels support the per-slot explanation: **1,535 split versus 583 static**, dominated by expert matvecs, repeated quantization, and concatenation.
+
+Proposed redesigns, with conditional savings estimates:
+
+1. Batched CUDA expert dispatch supporting skipped IDs: **0.7–1.1 ms/token**.
+2. Concentrate CPU work in fewer layers: **0.1–0.3 ms/token net**, depending on placement.
+3. Overlap cold CPU computation with hot GPU computation: **0.4–0.9 ms/token**.
+
+Estimates are not additive; profiling perturbs split more than static.
+
+Run the tool with:
+
+```bash
+python3 cc/nsys_decode/analyze_nsys.py \
+  artifacts/x4-hs/prof/static-n12.sqlite \
+  artifacts/x4-hs/prof/split-n12.sqlite \
+  --output artifacts/codexPROF/breakdown.json
+```
