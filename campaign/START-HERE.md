@@ -1,6 +1,13 @@
 # Campaign START-HERE — c2-resume state (2026-11-10, x86-main lane, Claude Opus lead)
 Read sections 1-3 and 6 first (about 10 minutes). The unedited c1 wrap-up text is at the end under "c1 snapshot (historical)"; where it disagrees with this page, this page wins (e.g. q8_reuse is no longer "UNTESTED", the goal wording changed).
 
+## CLOSEOUT (2026-11-10) — campaign halted. Read `CLOSEOUT.md` first.
+- State: no campaign processes running. The GPU is used only by restored owner services (`euaaa-llm-gpu-1`, Sunshine). The branch `x86/c2-resume` closeout commit is pushed. `origin/jetson/c1` is untouched.
+- Large artifacts are local only, with sha256 in `ARTIFACT-MANIFEST.tsv` (no approved remote store).
+- **Privacy:** the user's email is in already-pushed history (two evidence files). It is scrubbed from the tree, but history was not rewritten (no force-push). See CLOSEOUT section 0.
+- Test status at closeout: all `cc/*` and `bin/` suites pass except `cc/factory` (3 stale registry expectations).
+- Resume: CLOSEOUT section 8. Sections 2, 6 and 7 below are **pre-overnight snapshots**: T-PL4/T-QRT were delivered (review pending), and the services were restored.
+
 ## 0. Latest: D041–D048 (2026-11-10 overnight). Read this first.
 The progress ledger with every table is at https://claude.ai/artifact/8Uqsnssn6R6KY2EtAyTiyD (private to the owner).
 
@@ -30,7 +37,7 @@ The progress ledger with every table is at https://claude.ai/artifact/8Uqsnssn6R
 User goal: a **MoE inference-engine software factory**: input = model + system (host profile, memory budget) -> output = an engine (build + model representation + runtime flags) that uses **much less memory at about the same accuracy**. Load time, TTFT and tok/s may change (report them); KV-cache changes are allowed. Also in scope: (a) **Lab Manager design** (`MANAGER-DESIGN.md`, `LAB-FEASIBILITY.md`; deterministic coordination, our `bin/lab` is a TEMPORARY reference adapter, not the other team's lab agent), (b) the **CC portfolio** (`cc-inventory.csv`, builds/tools/methodologies with observed-vs-inferred status), (c) a **Friday 5-8 minute demo** (`cc/demo/DEMO.md`, `cc/demo/demo.sh`). Every result carries a claim category (computation-preserving engine gain | representation trade-off | runtime-placement trade-off | failed candidate | infrastructure/methodology | prediction) and a D012 transfer class (transferable | discrete-only | prediction). Proxies: Granite-3.1-1b-a400m (D001-D037; experts 0.84 MiB) and Qwen3-30B-A3B Q4_K_M (D038/D039; experts 2.72 MiB, does not fit the 16 GB GPU). Engine pin: llama.cpp `31288c9c6` (full `31288c9c66e59377f7788d920678a565bb89dd37`).
 
 ## 2. Lanes, hosts, branch
-- Branch `x86/c2-resume` (HEAD bb6a65e at time of writing, 30 commits). `main` untouched. Pushing this branch to `origin` is authorized (2026-11-10); pushing `main` is not.
+- Branch `x86/c2-resume` (HEAD at closeout: see CLOSEOUT.md; bb6a65e when this section was written). `main` untouched. Pushing this branch to `origin` is authorized (2026-11-10); pushing `main` is not.
 - x86-main lane (this host): RTX 5070 Ti (discrete, sm_120), amd64, Docker (containerd store), one GPU job at a time by procedure only (no admission lock, D007). Models in `~/models/campaign/{gguf,qwen3-30b-a3b,data,tools}`; llama.cpp clone `ref/` and image archives are NOT in git.
 - jetson-arm lane: separate host/lead. No SSH route. Exchange = operator-carried git bundle of `x86/c2-resume` (`git bundle verify` + sha256 in BUNDLE.sha256; ~68 MB history, no models/images/profiler reports) plus `handoff/jetson/EXCHANGE-1.md`. Jetson replies as `handoff/jetson/REPLY-1.md` + bundle of `jetson/<task>`. **No reply exists yet** (only EXCHANGE-1.md is in `handoff/jetson/`). Ownership: jetson owns `platform/jetson/**`, `cc/resource_observe/backends/jetson*`, `handoff/jetson/**` replies; x86 owns `cc/engine_handoff`, `cc/build_engine`, `bin/lab`, `cc/resource_observe/CONTRACT.md`.
 - Working tree is dirty by design (many untracked `artifacts/codex*`; modified `evidence/claude-code.jsonl`, `artifacts/x2/loadmon.pid`, and `cc/routing_trace/routing-trace.patch` which T-QRT is editing). Do not `git add -A` blindly.
@@ -79,7 +86,7 @@ Pending (no verdict): T-PL4 (bandwidth decode model) and T-QRT (Qwen routing ske
 - Skills (`.claude/skills/*/SKILL.md`): `codex-assignment` (write/launch/review bounded Codex tasks; Codex has no Docker/GPU), `decision-note` (D0xx notes + claim category + accept/reject), `engine-candidate` (patch -> Build CC -> engagement -> correctness -> only then GPU timing; run_ref, test-backend-ops, text identity), `frozen-experiment` (pre-registered A/B on GPU lab: alternating order, host-load monitor, aggregate, verdict), `model-variant` (GGUF quantization/imatrix/PAP, KLD gate).
 - Environment: python3 stdlib + PyYAML/pytest (+ jsonschema for `cc/components` tests). Re-create lab image if missing: see "Resume" in the historical section.
 
-## 6. Open work / next bounded tasks (in this order)
+## 6. Open work / next bounded tasks (SUPERSEDED by CLOSEOUT.md section 8; items 1–2 delivered in 7e3155d, review pending)
 1. **Collect T-PL4** (`assignments/T-PL4-bandwidth-decode-model.md`, Codex, writes `cc/moe_planner/**`, `artifacts/codexPL4/`): bytes/bandwidth decode model, per-quant-type CPU screen `cc/moe_planner/cpu_type_screen.py`, leave-one-model-out errors, rescoring of the pre-registered Qwen scenarios (12000/8000/4000 MiB). Review, then decision note.
 2. **Collect T-QRT** (`assignments/T-QRT-qwen-routing-skew.md`, Codex, writes `cc/routing_trace/**`, `artifacts/codexQRT/`): Qwen3-30B-A3B routing skew -> train/eval hot-set coverage -> predicted crossover vs the static frontier. **Hybrid expert split for Qwen only if T-QRT predicts a crossover** (D031 argues large experts amortize handoff; D030 shows it lost on Granite); otherwise record "not justified".
 3. **Quiet-host CPU screen rerun**: T-PL4 and T-QRT ran CPU jobs concurrently, so PL4 CPU constants are indicative only (gaps.md). Rerun `python3 cc/moe_planner/cpu_type_screen.py` on a quiet host (check `pgrep -af 'codex exec'`, load < 1) before adopting constants.
@@ -87,7 +94,7 @@ Pending (no verdict): T-PL4 (bandwidth decode model) and T-QRT (Qwen routing ske
 5. **Jetson**: send the bundle + `handoff/jetson/EXCHANGE-1.md`; requested items are 1 J1 inventory, 2 resource envelope (max -j, ctx, spool), 3 native sm_87 build + one mixE4K run, 4 tegrastats fields + fixtures (the file lists four numbered requests; no J5). Cross-platform check: layer-offload collapse (D014) is PCIe-specific and should differ on shared DRAM.
 6. Other candidates: apply PAP only after per-type CPU screen (D040 rule); long-context combined plan (1317 MiB ctx32768 q8 KV is the smallest feasible per PLANNER.md; 1200 MiB infeasible); engagement + KLD on Qwen with imatrix; commit decision notes D041+ for T-PL4/T-QRT.
 
-## 7. Host state to restore, active resources
+## 7. Host state to restore, active resources (historical; at closeout both services are UP and no Codex runs, see CLOSEOUT section 0)
 - D002 changes (approved): container `euaaa-llm-gpu-1` stopped (`docker start euaaa-llm-gpu-1`; currently "Exited (137)") and user unit Sunshine stopped (`systemctl --user start app-dev.lizardbyte.app.Sunshine.service`; currently inactive). GPU lock removed (D007). No host-wide driver/profiling change.
 - Check before any timing window: `docker ps --filter label=campaign=c1` (none expected), `pgrep -af 'codex exec'` (at time of writing: T-PL4 pid 1860892 and T-QRT pid 1860893, started under `bin/run_op`), `uptime` (load 3.9 with those running), no compile/download. Timed windows run only on a quiet host; otherwise label "untimed".
 - Qwen mmap needs ~18.6 GB of ~46 GB host RAM: one such process at a time; Qwen runs need container memory 40g.

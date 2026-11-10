@@ -1,0 +1,18 @@
+Explain, step by step, how a mixture-of-experts transformer routes each token to a small subset of experts, why that saves compute, and what problems appear when the expert weights do not fit in GPU memory. Then propose three practical strategies and compare their trade-offs in a short table. Finally, conclude with a summary of the key takeaways.
+
+Okay, so I need to explain how a mixture-of-experts (MoE) transformer works, specifically how it routes each token to a subset of experts. Then I have to explain why this saves compute, discuss the problem when expert weights don't fit in GPU memory, suggest three strategies, compare them, and conclude. Let me start by recalling what I know about MoE.
+
+First, in a standard transformer, each token goes through the same set of layers. But in MoE, there are multiple "experts" (which are like specialized sub-networks), and each token is routed to a few of them. The routing is done by a gate, which is a neural network that decides which experts to use for each token. So for each token, the gate outputs a probability distribution over the experts, and then the token is sent to the top-k experts (like top 2 or something). Then the outputs from those experts are combined, maybe weighted by the gate's probabilities.
+
+So step by step, the process would be:
+
+1. For each token, the gate network (which is part of the model) computes a score for each expert.
+2. The scores are passed through a softmax to get probabilities.
+3. The top-k experts (based on the probabilities) are selected for that token.
+4. The token is processed by those selected experts.
+5. The outputs from the experts are aggregated (e.g., summed or averaged) to produce the final output for that token.
+
+This routing saves compute because instead of applying all experts to every token, you only apply a subset. If there are, say, 100 experts but each token only uses 2, then the total computation is 2/100 of the original, which is a big saving. But this depends on the number of experts and the k value.
+
+Now, the problem when expert weights don't fit in GPU memory. If each expert has its own weights, and there are many experts, the total memory required for all experts could exceed the GPU's capacity. For example, if each expert is a large neural network, and you have 100 of them, the total memory needed is 100 times the size of one expert. If the GPU can't hold that, you can't load all the experts at once. So during training or inference, you might have to load them in batches,
+

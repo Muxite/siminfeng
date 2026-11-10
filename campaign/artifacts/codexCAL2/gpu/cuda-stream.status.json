@@ -1,0 +1,29 @@
+{
+  "returncode": 0,
+  "argv": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "host-cal-1794289159182028784",
+    "--init",
+    "--network=none",
+    "--read-only",
+    "--memory=2g",
+    "--memory-swap=2g",
+    "--pids-limit=128",
+    "--tmpfs",
+    "/tmp:rw,size=64m",
+    "--stop-timeout=1",
+    "--gpus",
+    "device=0",
+    "--mount",
+    "type=bind,src=/home/muk/projects/siminfeng/campaign/artifacts/codexCAL2/gpu,dst=/probe,readonly",
+    "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+    "timeout",
+    "-k",
+    "1s",
+    "25s",
+    "/probe/bw"
+  ]
+}
