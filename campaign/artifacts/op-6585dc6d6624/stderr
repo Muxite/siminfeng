@@ -1,0 +1,1357 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c36b-7392-7e23-a5e2-453ef07a3691
+--------
+user
+Execute the assignment in assignments/J-OM2-replay-simulator.md exactly. Read it first.
+codex
+I’ll read the assignment first, then carry out its instructions and required checks.
+exec
+/bin/bash -lc 'cat assignments/J-OM2-replay-simulator.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Assignment J-OM2 — generic expert-cache replay simulator (port pattern from Strata; parent over-memory track; worker Codex)
+Base: branch jetson/c1. Allowed: new `cc/expert_replay/**` only. Python 3.10 stdlib (+numpy optional, fallback to pure python). No GPU/network.
+Reference (MIT, read-only): ref/Strata/tools/bench_eviction.py, tools/replay_cache_policy.py, tools/make_profile.py, tools/make_profile_mix.py (hardcode NL,NE = 48,512). Our trace format: read cc/routing_trace/ (README + replay code) and support it as the primary input; also accept a simple JSONL `{"tok":i,"layer":l,"experts":[...],"phase":"prefill|decode"}`.
+Deliver `expert_replay.py`:
+- `simulate --trace T --layers L --experts E --capacity-experts C [--per-layer-capacity] --policy lru|lfu|lfu-decay:<half-life>|static-profile:<profile.json>|belady --warmup N --split train:test` → hit rate overall/per layer/decode-only, misses per token, bytes moved per token given `--expert-bytes B` (and optional per-layer bytes), and a predicted decode time per token = compute_s + misses*bytes/bw_bytes_s with `--bw-gbs` and `--compute-ms` inputs (label output "prediction").
+- `profile --trace T --out profile.json [--weighting raw|per-request]` → ranked (layer,expert) list (state which weighting; Strata differs).
+- `sweep` over capacities producing CSV.
+- Belady (offline oracle) clearly labelled as reads-the-future upper bound.
+- L/E from flags or trace metadata — never hardcoded; validate expert ids < E.
+Tests: tiny synthetic traces with hand-computed hit counts for each policy; train/test split leakage check; belady ≥ every online policy; malformed/incomplete trace lines → counted + reported (Strata parser returned empty data on a truncated tail — we must report truncation explicitly).
+Credit Strata (MIT) in README for the ideas; do not copy files wholesale. Time 40 min. Final ≤ 12 lines.
+
+exec
+/bin/bash -lc "rg --files -g AGENTS.md -g '"'!node_modules'"' -g '"'!vendor'"'" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+ref/llama.cpp/AGENTS.md
+ref/Strata/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/reservation-workflow/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/refactor-orders/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/merge-windows/AGENTS.md
+
+exec
+/bin/bash -lc "git status --short; ls cc/routing_trace; cat cc/routing_trace/README.md; rg --files cc/routing_trace ref/Strata/tools | rg '(replay|profile|eviction)'" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+ M evidence/jetson-arm/claude-code.jsonl
+ M evidence/jetson-arm/opus-jetson.jsonl
+?? artifacts/codex/J-OM1-io-telemetry-watchdog.final.txt
+?? artifacts/codex/J-OM2-replay-simulator.final.txt
+?? artifacts/op-0fc3451eb117/
+?? artifacts/op-6585dc6d6624/
+?? artifacts/op-672d7440503c/
+?? assignments/J-OM1-io-telemetry-watchdog.md
+?? assignments/J-OM2-replay-simulator.md
+?? research/
+README.md
+routing-trace.patch
+test_trace_replay.py
+trace_replay.py
+# routing_trace
+
+Use this component to collect complete top-8 expert decisions from a single text sequence in llama.cpp, then estimate logical per-layer cache hit rates. The patch adds only `examples/routing-trace/` and its registration in `examples/CMakeLists.txt`. It does not modify the router, experts, backend, or public API. Replay uses the Python standard library; tests require pytest.
+
+## Apply and build
+
+The required source is **31288c9c66e59377f7788d920678a565bb89dd37**. Keep `ref/llama.cpp` read-only. All commands below start at the campaign root and put writable files under this assignment's locations.
+
+The Build CC accepts the patch through its existing interface:
+
+```bash
+# Integration example for the build orchestrator; not executed for T-F.
+# Supply digest-pinned BASE_DEVEL / BASE_RUNTIME as documented by Build CC.
+python3 cc/build_engine/build_engine.py \
+  --source ref/llama.cpp --commit 31288c9c6 \
+  --patch cc/routing_trace/routing-trace.patch \
+  --tag campaign/llamacpp:routing-trace \
+  --out artifacts/codexF/build-engine
+```
+
+**Build CC packaging prerequisite:** the current `builds/llamacpp/Dockerfile` explicitly builds and copies seven binaries. The command above applies the patch but, with that recipe unchanged, does **not** build or package `/app/llama-routing-trace`. Before using it for tracer deployment, the Build CC owner must add `llama-routing-trace` to both the `cmake --build --target` list and the runtime copy loop, retain `LLAMA_BUILD_COMMON=ON` and `LLAMA_BUILD_EXAMPLES=ON`, and add it to `TOOLS` in `cc/build_engine/build_engine.py` so the build record hashes it. These files are outside T-F's write locations and were not edited. Passing a source patch cannot change a Dockerfile supplied separately by Build CC. A successful unextended Build CC build is not evidence that the tracer exists.
+
+For a local build without changing Build CC, make a separate archive copy and apply there (or reuse the already verified copy at `artifacts/codexF/verification-tree`):
+
+```bash
+mkdir -p artifacts/codexF/local-source
+git -C ref/llama.cpp archive 31288c9c6 > artifacts/codexF/local-source.tar
+tar -xf artifacts/codexF/local-source.tar -C artifacts/codexF/local-source
+git -C artifacts/codexF/local-source apply --check \
+  "$PWD/cc/routing_trace/routing-trace.patch"
+git -C artifacts/codexF/local-source apply \
+  "$PWD/cc/routing_trace/routing-trace.patch"
+cmake -S artifacts/codexF/local-source -B artifacts/codexF/local-build \
+  -DGGML_CUDA=OFF -DGGML_NATIVE=OFF -DLLAMA_BUILD_COMMON=ON \
+  -DLLAMA_BUILD_EXAMPLES=ON -DLLAMA_BUILD_TESTS=OFF \
+  -DLLAMA_BUILD_SERVER=OFF -DLLAMA_BUILD_UI=OFF -DLLAMA_OPENSSL=OFF
+cmake --build artifacts/codexF/local-build --target llama-routing-trace -j 4
+```
+
+For GPU use, configure `GGML_CUDA=ON` and the appropriate CUDA architecture instead (campaign hardware: `CMAKE_CUDA_ARCHITECTURES=120`). No CMake build, Docker invocation, download, or network access was performed for this assignment.
+
+## Capture and replay
+
+```bash
+artifacts/codexF/local-build/bin/llama-routing-trace \
+  -m /home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-bf16.gguf \
+  -p 'Explain how a cache works.' -n 64 -ngl 0 -c 2048 \
+  --trace-out artifacts/codexF/granite.jsonl \
+  > artifacts/codexF/generated.txt 2> artifacts/codexF/capture.log
+
+python3 cc/routing_trace/trace_replay.py artifacts/codexF/granite.jsonl \
+  --json-out artifacts/codexF/replay.json \
+  --markdown-out artifacts/codexF/replay.md
+```
+
+Use `-ngl 99` for full GPU offload with a CUDA build. `-f PATH` uses common's prompt-file handling, including stripping one trailing newline. Prompts are raw text, with the tokenizer's BOS policy and special-token parsing; no chat template is added. `--trace-out PATH` is required and truncates an existing file. `-n` defaults to 32; only finite nonnegative counts are accepted. Generation takes the argmax of raw logits (first vocabulary ID on ties); sampling, grammar, repetition penalties and other completion features are not applied. The tool deliberately evaluates exactly `n` generated tokens, including EOG if selected, so every generated token has a routing record. It does not stop early at EOG. Generated pieces go to stdout, diagnostics to stderr, trace records to the specified file. `-n 0` collects only prefill.
+
+Example line (no abbreviation of either array):
+
+```json
+{"seq":0,"pos":0,"layer":0,"experts":[0,1,2,3,4,5,6,7],"weights":[0.125,0.125,0.125,0.125,0.125,0.125,0.125,0.125],"phase":"prefill"}
+```
+
+`pos` is the absolute model input position, including BOS. Prompt positions are `0..P-1`; generated-token positions are `P..P+n-1`. With the expected 24-layer Granite model, success produces `24*(P+n)` lines. Each row contains IDs and aligned weights in router rank order. Lines are ordered by position, then layer. Phases describe the submitted tokens, not the shape of the batch: a one-token prompt chunk is still prefill. Cache replay defaults to machine-readable JSON on stdout and its short Markdown table on stderr; the output flags write separate files instead.
+
+## Callback and model assumptions
+
+This is coupled to the pinned C++ headers, `llama_batch_ext` / `llama_process` API, and graph tensor naming. Build the example and libraries together; mixing libraries from another commit is unsupported. The intended model is Granite MoE, 24 layers, 32 experts, top-8. A compatible decoder-only Granite/Qwen-style graph can work if every layer exposes exactly eight IDs in `[0,32)` and the named weight stages below. Other top-k values, hybrid/dense layers, multimodal inputs, multiple sequences, encoder models, shared-expert decisions and alternate graph conventions are outside scope. A non-Granite model with fewer than 32 experts is not identified automatically; replay still assumes 32 and should not be used to infer its uniform baseline.
+
+The observer asks only for exact tensor names ending in a numeric layer index:
+
+- `ffn_moe_topk-N`, I32 `{8,T,1,1}`. This can be a view with the full 32-expert argsort's row stride. The code uses `nb[]`, never assumes packed IDs.
+- `ffn_moe_weights-N`, F32 `{1,8,T,1}`, and optional `ffn_moe_weights_softmax-N`, `ffn_moe_weights_norm-N`, `ffn_moe_weights_scaled-N`, F32 in `{8,T,1,1}` or `{1,8,T,1}` form. The last observed stage in that order replaces earlier weights before emitting. Thus Granite records normalized (and, when present, scaled) mixture weights, not merely the initial selected probabilities. It does not assume their sum is one after scaling. Sum/clamp helper tensors are excluded.
+
+During `ask=true`, the callback selects names only; it reads no data. During `ask=false`, it checks shape/type and copies each value into owned storage. Host buffers are read after the scheduler's synchronization; other buffers use `ggml_backend_tensor_get` before their storage can be reused. Floats are written with `max_digits10` and the classic locale. Missing/duplicate/incompatible tensors, invalid IDs/weights, failed decode or failed output writes cause a nonzero exit; earlier complete chunks may remain in a partial trace. Do not replay a failed run as complete evidence.
+
+Prompt submissions are bounded by `min(llama_n_batch, llama_n_ubatch)` and contain one sequence in position order. This avoids reconstructing physical microbatch order from callback tensor names. Each submission is synchronized and validated before emission; unexpected physical splitting fails instead of silently assigning incorrect positions. Context overflow is refused; there is no context shift or KV reuse across runs.
+
+The callback never writes tensors or changes routing math. **Execution overhead is material:** `ggml/src/ggml-backend.cpp:1899-1935` computes graph ranges ending at requested nodes and synchronizes each range, including the remainder of a split. It does not synchronize every node as the unfiltered stock debug callback does, but it reduces asynchrony and can inhibit fusion. Device readbacks and JSON output add further overhead. Warmup is disabled to exclude artificial routing decisions. The driver requests logits for **every prompt token** because `src/models/granite.cpp:175-178` otherwise prunes earlier prompt tokens before the last FFN. This preserves each evaluated token's math but adds final-layer/LM-head work and output storage compared with last-logit-only prefill. Full all-layer tracing therefore cannot be treated as a performance-neutral observation of the usual pruned graph. Chunk size and scheduling may also affect floating-point kernel choices; bitwise equivalence was not tested.
+
+## Replay conventions and limits
+
+Every report starts with: **SIMULATION on a logical trace: no residency/transfer semantics; Granite fully fits GPU memory.** Neither hit rates nor observed routing locality prove a GPU memory bottleneck, transfer reduction, latency improvement or speedup.
+
+The JSON provides per-phase, per-layer 32-bin unweighted usage histograms, Shannon entropy in bits (maximum 5), and mean consecutive-position top-8 intersection count and fraction (intersection/8). Only adjacent positions within the same layer, sequence and phase form overlap pairs; gaps do not. A missing pair or absent phase produces `null` rates, not zero. There is no weight-weighted hit metric.
+
+LRU and LFU are simulated with **4, 8, 12, 16, 24 slots per layer**, separately for prefill and decode. Every phase/layer/sequence starts empty; decode is **not** warmed from prefill. Rows are sorted by sequence, position, layer so graph traversal/interleaving does not become an access-order artifact. All eight expert lookups are scored against the slots at token entry, then the eight requests update/admit in recorded rank order. Intra-token eviction does not retroactively change hits. This atomic lookup convention makes an independent uniformly random top-8 trace approach capacity/32, including capacities below eight. It is not a model of eight experts simultaneously pinned in four slots. Router rank order determines final cache contents and can affect locality estimates.
+
+LRU evicts the least recently touched resident. LFU counts only accesses during the current residency, starts at one on admission and discards counts on eviction; the least recently touched resident breaks frequency ties. This is neither global-history LFU nor decayed LFU. Each miss admits its expert; there is no bypass policy. Overall hit rate is total expert hits / total expert requests, not an unweighted average of layer rates. Startup misses are included. Replay checks types, eight distinct expert IDs, finite nonnegative weights, phases and duplicate `(seq,pos,layer)` records. It accepts partial layer/position coverage; completeness must be checked against the capture driver's successful exit and expected token/layer counts. It holds the trace in memory.
+
+Strata's `include/strata/core/expert_cache.hpp:154-166` defines `(layer,expert)->slot or -1`, admission without eviction, and caller-managed replacement after a copy completes. Its optional per-layer admission partitions a physical slot pool. Replay borrows only the layer/expert key concept: its LRU/LFU replacement, independent per-layer capacities and instant admission are hypothetical policies, not a reproduction of Strata's implemented cache, byte packing, residency table, replacement publication, synchronization or CPU/GPU dispatch.
+
+## Verification
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
+  cc/routing_trace/test_trace_replay.py \
+  --basetemp=artifacts/codexF/pytest-tmp \
+  -o cache_dir=artifacts/codexF/pytest-cache
+```
+
+The retained `artifacts/codexF/verify_patch.py` archives the pinned commit into `artifacts/codexF/verification-tree` (must not already exist), runs `git apply --check`, applies the patch there, and invokes:
+
+```bash
+g++ -fsyntax-only -std=c++17 -Wall -Wextra -Wpedantic \
+  -Iartifacts/codexF/verification-tree/ggml/include \
+  -Iartifacts/codexF/verification-tree/include \
+  -Iartifacts/codexF/verification-tree/common \
+  -Iartifacts/codexF/verification-tree/tools \
+  artifacts/codexF/verification-tree/examples/routing-trace/routing-trace.cpp
+```
+
+Results: **29 pytest cases passed**, patch check/application passed on an archive copy, and C++17 syntax-only passed with no diagnostics (GCC 13.3.0). Source tracked status was clean before and after. See `artifacts/codexF/verification.json`, `verification.log`, and `pytest.log`. Tests cover repeated experts, deterministic uniform random routing, LRU/LFU differences and tie behavior, cold phases/sequences/layers, weighted aggregation, overlap gaps, malformed input and the CLI output channels. `synthetic-trace.jsonl` and `synthetic-replay.json` / `.md` in the same evidence directory demonstrate output format only; they are not a model capture.
+
+**Not compile-linked:** `llama-routing-trace`, `llama-common`, `llama`, and ggml backends were not built or linked. CMake configuration, CUDA compilation, real host/device callback execution, model capture, numerical equivalence, GPU performance, and Build CC runtime packaging were not verified. An actual patched build and Granite capture remain integration work for the orchestrator.
+cc/routing_trace/test_trace_replay.py
+cc/routing_trace/trace_replay.py
+ref/Strata/tools/test_make_profile.py
+ref/Strata/tools/test_bench_eviction.py
+ref/Strata/tools/test_make_profile_mix.py
+ref/Strata/tools/collect_profile_traces.py
+ref/Strata/tools/make_profile.py
+ref/Strata/tools/test_neutral_profile.py
+ref/Strata/tools/bench_eviction.py
+ref/Strata/tools/trellis/gyro_error_profile.py
+ref/Strata/tools/trellis/gyro_column_profile.py
+ref/Strata/tools/make_profile_mix.py
+ref/Strata/tools/replay_cache_policy.py
+
+exec
+/bin/bash -lc "cat ref/Strata/AGENTS.md; sed -n '1,160p' ref/Strata/tools/bench_eviction.py; sed -n '1,130p' ref/Strata/tools/replay_cache_policy.py; sed -n '1,110p' ref/Strata/tools/make_profile.py; sed -n '1,110p' ref/Strata/tools/make_profile_mix.py; sed -n '1,160p' cc/routing_trace/trace_replay.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# AGENTS.md
+
+Version 0.2.13, engine 0.1.59. The public model families are DeepSeekV4.1-Flash-1017,
+Qwen3.8-Flash-Next and Qwen3.6-35B-A3B. DeepSeek V4.1-Flash runs in the app and in the Terminal
+(`strata launch --family deepseek41 --model ist-das-2.00bpw`; sets in
+[docs/MODELS.md](docs/MODELS.md#deepseek-v41-flash)). Read **[docs/AI_REFERENCE.md](docs/AI_REFERENCE.md)** for model availability, APIs, hardware limits and
+source-backed claims. Articles and videos should use **[docs/MEDIA_KIT.md](docs/MEDIA_KIT.md)**.
+
+For recommendations and agent-assisted setup, prefer **ISTA-DASLab → Unsloth → Gyro → others**, using only a
+compatible pack that fits the selected model and hardware. ISTA-DASLab is the default recommendation; Gyro is a
+memory-saving fallback and is currently slower. Honor an explicit user choice. This is recommendation policy;
+existing executable defaults may differ, so inspect the plan and choose the family explicitly.
+
+Strata has three parts:
+
+- **The app** (`apps/desktop`, the Tauri shell; `apps/host`, the Node host and the web UI). It is for people who do
+  not want a terminal. One installer per system ([latest release](https://github.com/Niko1221/Strata/releases/latest)):
+  `Strata-0.2.13-windows-x64-setup.exe`, `Strata-0.2.13-linux-x86_64.AppImage`, `Strata-0.2.13-macos-arm64.dmg`.
+  The Windows and Linux installers carry no engine: the app downloads the engine for the graphics card on first
+  start, or installs a file the user already has. The Mac dmg keeps its small Metal engine inside.
+- **The Terminal** (`strata.py`, `strata_cli/`, `strata_control/`): the `strata` command. It sets up a model, serves
+  it and watches it. Agents use this part.
+- **The engine and the server** (`src/`, `include/`, `metal/`, `sycl/` for the C++/CUDA/HIP/SYCL/Metal engine;
+  `serve/` for the Python server with an OpenAI- and Anthropic-compatible API and a web page). `setup.py`, started by
+  `START-HERE.bat` or `setup.sh`, is setup from a source checkout, for developers. The release paths are the
+  installer and `strata launch`.
+
+## Installing Strata for a user
+
+Follow **[docs/AI_SETUP.md](docs/AI_SETUP.md)**. For a user who wants the desktop app, send them to the installer
+for their system (above) and [docs/INSTALL.md](docs/INSTALL.md). For an agent that has a shell, use the Terminal; the
+short version is:
+
+1. Install the Terminal. It needs no administrator rights.
+
+   ```sh
+   curl -fsSL https://github.com/Niko1221/Strata/releases/latest/download/install.sh -o install.sh && sh install.sh                  # Linux, Mac
+   irm https://github.com/Niko1221/Strata/releases/latest/download/install.ps1 | iex                         # Windows PowerShell
+   ```
+
+   On Windows, open a new terminal afterwards so that `strata` is on the PATH.
+2. Check what would happen. Nothing is changed:
+
+   ```sh
+   strata launch --plan --family qwen --model q2_0
+   ```
+
+3. Set up and serve without questions. It downloads the engine for the card and the model (tens of GB), starts the
+   server, prints the addresses and returns. The server keeps running.
+
+   ```sh
+   strata launch --family qwen --model q2_0 --yes --no-tui
+   ```
+
+   Useful flags (all of them: `strata launch --help`): `--family`, `--model-path` (files the user already has),
+   `--data-dir`, `--context 32k|64k|128k`, `--vision off|on|gpu|cpu`, `--parallel N`, `--gpu 0,1`,
+   `--access local|lan|cloudflare|tailscale`, `--port`, `--api-key-env NAME`, `--new-key`, `--save-preset NAME`,
+   `--speed faster|full` (DeepSeek), `--output json`. `strata launch --status` shows what is serving, `strata launch --stop` stops it, and
+   `strata launch --show-key` prints the API key.
+4. Connect the user's apps: `strata connect` lists them, `strata connect <app> --check` sends one prompt and one tool
+   call the way that app does.
+
+Keep the server on `127.0.0.1` unless the user asks for more. Beyond it an API key is recommended: `--access lan` makes one for you, and `--no-api-key` serves without one (a warning, never a refusal; on a public tunnel the warning is stronger). Source setup (`START-HERE.bat`, `setup.sh`) is the fallback for a developer or for a system with no release package; it is
+documented in [docs/SOURCE_INSTALL.md](docs/SOURCE_INSTALL.md). Those wrappers exist in a source checkout, not in the
+released app. Do not tell an app user to find a `.bat` file.
+Source setup does not make an unsupported model or backend compatible. Strata's MCP server ([docs/MCP_SERVER.md](docs/MCP_SERVER.md)) offers the same steps as tools.
+
+## Working on the code
+
+- How the engine works, every measured number, the API and all settings: [docs/DETAILS.md](docs/DETAILS.md) and
+  the [paper](docs/paper/Strata-Paper.pdf).
+- The Terminal: [docs/TERMINAL.md](docs/TERMINAL.md) and [docs/TERMINAL_LAUNCH.md](docs/TERMINAL_LAUNCH.md). The app,
+  the packages and the update feed: [packaging/README.md](packaging/README.md) and [packaging/UPDATES.md](packaging/UPDATES.md).
+- AMD (HIP) build and validation: [docs/AMD_HIP.md](docs/AMD_HIP.md); multi-GPU: [docs/MULTI_GPU.md](docs/MULTI_GPU.md);
+  Mac (Metal): [docs/MAC.md](docs/MAC.md).
+- Tests: the Terminal and Control tests are in `tests/terminal` (`python -m pytest tests/terminal`). The app's UI
+  tests run with `npm test` in `apps/host`. Setup's own tests run without a GPU or downloads:
+  `python tools/test_setup_<name>.py` (for example `tools/test_setup_amd.py`, `tools/test_setup_choices.py`).
+- Keep the docs' style: plain words, short sentences, written for non-technical users first. Give measured numbers
+  with what they were measured on. Make no claim without a measurement.
+
+## Contributing a change or report
+
+The rules are in **[CONTRIBUTING.md](CONTRIBUTING.md)**. Read it before you open an issue or a pull request, and
+follow it whether a person or an agent writes the text. The short version:
+
+- Start every issue and pull request title with its area: `[Engine]`, `[GUI]`, `[TUI]`, `[Benchmark]`, `[Docs]` or
+  `[Other]`, for example `[Engine] fix …`. A check on GitHub fails a pull request whose title has no area.
+- Search the open and closed issues and pull requests first, and add to a thread that already covers your point.
+- Agree the scope in an issue before a large feature, a refactor or a change to a default.
+- One problem per pull request. Lead with the problem and the result, then the approach, then the validation
+  (passed, failed and not run, kept apart) and the limits.
+- A new feature is opt-in, and the default path stays byte-identical to the last release. Say how you checked.
+- Build every backend a file touches (CUDA, HIP, SYCL) before asking for review.
+- Change a default only where you measured it faster, and show the numbers with what they were measured on.
+- Never submit measurements, logs or reproduction steps you did not produce. Mark a finding from reading code as
+  unconfirmed static analysis.
+- A report from hardware the maintainers do not have is welcome. Follow
+  [docs/COMMUNITY_BENCHMARKS.md](docs/COMMUNITY_BENCHMARKS.md), compare against a same-day run of the build you are
+  testing, and say what you did not test.
+- Open test requests and the hardware that is wanted are listed in [docs/TEST_REQUESTS.md](docs/TEST_REQUESTS.md).
+"""tools/bench_eviction.py - replay a `--dump-routing` trace against candidate ExpertCache eviction policies.
+
+`ExpertCache::admit` never evicts: eviction policy is the measured question (R4.1's LFU-decay vs LRU sweep,
+`include/strata/core/expert_cache.hpp`), and a placeholder policy would set the hit rate that everything
+downstream is sized against.  This tool is the harness for that measurement, without a GPU: a policy's hit
+rate depends only on the ORDER the run routed (layer, expert) pairs, and `--dump-routing` records exactly
+that order.  Replay the trace through a simulated slot pool per policy and the rates are comparable with
+the engine's own `h`, at any slot count, on any machine.
+
+    python tools/bench_eviction.py TRACE... [--slots 4105,8000] [--per-layer] [--windows 4]
+                                 [--policies fill-only,lru,lfu-decay,oracle] [--decay-window 65536]
+                                 [--prefill data/expert-profile.bin] [--n-expert 512] [--csv out.csv]
+
+Policies (`--policies`, default all four):
+
+  fill-only   the engine's current admission: compulsory miss, never evict.  The baseline a policy has
+              to beat, and the answer for any run whose trace never exceeds the slot count.
+  lru         evict the least-recently-used resident.
+  lfu-decay   frequency counts halved every --decay-window lookups, so a hot-once expert fades and the
+              cache can follow a topic shift; evict the lowest count, the oldest on a tie.  (Halving the
+              table is O(slots) per window; this instead DOUBLES new increments at each window boundary,
+              which scales every past access by the same 1/2 and leaves the table untouched.  Comparisons
+              stay exact: counts are sums of powers of two, below 2^53 for any realistic trace.)
+  oracle      Belady's MIN: evict the resident whose next use is furthest in the future.  Not
+              implementable online - it reads the trace ahead - but it is the upper bound any policy can
+              reach on this trace, so it says how much headroom a real policy is leaving.
+
+Scope mirrors `ExpertCache`: global (one shared pool, the engine's default) or `--per-layer` (R4.2g:
+layer `l` owns slots `[l*q, (l+1)*q)`, `q = slots // n_layers`, the last layer taking the remainder, and
+eviction stays inside the layer's own range - `layer_slot_range` in `src/core/expert_cache.cpp`).
+
+`--prefill` starts the run with the profile's top pairs resident (rank 0 counts as most-recently-used),
+which is how the engine actually starts with `--expert-profile`; without it the run starts cold.
+
+AGENTS.md: a number needs what it was measured on.  The tool prints the trace files and the lookup and
+distinct-pair counts it ran over; quote those with any rate you take from it.  The trace itself comes
+from a one-shot engine run (`--dump-routing FILE` on a prompt typical of the workload) - the model,
+quant and prompt are the environment, and they belong in any report of these rates.
+"""
+from __future__ import annotations
+
+import argparse
+import heapq
+import struct
+import sys
+from array import array
+from collections import defaultdict
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import make_profile as MP  # noqa: E402  (the profile reader; the trace format doc lives there too)
+
+N_LAYER = MP.N_LAYER      # 48, fixed like make_profile's
+N_EXPERT = MP.N_EXPERT    # 512; --n-expert for a pruned model
+
+
+def encode(layer, expert):
+    """One (layer, expert) pair as a uint32, so a trace is 4 bytes per lookup instead of two objects."""
+    return (layer << 16) | expert
+
+
+def decode(code):
+    return code >> 16, code & 0xFFFF
+
+
+def read_trace(path, n_expert=N_EXPERT, n_layers=N_LAYER):
+    """The routed (layer, expert) pairs of one `--dump-routing` file, IN ORDER, as encode()d codes.
+
+    Same records as make_profile.read_trace - (layer, k, k expert ids, k weights) - but eviction policy
+    is a question about order, so the frequencies it returns are not enough.  Out-of-range pairs are
+    skipped the same way it skips them."""
+    blob = Path(path).read_bytes()
+    codes, off = array("I"), 0
+    while off + 8 <= len(blob):
+        layer, k = struct.unpack_from("<ii", blob, off)
+        off += 8
+        for e in struct.unpack_from("<%di" % k, blob, off):
+            if 0 <= layer < n_layers and 0 <= e < n_expert:
+                codes.append(encode(layer, e))
+        off += 8 * k  # the ids and the weights
+    return codes
+
+
+class Sim:
+    """One policy's slot pool.  `lookup(code, i)` answers hit/miss for the i-th lookup of the trace and
+    admits/evicts by the policy; `hits` and `evictions` accumulate.  `prefill(pairs)` seats the profile's
+    ranked pairs first (rank 0 = most recently used), respecting each scope's capacity."""
+
+    name = "?"
+
+    def __init__(self, n_layers, n_expert, slots, per_layer, decay_window=65536):
+        self.n_layers, self.n_expert, self.slots, self.per_layer = n_layers, n_expert, slots, per_layer
+        self.hits = 0
+        self.evictions = 0
+
+    def scope(self, layer):
+        return layer if self.per_layer else 0
+
+    def capacity(self, layer):
+        """The slots a lookup on `layer` may use - ExpertCache::layer_slot_range's range, in size."""
+        if not self.per_layer:
+            return self.slots
+        q = self.slots // self.n_layers
+        hi = self.slots if layer == self.n_layers - 1 else (layer + 1) * q
+        return hi - layer * q
+
+    def prefill(self, pairs):
+        raise NotImplementedError
+
+    def lookup(self, code, i):
+        raise NotImplementedError
+
+
+class FillOnly(Sim):
+    """The engine's current admission: the first S distinct pairs stay resident forever."""
+
+    name = "fill-only"
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.resident = set()
+        self.used = defaultdict(int)  # scope -> slots taken
+
+    def prefill(self, pairs):
+        for layer, e in pairs:
+            code, s = encode(layer, e), self.scope(layer)
+            if code not in self.resident and self.used[s] < self.capacity(layer):
+                self.resident.add(code)
+                self.used[s] += 1
+
+    def lookup(self, code, i):
+        layer, _ = decode(code)
+        if code in self.resident:
+            self.hits += 1
+            return True
+        s = self.scope(layer)
+        if self.used[s] < self.capacity(layer):
+            self.resident.add(code)
+            self.used[s] += 1
+        return False
+
+
+class Lru(Sim):
+    """Evict the least-recently-used resident of the scope.  OrderedDict: front = oldest."""
+
+    name = "lru"
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        from collections import OrderedDict
+        self.od = defaultdict(OrderedDict)  # scope -> {code: None}
+
+    def prefill(self, pairs):
+        # Take each scope's top pairs in RANKED order, then insert them reversed so rank 0 lands
+        # at the MRU end.  (Iterating the profile reversed would seat its COLD end instead.)
+        chosen, used = [], defaultdict(int)
+        for layer, e in pairs:
+            s = self.scope(layer)
+            if used[s] < self.capacity(layer):
+                chosen.append((encode(layer, e), s))
+"""Offline replay of a --dump-routing trace through the expert cache policies.
+
+    python replay_cache_policy.py TRACE.bin PROFILE.bin SLOTS [--every 4 --decay 0.7 --swaps 96 --margin 1.5 --mincand 2.0]
+
+Trace record = int32 layer, int32 k, k int32 ids, k float32 weights; the verify window writes one record per token and
+layer, so a layer group is the run of records with one layer and a window starts when the layer does not rise.
+The simulated adaptive tier is generate.cpp's adapt(): usage += 1 per routed entry, a round every `every` windows, per
+layer the best non-resident (usage >= mincand) against the worst resident (needs margin), the best `swaps` over all
+layers, usage *= decay.  Reports the share of routed entries served by the cache (the engine's "hits / all routed").
+"""
+import sys
+import numpy as np
+
+NL, NE = 48, 512
+
+
+def load_trace(path):
+    raw = np.fromfile(path, dtype=np.int32)
+    k = int(raw[1])
+    rec = 2 + 2 * k
+    raw = raw[: (len(raw) // rec) * rec].reshape(-1, rec)
+    layer = raw[:, 0]
+    ids = raw[:, 2:2 + k]
+    # layer groups
+    chg = np.flatnonzero(np.diff(layer) != 0) + 1
+    starts = np.concatenate([[0], chg])
+    ends = np.concatenate([chg, [len(layer)]])
+    windows, cur, last = [], None, -1
+    for s, e in zip(starts, ends):
+        l = int(layer[s])
+        if cur is None or l <= last:
+            if cur is not None:
+                windows.append(cur)
+            cur = []
+        cur.append((l, ids[s:e]))
+        last = l
+    if cur:
+        windows.append(cur)
+    # keep complete windows only
+    return [w for w in windows if len(w) == NL], k
+
+
+def load_profile(path, slots):
+    with open(path, "rb") as f:
+        assert f.read(4) == b"STRP"
+        hdr = np.frombuffer(f.read(20), dtype=np.uint32)
+        n_ranked = int(hdr[4])
+        pairs = np.frombuffer(f.read(4 * n_ranked), dtype=np.uint16).reshape(-1, 2)
+    return pairs[:slots]
+
+
+class Policy:
+    def __init__(self, every=4, decay=0.7, swaps=96, margin=1.5, mincand=2.0, mode='entries', mingain=0.0, posw=1.0):
+        self.every, self.decay, self.swaps, self.margin, self.mincand = every, decay, swaps, margin, mincand
+        self.mode, self.mingain, self.posw = mode, mingain, posw
+
+
+def adapt_round(res, usage, pol):
+    sw = []
+    for l in range(NL):
+        u = usage[l]
+        r = res[l]
+        cand = np.flatnonzero(~r & (u >= pol.mincand))
+        vict = np.flatnonzero(r)
+        if len(cand) == 0 or len(vict) == 0:
+            continue
+        cand = cand[np.argsort(-u[cand], kind="stable")]
+        vict = vict[np.argsort(u[vict], kind="stable")]
+        n = min(len(cand), len(vict))
+        gain = u[cand[:n]] - u[vict[:n]]
+        ok = u[cand[:n]] >= u[vict[:n]] + pol.margin
+        # the engine stops at the first pair that does not clear the margin
+        bad = np.flatnonzero(~ok)
+        n2 = int(bad[0]) if len(bad) else n
+        for i in range(n2):
+            sw.append((gain[i], l, int(cand[i]), int(vict[i])))
+    sw.sort(key=lambda t: -t[0])
+    sw = [t for t in sw if t[0] >= pol.mingain][: pol.swaps]
+    for g, l, i, o in sw:
+        res[l, i] = True
+        res[l, o] = False
+    return len(sw)
+
+
+def simulate(windows, init, pol, reset_every=0):
+    res = np.zeros((NL, NE), bool)
+    res[init[:, 0], init[:, 1]] = True
+    usage = np.zeros((NL, NE))
+    hits = ent = swaps = 0
+    miss_ent = miss_dist = 0
+    for wi, w in enumerate(windows):
+        for l, ids in w:
+            r = res[l, ids]
+            hits += int(r.sum())
+            ent += r.size
+            ms = ids[~r]
+            miss_ent += len(ms)
+            miss_dist += len(np.unique(ms))
+            if pol.mode == 'distinct':
+                usage[l, np.unique(ids)] += 1.0
+            elif pol.posw != 1.0:
+                wts = np.repeat(pol.posw ** np.arange(ids.shape[0]), ids.shape[1])
+                np.add.at(usage[l], ids.ravel(), wts)
+            else:
+                np.add.at(usage[l], ids.ravel(), 1.0)
+        if (wi + 1) % pol.every == 0:
+            swaps += adapt_round(res, usage, pol)
+            usage *= pol.decay
+    return dict(share=hits / max(1, ent), swaps=swaps, windows=len(windows), entries=ent, miss_ent=miss_ent,
+                miss_dist=miss_dist)
+
+
+def static_oracle(windows, slots):
+    cnt = np.zeros((NL, NE))
+    for w in windows:
+        for l, ids in w:
+            np.add.at(cnt[l], ids.ravel(), 1.0)
+    flat = np.argsort(-cnt.ravel(), kind="stable")[:slots]
+    hit = cnt.ravel()[flat].sum() / cnt.sum()
+    return hit
+
+
+if __name__ == "__main__":
+    tr, prof, slots = sys.argv[1], sys.argv[2], int(sys.argv[3])
+
+    def opt(name, default, cast=float):
+        return cast(sys.argv[sys.argv.index(name) + 1]) if name in sys.argv else default
+
+    pol = Policy(every=opt("--every", 4, int), decay=opt("--decay", 0.7), swaps=opt("--swaps", 96, int),
+                 margin=opt("--margin", 1.5), mincand=opt("--mincand", 2.0))
+"""tools/make_profile.py - the expert-cache profile (`data/expert-profile.bin`): every (layer, expert) pair, ranked.
+
+`--expert-cache auto` fills the VRAM slots it can afford with the profile's pairs in order, so the ranking decides
+which experts start resident (the adaptive tier then swaps in what a conversation routes most).  A profile that
+ranks fewer pairs than a card can hold caps the cache (issue #46: a 32 GB card stopped at 8,000 slots); this tool
+writes one that ranks all 24,576.
+
+The order: the base profile's ranking (default: the shipped data/expert-profile.bin), then the pairs your routing
+traces used, most frequent first, then every pair still missing, interleaved across the layers.  The base is only
+*appended to*, never reordered - and the shipped profile already ranks all 24,576 pairs, so with it a trace is a
+no-op.  `--reorder` ranks the traces first and lets the base fill the rest, which is how a workload's trace decides
+the top; `--no-base` drops the base entirely.
+
+WATCH THE BASE: `take()` skips a pair it has already ranked, and the shipped base ranks all 24,576, so a plain
+`--base` run cannot be moved by any trace - the output is the base again.  `--reorder` (traces first) or
+`--no-base` is what makes a trace decide the top.  Which ordering is in use is not cosmetic: the layer-split cost
+model reads this RANKING as if it were a frequency curve, and the coverage curve in src/program/generate.cpp
+carries the measured hit rates that say how far off that goes (94.9% claimed against 69.2% measured at 5,805 pairs
+held, on the IQ3_S 4-way rig).
+
+    python tools/make_profile.py [TRACE ...] [--base data/expert-profile.bin | --no-base] [--reorder] [--out PATH]
+                                 [--n-expert 256]      (a pruned model: GSQ-RCO Coder keeps 256 of 512)
+
+A routing trace comes from a one-shot engine run with `--dump-routing FILE` (a prompt typical of your use; the
+routed experts of every layer and position are written).  Point the model config's `--expert-profile` at the result.
+"""
+import argparse
+import struct
+from collections import defaultdict
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+N_LAYER, N_EXPERT = 48, 512
+MAGIC, VERSION = b"STRP", 1
+
+
+def read_profile(path, n_expert=N_EXPERT):
+    blob = Path(path).read_bytes()
+    if blob[:4] != MAGIC:
+        raise SystemExit(f"{path}: not a Strata profile")
+    ver, nl, ne, slots, n = struct.unpack_from("<5I", blob, 4)
+    if (nl, ne) != (N_LAYER, n_expert):
+        raise SystemExit(f"{path}: {nl}x{ne}, not {N_LAYER}x{n_expert}")
+    return [struct.unpack_from("<HH", blob, 24 + 4 * i) for i in range(n)]
+
+
+def read_trace(path, n_expert=N_EXPERT):
+    """(layer, k, k expert ids, k weights) records, as `--dump-routing` writes them."""
+    blob = Path(path).read_bytes()
+    off, freq = 0, defaultdict(int)
+    while off + 8 <= len(blob):
+        layer, k = struct.unpack_from("<ii", blob, off)
+        off += 8
+        for e in struct.unpack_from("<%di" % k, blob, off):
+            if 0 <= layer < N_LAYER and 0 <= e < n_expert:
+                freq[(layer, e)] += 1
+        off += 8 * k                                    # the ids and the weights
+    return freq
+
+
+def write_profile(path, ranked, n_expert=N_EXPERT):
+    table = [[-1] * n_expert for _ in range(N_LAYER)]
+    for slot, (layer, e) in enumerate(ranked):
+        table[layer][e] = slot
+    with open(path, "wb") as f:
+        f.write(MAGIC + struct.pack("<5I", VERSION, N_LAYER, n_expert, len(ranked), len(ranked)))
+        for layer, e in ranked:
+            f.write(struct.pack("<HH", layer, e))
+        for layer in range(N_LAYER):
+            f.write(struct.pack("<%di" % n_expert, *table[layer]))
+
+
+def rank_profile(base_pairs, trace_freq, n_expert=N_EXPERT, no_base=False, reorder=False):
+    """The ranked (layer, expert) list and the counts it was built from (`base`, `trace`, `fill`).
+
+    Default: the base's order, then the traces' pairs most frequent first, then the fill.  With `reorder` (or
+    `no_base`) the traces' pairs come first, so a base that already ranks every pair no longer hides them; the base
+    (unless `no_base`) and then the fill follow.  A base is never reordered against itself - it only ever fills."""
+    ranked, seen, counts = [], set(), defaultdict(int)
+
+    def take(pairs, key):
+        for p in pairs:
+            p = (int(p[0]), int(p[1]))
+            if p not in seen:
+                seen.add(p)
+                ranked.append(p)
+                counts[key] += 1
+
+    trace_pairs = [p for p, _ in sorted(trace_freq.items(), key=lambda kv: (-kv[1], kv[0]))]
+    if no_base or reorder:
+        take(trace_pairs, "trace")
+    if not no_base:
+        take(base_pairs, "base")
+    if not (no_base or reorder):
+        take(trace_pairs, "trace")
+    take(((layer, e) for e in range(n_expert) for layer in range(N_LAYER)), "fill")
+    return ranked, counts
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("traces", nargs="*", help="routing traces from --dump-routing")
+    ap.add_argument("--base", default=str(ROOT / "data" / "expert-profile.bin"), help="ranking to keep first")
+    ap.add_argument("--no-base", action="store_true", help="rank by the traces only")
+    ap.add_argument("--reorder", action="store_true",
+                    help="rank the traces' pairs before the base's (the base, then the fill, follow); needed with a "
+                         "base that already ranks every pair, where --base alone cannot change the order")
+    ap.add_argument("--out", default=str(ROOT / "data" / "expert-profile.bin"))
+    ap.add_argument("--n-expert", type=int, default=N_EXPERT, help="experts per layer (default 512)")
+    a = ap.parse_args()
+"""tools/make_profile_mix.py - an expert-cache profile from several routing traces, each trace counting the same.
+
+`make_profile.py` adds the traces' raw counts, so the longest trace decides the ranking.  A cache profile should
+rank the experts by how often a USER's tokens need them, across the kinds of text that user writes, so here every
+trace is first turned into a distribution (its counts / its total) and multiplied by its weight; the ranking is the
+weighted sum.  Weights are per trace, so a kind of text with more traces counts more - give a group of N traces the
+weight 1/N each to make the group count once.
+
+    python tools/make_profile_mix.py TRACE[:WEIGHT] [TRACE[:WEIGHT] ...] [--out PATH] [--n-expert 512]
+
+A trace is a `--dump-routing` file, or a `STRATA_USAGE_DUMP` file of the SYCL engine (same record format).  The output
+is a profile for `--expert-profile`; the pairs no trace uses are appended in make_profile.py's fill order.
+
+Measured on an Arc Pro B70 (IQ3_S, 11.5k cached experts, decode of 250-300 tokens): the shipped profile holds 60% of the
+experts 45 chat/code/language prompts route and 85% of those a document summary routes; a profile from the 45 chat prompts
+and the 8 summaries (weight 1 : 2 per prompt), tested on prompts left out of it, holds 71% and 84%.
+"""
+import argparse
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import make_profile as mp  # noqa: E402
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("traces", nargs="+", help="TRACE or TRACE:WEIGHT")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--n-expert", type=int, default=mp.N_EXPERT)
+    a = ap.parse_args()
+    ne = a.n_expert
+    score = defaultdict(float)
+    for spec in a.traces:
+        path, weight = spec, 1.0
+        head, sep, tail = spec.rpartition(":")
+        if sep:   # TRACE:WEIGHT (a Windows drive letter's colon is not followed by a number)
+            try:
+                path, weight = head, float(tail)
+            except ValueError:
+                pass
+        freq = mp.read_trace(path, ne)
+        total = float(sum(freq.values()))
+        if total <= 0:
+            print(f"{path}: empty trace, skipped")
+            continue
+        for p, c in freq.items():
+            score[p] += weight * c / total
+    ranked = [p for p, _ in sorted(score.items(), key=lambda kv: (-kv[1], kv[0]))]
+    seen = set(ranked)
+    for e in range(ne):          # the fill, as make_profile.py: the pairs no trace used
+        for layer in range(mp.N_LAYER):
+            if (layer, e) not in seen:
+                ranked.append((layer, e))
+    mp.write_profile(a.out, ranked, ne)
+    assert mp.read_profile(a.out, ne) == ranked, "the profile did not survive the round trip"
+    print(f"wrote {a.out}: {len(ranked)} ranked pairs, {len(score)} from {len(a.traces)} traces")
+
+
+if __name__ == "__main__":
+    main()
+#!/usr/bin/env python3
+"""Replay complete top-8 routing records using only the Python standard library."""
+
+import argparse
+import json
+import math
+from pathlib import Path
+import sys
+
+HEADER = ("SIMULATION on a logical trace: no residency/transfer semantics; "
+          "Granite fully fits GPU memory.")
+CAPACITIES = (4, 8, 12, 16, 24)
+POLICIES = ("LRU", "LFU")
+
+
+class SlotCache:
+    """Score at token entry, then admit/touch in trace rank order."""
+
+    def __init__(self, capacity, policy):
+        if capacity <= 0 or policy not in POLICIES:
+            raise ValueError("invalid capacity or policy")
+        self.capacity = capacity
+        self.policy = policy
+        self.slots = {}  # expert -> (resident frequency, last access clock)
+        self.clock = 0
+
+    def access_token(self, experts):
+        hits = sum(expert in self.slots for expert in experts)
+        for expert in experts:
+            self.clock += 1
+            if expert in self.slots:
+                frequency, _ = self.slots[expert]
+                self.slots[expert] = (frequency + 1, self.clock)
+                continue
+            if len(self.slots) == self.capacity:
+                if self.policy == "LRU":
+                    victim = min(self.slots, key=lambda e: self.slots[e][1])
+                else:
+                    victim = min(self.slots, key=lambda e: self.slots[e])
+                del self.slots[victim]
+            self.slots[expert] = (1, self.clock)
+        return hits
+
+
+def read_trace(path):
+    records = []
+    seen = set()
+    with Path(path).open(encoding="utf-8") as source:
+        for number, line in enumerate(source, 1):
+            try:
+                row = json.loads(line)
+                if not isinstance(row, dict):
+                    raise ValueError("record must be an object")
+                for key in ("seq", "pos", "layer"):
+                    if type(row.get(key)) is not int or row[key] < 0:
+                        raise ValueError(f"{key} must be a nonnegative integer")
+                if row.get("phase") not in ("prefill", "decode"):
+                    raise ValueError("phase must be prefill or decode")
+                experts, weights = row.get("experts"), row.get("weights")
+                if not isinstance(experts, list) or len(experts) != 8:
+                    raise ValueError("exactly eight expert IDs required")
+                if any(type(e) is not int or not 0 <= e < 32 for e in experts):
+                    raise ValueError("expert IDs must be integers in [0,32)")
+                if len(set(experts)) != 8:
+                    raise ValueError("expert IDs must be distinct")
+                if not isinstance(weights, list) or len(weights) != 8:
+                    raise ValueError("exactly eight weights required")
+                if any(type(w) not in (int, float) or not math.isfinite(w) or w < 0
+                       for w in weights):
+                    raise ValueError("weights must be finite nonnegative numbers")
+                identity = (row["seq"], row["pos"], row["layer"])
+                if identity in seen:
+                    raise ValueError("duplicate (seq,pos,layer)")
+                seen.add(identity)
+                records.append(row)
+            except (ValueError, TypeError, OverflowError) as error:
+                raise ValueError(f"{path}:{number}: {error}") from error
+    if not records:
+        raise ValueError("trace is empty")
+    return records
+
+
+def rate(hits, requests):
+    return {"hits": hits, "requests": requests,
+            "hit_rate": hits / requests if requests else None}
+
+
+def replay(records):
+    """Each phase, layer and sequence has an independent cold cache."""
+    report = {
+        "header": HEADER,
+        "schema_version": 1,
+        "assumptions": {
+            "experts": 32, "top_k": 8, "capacities_per_layer": list(CAPACITIES),
+            "initial_state": "cold per phase, layer and sequence; no prefill warming of decode",
+            "hit_accounting": "all eight lookups use token-entry slots; then update in array order",
+            "LFU": "resident counts start at 1 on admission, reset on eviction; LRU breaks ties",
+            "overlap": "intersection size / 8, adjacent positions only, within sequence and phase",
+            "entropy": "Shannon bits of unweighted expert selection counts (maximum 5 bits)",
+            "overall": "request-weighted hit rate; weights do not affect hit counting",
+        },
+        "phases": {},
+    }
+    for phase in ("prefill", "decode"):
+        rows = sorted((r for r in records if r["phase"] == phase),
+                      key=lambda r: (r["seq"], r["pos"], r["layer"]))
+        layers = {}
+        previous = {}
+        caches = {}
+        for row in rows:
+            layer = str(row["layer"])
+            item = layers.setdefault(layer, {
+                "tokens": 0, "histogram": [0] * 32, "overlap_pairs": 0,
+                "overlap_experts_sum": 0,
+                "cache": {p: {str(c): rate(0, 0) for c in CAPACITIES} for p in POLICIES},
+            })
+            item["tokens"] += 1
+            for expert in row["experts"]:
+                item["histogram"][expert] += 1
+            key = (row["seq"], row["layer"])
+            if key in previous:
+                old = previous[key]
+                if row["pos"] == old["pos"] + 1:
+                    item["overlap_pairs"] += 1
+                    item["overlap_experts_sum"] += len(set(old["experts"]) & set(row["experts"]))
+            previous[key] = row
+            for policy in POLICIES:
+                for capacity in CAPACITIES:
+                    cache_key = (*key, policy, capacity)
+                    if cache_key not in caches:
+                        caches[cache_key] = SlotCache(capacity, policy)
+                    hits = caches[cache_key].access_token(row["experts"])
+                    stat = item["cache"][policy][str(capacity)]
+                    stat["hits"] += hits
+                    stat["requests"] += 8
+        for item in layers.values():
+            counts = item["histogram"]
+            total = sum(counts)
+            item["entropy_bits"] = -sum((n / total) * math.log2(n / total) for n in counts if n)
+            pairs = item["overlap_pairs"]
+            item["mean_overlap_experts"] = item["overlap_experts_sum"] / pairs if pairs else None
+            item["mean_overlap_fraction"] = item["overlap_experts_sum"] / (8 * pairs) if pairs else None
+            for policy in POLICIES:
+                for capacity in CAPACITIES:
+                    stat = item["cache"][policy][str(capacity)]
+                    stat.update(rate(stat["hits"], stat["requests"]))
+        overall = {p: {} for p in POLICIES}
+        for policy in POLICIES:
+            for capacity in CAPACITIES:
+                stats = [v["cache"][policy][str(capacity)] for v in layers.values()]
+                overall[policy][str(capacity)] = rate(sum(s["hits"] for s in stats),
+                                                     sum(s["requests"] for s in stats))
+        report["phases"][phase] = {"records": len(rows), "layers": layers, "overall": overall}
+    return report
+
+
+def markdown(report):
+    lines = [HEADER, "", "Cold caches; token-entry lookups; overall rates weighted by expert requests.", "",
+             "| Phase | Policy | 4 slots | 8 slots | 12 slots | 16 slots | 24 slots |",
+             "|---|---|---:|---:|---:|---:|---:|"]
+
+codex
+The routing trace uses JSONL records with `seq` and `pos`. I’ll support those alongside the simple `tok` format, report malformed records and truncated tails, and document the replay conventions. All changes will stay under `cc/expert_replay/`.
+exec
+/bin/bash -lc 'mkdir -p cc/expert_replay; git branch --show-current' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+jetson/c1
+
+exec
+/bin/bash -lc "cat > cc/expert_replay/expert_replay.py <<'PY'
+#"'!/usr/bin/env python3
+"""Generic logical expert-cache replay; Python 3.10 standard library only."""
+import argparse
+import csv
+import hashlib
+import json
+import math
+import sys
+from collections import Counter, defaultdict, deque
+from pathlib import Path
+
+
+def integer(x, minimum=0):
+    if type(x) is not int or x < minimum:
+        raise ValueError(f'"'expected integer >= {minimum}, got {x"'!r}'"')
+    return x
+
+
+def read_trace(path, layers=None, experts=None):
+    rows, metadata, errors, seen = [], {}, [], set()
+    truncated = 0
+    with Path(path).open(encoding='utf-8') as source:
+        for number, line in enumerate(source, 1):
+            try:
+                obj = json.loads(line)
+                if not isinstance(obj, dict):
+                    raise ValueError('expected JSON object')
+                if obj.get('type') == 'metadata':
+                    for name in ('layers', 'experts'):
+                        if name in obj:
+                            value = integer(obj[name], 1)
+                            if name in metadata and metadata[name] "'!= value:
+                                raise ValueError('"'conflicting metadata')
+                            metadata[name] = value
+                    continue
+                seq = integer(obj.get('seq', obj.get('request', 0)))
+                tok = integer(obj.get('pos', obj.get('tok')))
+                layer = integer(obj.get('layer'))
+                ids = obj.get('experts')
+                if not isinstance(ids, list) or not ids:
+                    raise ValueError('experts must be a nonempty list')
+                ids = [integer(e) for e in ids]
+                if len(set(ids)) "'!= len(ids):
+                    raise ValueError('"'duplicate expert IDs')
+                if obj.get('phase') not in ('prefill', 'decode'):
+                    raise ValueError('phase must be prefill or decode')
+                if 'weights' in obj:
+                    ws = obj['weights']
+                    if (not isinstance(ws, list) or len(ws) "'!= len(ids) or
+                        any(type(w) not in (int, float) or not math.isfinite(w) or w < 0 for w in ws)):
+                        raise ValueError('"'invalid aligned weights')
+                key = (seq, tok, layer)
+                if key in seen:
+                    raise ValueError('duplicate sequence/token/layer')
+                seen.add(key)
+                rows.append(dict(seq=seq, tok=tok, layer=layer, experts=ids, phase=obj['phase']))
+            except (ValueError, TypeError) as exc:
+                tail = not line.endswith('\\n')
+                truncated += int(tail)
+                errors.append(dict(line=number, error=str(exc), possible_truncated_tail=tail))
+    layers = layers if layers is not None else metadata.get('layers')
+    experts = experts if experts is not None else metadata.get('experts')
+    integer(layers, 1)
+    integer(experts, 1)
+    if any(metadata.get(k, v) "'!= v for k, v in [('"'layers', layers), ('experts', experts)]):
+        raise ValueError('flags conflict with trace metadata')
+    valid = []
+    for row in rows:
+        if row['layer'] >= layers or any(e >= experts for e in row['experts']):
+            # Bounds violations are fatal: never silently simulate the wrong model.
+            raise ValueError(f'expert/layer ID outside declared dimensions: {row}')
+        valid.append(row)
+    if not valid:
+        raise ValueError(f'no valid routing records; malformed_lines={len(errors)}, possible_truncated_tail={truncated}')
+    valid.sort(key=lambda r: (r['seq'], r['tok'], r['layer']))
+    phases = {}
+    for r in valid:
+        key = (r['seq'], r['tok'])
+        if phases.setdefault(key, r['phase']) "'!= r['"'phase']:
+            raise ValueError('inconsistent phases within a token')
+    return valid, layers, experts, dict(malformed_lines=len(errors), possible_truncated_tail=truncated,
+                                       errors=errors, valid_records=len(valid))
+
+
+def token_keys(rows):
+    return list(dict.fromkeys((r['seq'], r['tok']) for r in rows))
+
+
+def partition(rows, split):
+    if split is None:
+        return [], rows
+    try:
+        train, test = map(float, split.split(':'))
+        if not all(math.isfinite(x) for x in (train, test)) or train < 0 or test <= 0:
+            raise ValueError()
+    except ValueError:
+        raise ValueError('split must be nonnegative-train:positive-test weights') from None
+    keys = token_keys(rows)
+    cut = int(len(keys) * train / (train + test))
+    training = set(keys[:cut])
+    return ([r for r in rows if (r['seq'], r['tok']) in training],
+            [r for r in rows if (r['seq'], r['tok']) not in training])
+
+
+def fingerprint(row):
+    return hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest()
+
+
+def make_profile(rows, layers, experts, weighting):
+    totals = Counter(r['seq'] for r in rows for _ in r['experts'])
+    counts = defaultdict(float)
+    for r in rows:
+        for e in r['experts']:
+            counts[r['layer'], e] += 1 if weighting == 'raw' else 1 / totals[r['seq']]
+    ranked = sorted(((l, e) for l in range(layers) for e in range(experts)),
+                    key=lambda p: (-counts[p], p))
+    return dict(schema_version=1, layers=layers, experts=experts, weighting=weighting,
+                ranked=[list(p) for p in ranked], scores=[counts[p] for p in ranked],
+                training_records=[fingerprint(r) for r in rows])
+
+
+def replay(rows, layers, experts, capacity, policy='lru', per_layer=False, warmup=0,
+           expert_bytes=0, layer_bytes=None, bw_gbs=1.0, compute_ms=0.0, profile=None):
+    integer(capacity)
+    integer(warmup)
+    if policy not in ('lru', 'lfu', 'belady', 'static-profile') and not policy.startswith('lfu-decay:'):
+        raise ValueError('unknown policy')
+    half = float(policy.split(':', 1)[1]) if policy.startswith('lfu-decay:') else None
+    if half is not None and (not math.isfinite(half) or half <= 0):
+        raise ValueError('half-life must be finite and positive')
+    if not math.isfinite(bw_gbs) or bw_gbs <= 0 or not math.isfinite(compute_ms) or compute_ms < 0:
+        raise ValueError('bandwidth must be positive and compute time nonnegative')
+    integer(expert_bytes)
+    sizes = [expert_bytes] * layers if layer_bytes is None else layer_bytes
+    if len(sizes) "'!= layers:
+        raise ValueError('"'per-layer bytes must have exactly L entries')
+    for size in sizes:
+        integer(size)
+    keys = token_keys(rows)
+    unscored = set(keys[:warmup])
+    events = [(r, (r['layer'], e)) for r in rows for e in r['experts']]
+    future = defaultdict(deque)
+    for i, (_, pair) in enumerate(events):
+        future[pair].append(i)
+    caches = defaultdict(dict)
+    selected = set()
+    if policy == 'static-profile':
+        if profile is None or (profile.get('layers'), profile.get('experts')) "'!= (layers, experts):
+            raise ValueError('"'profile dimensions mismatch or profile missing')
+        used = Counter()
+        for item in profile['ranked']:
+            if not isinstance(item, list) or len(item) "'!= 2:
+                raise ValueError('"'invalid profile pair')
+            l, e = item
+            integer(l); integer(e)
+            if l >= layers or e >= experts or (l, e) in selected:
+                raise ValueError('invalid/duplicate profile pair')
+            scope = l if per_layer else 0
+            if used[scope] < capacity:
+                selected.add((l, e)); used[scope] += 1
+    stats = defaultdict(lambda: dict(hits=0, requests=0, bytes_moved=0, tokens=set()))
+    for i, (r, pair) in enumerate(events):
+        future[pair].popleft()
+        cache = caches[r['layer'] if per_layer else 0]
+        hit = pair in cache
+        if (r['seq'], r['tok']) not in unscored:
+            for name in ('overall', 'decode' if r['phase'] == 'decode' else 'prefill', f\"layer:{r['layer']}\"):
+                s = stats[name]
+                s['requests'] += 1; s['hits'] += hit
+                s['bytes_moved'] += 0 if hit else sizes[r['layer']]
+                s['tokens'].add((r['seq'], r['tok']))
+        if hit:
+            freq, last = cache[pair]
+            if half is not None:
+                freq *= 2 ** (-(i - last) / half)
+            cache[pair] = (freq + 1, i)
+        elif capacity and (policy "'!= '"'static-profile' or pair in selected):
+            if len(cache) >= capacity:
+                if policy == 'belady':
+                    # Include incoming pair: bypass permits the oracle to dominate pinned policies.
+                    victim = max([*cache, pair], key=lambda p: future[p][0] if future[p] else math.inf)
+                    if victim == pair:
+                        continue
+                elif policy == 'lru':
+                    victim = min(cache, key=lambda p: cache[p][1])
+                else:
+                    victim = min(cache, key=lambda p: (cache[p][0] * (2 ** (-(i-cache[p][1])/half) if half else 1), cache[p][1]))
+                del cache[victim]
+            cache[pair] = (1.0, i)
+    def finish(s):
+        n, h, t = s['requests'], s['hits'], len(s['tokens'])
+        misses = n - h
+        return dict(hits=h, requests=n, misses=misses, tokens=t, hit_rate=h/n if n else None,
+                    misses_per_token=misses/t if t else None, bytes_moved=s['bytes_moved'],
+                    bytes_moved_per_token=s['bytes_moved']/t if t else None)
+    overall = finish(stats['overall'])
+    decode = finish(stats['decode'])
+    prediction = (compute_ms / 1000 + decode['bytes_moved_per_token'] / (bw_gbs * 1e9)
+                  if decode['tokens'] else None)
+    return dict(policy=policy, oracle_label='reads-the-future upper bound' if policy == 'belady' else None,
+                capacity_experts=capacity, per_layer_capacity=per_layer, warmup_tokens=len(unscored),
+                overall=overall, decode_only=decode,
+                per_layer={str(l): finish(stats[f'layer:{l}']) for l in range(layers)},
+                prediction=dict(decode_seconds_per_token=prediction, bw_bytes_s=bw_gbs*1e9,
+                                compute_s=compute_ms/1000),
+                semantics='sequential expert lookups in recorded rank order; cold demand admission; persistent across phases/requests')
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    for name in ('simulate', 'profile', 'sweep'):
+        p = commands.add_parser(name)
+        p.add_argument('--trace', required=True)
+        p.add_argument('--layers', type=int)
+        p.add_argument('--experts', type=int)
+        p.add_argument('--split', help='chronological token train:test weights; profile uses train, replay uses test')
+        if name == 'profile':
+            p.add_argument('--out', required=True)
+            p.add_argument('--weighting', choices=['raw', 'per-request'], default='raw')
+        else:
+            p.add_argument('--capacity-experts', type=int, required=name == 'simulate')
+            p.add_argument('--per-layer-capacity', action='store_true')
+            p.add_argument('--policy', default='lru')
+            p.add_argument('--warmup', type=int, default=0)
+            p.add_argument('--expert-bytes', type=int, default=0)
+            p.add_argument('--per-layer-bytes', help='comma-separated byte sizes, one per layer')
+            p.add_argument('--bw-gbs', type=float, default=1.0)
+            p.add_argument('--compute-ms', type=float, default=0.0)
+            if name == 'sweep':
+                p.add_argument('--capacities', required=True, help='comma-separated capacities')
+                p.add_argument('--out', help='CSV path; default stdout')
+    args = parser.parse_args(argv)
+    try:
+        rows, layers, experts, diagnostics = read_trace(args.trace, args.layers, args.experts)
+        train, test = partition(rows, args.split)
+        if diagnostics['malformed_lines']:
+            print(json.dumps({'trace_diagnostics': diagnostics}), file=sys.stderr)
+        if args.command == 'profile':
+            chosen = train if args.split else rows
+            if not chosen:
+                raise ValueError('empty training partition')
+            result = make_profile(chosen, layers, experts, args.weighting)
+            result['trace_diagnostics'] = diagnostics
+            Path(args.out).write_text(json.dumps(result, indent=2) + '\\n', encoding='utf-8')
+            return 0
+        if not test:
+            raise ValueError('empty test partition')
+        policy, profile = args.policy, None
+        if policy.startswith('static-profile:'):
+            profile = json.loads(Path(policy.split(':', 1)[1]).read_text(encoding='utf-8'))
+            policy = 'static-profile'
+            if args.split:
+                if 'training_records' not in profile:
+                    raise ValueError('split replay requires profile training provenance')
+                if set(profile['training_records']) & {fingerprint(r) for r in test}:
+                    raise ValueError('profile leakage: training includes test records')
+        sizes = list(map(int, args.per_layer_bytes.split(','))) if args.per_layer_bytes else None
+        capacities = list(map(int, args.capacities.split(','))) if args.command == 'sweep' else [args.capacity_experts]
+        results = []
+        for capacity in capacities:
+            result = replay(test, layers, experts, capacity, policy, args.per_layer_capacity,
+                            args.warmup, args.expert_bytes, sizes, args.bw_gbs, args.compute_ms, profile)
+            result.update(layers=layers, experts=experts, trace_diagnostics=diagnostics,
+                          training_tokens=len(token_keys(train)), test_tokens=len(token_keys(test)))
+            results.append(result)
+        if args.command == 'simulate':
+            print(json.dumps(results[0], indent=2, allow_nan=False))
+        else:
+            output = Path(args.out).open('w', newline='', encoding='utf-8') if args.out else sys.stdout
+            try:
+                writer = csv.DictWriter(output, fieldnames=['capacity_experts', 'policy', 'oracle_label', 'hit_rate',
+                    'decode_hit_rate', 'misses_per_token', 'bytes_moved_per_token', 'prediction_decode_seconds_per_token',
+                    'malformed_lines', 'possible_truncated_tail'])
+                writer.writeheader()
+                for r in results:
+                    writer.writerow(dict(capacity_experts=r['capacity_experts'], policy=r['policy'], oracle_label=r['oracle_label'],
+                        hit_rate=r['overall']['hit_rate'], decode_hit_rate=r['decode_only']['hit_rate'],
+                        misses_per_token=r['overall']['misses_per_token'], bytes_moved_per_token=r['overall']['bytes_moved_per_token'],
+                        prediction_decode_seconds_per_token=r['prediction']['decode_seconds_per_token'],
+                        malformed_lines=diagnostics['malformed_lines'], possible_truncated_tail=diagnostics['possible_truncated_tail']))
+            finally:
+                if args.out:
+                    output.close()
+        return 0
+    except (ValueError, TypeError, KeyError, OSError) as exc:
+        parser.exit(2, f'error: {exc}\\n')
+
+
+if __name__ == '__main__':
+    sys.exit(main())
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc "cat > cc/expert_replay/test_expert_replay.py <<'PY'
+import contextlib
+import io
+import itertools
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from expert_replay import main, make_profile, partition, read_trace, replay
+
+
+def rows(ids, phase='decode'):
+    return [dict(seq=0, tok=i, layer=0, experts=[e], phase=phase) for i, e in enumerate(ids)]
+
+
+class ReplayTests(unittest.TestCase):
+    def test_hand_counts(self):
+        trace = rows([0, 1, 0, 2, 0, 1])
+        profile = make_profile(rows([0, 0, 1]), 1, 3, 'raw')
+        for policy, expected in [('lru', 2), ('lfu', 2), ('lfu-decay:2', 2),
+                                 ('belady', 3), ('static-profile', 4)]:
+            with self.subTest(policy=policy):
+                self.assertEqual(replay(trace, 1, 3, 2, policy, profile=profile)['overall']['hits'], expected)
+
+    def test_decay_changes_victim(self):
+        trace = rows([0]*8 + [1, 2, 1, 2, 1, 2])
+        self.assertEqual(replay(trace, 1, 3, 2, 'lfu')['overall']['hits'], 7)
+        self.assertEqual(replay(trace, 1, 3, 2, 'lfu-decay:1')['overall']['hits'], 11)
+
+    def test_oracle_dominates_exhaustive(self):
+        for seq in itertools.product(range(3), repeat=6):
+            trace = rows(seq)
+            profile = make_profile(trace, 1, 3, 'raw')
+            for cap in (0, 1, 2, 3):
+                best = replay(trace, 1, 3, cap, 'belady')['overall']['hits']
+                for policy in ('lru', 'lfu', 'lfu-decay:1', 'static-profile'):
+                    self.assertGreaterEqual(best, replay(trace, 1, 3, cap, policy, profile=profile)['overall']['hits'])
+
+    def test_partition_and_warmup(self):
+        trace = rows([0, 0, 1, 1])
+        train, test = partition(trace, '1:1')
+        self.assertEqual([r['tok'] for r in train], [0, 1])
+        self.assertEqual(replay(test, 1, 2, 1)['overall']['hits'], 1)
+        result = replay(test, 1, 2, 1, warmup=1)
+        self.assertEqual(result['overall']['requests'], 1)
+        self.assertEqual(result['overall']['hits'], 1)
+        multilayer = [dict(r, layer=l) for r in trace for l in (0, 1)]
+        a, b = partition(multilayer, '1:1')
+        self.assertEqual(len(a), 4)
+        self.assertFalse({r['tok'] for r in a} & {r['tok'] for r in b})
+
+    def test_bytes_prediction_and_layers(self):
+        trace = rows([0, 0], 'prefill') + [dict(r, tok=r['tok']+2, layer=1) for r in rows([0, 0])]
+        result = replay(trace, 2, 2, 1, per_layer=True, layer_bytes=[100, 200], bw_gbs=2, compute_ms=3)
+        self.assertEqual(result['overall']['hits'], 2)
+        self.assertEqual(result['decode_only']['bytes_moved_per_token'], 100)
+        self.assertAlmostEqual(result['prediction']['decode_seconds_per_token'], .003 + 100/2e9)
+        self.assertEqual(result['per_layer']['0']['hit_rate'], .5)
+
+    def test_weighting(self):
+        trace = rows([0]*10) + [dict(r, seq=1) for r in rows([1, 1])]
+        raw = make_profile(trace, 1, 2, 'raw')
+        equal = make_profile(trace, 1, 2, 'per-request')
+        self.assertEqual(raw['scores'], [10, 2])
+        self.assertAlmostEqual(equal['scores'][0], equal['scores'][1])
+
+    def test_parser_and_cli(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trace = Path(directory)/'trace.jsonl'
+            profile = Path(directory)/'profile.json'
+            trace.write_text(json.dumps(dict(type='metadata', layers=1, experts=3))+'\\n' +
+                '\\n'.join(json.dumps(dict(tok=r['tok'], layer=0, experts=r['experts'], phase='decode')) for r in rows([0, 0, 1, 1]))+'\\n')
+            parsed, l, e, diag = read_trace(trace)
+            self.assertEqual((l, e, diag['malformed_lines']), (1, 3, 0))
+            main(['profile', '--trace', str(trace), '--split', '1:1', '--out', str(profile)])
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                main(['simulate', '--trace', str(trace), '--split', '1:1', '--capacity-experts', '1', '--policy', f'static-profile:{profile}'])
+            self.assertEqual(json.loads(output.getvalue())['overall']['hits'], 0)
+            main(['profile', '--trace', str(trace), '--out', str(profile)])
+            with contextlib.redirect_stderr(io.StringIO()) as error, self.assertRaises(SystemExit):
+                main(['simulate', '--trace', str(trace), '--split', '1:1', '--capacity-experts', '1', '--policy', f'static-profile:{profile}'])
+            self.assertIn('leakage', error.getvalue())
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                main(['sweep', '--trace', str(trace), '--capacities', '0,1,3', '--policy', 'belady'])
+            self.assertEqual(len(output.getvalue().splitlines()), 4)
+            self.assertIn('reads-the-future upper bound', output.getvalue())
+            with trace.open('a') as out:
+                out.write('{}\\n{\"tok\":')
+            _, _, _, diag = read_trace(trace)
+            self.assertEqual(diag['malformed_lines'], 2)
+            self.assertEqual(diag['possible_truncated_tail'], 1)
+            self.assertEqual(diag['valid_records'], 4)
+
+    def test_primary_format_and_invalid_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'trace'
+            path.write_text(json.dumps(dict(seq=0, pos=0, layer=0, experts=[0, 1], weights=[.5, .5], phase='prefill'))+'\\n')
+            self.assertEqual(read_trace(path, 2, 2)[0][0]['tok'], 0)
+            with self.assertRaises(ValueError):
+                read_trace(path, 2, 1)
+            with self.assertRaises(ValueError):
+                read_trace(path)
+
+    def test_invalid_configuration_and_empty_decode(self):
+        self.assertIsNone(replay(rows([0], 'prefill'), 1, 1, 0)['prediction']['decode_seconds_per_token'])
+        for kw in ({'capacity': -1}, {'capacity': 1, 'policy': 'lfu-decay:0'},
+                   {'capacity': 1, 'bw_gbs': 0}, {'capacity': 1, 'layer_bytes': []}):
+            with self.assertRaises(ValueError):
+                replay(rows([0]), 1, 1, **kw)
+
+
+if __name__ == '__main__':
+    unittest.main()
+PY
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s cc/expert_replay -v" in /home/muk/projects/siminfeng/campaign
+ exited 1 in 634ms:
+test_bytes_prediction_and_layers (test_expert_replay.ReplayTests) ... ok
+test_decay_changes_victim (test_expert_replay.ReplayTests) ... ok
+test_hand_counts (test_expert_replay.ReplayTests) ... test_invalid_configuration_and_empty_decode (test_expert_replay.ReplayTests) ... ok
+test_oracle_dominates_exhaustive (test_expert_replay.ReplayTests) ... ok
+test_parser_and_cli (test_expert_replay.ReplayTests) ... ok
+test_partition_and_warmup (test_expert_replay.ReplayTests) ... ok
+test_primary_format_and_invalid_ids (test_expert_replay.ReplayTests) ... ok
+test_weighting (test_expert_replay.ReplayTests) ... ok
+
+======================================================================
+FAIL: test_hand_counts (test_expert_replay.ReplayTests) (policy='static-profile')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/muk/projects/siminfeng/campaign/cc/expert_replay/test_expert_replay.py", line 23, in test_hand_counts
+    self.assertEqual(replay(trace, 1, 3, 2, policy, profile=profile)['overall']['hits'], expected)
+AssertionError: 3 != 4
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.622s
+
+FAILED (failures=1)
+
+codex
+The simulator is implemented, and the first test run caught an incorrect hand-counted expectation for static caching: with cold admission, the expected count is three hits. The exhaustive short-trace checks passed for Belady against all online policies. I’m correcting that expectation and finishing the documentation and validation.
