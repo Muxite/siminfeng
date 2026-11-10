@@ -1,11 +1,36 @@
 # Campaign START-HERE — c2-resume state (2026-11-10, x86-main lane, Claude Opus lead)
 Read sections 1-3 and 6 first (about 10 minutes). The unedited c1 wrap-up text is at the end under "c1 snapshot (historical)"; where it disagrees with this page, this page wins (e.g. q8_reuse is no longer "UNTESTED", the goal wording changed).
 
+## 0. Latest: D041–D048 (2026-11-10 overnight). Read this first.
+The progress ledger with every table is at https://claude.ai/artifact/8Uqsnssn6R6KY2EtAyTiyD (private to the owner).
+
+| ID | Verdict | Category | One line |
+|---|---|---|---|
+| D041 | indicative | placement | upstream `--moe-cache-mib` +38% decode at 8 GB on Qwen3-30B, −34% at 4 GB; ncu: 222 GB/s, 40% of kernel time in tiny kernels |
+| D042 | indicative | spec + tools | ngram-mod 2.4–3.0× lossless on copy-heavy prompts; bpftrace 0.79 ms/CPU layer; research intake |
+| D043 | protocol | — | overnight E1–E4 frozen; A1 (download A/A), A2 (post-hoc decode-path KLD) |
+| D044 | **speed rule MET** | placement | cache + CPU-share 0.9 beats static at 4/6/8/10 GB (+30 to +76%), with 3–6% less VRAM; frozen absolute KLD gate miscalibrated (the reference fails its own batch-shape floor of 0.0058 / 96.5%), all placements within that floor |
+| D045 | ACCEPTED (static) | spec | ngram on K30: 2.32× / 3.01×, text identical, chat +1%; stacks with the cache (3.9× over static); cache output depends on cache history |
+| D045 | trade-off | representation | REAP-15B: 6.6× decode all-GPU, code PPL +8%, wikitext PPL ×2.84; needs a domain-matched task eval |
+| D046 | ACCEPTED (copy), chat equivalent (via D048 X2) | spec | MTP on Qwen3.6-35B: +23–42% copy (text identical), +11–14% chat |
+| D047 | protocol | — | overnight-2 X1–X8 frozen; A1 reruns (X8 contaminated by a swap episode; X7 flag fix) |
+| D048 | results | placement/spec/load | cache transfers to Qwen3.6 (+21 to +42%); MTP beats the same VRAM spent on layers (+9.8% chat); ub 2048 cuts cache TTFT 2.9×; 4 threads beat 8, SMT −50%; cache + MTP stack (+52% chat vs static); cold load 1.48 GB/s |
+
+**Factory rules adopted (discrete GPU, measured on two models):**
+1. Expert cache with CPU-share is the default placement. Share 0 if the predicted hit rate is ≥ about 90%, otherwise 0.9.
+2. ub sets the TTFT vs VRAM trade: ub 1024–2048 removes the cache's TTFT penalty.
+3. MTP n_max 3 when the model ships MTP heads. n-gram for copy-heavy workloads.
+4. Gate quality with distributional checks against the reference's own batch-shape floor, never absolute text identity.
+5. Threads ≤ physical cores, autotuned. Never SMT.
+6. mmap. Budget cold load as GB ÷ disk GB/s.
+
+**Host state:** `euaaa-llm-gpu-1` and Sunshine were restored after the GPU measurements (D002). `kernel.perf_event_paranoid` is still 1 (runtime only; restore with `sudo sysctl -w kernel.perf_event_paranoid=4`). Pushing to `origin x86/c2-resume` is authorized; `main` is not.
+
 ## 1. Goal now
 User goal: a **MoE inference-engine software factory**: input = model + system (host profile, memory budget) -> output = an engine (build + model representation + runtime flags) that uses **much less memory at about the same accuracy**. Load time, TTFT and tok/s may change (report them); KV-cache changes are allowed. Also in scope: (a) **Lab Manager design** (`MANAGER-DESIGN.md`, `LAB-FEASIBILITY.md`; deterministic coordination, our `bin/lab` is a TEMPORARY reference adapter, not the other team's lab agent), (b) the **CC portfolio** (`cc-inventory.csv`, builds/tools/methodologies with observed-vs-inferred status), (c) a **Friday 5-8 minute demo** (`cc/demo/DEMO.md`, `cc/demo/demo.sh`). Every result carries a claim category (computation-preserving engine gain | representation trade-off | runtime-placement trade-off | failed candidate | infrastructure/methodology | prediction) and a D012 transfer class (transferable | discrete-only | prediction). Proxies: Granite-3.1-1b-a400m (D001-D037; experts 0.84 MiB) and Qwen3-30B-A3B Q4_K_M (D038/D039; experts 2.72 MiB, does not fit the 16 GB GPU). Engine pin: llama.cpp `31288c9c6` (full `31288c9c66e59377f7788d920678a565bb89dd37`).
 
 ## 2. Lanes, hosts, branch
-- Branch `x86/c2-resume` (HEAD bb6a65e at time of writing, 30 commits). `main` untouched. **Nothing pushed; pushing to `origin` (git@github.com:Muxite/siminfeng.git) is not authorized.**
+- Branch `x86/c2-resume` (HEAD bb6a65e at time of writing, 30 commits). `main` untouched. Pushing this branch to `origin` is authorized (2026-11-10); pushing `main` is not.
 - x86-main lane (this host): RTX 5070 Ti (discrete, sm_120), amd64, Docker (containerd store), one GPU job at a time by procedure only (no admission lock, D007). Models in `~/models/campaign/{gguf,qwen3-30b-a3b,data,tools}`; llama.cpp clone `ref/` and image archives are NOT in git.
 - jetson-arm lane: separate host/lead. No SSH route. Exchange = operator-carried git bundle of `x86/c2-resume` (`git bundle verify` + sha256 in BUNDLE.sha256; ~68 MB history, no models/images/profiler reports) plus `handoff/jetson/EXCHANGE-1.md`. Jetson replies as `handoff/jetson/REPLY-1.md` + bundle of `jetson/<task>`. **No reply exists yet** (only EXCHANGE-1.md is in `handoff/jetson/`). Ownership: jetson owns `platform/jetson/**`, `cc/resource_observe/backends/jetson*`, `handoff/jetson/**` replies; x86 owns `cc/engine_handoff`, `cc/build_engine`, `bin/lab`, `cc/resource_observe/CONTRACT.md`.
 - Working tree is dirty by design (many untracked `artifacts/codex*`; modified `evidence/claude-code.jsonl`, `artifacts/x2/loadmon.pid`, and `cc/routing_trace/routing-trace.patch` which T-QRT is editing). Do not `git add -A` blindly.

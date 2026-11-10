@@ -21,7 +21,7 @@ Last updated 2026-11-10, after D041. Statuses come from the decision notes.
 |---|---|---|
 | Resource observer (nvidia-smi, cgroup; "unavailable" ≠ 0) | HAVE (x86) | `cc/resource_observe/`. Jetson/tegrastats backend is a stub |
 | Host-load monitor (compiles/downloads/codex) | HAVE | `frozen-experiment/scripts/loadmon.sh` |
-| **Host calibration microbench**: GPU BW, CPU expert BW per quant, PCIe H2D, per-layer handoff | **GAP (top priority)** | PL4 showed constants don't transfer between models. Candidates: `test-backend-ops perf -o MUL_MAT_ID`, nvbandwidth, STREAM |
+| **Host calibration microbench**: GPU BW, CPU expert BW per quant, PCIe H2D, per-layer handoff | HAVE (T-CAL2: GPU 766, CPU 30.8, H2D 28.7 GB/s) | PL4 showed constants don't transfer between models. Candidates: `test-backend-ops perf -o MUL_MAT_ID`, nvbandwidth, STREAM |
 | PCIe / NVLink bandwidth | TRY | `nvbandwidth`, CUDA `bandwidthTest`. Neither is installed, both can be built in cuda-tools |
 | CPU DRAM bandwidth / Zen 2 counters | TRIED (D042) | No amd_df/UMC PMU on this kernel. perf gives only IPC and DC-fill proxies, so use the T-CAL microbench. `perf_event_paranoid`=1 at runtime; `sudo perf` for system-wide |
 | Jetson telemetry | TRY | `tegrastats`, jtop (jetson-stats) |
@@ -34,7 +34,7 @@ Last updated 2026-11-10, after D041. Statuses come from the decision notes.
 | Quality ledger (fail-closed inheritance of measured quality) | HAVE | T-PL3 `build_quality_ledger.py` (64 entries) |
 | Pareto frontier/budget fit | HAVE | `cc/memory_pareto/pareto.py` |
 | Cache hit-rate predictor from routing traces | HAVE (Granite), extended | `experiments/routing/predict_slots.py`, `cc/routing_trace/trace_replay.py`, T-QRT coverage curves |
-| **Expert-cache lever in the planner** (coverage → hit rate → PCIe miss cost) | **GAP (new, D041)** | Cache gave +38% at 8 GB on Qwen and −34% at 4 GB |
+| **Expert-cache lever in the planner** (coverage → hit rate → miss cost, CPU-share rule) | **GAP (top priority; rules measured in D044/D048)** | Cache gave +38% at 8 GB on Qwen and −34% at 4 GB |
 | TTFT/load-time model | GAP | The planner predicts decode only. D041 shows the cache trades TTFT for decode |
 | Unified-memory (Jetson) host profile | GAP | Offloading saves nothing there. Levers are quant, KV and mmap |
 
@@ -68,8 +68,8 @@ Last updated 2026-11-10, after D041. Statuses come from the decision notes.
 | nsys per-token decode breakdown | HAVE | `cc/nsys_decode/analyze_nsys.py` (D031) |
 | **ncu kernel roofline per kernel class** | HAVE (first use, D041) | `artifacts/ncu1`. Needs `--cap-add SYS_ADMIN`. Found about 40% of kernel time in tiny launch-bound kernels |
 | Routing tracer (top-k IDs per layer/token; Granite + Qwen3) | HAVE | `cc/routing_trace/` patch + replay |
-| **Profiler capture wrapper** (nsys/ncu flags, mounts, extracting the engine `/app` into cuda-tools) | **GAP** | The recipes live only in D004/D011/D041 |
-| ncu summarizer (by kernel: time share, GB/s, DRAM %) | GAP (inline script) | Promote from the D041 inline Python |
+| **Profiler capture wrapper** (nsys/ncu flags, mounts, extracting the engine `/app` into cuda-tools) | HAVE (`cc/profilers`, T-PROFW) | The recipes live only in D004/D011/D041 |
+| ncu summarizer (by kernel: time share, GB/s, DRAM %) | HAVE (`cc/profilers/ncu_summary.py`) | Promote from the D041 inline Python |
 | compute-sanitizer memcheck/racecheck for engine patches | TRY | Already in cuda-tools, never run |
 | eBPF uprobe split timer (`ggml_graph_compute` per CPU split) | HAVE (first use, D042) | sudo bpftrace on `/proc/<ctr pid>/root/app/libggml-cpu.so`. Confirmed 0.79 ms/CPU layer at 89% of decode wall time |
 | `cb_eval` per-node timing by `ffn_moe_*` tag | TRY | Pitfall: `ffn_moe_topk` is a strided view |
@@ -82,9 +82,9 @@ Last updated 2026-11-10, after D041. Statuses come from the decision notes.
 | Engagement check (prove a patch path is actually taken before timing) | HAVE (method) | D024 |
 | Paired PPL + KLD against bf16 logits | HAVE | `llama-perplexity --kl-divergence-base`, `artifacts/kl/` |
 | test-backend-ops for patched ops | HAVE | Build CC `--extra-target` |
-| **Verdict tool**: frozen criteria → `verdict.json` (speed Δ, text, PPL, KLD, backend-ops) | **GAP** | Checked by hand in each D0xx note |
+| **Verdict tool**: frozen criteria → `verdict.json` (speed Δ, text, PPL, KLD, backend-ops) | HAVE (`cc/verdict`, T-VER) | Checked by hand in each D0xx note |
 | Task-level eval (lm-eval-harness against llama-server, logprob tasks) | TRY | Catches regressions that KLD misses on long generation |
-| Qwen KLD reference logits | GAP | Needed to gate D041 cache configs and Qwen variants |
+| Qwen KLD reference logits | HAVE (`artifacts/night/kl/qwen-k18.kl`, `q36-k18.kl`; decode-path floor about 0.0058) | Needed to gate D041 cache configs and Qwen variants |
 
 ## 8. Model variants and compression
 | Item | State | Where / what |
@@ -103,10 +103,10 @@ Last updated 2026-11-10, after D041. Statuses come from the decision notes.
 | kv_quant_fix (q8_0 KV at 32k: −720 MiB, PPL ≈) | ACCEPTED (D033) |
 | release-stack-1 (both) | SHIPPED (D037/D040) |
 | moe_static_hot, hybrid_split, own LRU | REJECTED (D024, D030/31, D022) |
-| upstream `--moe-cache-mib` | **RE-OPENED (D041)**: wins on Qwen at 8 GB |
+| upstream `--moe-cache-mib` + `--moe-cache-cpu-share` | **DEFAULT (D044, D048)**: +30–76% on Qwen3-30B and +21–42% on Qwen3.6, with less VRAM |
 | Kernel fusion: rms_norm+quantize_q8_1, scale+add, topk+reduce | TRY (from ncu, D041) |
 | N-gram self-spec `--spec-type ngram-mod` | **WIN, workload-gated (D042)**: 2.4–3.0× on copy-heavy Qwen, lossless, 0 cost on chat |
-| MTP heads (`--spec-type draft-mtp`) | TRY. Verifying several tokens at once reads each expert once; watch the growth in the union of experts touched |
+| MTP heads (`--spec-type draft-mtp`) | **ACCEPTED (D046, D048)**: +23–42% copy, +10–14% chat; beats spending the VRAM on layers; stacks with the cache |
 | Shared-expert-on-GPU pinning, async CPU/GPU overlap (KTransformers ideas) | TRY (research) |
 
 ## 10. Provenance, orchestration, reporting
@@ -166,11 +166,11 @@ Each row is an engine feature, followed by what we have and the gap in tools or 
 
 Not adopted: Strata's "experimental speed projection" is a refusal-direction control vector. It is a safety removal, not an inference optimisation, so it is out of scope.
 
-## Build next (ranked)
-1. Host calibration microbench (§2). It feeds the PL4 model per host.
-2. Expert-cache lever plus a TTFT model in the planner (§3), followed by the frozen D041 sweep with Qwen KLD reference logits (§7).
-3. Verdict tool and quiet-host gate (§5, §7). These remove most of the manual review.
-4. Generic `make_variant` and the patch packager (§4, §8).
-5. Profiler capture wrapper and ncu summarizer (§6). After that, prototype kernel fusion.
-6. Speculative-decoding screen (n-gram first) on Qwen.
-7. Unified-memory host profile for the Jetson.
+## Build next (ranked, updated after D048)
+1. **Planner levers from measured rules:** expert cache + CPU-share (hit-rate → share 0 / 0.9), ub (TTFT vs VRAM), spec (MTP if heads exist, n-gram for copy-heavy work), threads. Plus a TTFT/load model (load ≈ 6 s + cold GB ÷ disk GB/s; prompt ms by ub). Validate against D044/D048 cells.
+2. **Quality gate v2:** relative to the reference's batch-shape floor (D044 A2, D048 X2) and added to `cc/verdict`. Agreement@sure and per-task metrics (G12). Task-level eval for pruned variants (G-REAP).
+3. **Quiet-host gate v2:** process names plus swap-in, page faults and GPU clocks (the D048 interference window).
+4. **Workload pack and history control (G3, G4):** multi-turn, long prompt, fresh vs warmed cache per workload (D045 addendum).
+5. Runtime autotuner (G5): threads, ub, share, cache MiB. Keep a change if it is ≥ 3% faster.
+6. Host-RAM / SSD tier and load-time probe in the planner (G1, G2; X7 provides the constants).
+7. Generic `make_variant`, patch packager, kernel fusion prototype, Jetson unified-memory profile.
