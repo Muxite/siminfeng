@@ -1,0 +1,478 @@
+0.00.021.234 I llama_completion: llama backend init
+0.00.021.253 I llama_completion: load the model and apply lora adapter, if any
+0.00.021.290 I cmn  common_fit_a: fitting params to device memory ...
+0.00.021.291 I cmn  common_fit_a: (for bugs during this step try to reproduce them with -fit off, or provide --verbose logs if the bug only occurs with -fit on)
+0.00.021.363 I common_params_fit_impl: getting device memory data for initial parameters:
+0.00.923.794 I common_memory_breakdown_print: | memory breakdown [MiB] | total   free     self   model   context   compute    unaccounted |
+0.00.923.807 I common_memory_breakdown_print: |   - CUDA0 (Orin)       |  7607 = 5234 + ( 4762 =  2038 +    2186 +     537) +       -2390 |
+0.00.923.808 I common_memory_breakdown_print: |   - Host               |                 19295 = 19275 +       0 +      20                |
+0.01.100.672 I common_params_fit_impl: projected to use 4762 MiB of device memory vs. 5234 MiB of free device memory
+0.01.100.690 I common_params_fit_impl: cannot meet free memory target of 1024 MiB, need to reduce device memory by 551 MiB
+0.01.100.691 I common_params_fit_impl: context size set by user to 4096 -> no change
+0.01.106.318 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+0.01.106.350 I common_fit_params: fitting params to free memory took 1.08 seconds
+0.01.207.894 I llama_model_loader: loaded meta data with 54 key-value pairs and 733 tensors from /om/model.gguf (version GGUF V3 (latest))
+0.01.207.946 I llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
+0.01.207.957 I llama_model_loader: - kv   0:                       general.architecture str              = qwen35moe
+0.01.207.959 I llama_model_loader: - kv   1:                               general.type str              = model
+0.01.207.963 I llama_model_loader: - kv   2:                     general.sampling.top_k i32              = 20
+0.01.207.976 I llama_model_loader: - kv   3:                     general.sampling.top_p f32              = 0.950000
+0.01.207.978 I llama_model_loader: - kv   4:                      general.sampling.temp f32              = 1.000000
+0.01.207.979 I llama_model_loader: - kv   5:                               general.name str              = Qwen3.6-35B-A3B
+0.01.207.985 I llama_model_loader: - kv   6:                           general.basename str              = Qwen3.6-35B-A3B
+0.01.207.988 I llama_model_loader: - kv   7:                       general.quantized_by str              = Unsloth
+0.01.207.989 I llama_model_loader: - kv   8:                         general.size_label str              = 35B-A3B
+0.01.207.991 I llama_model_loader: - kv   9:                            general.license str              = apache-2.0
+0.01.207.996 I llama_model_loader: - kv  10:                       general.license.link str              = https://huggingface.co/Qwen/Qwen3.6-3...
+0.01.207.999 I llama_model_loader: - kv  11:                           general.repo_url str              = https://huggingface.co/unsloth
+0.01.208.001 I llama_model_loader: - kv  12:                   general.base_model.count u32              = 1
+0.01.208.003 I llama_model_loader: - kv  13:                  general.base_model.0.name str              = Qwen3.6 35B A3B
+0.01.208.004 I llama_model_loader: - kv  14:          general.base_model.0.organization str              = Qwen
+0.01.208.007 I llama_model_loader: - kv  15:              general.base_model.0.repo_url str              = https://huggingface.co/Qwen/Qwen3.6-3...
+0.01.208.014 I llama_model_loader: - kv  16:                               general.tags arr[str,3]       = ["qwen3_5_moe", "qwen", "image-text-t...
+0.01.208.017 I llama_model_loader: - kv  17:                      qwen35moe.block_count u32              = 40
+0.01.208.018 I llama_model_loader: - kv  18:                   qwen35moe.context_length u32              = 262144
+0.01.208.019 I llama_model_loader: - kv  19:                 qwen35moe.embedding_length u32              = 2048
+0.01.208.021 I llama_model_loader: - kv  20:             qwen35moe.attention.head_count u32              = 16
+0.01.208.023 I llama_model_loader: - kv  21:          qwen35moe.attention.head_count_kv u32              = 2
+0.01.208.026 I llama_model_loader: - kv  22:          qwen35moe.rope.dimension_sections arr[i32,4]       = [11, 11, 10, 0]
+0.01.208.031 I llama_model_loader: - kv  23:                   qwen35moe.rope.freq_base f32              = 10000000.000000
+0.01.208.033 I llama_model_loader: - kv  24: qwen35moe.attention.layer_norm_rms_epsilon f32              = 0.000001
+0.01.208.035 I llama_model_loader: - kv  25:                     qwen35moe.expert_count u32              = 256
+0.01.208.037 I llama_model_loader: - kv  26:                qwen35moe.expert_used_count u32              = 8
+0.01.208.038 I llama_model_loader: - kv  27:             qwen35moe.attention.key_length u32              = 256
+0.01.208.040 I llama_model_loader: - kv  28:           qwen35moe.attention.value_length u32              = 256
+0.01.208.041 I llama_model_loader: - kv  29:       qwen35moe.expert_feed_forward_length u32              = 512
+0.01.208.043 I llama_model_loader: - kv  30: qwen35moe.expert_shared_feed_forward_length u32              = 512
+0.01.208.044 I llama_model_loader: - kv  31:                  qwen35moe.ssm.conv_kernel u32              = 4
+0.01.208.045 I llama_model_loader: - kv  32:                   qwen35moe.ssm.state_size u32              = 128
+0.01.208.046 I llama_model_loader: - kv  33:                  qwen35moe.ssm.group_count u32              = 16
+0.01.208.048 I llama_model_loader: - kv  34:               qwen35moe.ssm.time_step_rank u32              = 32
+0.01.208.050 I llama_model_loader: - kv  35:                   qwen35moe.ssm.inner_size u32              = 4096
+0.01.208.052 I llama_model_loader: - kv  36:          qwen35moe.full_attention_interval u32              = 4
+0.01.208.054 I llama_model_loader: - kv  37:             qwen35moe.rope.dimension_count u32              = 64
+0.01.208.056 I llama_model_loader: - kv  38:                       tokenizer.ggml.model str              = gpt2
+0.01.208.057 I llama_model_loader: - kv  39:                         tokenizer.ggml.pre str              = qwen35
+0.01.208.062 I llama_model_loader: - kv  40:                      tokenizer.ggml.tokens arr[str,248320]  = ["!", "\"", "#", "$", "%", "&", "'", ...
+0.01.208.067 I llama_model_loader: - kv  41:                  tokenizer.ggml.token_type arr[i32,248320]  = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ...
+0.01.208.071 I llama_model_loader: - kv  42:                      tokenizer.ggml.merges arr[str,247587]  = ["Ġ Ġ", "ĠĠ ĠĠ", "i n", "Ġ t",...
+0.01.208.072 I llama_model_loader: - kv  43:                tokenizer.ggml.eos_token_id u32              = 248046
+0.01.208.073 I llama_model_loader: - kv  44:            tokenizer.ggml.padding_token_id u32              = 248055
+0.01.208.074 I llama_model_loader: - kv  45:                tokenizer.ggml.bos_token_id u32              = 248044
+0.01.208.076 I llama_model_loader: - kv  46:               tokenizer.ggml.add_bos_token bool             = false
+0.01.208.081 I llama_model_loader: - kv  47:                    tokenizer.chat_template str              = {%- set image_count = namespace(value...
+0.01.208.082 I llama_model_loader: - kv  48:               general.quantization_version u32              = 2
+0.01.208.083 I llama_model_loader: - kv  49:                          general.file_type u32              = 15
+0.01.208.085 I llama_model_loader: - kv  50:                      quantize.imatrix.file str              = Qwen3.6-35B-A3B-GGUF/imatrix_unsloth....
+0.01.208.087 I llama_model_loader: - kv  51:                   quantize.imatrix.dataset str              = unsloth_calibration_Qwen3.6-35B-A3B.txt
+0.01.208.088 I llama_model_loader: - kv  52:             quantize.imatrix.entries_count u32              = 510
+0.01.208.089 I llama_model_loader: - kv  53:              quantize.imatrix.chunks_count u32              = 76
+0.01.208.091 I llama_model_loader: - type  f32:  361 tensors
+0.01.208.092 I llama_model_loader: - type q8_0:  252 tensors
+0.01.208.093 I llama_model_loader: - type q4_K:   78 tensors
+0.01.208.093 I llama_model_loader: - type q5_K:   38 tensors
+0.01.208.094 I llama_model_loader: - type q6_K:    4 tensors
+0.01.208.098 I print_info: file format = GGUF V3 (latest)
+0.01.208.099 I print_info: file type   = Q4_K - Medium
+0.01.208.101 I print_info: file size   = 20.81 GiB (5.16 BPW) 
+0.01.208.391 I llama_prepare_model_devices: using device CUDA0 (Orin) (0000:00:00.0) - 5252 MiB free
+0.01.518.168 I load: 0 unused tokens
+0.01.663.101 I load: printing all EOG tokens:
+0.01.663.120 I load:   - 248044 ('<|endoftext|>')
+0.01.663.122 I load:   - 248046 ('<|im_end|>')
+0.01.663.123 I load:   - 248063 ('<|fim_pad|>')
+0.01.663.124 I load:   - 248064 ('<|repo_name|>')
+0.01.663.125 I load:   - 248065 ('<|file_sep|>')
+0.01.664.250 I load: special tokens cache size = 33
+0.01.729.420 I load: token to piece cache size = 1.7581 MB
+0.01.729.473 I print_info: arch                  = qwen35moe
+0.01.729.474 I print_info: vocab_only            = 0
+0.01.729.475 I print_info: no_alloc              = 0
+0.01.729.476 I print_info: n_ctx_train           = 262144
+0.01.729.478 I print_info: n_embd_inp            = 2048
+0.01.729.478 I print_info: n_embd                = 2048
+0.01.729.480 I print_info: n_embd_out            = 2048
+0.01.729.480 I print_info: n_layer               = 40
+0.01.729.481 I print_info: n_layer_all           = 40
+0.01.729.509 I print_info: n_head                = 16
+0.01.729.512 I print_info: n_head_kv             = 2
+0.01.729.513 I print_info: n_rot                 = 64
+0.01.729.514 I print_info: n_swa                 = 0
+0.01.729.515 I print_info: is_swa_any            = 0
+0.01.729.516 I print_info: non_causal_type       = 0
+0.01.729.517 I print_info: n_embd_head_k         = 256
+0.01.729.517 I print_info: n_embd_head_v         = 256
+0.01.729.519 I print_info: n_gqa                 = 8
+0.01.729.523 I print_info: n_embd_k_gqa          = 512
+0.01.729.526 I print_info: n_embd_v_gqa          = 512
+0.01.729.528 I print_info: f_norm_eps            = 0.0e+00
+0.01.729.531 I print_info: f_norm_rms_eps        = 1.0e-06
+0.01.729.532 I print_info: f_clamp_kqv           = 0.0e+00
+0.01.729.532 I print_info: f_max_alibi_bias      = 0.0e+00
+0.01.729.533 I print_info: f_logit_scale         = 0.0e+00
+0.01.729.534 I print_info: f_attn_scale          = 0.0e+00
+0.01.729.535 I print_info: f_attn_value_scale    = 0.0000
+0.01.729.537 I print_info: n_ff                  = 0
+0.01.729.538 I print_info: n_expert              = 256
+0.01.729.539 I print_info: n_expert_used         = 8
+0.01.729.540 I print_info: n_expert_groups       = 0
+0.01.729.541 I print_info: n_group_used          = 0
+0.01.729.541 I print_info: causal attn           = 1
+0.01.729.542 I print_info: pooling type          = -1
+0.01.729.543 I print_info: rope type             = 40
+0.01.729.543 I print_info: rope scaling          = linear
+0.01.729.547 I print_info: freq_base_train       = 10000000.0
+0.01.729.548 I print_info: freq_scale_train      = 1
+0.01.729.548 I print_info: n_ctx_orig_yarn       = 262144
+0.01.729.549 I print_info: rope_yarn_log_mul     = 0.0000
+0.01.729.550 I print_info: rope_finetuned        = unknown
+0.01.729.551 I print_info: mrope sections        = [11, 11, 10, 0]
+0.01.729.552 I print_info: ssm_d_conv            = 4
+0.01.729.553 I print_info: ssm_d_inner           = 4096
+0.01.729.553 I print_info: ssm_d_state           = 128
+0.01.729.554 I print_info: ssm_dt_rank           = 32
+0.01.729.555 I print_info: ssm_n_group           = 16
+0.01.729.555 I print_info: ssm_dt_b_c_rms        = 0
+0.01.729.557 I print_info: model type            = 35B.A3B
+0.01.729.559 I print_info: model params          = 34.66 B
+0.01.729.560 I print_info: general.name          = Qwen3.6-35B-A3B
+0.01.729.563 I print_info: vocab type            = BPE
+0.01.729.564 I print_info: n_vocab               = 248320
+0.01.729.565 I print_info: n_merges              = 247587
+0.01.729.566 I print_info: BOS token             = 248044 '<|endoftext|>'
+0.01.729.567 I print_info: EOS token             = 248046 '<|im_end|>'
+0.01.729.567 I print_info: EOT token             = 248046 '<|im_end|>'
+0.01.729.569 I print_info: PAD token             = 248055 '<|vision_pad|>'
+0.01.729.570 I print_info: LF token              = 198 'Ċ'
+0.01.729.570 I print_info: FIM PRE token         = 248060 '<|fim_prefix|>'
+0.01.729.571 I print_info: FIM SUF token         = 248062 '<|fim_suffix|>'
+0.01.729.572 I print_info: FIM MID token         = 248061 '<|fim_middle|>'
+0.01.729.573 I print_info: FIM PAD token         = 248063 '<|fim_pad|>'
+0.01.729.573 I print_info: FIM REP token         = 248064 '<|repo_name|>'
+0.01.729.574 I print_info: FIM SEP token         = 248065 '<|file_sep|>'
+0.01.729.575 I print_info: EOG token             = 248044 '<|endoftext|>'
+0.01.729.576 I print_info: EOG token             = 248046 '<|im_end|>'
+0.01.729.576 I print_info: EOG token             = 248063 '<|fim_pad|>'
+0.01.729.577 I print_info: EOG token             = 248064 '<|repo_name|>'
+0.01.729.578 I print_info: EOG token             = 248065 '<|file_sep|>'
+0.01.729.578 I print_info: max token length      = 256
+0.01.729.866 I load_tensors: loading model tensors, this can take a while... (load_mode = mmap)
+0.01.730.593 W llama_model_loader: tensor overrides to CPU are used with mmap enabled - consider using --load-mode none for better performance
+0.42.860.433 I load_tensors: offloading output layer to GPU
+0.42.860.445 I load_tensors: offloading 39 repeating layers to GPU
+0.42.860.446 I load_tensors: offloaded 41/41 layers to GPU
+0.42.860.464 I load_tensors:   CPU_Mapped model buffer size =   515.31 MiB
+0.42.860.466 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.468 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.469 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.470 I load_tensors:   CPU_Mapped model buffer size =   210.00 MiB
+0.42.860.472 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.473 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.474 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.475 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.477 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.478 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.479 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.480 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.481 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.483 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.484 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.485 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.486 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.487 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.489 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.490 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.490 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.492 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.492 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.493 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.494 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.495 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.496 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.497 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.498 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.499 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.500 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.500 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.501 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.502 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.503 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.504 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.505 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.506 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.507 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.508 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.509 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.510 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.511 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.512 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.513 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.514 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.515 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.516 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.516 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.517 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.518 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.519 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.520 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.521 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.522 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.523 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.524 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.524 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.525 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.526 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.527 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.528 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.529 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.529 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.530 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.531 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.532 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.533 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.534 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.535 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.536 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.537 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.537 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.538 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.539 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.540 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.541 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.542 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.542 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.543 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.544 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.545 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.546 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.547 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.548 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.549 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.550 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.550 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.551 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.552 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.553 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.554 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.555 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.556 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.556 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.557 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.558 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.559 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.560 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.561 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.562 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.563 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.564 I load_tensors:   CPU_Mapped model buffer size =   210.00 MiB
+0.42.860.564 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.565 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.566 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.567 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.568 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.569 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.569 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.570 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.571 I load_tensors:   CPU_Mapped model buffer size =   176.00 MiB
+0.42.860.572 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.573 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.574 I load_tensors:   CPU_Mapped model buffer size =   210.00 MiB
+0.42.860.575 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.576 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.576 I load_tensors:   CPU_Mapped model buffer size =   210.00 MiB
+0.42.860.577 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.578 I load_tensors:   CPU_Mapped model buffer size =   144.00 MiB
+0.42.860.580 I load_tensors:        CUDA0 model buffer size =  2038.80 MiB
+..................................................................................................
+0.47.041.920 I cmn  common_init_: added <|endoftext|> logit bias = -inf
+0.47.041.934 I cmn  common_init_: added <|im_end|> logit bias = -inf
+0.47.041.936 I cmn  common_init_: added <|fim_pad|> logit bias = -inf
+0.47.041.937 I cmn  common_init_: added <|repo_name|> logit bias = -inf
+0.47.041.938 I cmn  common_init_: added <|file_sep|> logit bias = -inf
+0.47.043.290 I llama_context: constructing llama_context
+0.47.043.303 I llama_context: n_seq_max             = 1
+0.47.043.303 I llama_context: n_ctx                 = 4096
+0.47.043.304 I llama_context: n_ctx_seq             = 4096
+0.47.043.305 I llama_context: n_batch               = 2048
+0.47.043.305 I llama_context: n_ubatch              = 512
+0.47.043.306 I llama_context: causal_attn           = 1
+0.47.043.308 I llama_context: flash_attn            = auto
+0.47.043.308 I llama_context: kv_unified            = false
+0.47.043.316 I llama_context: freq_base             = 10000000.0
+0.47.043.317 I llama_context: freq_scale            = 1
+0.47.043.318 I llama_context: n_rs_seq              = 0
+0.47.043.319 I llama_context: n_outputs_max         = 2048
+0.47.043.320 I llama_context: n_outputs_max_per_seq = 1
+0.47.043.321 I llama_context: n_ctx_seq (4096) < n_ctx_train (262144) -- the full capacity of the model will not be utilized
+0.47.044.784 I llama_context:  CUDA_Host  output buffer size =     0.95 MiB
+0.47.157.707 I llama_kv_cache:      CUDA0 KV buffer size =    80.00 MiB
+0.47.157.726 I llama_kv_cache: size =   80.00 MiB (  4096 cells,  10 layers,  1/1 seqs), K (f16):   40.00 MiB, V (f16):   40.00 MiB
+0.47.157.732 I llama_kv_cache: n_rot_k = 0, n_embd_head_k_all = 256
+0.47.157.733 I llama_kv_cache: n_rot_v = 0, n_embd_head_k_all = 256
+0.47.197.628 I llama_memory_recurrent:      CUDA0 RS buffer size =    62.81 MiB
+0.47.197.653 I llama_memory_recurrent: size =   62.81 MiB (     1 cells,  40 layers,  1 seqs  0 rs_seq), R (f32):    2.81 MiB, S (f32):   60.00 MiB, P (f32):    0.00 MiB
+0.48.845.857 I llama_moe_cache: direct fill on CUDA0: 2 pinned buffers, 860160 bytes each (+4095 alignment slack)
+0.48.845.882 W llama_moe_cache: direct fill tensor blk.0.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.887 W llama_moe_cache: direct fill tensor blk.0.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.889 W llama_moe_cache: direct fill tensor blk.0.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.890 W llama_moe_cache: direct fill tensor blk.1.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.891 W llama_moe_cache: direct fill tensor blk.1.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.892 W llama_moe_cache: direct fill tensor blk.1.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.894 W llama_moe_cache: direct fill tensor blk.2.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.895 W llama_moe_cache: direct fill tensor blk.2.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.896 W llama_moe_cache: direct fill tensor blk.2.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.897 W llama_moe_cache: direct fill tensor blk.3.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.898 W llama_moe_cache: direct fill tensor blk.3.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.899 W llama_moe_cache: direct fill tensor blk.3.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.900 W llama_moe_cache: direct fill tensor blk.4.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.901 W llama_moe_cache: direct fill tensor blk.4.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.902 W llama_moe_cache: direct fill tensor blk.4.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.903 W llama_moe_cache: direct fill tensor blk.5.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.904 W llama_moe_cache: direct fill tensor blk.5.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.905 W llama_moe_cache: direct fill tensor blk.5.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.906 W llama_moe_cache: direct fill tensor blk.6.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.907 W llama_moe_cache: direct fill tensor blk.6.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.908 W llama_moe_cache: direct fill tensor blk.6.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.909 W llama_moe_cache: direct fill tensor blk.7.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.910 W llama_moe_cache: direct fill tensor blk.7.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.911 W llama_moe_cache: direct fill tensor blk.7.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.912 W llama_moe_cache: direct fill tensor blk.8.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.913 W llama_moe_cache: direct fill tensor blk.8.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.913 W llama_moe_cache: direct fill tensor blk.8.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.915 W llama_moe_cache: direct fill tensor blk.9.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.916 W llama_moe_cache: direct fill tensor blk.9.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.917 W llama_moe_cache: direct fill tensor blk.9.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.918 W llama_moe_cache: direct fill tensor blk.10.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.919 W llama_moe_cache: direct fill tensor blk.10.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.920 W llama_moe_cache: direct fill tensor blk.10.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.922 W llama_moe_cache: direct fill tensor blk.11.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.922 W llama_moe_cache: direct fill tensor blk.11.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.923 W llama_moe_cache: direct fill tensor blk.11.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.924 W llama_moe_cache: direct fill tensor blk.12.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.943 W llama_moe_cache: direct fill tensor blk.12.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.946 W llama_moe_cache: direct fill tensor blk.12.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.948 W llama_moe_cache: direct fill tensor blk.13.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.949 W llama_moe_cache: direct fill tensor blk.13.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.950 W llama_moe_cache: direct fill tensor blk.13.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.951 W llama_moe_cache: direct fill tensor blk.14.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.952 W llama_moe_cache: direct fill tensor blk.14.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.953 W llama_moe_cache: direct fill tensor blk.14.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.954 W llama_moe_cache: direct fill tensor blk.15.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.955 W llama_moe_cache: direct fill tensor blk.15.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.956 W llama_moe_cache: direct fill tensor blk.15.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.957 W llama_moe_cache: direct fill tensor blk.16.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.958 W llama_moe_cache: direct fill tensor blk.16.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.958 W llama_moe_cache: direct fill tensor blk.16.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.960 W llama_moe_cache: direct fill tensor blk.17.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.961 W llama_moe_cache: direct fill tensor blk.17.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.961 W llama_moe_cache: direct fill tensor blk.17.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.962 W llama_moe_cache: direct fill tensor blk.18.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.963 W llama_moe_cache: direct fill tensor blk.18.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.964 W llama_moe_cache: direct fill tensor blk.18.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.965 W llama_moe_cache: direct fill tensor blk.19.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.966 W llama_moe_cache: direct fill tensor blk.19.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.967 W llama_moe_cache: direct fill tensor blk.19.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.968 W llama_moe_cache: direct fill tensor blk.20.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.969 W llama_moe_cache: direct fill tensor blk.20.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.969 W llama_moe_cache: direct fill tensor blk.20.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.970 W llama_moe_cache: direct fill tensor blk.21.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.971 W llama_moe_cache: direct fill tensor blk.21.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.972 W llama_moe_cache: direct fill tensor blk.21.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.973 W llama_moe_cache: direct fill tensor blk.22.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.974 W llama_moe_cache: direct fill tensor blk.22.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.975 W llama_moe_cache: direct fill tensor blk.22.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.976 W llama_moe_cache: direct fill tensor blk.23.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.977 W llama_moe_cache: direct fill tensor blk.23.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.978 W llama_moe_cache: direct fill tensor blk.23.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.980 W llama_moe_cache: direct fill tensor blk.24.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.980 W llama_moe_cache: direct fill tensor blk.24.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.981 W llama_moe_cache: direct fill tensor blk.24.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.983 W llama_moe_cache: direct fill tensor blk.25.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.983 W llama_moe_cache: direct fill tensor blk.25.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.984 W llama_moe_cache: direct fill tensor blk.25.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.985 W llama_moe_cache: direct fill tensor blk.26.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.986 W llama_moe_cache: direct fill tensor blk.26.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.987 W llama_moe_cache: direct fill tensor blk.26.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.988 W llama_moe_cache: direct fill tensor blk.27.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.989 W llama_moe_cache: direct fill tensor blk.27.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.990 W llama_moe_cache: direct fill tensor blk.27.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.991 W llama_moe_cache: direct fill tensor blk.28.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.992 W llama_moe_cache: direct fill tensor blk.28.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.992 W llama_moe_cache: direct fill tensor blk.28.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.993 W llama_moe_cache: direct fill tensor blk.29.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.994 W llama_moe_cache: direct fill tensor blk.29.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.995 W llama_moe_cache: direct fill tensor blk.29.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.996 W llama_moe_cache: direct fill tensor blk.30.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.997 W llama_moe_cache: direct fill tensor blk.30.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.998 W llama_moe_cache: direct fill tensor blk.30.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.845.999 W llama_moe_cache: direct fill tensor blk.31.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.000 W llama_moe_cache: direct fill tensor blk.31.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.000 W llama_moe_cache: direct fill tensor blk.31.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.001 W llama_moe_cache: direct fill tensor blk.32.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.002 W llama_moe_cache: direct fill tensor blk.32.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.003 W llama_moe_cache: direct fill tensor blk.32.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.004 W llama_moe_cache: direct fill tensor blk.33.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.005 W llama_moe_cache: direct fill tensor blk.33.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.006 W llama_moe_cache: direct fill tensor blk.33.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.007 W llama_moe_cache: direct fill tensor blk.34.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.007 W llama_moe_cache: direct fill tensor blk.34.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.009 W llama_moe_cache: direct fill tensor blk.34.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.010 W llama_moe_cache: direct fill tensor blk.35.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.011 W llama_moe_cache: direct fill tensor blk.35.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.011 W llama_moe_cache: direct fill tensor blk.35.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.013 W llama_moe_cache: direct fill tensor blk.36.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.014 W llama_moe_cache: direct fill tensor blk.36.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.014 W llama_moe_cache: direct fill tensor blk.36.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.016 W llama_moe_cache: direct fill tensor blk.37.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.016 W llama_moe_cache: direct fill tensor blk.37.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.017 W llama_moe_cache: direct fill tensor blk.37.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.018 W llama_moe_cache: direct fill tensor blk.38.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.019 W llama_moe_cache: direct fill tensor blk.38.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.020 W llama_moe_cache: direct fill tensor blk.38.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.021 W llama_moe_cache: direct fill tensor blk.39.ffn_gate_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.021 W llama_moe_cache: direct fill tensor blk.39.ffn_up_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.023 W llama_moe_cache: direct fill tensor blk.39.ffn_down_exps.weight is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback
+0.48.846.040 I impl:      CUDA0 MoE cache size =  2044.11 MiB for 18760.00 MiB of host experts, 0% of the misses on the CPU
+0.48.846.044 I impl: 36 layers, q5_K:  1005 slots (10.9%, 3.5 tokens worth)
+0.48.846.046 I impl:  1 layers, q6_K:    26 slots (10.2%, 3.2 tokens worth)
+0.48.846.048 I impl:  3 layers, q6_K:    82 slots (10.7%, 3.4 tokens worth)
+0.48.846.052 I sched_reserve: reserving ...
+0.48.856.064 I resolve_fused_ops: Flash Attention enabled
+0.48.856.076 I resolve_fused_ops: resolving fused DeepSeek V4 HC support:
+0.48.859.360 I resolve_fused_ops: fused DeepSeek V4 HC pre enabled
+0.48.862.590 I resolve_fused_ops: fused DeepSeek V4 HC comb enabled
+0.48.865.836 I resolve_fused_ops: fused DeepSeek V4 HC post enabled
+0.49.311.265 I sched_reserve:      CUDA0 compute buffer size =   537.00 MiB
+0.49.311.284 I sched_reserve:  CUDA_Host compute buffer size =    20.03 MiB
+0.49.311.293 I sched_reserve: graph (pp bs=512, tg bs=1): nodes = 3819 / 4059, splits = 122 / 42, input objects = 4 / 4, input tensors = 10 / 10
+0.49.311.296 I sched_reserve: reserve took 465.24 ms, sched copies = 1
+0.49.311.479 I cmn          init: llama threadpool init, n_threads = 6
+0.49.312.505 I cmn  common_init_: warming up the model with an empty run - please wait ... (--no-warmup to disable)
+0.54.574.005 I 
+0.54.576.631 I system_info: n_threads = 6 (n_threads_batch = 6) / 6 | CUDA : ARCHS = 870 | USE_GRAPHS = 1 | FA_QUANTS = q4_0-q4_0,q8_0-q8_0,f16-f16,bf16-bf16 | CPU : NEON = 1 | ARM_FMA = 1 | FP16_VA = 1 | DOTPROD = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.54.576.636 I 
+0.54.580.295 I sampler seed: 4294967295
+0.54.580.331 I sampler params: 
+	repeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000
+	dry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 64
+	top_k = 20, top_p = 0.950, min_p = 0.050, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000
+	mirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900
+0.54.580.545 I sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> greedy 
+0.54.580.551 I generate: n_ctx = 4096, n_batch = 2048, n_predict = 64, n_keep = 0
+0.54.580.551 I 
+2.38.224.279 I sched_graph_realloc: graph reallocation: nodes = 4319 (changed = 0), splits = 42, n_same = 1, n_diff = 0
+2.42.321.288 I common_perf_print:    sampling time =      66.41 ms
+2.42.321.422 I common_perf_print:    samplers time =      30.41 ms /   259 tokens
+2.42.322.413 I common_perf_print:        load time =   53343.40 ms
+2.42.322.420 I common_perf_print: prompt eval time =   36192.21 ms /   195 tokens (  185.60 ms per token,     5.39 tokens per second)
+2.42.322.423 I common_perf_print:        eval time =   71453.17 ms /    63 runs   ( 1134.18 ms per token,     0.88 tokens per second)
+2.42.322.424 I common_perf_print:       total time =  107748.67 ms /   258 tokens
+2.42.322.425 I common_perf_print: unaccounted time =      36.87 ms /   0.0 %      (total - sampling - prompt eval - eval) / (total)
+2.42.322.427 I common_perf_print:    graphs reused =         61
+2.42.322.428 I common_perf_print:   graph reallocs =          1    /     0        (same size) / (changed size)
+2.42.341.115 I common_memory_breakdown_print: | memory breakdown [MiB] | total   free     self   model   context   compute    unaccounted |
+2.42.341.124 I common_memory_breakdown_print: |   - CUDA0 (Orin)       |  7607 = 1191 + ( 4762 =  2038 +    2186 +     537) +        1653 |
+2.42.341.125 I common_memory_breakdown_print: |   - Host               |                 19297 = 19275 +       1 +      20                |
+2.42.417.814 I llama_moe_cache: direct fill reads = 0, bytes = 0, mean read = 0.000 us, fallbacks = 22437
+2.42.417.844 I llama_moe_cache: ubatch <= 8: hits = 13306, misses = 7479 (0 on the CPU), hit rate = 64.02%, uploaded = 13785.79 MiB
+2.42.417.848 I llama_moe_cache: large batches: 1062 experts copied from the cache, 649.24 MiB

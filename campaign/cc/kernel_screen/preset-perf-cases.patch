@@ -1,0 +1,41 @@
+--- a/tests/test-backend-ops.cpp
++++ b/tests/test-backend-ops.cpp
+@@ -12109,6 +12109,38 @@
+ // Test cases for performance evaluation: should be representative of real-world use cases
+ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
+     std::vector<std::unique_ptr<test_case>> test_cases;
++    // CC kernel screen: Granite and Qwen3.6-35B-A3B expert shapes.
++    // Keep registration cheap: -p filters cases before graph allocation.
++    for (const auto & model : {std::array<int64_t, 3>{1024, 512, 32},
++                              std::array<int64_t, 3>{2048, 512, 256}}) {
++        for (int64_t tokens : {1, 8}) {
++            for (bool down : {false, true}) {
++                const int64_t k = down ? model[1] : model[0];
++                const int64_t width = down ? model[0] : model[1];
++                for (ggml_type type : all_types) {
++                    test_cases.emplace_back(new test_mul_mat(type, GGML_TYPE_F32,
++                        width, tokens, k, {1, 1}, {1, 1}));
++                    for (bool broadcast : {false, true}) {
++                        test_cases.emplace_back(new test_mul_mat_id(type, GGML_TYPE_F32,
++                            model[2], 8, broadcast, width, tokens, k));
++                        test_cases.emplace_back(new test_mul_mat_id_fusion(type, GGML_TYPE_F32,
++                            model[2], 8, broadcast, width, tokens, k, 1));
++                        test_cases.emplace_back(new test_mul_mat_vec_fusion(type, GGML_GLU_OP_SWIGLU,
++                            tokens, width, k, true, model[2], 8, broadcast, false, true, false, {1, 1}));
++                    }
++                }
++            }
++        }
++    }
++
++    for (int64_t width : {512, 1024, 2048}) {
++        for (int64_t tokens : {1, 8}) {
++            for (ggml_type type : {GGML_TYPE_F16, GGML_TYPE_F32}) {
++                test_cases.emplace_back(new test_glu(GGML_GLU_OP_SWIGLU, type,
++                    {2*width, tokens, 1, 1}, 0, false));
++            }
++        }
++    }
+ 
+     // SWIGLU at a 27B-class FFN width, fused [gate|up] vs split operands
+     // note: same bytes either way, so a backend that indexes them differently shows it here

@@ -1,0 +1,44 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c439-5f2c-7d73-a803-40d98d0abf59
+--------
+user
+Execute the assignment in assignments/J-OM7-router-exact-prefetch.md exactly. Read it first.
+codex
+I’ll read the assignment first, then carry out its instructions and required checks.
+exec
+/bin/bash -lc 'cat assignments/J-OM7-router-exact-prefetch.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Assignment J-OM7 — router-informed exact expert prefetch via madvise (component; host jetson-arm; worker Codex)
+Tree: ref/llama.cpp-up1108 @ cf34d311 + cc/mmap_advice/patches/01-mmap-advice-random.patch (your patch 02 must apply on top: `git -C ref/llama.cpp-up1108 apply --check` on the concatenation 01+02).
+Evidence: decisions/D033 (default readahead wastes 57% of NVMe bytes; MADV_RANDOM alone → 4 KiB IOs → half speed; drive: 4K qd1 ≈ 20 MiB/s, 576K qd8 ≈ 536 MiB/s), D032, experiments/jetson/OM/qwen36-layout.json (per-expert slices contiguous inside fused [ne0, ne1, n_expert] tensors ffn_gate_exps/ffn_up_exps/ffn_down_exps; gate/up 589,824 B, down 720,896 B per expert).
+Write `cc/mmap_advice/patches/02-router-prefetch.patch`:
+- Opt-in env `LLAMA_EXPERT_PREFETCH=1` (implies LLAMA_MMAP_ADVICE=random semantics for the expert tensors only: MADV_RANDOM on ffn_*_exps ranges; keep the default advice for the rest of the file so non-expert weights still load with large reads).
+- Hook: when the router top-k tensor of layer L is computed (the same `ffn_moe_topk-L` node the routing-trace patch uses; find how llama.cpp exposes a per-node callback on the CPU/scheduler path — e.g. ggml_backend_sched eval callback, or a dedicated hook in llama-graph build_moe_ffn / llama-context), read the selected expert ids for each token in the ubatch, dedupe, and call madvise(addr, len, MADV_WILLNEED) on each selected expert's gate/up/down slice in the mmap (page-aligned outward; skip if the tensor is not mmap-backed or not expert-contiguous — log once).
+- Optional `LLAMA_EXPERT_PREFETCH_NEXT=1`: also WILLNEED the same expert ids in layer L+1 (cheap speculative heuristic; count how often they are actually selected — log hit ratio at exit).
+- The hook must not force a device→host sync on the GPU path more than the existing code already does; on the -cmoe path ids are computed where? (state it). Avoid calling madvise for experts already advised in the last N tokens (small per-layer LRU of advised ids) to limit syscalls.
+- Counters at exit (LLAMA_LOG_INFO): advise calls, bytes advised, next-layer prediction hits/total.
+- README cc/mmap_advice/README.md: mechanism, applicability (mmap-backed experts; Linux; any GPU/CPU split), risks, the A/B to run (base vs prefetch vs prefetch+next, with io telemetry avg KiB/IO and NVMe GiB).
+No builds/GPU. Time 50 min. Final ≤ 10 lines: patch, combined apply --check, hook point (file:line), sync implications, risks.
+
+exec
+/bin/bash -lc "pwd; rg --files -g AGENTS.md -g '"'!node_modules'"' -g '"'!vendor'"' " in /home/muk/projects/siminfeng/campaign
+ succeeded in 127ms:
+/home/muk/projects/siminfeng/campaign
+ref/llama.cpp-pr31469/AGENTS.md
+ref/llama.cpp-up1108/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/reservation-workflow/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/refactor-orders/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/merge-windows/AGENTS.md
+ref/Strata/AGENTS.md
+ref/llama.cpp/AGENTS.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/AGENTS.md
+

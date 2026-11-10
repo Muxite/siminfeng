@@ -1,0 +1,178 @@
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -1844,7 +1844,57 @@
+     return true;
+ }
+ 
+-static bool ggml_cuda_should_fuse_mul_mat_vec_f(const ggml_tensor * tensor) {
++// Process-wide opt-in; only gate/up GLU callers consult this policy.
++static bool ggml_cuda_j_unfuse_ids(const ggml_tensor * tensor) {
++    static const std::array<bool, GGML_TYPE_COUNT> types = [] {
++        std::array<bool, GGML_TYPE_COUNT> selected{};
++        const char * env = getenv("GGML_CUDA_J_UNFUSE_IDS_TYPES");
++        const std::string list = env ? env : "";
++        size_t begin = 0;
++        while (begin < list.size()) {
++            const size_t end = list.find(',', begin);
++            std::string name = list.substr(begin, end == std::string::npos ? end : end - begin);
++            const size_t first = name.find_first_not_of(" \t\r\n");
++            if (first != std::string::npos) {
++                name = name.substr(first, name.find_last_not_of(" \t\r\n") - first + 1);
++                for (int i = 0; i < GGML_TYPE_COUNT; ++i) {
++                    const char * type_name = ggml_type_name(static_cast<ggml_type>(i));
++                    if (type_name && name == type_name && name != "DEPRECATED") {
++                        selected[i] = true;
++                    }
++                }
++            }
++            if (end == std::string::npos) {
++                break;
++            }
++            begin = end + 1;
++        }
++        // Preserve the numeric flag convention used by the original BF16 switch.
++        if (ggml_cuda_env_flag("GGML_CUDA_J_MMF_IDS")) {
++            selected[GGML_TYPE_BF16] = true;
++        }
++        std::string names;
++        for (int i = 0; i < GGML_TYPE_COUNT; ++i) {
++            if (selected[i]) {
++                if (!names.empty()) {
++                    names += ",";
++                }
++                names += ggml_type_name(static_cast<ggml_type>(i));
++            }
++        }
++        if (!names.empty()) {
++            fprintf(stderr, "GGML_CUDA_J_UNFUSE_IDS_TYPES: unfusing batch-one ID gate/up GLU for %s\n", names.c_str());
++        }
++        return selected;
++    }();
++    return tensor->op == GGML_OP_MUL_MAT_ID && tensor->ne[2] == 1 && types[tensor->src[0]->type];
++}
++
++static bool ggml_cuda_should_fuse_mul_mat_vec_f(const ggml_tensor * tensor, bool gate_up_glu = false) {
++    if (gate_up_glu && ggml_cuda_j_unfuse_ids(tensor)) {
++        return false;
++    }
++
+     ggml_tensor *       src0 = tensor->src[0];
+     ggml_tensor *       src1 = tensor->src[1];
+     const ggml_tensor * dst  = tensor;
+@@ -1872,7 +1922,11 @@
+     return use_mul_mat_vec_f;
+ }
+ 
+-static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor) {
++static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor, bool gate_up_glu = false) {
++    if (gate_up_glu && ggml_cuda_j_unfuse_ids(tensor)) {
++        return false;
++    }
++
+     ggml_tensor *       src0 = tensor->src[0];
+     ggml_tensor *       src1 = tensor->src[1];
+     const ggml_tensor * dst  = tensor;
+@@ -3758,7 +3812,7 @@
+ 
+     if (node->op == GGML_OP_MUL_MAT_ID && cuda_ctx->stream_context().concurrent_events.empty() &&
+             ggml_cuda_match_shared_expert(cgraph, i, i + 3) &&
+-            ggml_cuda_should_fuse_mul_mat_vec_q(cgraph->nodes[i + 2]->src[1])) {
++            ggml_cuda_should_fuse_mul_mat_vec_q(cgraph->nodes[i + 2]->src[1], /*gate_up_glu=*/true)) {
+         const int outputs[] = { i + 2, i + 5 };
+         if (ggml_cuda_check_fusion_memory_ranges(cgraph, i, 6, outputs, 2)) {
+             ggml_tensor * routed = cgraph->nodes[i + 2];
+@@ -4118,7 +4172,7 @@
+                 fusion_data.glu_op     = ggml_get_glu_op(glu);
+                 fusion_data.glu_limit  = ggml_get_op_params_f32(glu, 3);
+ 
+-                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
++                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n, /*gate_up_glu=*/true)) {
+                     ggml_cuda_mul_mat_vec_q(*cuda_ctx, src0, src1, ids, cgraph->nodes[glu_idx], &fusion_data);
+                     fused_mul_mat_vec = true;
+                     fused_node_count  = n_ops;
+@@ -4212,7 +4266,7 @@
+                 fusion_data.glu_op     = ggml_get_glu_op(glu);
+                 fusion_data.glu_limit  = ggml_get_op_params_f32(glu, 3);
+ 
+-                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
++                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n, /*gate_up_glu=*/true)) {
+                     ggml_cuda_mul_mat_vec_q(*cuda_ctx, src0, src1, ids, cgraph->nodes[glu_idx], &fusion_data);
+                     fused_mul_mat_vec = true;
+                     fused_node_count  = n_ops;
+@@ -4261,7 +4315,7 @@
+             const ggml_tensor * src1 = up_n->src[1];
+             const ggml_tensor * ids  = up_n->src[2];
+ 
+-            if (ggml_cuda_should_fuse_mul_mat_vec_f(up_n)) {
++            if (ggml_cuda_should_fuse_mul_mat_vec_f(up_n, /*gate_up_glu=*/true)) {
+                 ggml_cuda_mm_fusion_args_host fusion_data{};
+                 fusion_data.gate      = gate_n->src[0];
+                 fusion_data.x_bias    = up_bias_tensor;
+@@ -4275,7 +4329,7 @@
+                 break;
+             }
+ 
+-            if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
++            if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n, /*gate_up_glu=*/true)) {
+                 ggml_cuda_mm_fusion_args_host fusion_data{};
+                 fusion_data.gate      = gate_n->src[0];
+                 fusion_data.x_bias    = up_bias_tensor;
+@@ -4304,7 +4358,7 @@
+             const ggml_tensor * src1 = up->src[1];
+             const ggml_tensor * ids  = up->src[2];
+ 
+-            if (ggml_cuda_should_fuse_mul_mat_vec_f(up)) {
++            if (ggml_cuda_should_fuse_mul_mat_vec_f(up, /*gate_up_glu=*/true)) {
+                 ggml_cuda_mm_fusion_args_host fusion_data{};
+                 fusion_data.gate      = gate->src[0];
+                 fusion_data.glu_op    = ggml_get_glu_op(glu);
+@@ -4316,7 +4370,7 @@
+                 break;
+             }
+ 
+-            if (ggml_cuda_should_fuse_mul_mat_vec_q(up)) {
++            if (ggml_cuda_should_fuse_mul_mat_vec_q(up, /*gate_up_glu=*/true)) {
+                 ggml_cuda_mm_fusion_args_host fusion_data{};
+                 fusion_data.gate      = gate->src[0];
+                 fusion_data.glu_op    = ggml_get_glu_op(glu);
+--- a/tests/test-backend-ops.cpp
++++ b/tests/test-backend-ops.cpp
+@@ -12109,6 +12109,38 @@
+ // Test cases for performance evaluation: should be representative of real-world use cases
+ static std::vector<std::unique_ptr<test_case>> make_test_cases_perf() {
+     std::vector<std::unique_ptr<test_case>> test_cases;
++    // CC kernel screen: Granite and Qwen3.6-35B-A3B expert shapes.
++    // Keep registration cheap: -p filters cases before graph allocation.
++    for (const auto & model : {std::array<int64_t, 3>{1024, 512, 32},
++                              std::array<int64_t, 3>{2048, 512, 256}}) {
++        for (int64_t tokens : {1, 8}) {
++            for (bool down : {false, true}) {
++                const int64_t k = down ? model[1] : model[0];
++                const int64_t width = down ? model[0] : model[1];
++                for (ggml_type type : all_types) {
++                    test_cases.emplace_back(new test_mul_mat(type, GGML_TYPE_F32,
++                        width, tokens, k, {1, 1}, {1, 1}));
++                    for (bool broadcast : {false, true}) {
++                        test_cases.emplace_back(new test_mul_mat_id(type, GGML_TYPE_F32,
++                            model[2], 8, broadcast, width, tokens, k));
++                        test_cases.emplace_back(new test_mul_mat_id_fusion(type, GGML_TYPE_F32,
++                            model[2], 8, broadcast, width, tokens, k, 1));
++                        test_cases.emplace_back(new test_mul_mat_vec_fusion(type, GGML_GLU_OP_SWIGLU,
++                            tokens, width, k, true, model[2], 8, broadcast, false, true, false, {1, 1}));
++                    }
++                }
++            }
++        }
++    }
++
++    for (int64_t width : {512, 1024, 2048}) {
++        for (int64_t tokens : {1, 8}) {
++            for (ggml_type type : {GGML_TYPE_F16, GGML_TYPE_F32}) {
++                test_cases.emplace_back(new test_glu(GGML_GLU_OP_SWIGLU, type,
++                    {2*width, tokens, 1, 1}, 0, false));
++            }
++        }
++    }
+ 
+     // SWIGLU at a 27B-class FFN width, fused [gate|up] vs split operands
+     // note: same bytes either way, so a backend that indexes them differently shows it here

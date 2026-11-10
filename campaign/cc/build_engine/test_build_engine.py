@@ -124,7 +124,7 @@ def mock_docker(monkeypatch):
             assert (app / "libggml.so").is_symlink()
             assert (app / "libggml.so.0").read_text() == "library"
             assert (app / "libgomp.so.1").exists()
-            assert set(p.name for p in app.iterdir()) == set(engine.TOOLS) | {"libggml.so", "libggml.so.0", "libgomp.so.1"}
+            assert set(p.name for p in app.iterdir()) == set(engine.TOOLS) | set(state.get("extra_targets", [])) | {"libggml.so", "libggml.so.0", "libgomp.so.1"}
             Path(command[command.index("--metadata-file") + 1]).write_text('{"native": true}')
         elif command[1:3] == ["buildx", "bake"]:
             env = kwargs["env"]
@@ -134,6 +134,8 @@ def mock_docker(monkeypatch):
             assert Path(command[command.index("--file") + 1]).parent == staged / ".campaign-recipe"
             assert not any(a.startswith("--allow") for a in command)  # no filesystem entitlements requested
             state["staged_content"] = (staged / "input.txt").read_text()
+            if "test-backend-ops" in env.get("EXTRA_TARGETS", ""):
+                assert "-DLLAMA_BUILD_TESTS=ON" in (staged / ".campaign-recipe" / "Dockerfile").read_text()
             assert not (staged / ".git").exists()
             assert "@sha256:" in env["BASE_RUNTIME"]
             result = "full compiler stdout\n"
@@ -152,7 +154,7 @@ def mock_docker(monkeypatch):
             assert "--rm" in command
             assert "/bin/sh" in command and "sha256sum" in command[-1]
             assert "sha256:" + "1" * 64 in command   # hashed by immutable id, not by tag
-            result = "".join("a" * 64 + "  /app/" + tool + "\n" for tool in engine.TOOLS) + "b" * 64 + "  /app/libggml.so.0\n"
+            result = "".join("a" * 64 + "  /app/" + tool + "\n" for tool in engine.TOOLS + tuple(state.get("extra_targets", []))) + "b" * 64 + "  /app/libggml.so.0\n"
         elif command[1] == "save":
             assert command[-1] == "sha256:" + "1" * 64
             make_tar(command[command.index("--output") + 1], {"manifest.json": []})
@@ -383,3 +385,39 @@ def test_snapshot_python310_fallback(tmp_path, monkeypatch):
         archive.addfile(link)
     with tarfile.open(path) as archive, pytest.raises(ValueError, match="Unsafe archive link"):
         engine.extract_snapshot(archive, dest)
+
+
+def test_tests_target_requires_option(source, tmp_path):
+    args = arguments(source, tmp_path)
+    args.extra_target = ['test-backend-ops']
+    with pytest.raises(ValueError, match='requires --with-tests'):
+        engine.build(args)
+
+
+@pytest.mark.parametrize('jetson', [False, True])
+def test_with_tests_build_and_record(source, tmp_path, mock_docker, monkeypatch, jetson):
+    calls, state = mock_docker
+    state['jetson'] = jetson
+    state['libgomp'] = tmp_path / 'libgomp.so.1'
+    state['libgomp'].write_text('openmp')
+    monkeypatch.setattr(engine.shutil, 'which', lambda name: None)
+    args = arguments(source, tmp_path)
+    args.with_tests = True
+    args.extra_target = ['test-backend-ops']
+    state['extra_targets'] = args.extra_target
+    if jetson:
+        args.target = 'jetson-orin'
+    assert engine.build(args) == 0
+    result = record(args)
+    assert result['with_tests'] is True
+    assert result['extra_targets'] == ['test-backend-ops']
+    assert '-DLLAMA_BUILD_TESTS=ON' in result['cmake_flags']
+    assert '-DLLAMA_BUILD_TESTS=OFF' not in result['cmake_flags']
+    assert '/app/test-backend-ops' in result['tools']
+    if jetson:
+        configure = next(c for c in state['native_calls'] if '-S' in c)
+        assert '-DLLAMA_BUILD_TESTS=ON' in configure
+        compile_cmd = next(c for c in state['native_calls'] if c[:2] == ['cmake', '--build'])
+        assert 'test-backend-ops' in compile_cmd
+    else:
+        assert 'staged_recipes' in result

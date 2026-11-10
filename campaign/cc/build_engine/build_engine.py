@@ -35,6 +35,21 @@ JETSON_FLAGS = ["-DCMAKE_BUILD_TYPE=Release", "-DGGML_CUDA=ON",
                 "-DLLAMA_BUILD_TESTS=OFF", "-DBUILD_SHARED_LIBS=ON"]
 
 
+def test_flags(flags, enabled):
+    return ["-DLLAMA_BUILD_TESTS=ON" if enabled and f == "-DLLAMA_BUILD_TESTS=OFF" else f for f in flags]
+
+
+def stage_recipes(destination, with_tests):
+    for name in ("Dockerfile", "docker-bake.hcl"):
+        shutil.copy2(RECIPES / name, destination / name)
+    if with_tests:
+        path = destination / "Dockerfile"
+        text = path.read_text()
+        if "-DLLAMA_BUILD_TESTS=OFF" not in text:
+            raise ValueError("Recipe no longer contains expected tests flag")
+        path.write_text(text.replace("-DLLAMA_BUILD_TESTS=OFF", "-DLLAMA_BUILD_TESTS=ON"))
+
+
 def docker_command(command):
     """Prefix is a launcher, e.g. DOCKER_CMD_PREFIX='sg docker -c'."""
     prefix = shlex.split(os.environ.get("DOCKER_CMD_PREFIX", ""))
@@ -87,7 +102,7 @@ def jetson_build(run, staged, out, record, args):
         ("nv_tegra_release", ["head", "-n", "1", "/etc/nv_tegra_release"]),
         ("nvidia-jetpack", ["dpkg-query", "-W", "-f=${Version}", "nvidia-jetpack"])):
         record["toolchain"][name] = run(command).strip()
-    flags = list(JETSON_FLAGS)
+    flags = test_flags(JETSON_FLAGS, getattr(args, "with_tests", False))
     cached = bool(shutil.which("ccache"))
     cache = record["ccache"]
     cache["enabled"] = cached
@@ -274,6 +289,8 @@ def resolve_base(run, value, kind):
 
 
 def build(args, runner=None):
+    if "test-backend-ops" in (getattr(args, "extra_target", []) or []) and not getattr(args, "with_tests", False):
+        raise ValueError("--extra-target test-backend-ops requires --with-tests")
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     # Never overwrite evidence from an earlier attempt.
@@ -295,7 +312,8 @@ def build(args, runner=None):
         "source": {"path": str(Path(args.source).resolve()), "requested_commit": args.commit,
                    "commit": None, "tree": None, "dirty": None, "status_porcelain": None},
         "patch_sha256": None, "extra_targets": list(getattr(args, "extra_target", []) or []), "tag": args.tag, "platform": "linux/amd64",
-        "cmake_flags": CMAKE_FLAGS,
+        "with_tests": bool(getattr(args, "with_tests", False)),
+        "cmake_flags": test_flags(CMAKE_FLAGS, getattr(args, "with_tests", False)),
         "recipes": {}, "base_images": {}, "versions": {},
         "image": None, "tools": {}, "app_files": {}, "archive": None, "buildx_metadata": None,
         "provenance": {"retained": False, "reason": "Archive not inspected"},
@@ -304,7 +322,7 @@ def build(args, runner=None):
     if jetson:
         record.update(schema_version=2, target_profile="jetson-orin", builder="host-native",
                       ccache={"enabled": False, "version": None, "before": None, "after": None, "delta": None},
-                      toolchain={}, platform="linux/arm64", cmake_flags=list(JETSON_FLAGS),
+                      toolchain={}, platform="linux/arm64", cmake_flags=test_flags(JETSON_FLAGS, getattr(args, "with_tests", False)),
                       target_requirements={"platform": "linux/arm64", "l4t_major": 36,
                                            "cuda_arch": "sm_87", "jetpack": ">=6.1",
                                            "runtime": "nvidia (NVIDIA_VISIBLE_DEVICES required)"})
@@ -391,8 +409,9 @@ def build(args, runner=None):
                 else:
                     # Stage the recipe INSIDE the build context so Bake needs no filesystem entitlements (no fs.read=/).
                     recipe_dir = staged / ".campaign-recipe"; recipe_dir.mkdir(exist_ok=True)
-                    for name in ("Dockerfile", "docker-bake.hcl"):
-                        shutil.copy2(RECIPES / name, recipe_dir / name)
+                    stage_recipes(recipe_dir, getattr(args, "with_tests", False))
+                    record["staged_recipes"] = {name: file_digest(recipe_dir / name)
+                                                for name in ("Dockerfile", "docker-bake.hcl")}
                     env["SOURCE_DIR"] = "."
                     run(["docker", "buildx", "bake", "--file", str(recipe_dir / "docker-bake.hcl"),
                          "--metadata-file", str(out / "buildx-metadata.json"), "--progress", "plain", "engine"],
@@ -453,6 +472,7 @@ def main():
     parser.add_argument("--source", required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--patch")
+    parser.add_argument("--with-tests", action="store_true", help="enable LLAMA_BUILD_TESTS (needed for test-backend-ops)")
     parser.add_argument("--extra-target", action="append", default=[], help="extra CMake executable target to build and ship in /app (e.g. llama-routing-trace added by a patch)")
     parser.add_argument("--tag", required=True)
     parser.add_argument("--out", required=True)

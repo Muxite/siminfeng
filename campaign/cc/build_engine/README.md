@@ -153,3 +153,15 @@ this assignment. Confirm CUDA hits in a later authorized rebuild. Compiler
 flags, generated content, absolute paths outside the base directory and embedded
 source paths can still affect reuse. Disabling directory hashing can reuse old
 debug compilation-directory paths; Release builds here do not request debug info.
+
+## Backend-op screen executable
+
+Add `--with-tests --extra-target test-backend-ops` to enable
+`-DLLAMA_BUILD_TESTS=ON` and build/ship `/app/test-backend-ops` on either target.
+The target is registered by `tests/CMakeLists.txt:316` at `31288c9c6`.
+Requesting this target without `--with-tests` is rejected before building.
+`build-record.json` records `with_tests`, `extra_targets`, actual CMake flags and
+the executable hash. For x86, the tests flag is changed only in the staged
+Dockerfile; `staged_recipes` records its hashes. Tests remain disabled by default.
+See [kernel screen](../kernel_screen/README.md) for presets, the optional perf
+case registration patch, environment comparisons and limitations.

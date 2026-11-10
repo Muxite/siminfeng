@@ -1,0 +1,68 @@
+{
+  "schema_version": 2,
+  "status": "failed",
+  "failure_stage": "verify_source",
+  "started_at": "2026-11-10T03:50:52.269493+00:00",
+  "source": {
+    "path": "/home/muk/projects/siminfeng/campaign/ref/llama.cpp-up1108",
+    "requested_commit": "cf34d3113eb6d8e3a6c34bd8f4d1e9c5c3a7b9f1",
+    "commit": null,
+    "tree": null,
+    "dirty": null,
+    "status_porcelain": null
+  },
+  "patch_sha256": null,
+  "extra_targets": [
+    "llama-quantize"
+  ],
+  "tag": "campaign/llamacpp:jetson-up1108",
+  "platform": "linux/arm64",
+  "cmake_flags": [
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DGGML_CUDA=ON",
+    "-DCMAKE_CUDA_ARCHITECTURES=87",
+    "-DGGML_NATIVE=OFF",
+    "-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16",
+    "-DLLAMA_CURL=OFF",
+    "-DLLAMA_BUILD_TESTS=OFF",
+    "-DBUILD_SHARED_LIBS=ON"
+  ],
+  "recipes": {
+    "Dockerfile": {
+      "sha256": "e77a8372f66991d4e0e377143c4557282ff2dba0ce529cfc855c37c483612da2",
+      "bytes": 668
+    }
+  },
+  "base_images": {},
+  "versions": {},
+  "image": null,
+  "tools": {},
+  "app_files": {},
+  "archive": null,
+  "buildx_metadata": null,
+  "provenance": {
+    "retained": false,
+    "reason": "Archive not inspected"
+  },
+  "build_wall_seconds": null,
+  "target_profile": "jetson-orin",
+  "builder": "host-native",
+  "ccache": {
+    "enabled": false,
+    "version": null,
+    "before": null,
+    "after": null,
+    "delta": null
+  },
+  "toolchain": {},
+  "target_requirements": {
+    "platform": "linux/arm64",
+    "l4t_major": 36,
+    "cuda_arch": "sm_87",
+    "jetpack": ">=6.1",
+    "runtime": "nvidia (NVIDIA_VISIBLE_DEVICES required)"
+  },
+  "error": "Command exited 128: ['git', '-C', '/home/muk/projects/siminfeng/campaign/ref/llama.cpp-up1108', 'rev-parse', '--verify', 'cf34d3113eb6d8e3a6c34bd8f4d1e9c5c3a7b9f1^{commit}']",
+  "wall_seconds": 0.011741141090169549,
+  "finished_at": "2026-11-10T03:50:52.281233+00:00"
+}
