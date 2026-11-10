@@ -89,6 +89,11 @@ def parse_perf(text):
     return rows
 
 
+
+def _jsonl(text):
+    """JSON-object lines only: container entrypoints (nvidia/cuda banner) print prose to stdout first."""
+    return [json.loads(line) for line in text.splitlines() if line.lstrip().startswith('{')]
+
 def parse_bench(text, n_gen=64, coord=None):
     rows = json.loads(text)
     if len(rows) != 1:
@@ -100,7 +105,7 @@ def parse_bench(text, n_gen=64, coord=None):
 
 
 def parse_h2d(text):
-    rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+    rows = _jsonl(text)
     expected = {(2**i*1048576, r) for i in range(9) for r in range(3)}
     if {(r['bytes'],r['repeat']) for r in rows} != expected or len(rows) != 27:
         raise ValueError('incomplete H2D sweep')
@@ -157,7 +162,7 @@ def guard_bandwidth(samples, ceilings):
 
 
 def parse_stream(text, device, max_threads=8):
-    rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+    rows = _jsonl(text)
     expected = {(t,r) for t in range(1,(max_threads if device=='cpu' else 1)+1) for r in range(3)}
     if len(rows)!=len(expected) or {(r['threads'],r['repeat']) for r in rows}!=expected:
         raise ValueError('incomplete rotating stream sweep')

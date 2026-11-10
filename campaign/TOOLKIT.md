@@ -139,6 +139,33 @@ Last updated 2026-11-10, after D041. Statuses come from the decision notes.
 - **Image identity:** run by `run_ref`, never by `config_digest`.
 - **Profiler perturbation check:** compare profiled and unprofiled timing (D008). ncu inflates small kernels.
 
+## Gap audit vs. Strata (MoE-specialised engine, Niko1221/Strata, 2026-11-10)
+Source: the Strata README and `docs/DETAILS.md`, read 2026-11-10. Strata runs a 125B MoE on a 12–16 GB card plus host RAM.
+Each row is an engine feature, followed by what we have and the gap in tools or levers. P = priority for our goal (memory ↓, accuracy ≈, load/TTFT/decode).
+
+| # | Strata feature | Ours today | Gap (tool / lever) | P |
+|---|---|---|---|---|
+| G1 | Three-tier expert store: VRAM cache, pinned RAM, mmap/SSD with `--resident-budget-gib` (hottest-by-profile in RAM) | Planner budgets **VRAM only** and assumes all experts sit in RAM | Host-RAM budget in the planner; mmap/`--no-mmap`/mlock lever; SSD tier cost model; a page-cache-cold run mode | 1 |
+| G2 | Load time treated as a feature: madvise/fadvise WILLNEED, startup memory guard | Nothing. "Load time" is in the goal, but there is no tool | Load-time probe: cold (drop caches needs sudo) vs warm page cache, mmap vs no-mmap, time to first token from process start | 1 |
+| G3 | Workload realism: a coding-agent conversation (100K start + 8 turns), short-prompt TTFT, long-context decode | 128-token chat/code prompts, single shot | Workload pack: multi-turn replay, 512/2K/8K/32K prompt TTFT, decode at depth (`llama-bench -d`) | 1 |
+| G4 | Prompt/conversation cache: checkpoints, prefix pinning, parking in host RAM | Never measured | llama-server prefix reuse (`--cache-reuse`, slot save/restore, host prompt cache if the pin has it) measured on the G3 multi-turn pack; this is the TTFT lever | 2 |
+| G5 | `--calibrate`: sweeps host-dependent knobs (pcie-frac, workers, adapt rate), keeps one only if >3% faster, remembers per PC+model | T-CAL measures constants only; knobs stay at defaults | Runtime autotuner over `-t`, `-ub/-b`, `--moe-cache-cpu-share`, cache size, `--cpu-mask/--prio`, with an A/A noise floor and a keep-if-≥3% rule | 2 |
+| G6 | Per-miss routing: upload over PCIe vs compute on CPU (`--pcie-frac`, auto from CPU speed) | Static vs cache as a binary choice; C3 arm (cpu-share 0.9) is the first probe | Planner lever for the miss split, fed by CAL2 H2D and CPU GB/s | 2 |
+| G7 | Router lookahead prefetch: next-layer experts predicted, with prefetch accuracy scored (`LOOKAHEAD_STATS`) | Routing traces exist; never scored for predictability | Offline lookahead-accuracy tool on T-QRT traces. This decides whether prefetch can hide PCIe misses before anyone writes a kernel | 2 |
+| G8 | Adaptive cache policy plus offline replay (`replay_cache_policy.py`, adapt-every/swaps/decay) | T-POL (LRU/SLRU/ClassLRU replay) is in review | Add decay/swap-rate policies and validate replay against the engine `-lv 4` hit rate | 3 |
+| G9 | KV levers: k8v4, Hadamard-rotated q4 KV, KV streaming (resident window in VRAM, rest in RAM), kv-grow (KV ↔ expert cache trade) | q8_0 KV fix (D033); KV types; `--no-kv-offload` never tried | Measure K/V asymmetric types and `-nkvo` at long context as levers; planner trades KV VRAM against expert slots | 2 |
+| G10 | Lossy, cache-aware routing: `ROUTE_TAIL_SKIP` (skip low-rank missed experts, **on by default and it changes accuracy**), `ROUTE_PRIOR` (bias the router to resident experts) | Dynamic skipping is listed only as "research" | Engine patch plus a KLD/agreement gate. Strata shows why the gate matters: its default speedup silently costs accuracy | 3 |
+| G11 | Batch-shape determinism: drafting/cache state changes greedy text (1-token vs multi-token kernels), with documented knobs for bit-exact A/B | D043 E2/E4 require **text identity**, which can fail on a lossless spec because verify batches use different kernels | Batch-invariance probe (same prompt, ub=1 vs n). Fall back to KLD/next-token agreement as the spec gate | 1 |
+| G12 | Quality report: next-token agreement vs reference, "where the reference was sure", per task class, 5-token KL | KLD vs bf16 (Granite); no Qwen reference | Agreement@sure and per-task breakdown added to the verdict tool; Qwen reference logits (existing GAP §7) | 2 |
+| G13 | Telemetry: `/metrics` with tier counters, hit_rate, pcie_share, drafts offered/accepted, per-stage decode timing | Parsed per experiment (`-lv 4` grep, draft_n by hand) | One telemetry parser → result record fields (hit rate, draft accept, split ms); engagement checks become automatic | 2 |
+| G14 | Spec gating by measured acceptance × cost (prompt lookup only "where it pays"); MTP + lookup combined | ngram-mod is a WIN, but gated by hand (D042); E4 MTP pending | Workload-aware spec lever using T-SPECM's expert-union model plus a live acceptance threshold | 2 |
+| G15 | CPU-pool placement: worker count, affinity, host-thread core, NUMA | Default threads always; 3700X is 2×CCX | Thread/affinity sweep (part of G5) | 3 |
+| G16 | In-layer concurrent CPU+GPU expert compute via doorbells, without scheduler splits | Hybrid rejected (D030/31; QRT needs ~54 µs handoff vs 136–199 µs measured) | Handoff-floor microbench (pinned-flag doorbell round trip). It tells us whether the no-go is a llama.cpp limit or a physical one | 3 |
+| G17 | Hybrid-attention models (DeltaNet/GDN recurrent state) | `inspect_model` assumes full-attention KV | State-size-aware inspector (check Qwen3.6 metadata when the download lands) | 2 |
+| G18 | Concurrent requests (`parallel`): expert reads amortised across streams | Single-stream only | Throughput-vs-latency bench (`-np`, concurrent clients); low priority for local use | 4 |
+
+Not adopted: Strata's "experimental speed projection" is a refusal-direction control vector. It is a safety removal, not an inference optimisation, so it is out of scope.
+
 ## Build next (ranked)
 1. Host calibration microbench (§2). It feeds the PL4 model per host.
 2. Expert-cache lever plus a TTFT model in the planner (§3), followed by the frozen D041 sweep with Qwen KLD reference logits (§7).

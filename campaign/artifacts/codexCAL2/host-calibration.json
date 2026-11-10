@@ -1,0 +1,1049 @@
+{
+  "schema": "host-calibration/1",
+  "source_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+  "image": "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+  "host": {
+    "id": "64c3bdc896488d59ffd297e4fb925be1572e29be77ce1e0211ab6835a3d5f8c6",
+    "cpu_model": "AMD Ryzen 7 3700X 8-Core Processor",
+    "nvidia_smi_text": "GPU 0: NVIDIA GeForce RTX 5070 Ti (UUID: GPU-84a69240-4f41-afe8-2b85-76fe37a7a6d7)\n",
+    "lscpu_text": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           43 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  16\nOn-line CPU(s) list:                     0-15\nVendor ID:                               AuthenticAMD\nModel name:                              AMD Ryzen 7 3700X 8-Core Processor\nCPU family:                              23\nModel:                                   113\nThread(s) per core:                      2\nCore(s) per socket:                      8\nSocket(s):                               1\nStepping:                                0\nFrequency boost:                         enabled\nCPU(s) scaling MHz:                      91%\nCPU max MHz:                             4426.1709\nCPU min MHz:                             2200.0000\nBogoMIPS:                                7200.04\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb cat_l3 cdp_l3 hw_pstate ssbd mba ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 cqm rdt_a rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local clzero irperf xsaveerptr rdpru wbnoinvd arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif v_spec_ctrl umip rdpid overflow_recov succor smca sev sev_es ibpb_exit_to_user\nVirtualization:                          AMD-V\nL1d cache:                               256 KiB (8 instances)\nL1i cache:                               256 KiB (8 instances)\nL2 cache:                                4 MiB (8 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-15\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Mitigation; untrained return thunk; SMT enabled with STIBP protection\nVulnerability Spec rstack overflow:      Mitigation; Safe RET\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; STIBP always-on; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace\n",
+    "note": "Raw identity text; unavailable GPU information remains unknown."
+  },
+  "constants": {
+    "bw_gpu_gbs": 765.711444700209,
+    "bw_cpu_gbs": {
+      "Q2_K": 30.78877275099571,
+      "Q3_K": 30.78877275099571,
+      "Q4_K": 30.78877275099571,
+      "Q6_K": 30.78877275099571,
+      "Q8_0": 30.78877275099571
+    },
+    "bw_h2d_gbs": 28.694892928842926,
+    "handoff_us": 52.5394195459455,
+    "cache_miss_us": 0.0
+  },
+  "plausibility": {
+    "gpu_gbs": 896.0,
+    "gpu_reason": "rtx 5070 ti stated theoretical peak",
+    "cpu_gbs": 60.0,
+    "cpu_reason": "lscpu lacks populated DRAM channels/rate; conservative 60 GB/s fallback",
+    "memory_identity": {}
+  },
+  "raw_samples": {
+    "perf": {},
+    "streams": {
+      "cpu": [
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 1,
+          "repeat": 0,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 1610612736,
+          "ms": 94.364303048,
+          "checksum": 402653184,
+          "gbs": 17.068029795,
+          "weight_gbs": 17.068029794918687
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 1,
+          "repeat": 1,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 1610612736,
+          "ms": 92.939877068,
+          "checksum": 402653184,
+          "gbs": 17.329619823,
+          "weight_gbs": 17.32961982316359
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 1,
+          "repeat": 2,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 1610612736,
+          "ms": 93.283994007,
+          "checksum": 402653184,
+          "gbs": 17.265692289,
+          "weight_gbs": 17.265692288852257
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 2,
+          "repeat": 0,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 88.271936984,
+          "checksum": 671088640,
+          "gbs": 30.410056148,
+          "weight_gbs": 30.410056148270094
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 2,
+          "repeat": 1,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 88.87498104,
+          "checksum": 671088640,
+          "gbs": 30.203714573,
+          "weight_gbs": 30.20371457285433
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 2,
+          "repeat": 2,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2147483648,
+          "ms": 85.059331963,
+          "checksum": 536870912,
+          "gbs": 25.246890593,
+          "weight_gbs": 25.246890593193644
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 3,
+          "repeat": 0,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 3221225472,
+          "ms": 94.633709989,
+          "checksum": 805306368,
+          "gbs": 34.038879723,
+          "weight_gbs": 34.03887972239943
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 3,
+          "repeat": 1,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 83.924005041,
+          "checksum": 671088640,
+          "gbs": 31.985539283,
+          "weight_gbs": 31.98553928269502
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 3,
+          "repeat": 2,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 3221225472,
+          "ms": 94.378823065,
+          "checksum": 805306368,
+          "gbs": 34.130807817,
+          "weight_gbs": 34.13080781672279
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 4,
+          "repeat": 0,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 3221225472,
+          "ms": 92.914468027,
+          "checksum": 805306368,
+          "gbs": 34.668717805,
+          "weight_gbs": 34.66871780467973
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 4,
+          "repeat": 1,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 80.740959034,
+          "checksum": 671088640,
+          "gbs": 33.246503288,
+          "weight_gbs": 33.24650328799809
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 4,
+          "repeat": 2,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 84.665596019,
+          "checksum": 671088640,
+          "gbs": 31.705376047,
+          "weight_gbs": 31.70537604669549
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 5,
+          "repeat": 0,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 88.322288007,
+          "checksum": 671088640,
+          "gbs": 30.392719896,
+          "weight_gbs": 30.392719896332974
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 5,
+          "repeat": 1,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 3221225472,
+          "ms": 95.382022089,
+          "checksum": 805306368,
+          "gbs": 33.771830387,
+          "weight_gbs": 33.771830387432
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 5,
+          "repeat": 2,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 3221225472,
+          "ms": 94.776559039,
+          "checksum": 805306368,
+          "gbs": 33.987575669,
+          "weight_gbs": 33.98757566915343
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 6,
+          "repeat": 0,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 80.549709965,
+          "checksum": 671088640,
+          "gbs": 33.325440417,
+          "weight_gbs": 33.325440416438376
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 6,
+          "repeat": 1,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 82.947195042,
+          "checksum": 671088640,
+          "gbs": 32.362210183,
+          "weight_gbs": 32.362210182523796
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 6,
+          "repeat": 2,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 85.504358052,
+          "checksum": 671088640,
+          "gbs": 31.394359553,
+          "weight_gbs": 31.394359552614773
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 7,
+          "repeat": 0,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 90.249518049,
+          "checksum": 671088640,
+          "gbs": 29.743699668,
+          "weight_gbs": 29.74369966765428
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 7,
+          "repeat": 1,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 86.038132082,
+          "checksum": 671088640,
+          "gbs": 31.199591333,
+          "weight_gbs": 31.199591332848016
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 7,
+          "repeat": 2,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 82.76098792,
+          "checksum": 671088640,
+          "gbs": 32.435023161,
+          "weight_gbs": 32.435023160849674
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 8,
+          "repeat": 0,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 83.728986909,
+          "checksum": 671088640,
+          "gbs": 32.060038693,
+          "weight_gbs": 32.060038692662836
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 8,
+          "repeat": 1,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 87.18615002,
+          "checksum": 671088640,
+          "gbs": 30.788772751,
+          "weight_gbs": 30.78877275099571
+        },
+        {
+          "probe": "cpu-stream-v1",
+          "threads": 8,
+          "repeat": 2,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 33554432,
+          "buffers": 8,
+          "bytes_read": 2684354560,
+          "ms": 91.149768094,
+          "checksum": 671088640,
+          "gbs": 29.449932964,
+          "weight_gbs": 29.44993296342462
+        }
+      ],
+      "cuda": [
+        {
+          "probe": "cuda-stream-v1",
+          "threads": 1,
+          "repeat": 0,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 50331648,
+          "buffers": 8,
+          "bytes_read": 4294967296,
+          "ms": 5.603392124,
+          "checksum": 9363306,
+          "gbs": 766.49415226,
+          "weight_gbs": 766.4941522839604
+        },
+        {
+          "probe": "cuda-stream-v1",
+          "threads": 1,
+          "repeat": 1,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 50331648,
+          "buffers": 8,
+          "bytes_read": 4294967296,
+          "ms": 5.611199856,
+          "checksum": 9363306,
+          "gbs": 765.427610203,
+          "weight_gbs": 765.4276101763573
+        },
+        {
+          "probe": "cuda-stream-v1",
+          "threads": 1,
+          "repeat": 2,
+          "working_set_bytes": 536870912,
+          "cache_bytes": 50331648,
+          "buffers": 8,
+          "bytes_read": 4294967296,
+          "ms": 5.609119892,
+          "checksum": 9363306,
+          "gbs": 765.711444684,
+          "weight_gbs": 765.711444700209
+        }
+      ]
+    },
+    "h2d": [
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 1048576,
+        "repeat": 0,
+        "ms": 0.057932001,
+        "gbs": 18.100117066558777
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 1048576,
+        "repeat": 1,
+        "ms": 0.058556002,
+        "gbs": 17.907233489062317
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 1048576,
+        "repeat": 2,
+        "ms": 0.056584001,
+        "gbs": 18.53131594565043
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 2097152,
+        "repeat": 0,
+        "ms": 0.112435997,
+        "gbs": 18.651962502720547
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 2097152,
+        "repeat": 1,
+        "ms": 0.112683997,
+        "gbs": 18.6109124261895
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 2097152,
+        "repeat": 2,
+        "ms": 0.106288001,
+        "gbs": 19.730844312332117
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 4194304,
+        "repeat": 0,
+        "ms": 0.227579996,
+        "gbs": 18.430020536602875
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 4194304,
+        "repeat": 1,
+        "ms": 0.210143998,
+        "gbs": 19.959190078795398
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 4194304,
+        "repeat": 2,
+        "ms": 0.176284,
+        "gbs": 23.79287967143927
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 8388608,
+        "repeat": 0,
+        "ms": 0.403795987,
+        "gbs": 20.774371885969238
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 8388608,
+        "repeat": 1,
+        "ms": 0.345631987,
+        "gbs": 24.270346251257124
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 8388608,
+        "repeat": 2,
+        "ms": 0.33216399,
+        "gbs": 25.254417253357293
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 16777216,
+        "repeat": 0,
+        "ms": 0.740100026,
+        "gbs": 22.668849359018935
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 16777216,
+        "repeat": 1,
+        "ms": 0.71063602,
+        "gbs": 23.60873292068702
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 16777216,
+        "repeat": 2,
+        "ms": 0.614135981,
+        "gbs": 27.31840588900457
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 33554432,
+        "repeat": 0,
+        "ms": 1.29727602,
+        "gbs": 25.865298889900085
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 33554432,
+        "repeat": 1,
+        "ms": 1.180348039,
+        "gbs": 28.427574657071123
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 33554432,
+        "repeat": 2,
+        "ms": 1.178660035,
+        "gbs": 28.46828687120116
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 67108864,
+        "repeat": 0,
+        "ms": 2.513976097,
+        "gbs": 26.694312678661877
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 67108864,
+        "repeat": 1,
+        "ms": 2.42021203,
+        "gbs": 27.72850608465077
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 67108864,
+        "repeat": 2,
+        "ms": 2.336364031,
+        "gbs": 28.72363343621429
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 134217728,
+        "repeat": 0,
+        "ms": 4.803239822,
+        "gbs": 27.943166065797996
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 134217728,
+        "repeat": 1,
+        "ms": 4.677408218,
+        "gbs": 28.694892928842926
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 134217728,
+        "repeat": 2,
+        "ms": 4.662752151,
+        "gbs": 28.78508735902141
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 268435456,
+        "repeat": 0,
+        "ms": 9.405187607,
+        "gbs": 28.54121227738312
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 268435456,
+        "repeat": 1,
+        "ms": 9.32403183,
+        "gbs": 28.789633164519135
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 268435456,
+        "repeat": 2,
+        "ms": 9.329287529,
+        "gbs": 28.773414386208053
+      }
+    ],
+    "bench_us": [
+      [
+        1456.632411527789,
+        1393.1127292889414
+      ],
+      [
+        4878.6675383219335,
+        4527.427153697097
+      ]
+    ],
+    "handoff_us": [
+      64.5277821453617,
+      35.25775009329201,
+      69.821088998599,
+      40.5510569465293
+    ]
+  },
+  "uncertainty": {
+    "gpu": {
+      "median": 765.711444700209,
+      "min": 765.4276101763573,
+      "max": 766.4941522839604,
+      "count": 3,
+      "stdev": 0.5523744602294028,
+      "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+    },
+    "cpu": {
+      "Q2_K": {
+        "median": 30.78877275099571,
+        "min": 29.44993296342462,
+        "max": 32.060038692662836,
+        "count": 3,
+        "stdev": 1.305198643184782,
+        "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+      },
+      "Q3_K": {
+        "median": 30.78877275099571,
+        "min": 29.44993296342462,
+        "max": 32.060038692662836,
+        "count": 3,
+        "stdev": 1.305198643184782,
+        "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+      },
+      "Q4_K": {
+        "median": 30.78877275099571,
+        "min": 29.44993296342462,
+        "max": 32.060038692662836,
+        "count": 3,
+        "stdev": 1.305198643184782,
+        "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+      },
+      "Q6_K": {
+        "median": 30.78877275099571,
+        "min": 29.44993296342462,
+        "max": 32.060038692662836,
+        "count": 3,
+        "stdev": 1.305198643184782,
+        "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+      },
+      "Q8_0": {
+        "median": 30.78877275099571,
+        "min": 29.44993296342462,
+        "max": 32.060038692662836,
+        "count": 3,
+        "stdev": 1.305198643184782,
+        "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+      }
+    },
+    "h2d": {
+      "median": 28.694892928842926,
+      "min": 26.694312678661877,
+      "max": 28.789633164519135,
+      "count": 9,
+      "stdev": 0.7180574692566141,
+      "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+    },
+    "handoff": {
+      "min": 35.25775009329201,
+      "max": 69.821088998599,
+      "count": 4,
+      "note": "Correlated pairwise repeat residuals; not independent samples or a CI."
+    }
+  },
+  "handoff_terms": {
+    "delta_cpu_us": 2758.624277976562,
+    "delta_gpu_us": -110.92253692675781,
+    "delta_layers": 12
+  },
+  "provenance": {
+    "manifest": {
+      "schema": "host-calibration-plan/1",
+      "image": "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+      "model": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+      "cpu_layers": [
+        0,
+        12
+      ],
+      "jobs": [
+        {
+          "name": "nvidia",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "nvidia-smi",
+            "-L"
+          ]
+        },
+        {
+          "name": "lscpu",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "lscpu"
+          ]
+        },
+        {
+          "name": "build-h2d",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/cc/host_calibrate,dst=/src,readonly",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/artifacts/codexCAL2/gpu,dst=/out",
+            "campaign/cuda-tools:c1",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "nvcc",
+            "-O2",
+            "/src/h2d.cu",
+            "-o",
+            "/out/h2d"
+          ]
+        },
+        {
+          "name": "h2d",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/artifacts/codexCAL2/gpu,dst=/probe,readonly",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/probe/h2d"
+          ]
+        },
+        {
+          "name": "build-bw",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/cc/host_calibrate,dst=/src,readonly",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/artifacts/codexCAL2/gpu,dst=/out",
+            "campaign/cuda-tools:c1",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "nvcc",
+            "-O3",
+            "/src/bw.cu",
+            "-o",
+            "/out/bw"
+          ]
+        },
+        {
+          "name": "build-bw_cpu",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/cc/host_calibrate,dst=/src,readonly",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/artifacts/codexCAL2/gpu,dst=/out",
+            "campaign/cuda-tools:c1",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "gcc",
+            "-O3",
+            "-mavx2",
+            "-fopenmp",
+            "-Wall",
+            "-Wextra",
+            "/src/bw_cpu.c",
+            "-o",
+            "/out/bw_cpu"
+          ]
+        },
+        {
+          "name": "cuda-stream",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/artifacts/codexCAL2/gpu,dst=/probe,readonly",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/probe/bw"
+          ]
+        },
+        {
+          "name": "cpu-stream",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/artifacts/codexCAL2/gpu,dst=/probe,readonly",
+            "campaign/cuda-tools:c1",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/probe/bw_cpu",
+            "8"
+          ]
+        },
+        {
+          "name": "bench-0",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "--mount",
+            "type=bind,src=/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf,dst=/model/input.gguf,readonly",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/app/llama-bench",
+            "-m",
+            "/model/input.gguf",
+            "-ngl",
+            "999",
+            "--n-cpu-moe",
+            "0",
+            "-p",
+            "0",
+            "-n",
+            "64",
+            "-r",
+            "2",
+            "-t",
+            "8",
+            "-b",
+            "64",
+            "-ub",
+            "64",
+            "-o",
+            "json"
+          ]
+        },
+        {
+          "name": "bench-12",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "--mount",
+            "type=bind,src=/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf,dst=/model/input.gguf,readonly",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/app/llama-bench",
+            "-m",
+            "/model/input.gguf",
+            "-ngl",
+            "999",
+            "--n-cpu-moe",
+            "12",
+            "-p",
+            "0",
+            "-n",
+            "64",
+            "-r",
+            "2",
+            "-t",
+            "8",
+            "-b",
+            "64",
+            "-ub",
+            "64",
+            "-o",
+            "json"
+          ]
+        }
+      ]
+    },
+    "raw_outputs": {
+      "nvidia": "GPU 0: NVIDIA GeForce RTX 5070 Ti (UUID: GPU-84a69240-4f41-afe8-2b85-76fe37a7a6d7)\n",
+      "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           43 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  16\nOn-line CPU(s) list:                     0-15\nVendor ID:                               AuthenticAMD\nModel name:                              AMD Ryzen 7 3700X 8-Core Processor\nCPU family:                              23\nModel:                                   113\nThread(s) per core:                      2\nCore(s) per socket:                      8\nSocket(s):                               1\nStepping:                                0\nFrequency boost:                         enabled\nCPU(s) scaling MHz:                      91%\nCPU max MHz:                             4426.1709\nCPU min MHz:                             2200.0000\nBogoMIPS:                                7200.04\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb cat_l3 cdp_l3 hw_pstate ssbd mba ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 cqm rdt_a rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local clzero irperf xsaveerptr rdpru wbnoinvd arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif v_spec_ctrl umip rdpid overflow_recov succor smca sev sev_es ibpb_exit_to_user\nVirtualization:                          AMD-V\nL1d cache:                               256 KiB (8 instances)\nL1i cache:                               256 KiB (8 instances)\nL2 cache:                                4 MiB (8 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-15\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Mitigation; untrained return thunk; SMT enabled with STIBP protection\nVulnerability Spec rstack overflow:      Mitigation; Safe RET\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; STIBP always-on; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace\n",
+      "build-h2d": "\n==========\n== CUDA ==\n==========\n\nCUDA Version 12.8.1\n\nContainer image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n\nThis container image and its contents are governed by the NVIDIA Deep Learning Container License.\nBy pulling and using the container, you accept the terms and conditions of this license:\nhttps://developer.nvidia.com/ngc/nvidia-deep-learning-container-license\n\nA copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.\n\nWARNING: The NVIDIA Driver was not detected.  GPU functionality will not be available.\n   Use the NVIDIA Container Toolkit to start this container with GPU support; see\n   https://docs.nvidia.com/datacenter/cloud-native/ .\n\n",
+      "h2d": "{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":1048576,\"repeat\":0,\"ms\":0.057932001}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":1048576,\"repeat\":1,\"ms\":0.058556002}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":1048576,\"repeat\":2,\"ms\":0.056584001}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":2097152,\"repeat\":0,\"ms\":0.112435997}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":2097152,\"repeat\":1,\"ms\":0.112683997}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":2097152,\"repeat\":2,\"ms\":0.106288001}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":4194304,\"repeat\":0,\"ms\":0.227579996}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":4194304,\"repeat\":1,\"ms\":0.210143998}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":4194304,\"repeat\":2,\"ms\":0.176284000}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":8388608,\"repeat\":0,\"ms\":0.403795987}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":8388608,\"repeat\":1,\"ms\":0.345631987}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":8388608,\"repeat\":2,\"ms\":0.332163990}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":16777216,\"repeat\":0,\"ms\":0.740100026}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":16777216,\"repeat\":1,\"ms\":0.710636020}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":16777216,\"repeat\":2,\"ms\":0.614135981}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":33554432,\"repeat\":0,\"ms\":1.297276020}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":33554432,\"repeat\":1,\"ms\":1.180348039}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":33554432,\"repeat\":2,\"ms\":1.178660035}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":67108864,\"repeat\":0,\"ms\":2.513976097}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":67108864,\"repeat\":1,\"ms\":2.420212030}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":67108864,\"repeat\":2,\"ms\":2.336364031}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":134217728,\"repeat\":0,\"ms\":4.803239822}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":134217728,\"repeat\":1,\"ms\":4.677408218}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":134217728,\"repeat\":2,\"ms\":4.662752151}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":268435456,\"repeat\":0,\"ms\":9.405187607}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":268435456,\"repeat\":1,\"ms\":9.324031830}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":268435456,\"repeat\":2,\"ms\":9.329287529}\n",
+      "build-bw": "\n==========\n== CUDA ==\n==========\n\nCUDA Version 12.8.1\n\nContainer image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n\nThis container image and its contents are governed by the NVIDIA Deep Learning Container License.\nBy pulling and using the container, you accept the terms and conditions of this license:\nhttps://developer.nvidia.com/ngc/nvidia-deep-learning-container-license\n\nA copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.\n\nWARNING: The NVIDIA Driver was not detected.  GPU functionality will not be available.\n   Use the NVIDIA Container Toolkit to start this container with GPU support; see\n   https://docs.nvidia.com/datacenter/cloud-native/ .\n\n",
+      "build-bw_cpu": "\n==========\n== CUDA ==\n==========\n\nCUDA Version 12.8.1\n\nContainer image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n\nThis container image and its contents are governed by the NVIDIA Deep Learning Container License.\nBy pulling and using the container, you accept the terms and conditions of this license:\nhttps://developer.nvidia.com/ngc/nvidia-deep-learning-container-license\n\nA copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.\n\nWARNING: The NVIDIA Driver was not detected.  GPU functionality will not be available.\n   Use the NVIDIA Container Toolkit to start this container with GPU support; see\n   https://docs.nvidia.com/datacenter/cloud-native/ .\n\n",
+      "cuda-stream": "{\"probe\":\"cuda-stream-v1\",\"threads\":1,\"repeat\":0,\"working_set_bytes\":536870912,\"cache_bytes\":50331648,\"buffers\":8,\"bytes_read\":4294967296,\"ms\":5.603392124,\"checksum\":9363306,\"gbs\":766.494152260}\n{\"probe\":\"cuda-stream-v1\",\"threads\":1,\"repeat\":1,\"working_set_bytes\":536870912,\"cache_bytes\":50331648,\"buffers\":8,\"bytes_read\":4294967296,\"ms\":5.611199856,\"checksum\":9363306,\"gbs\":765.427610203}\n{\"probe\":\"cuda-stream-v1\",\"threads\":1,\"repeat\":2,\"working_set_bytes\":536870912,\"cache_bytes\":50331648,\"buffers\":8,\"bytes_read\":4294967296,\"ms\":5.609119892,\"checksum\":9363306,\"gbs\":765.711444684}\n",
+      "cpu-stream": "\n==========\n== CUDA ==\n==========\n\nCUDA Version 12.8.1\n\nContainer image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n\nThis container image and its contents are governed by the NVIDIA Deep Learning Container License.\nBy pulling and using the container, you accept the terms and conditions of this license:\nhttps://developer.nvidia.com/ngc/nvidia-deep-learning-container-license\n\nA copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.\n\nWARNING: The NVIDIA Driver was not detected.  GPU functionality will not be available.\n   Use the NVIDIA Container Toolkit to start this container with GPU support; see\n   https://docs.nvidia.com/datacenter/cloud-native/ .\n\n{\"probe\":\"cpu-stream-v1\",\"threads\":1,\"repeat\":0,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":1610612736,\"ms\":94.364303048,\"checksum\":402653184,\"gbs\":17.068029795}\n{\"probe\":\"cpu-stream-v1\",\"threads\":1,\"repeat\":1,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":1610612736,\"ms\":92.939877068,\"checksum\":402653184,\"gbs\":17.329619823}\n{\"probe\":\"cpu-stream-v1\",\"threads\":1,\"repeat\":2,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":1610612736,\"ms\":93.283994007,\"checksum\":402653184,\"gbs\":17.265692289}\n{\"probe\":\"cpu-stream-v1\",\"threads\":2,\"repeat\":0,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":88.271936984,\"checksum\":671088640,\"gbs\":30.410056148}\n{\"probe\":\"cpu-stream-v1\",\"threads\":2,\"repeat\":1,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":88.874981040,\"checksum\":671088640,\"gbs\":30.203714573}\n{\"probe\":\"cpu-stream-v1\",\"threads\":2,\"repeat\":2,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2147483648,\"ms\":85.059331963,\"checksum\":536870912,\"gbs\":25.246890593}\n{\"probe\":\"cpu-stream-v1\",\"threads\":3,\"repeat\":0,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":3221225472,\"ms\":94.633709989,\"checksum\":805306368,\"gbs\":34.038879723}\n{\"probe\":\"cpu-stream-v1\",\"threads\":3,\"repeat\":1,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":83.924005041,\"checksum\":671088640,\"gbs\":31.985539283}\n{\"probe\":\"cpu-stream-v1\",\"threads\":3,\"repeat\":2,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":3221225472,\"ms\":94.378823065,\"checksum\":805306368,\"gbs\":34.130807817}\n{\"probe\":\"cpu-stream-v1\",\"threads\":4,\"repeat\":0,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":3221225472,\"ms\":92.914468027,\"checksum\":805306368,\"gbs\":34.668717805}\n{\"probe\":\"cpu-stream-v1\",\"threads\":4,\"repeat\":1,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":80.740959034,\"checksum\":671088640,\"gbs\":33.246503288}\n{\"probe\":\"cpu-stream-v1\",\"threads\":4,\"repeat\":2,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":84.665596019,\"checksum\":671088640,\"gbs\":31.705376047}\n{\"probe\":\"cpu-stream-v1\",\"threads\":5,\"repeat\":0,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":88.322288007,\"checksum\":671088640,\"gbs\":30.392719896}\n{\"probe\":\"cpu-stream-v1\",\"threads\":5,\"repeat\":1,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":3221225472,\"ms\":95.382022089,\"checksum\":805306368,\"gbs\":33.771830387}\n{\"probe\":\"cpu-stream-v1\",\"threads\":5,\"repeat\":2,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":3221225472,\"ms\":94.776559039,\"checksum\":805306368,\"gbs\":33.987575669}\n{\"probe\":\"cpu-stream-v1\",\"threads\":6,\"repeat\":0,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":80.549709965,\"checksum\":671088640,\"gbs\":33.325440417}\n{\"probe\":\"cpu-stream-v1\",\"threads\":6,\"repeat\":1,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":82.947195042,\"checksum\":671088640,\"gbs\":32.362210183}\n{\"probe\":\"cpu-stream-v1\",\"threads\":6,\"repeat\":2,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":85.504358052,\"checksum\":671088640,\"gbs\":31.394359553}\n{\"probe\":\"cpu-stream-v1\",\"threads\":7,\"repeat\":0,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":90.249518049,\"checksum\":671088640,\"gbs\":29.743699668}\n{\"probe\":\"cpu-stream-v1\",\"threads\":7,\"repeat\":1,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":86.038132082,\"checksum\":671088640,\"gbs\":31.199591333}\n{\"probe\":\"cpu-stream-v1\",\"threads\":7,\"repeat\":2,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":82.760987920,\"checksum\":671088640,\"gbs\":32.435023161}\n{\"probe\":\"cpu-stream-v1\",\"threads\":8,\"repeat\":0,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":83.728986909,\"checksum\":671088640,\"gbs\":32.060038693}\n{\"probe\":\"cpu-stream-v1\",\"threads\":8,\"repeat\":1,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":87.186150020,\"checksum\":671088640,\"gbs\":30.788772751}\n{\"probe\":\"cpu-stream-v1\",\"threads\":8,\"repeat\":2,\"working_set_bytes\":536870912,\"cache_bytes\":33554432,\"buffers\":8,\"bytes_read\":2684354560,\"ms\":91.149768094,\"checksum\":671088640,\"gbs\":29.449932964}\n",
+      "bench-0": "[\n  {\n    \"build_commit\": \"unknown\",\n    \"build_number\": 0,\n    \"cpu_info\": \"AMD Ryzen 7 3700X 8-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5070 Ti\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"/model/input.gguf\",\n    \"model_type\": \"granitemoe 1B.A400M Q8_0\",\n    \"model_size\": 816520384,\n    \"model_n_params\": 1334628352,\n    \"n_batch\": 64,\n    \"n_ubatch\": 64,\n    \"n_threads\": 8,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 999,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"load_mode\": \"auto\",\n    \"lazy_mode\": \"auto\",\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"repack\": true,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 64,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-11-10T05:39:23Z\",\n    \"avg_ns\": 91191863,\n    \"stddev_ns\": 2874553,\n    \"avg_ts\": 702.165841,\n    \"stddev_ts\": 22.133451,\n    \"samples_ns\": [ 93224457, 89159270 ],\n    \"samples_ts\": [ 686.515, 717.817 ]\n  }\n]\n",
+      "bench-12": "[\n  {\n    \"build_commit\": \"unknown\",\n    \"build_number\": 0,\n    \"cpu_info\": \"AMD Ryzen 7 3700X 8-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5070 Ti\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"/model/input.gguf\",\n    \"model_type\": \"granitemoe 1B.A400M Q8_0\",\n    \"model_size\": 816520384,\n    \"model_n_params\": 1334628352,\n    \"n_batch\": 64,\n    \"n_ubatch\": 64,\n    \"n_threads\": 8,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 999,\n    \"n_cpu_moe\": 12,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"load_mode\": \"auto\",\n    \"lazy_mode\": \"auto\",\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"repack\": true,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 64,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-11-10T05:39:24Z\",\n    \"avg_ns\": 300995092,\n    \"stddev_ns\": 15894952,\n    \"avg_ts\": 212.924941,\n    \"stddev_ts\": 11.244130,\n    \"samples_ns\": [ 312234508, 289755677 ],\n    \"samples_ts\": [ 204.974, 220.876 ]\n  }\n]\n"
+    }
+  },
+  "caveats": [
+    "Rotating FP32 read bandwidth is a DRAM screen; quantization/dequantization throughput is unmeasured.",
+    "All CPU quant types use the same eight-thread DRAM proxy; validate with model benchmarks.",
+    "H2D probe and two-K residual handoff algebra unchanged; old captures are never overwritten.",
+    "Raw pinned H2D excludes cache dispatch; cache_miss_us remains unmeasured zero.",
+    "Observed spread excludes systematic model error; no whole-model fit validation."
+  ]
+}
