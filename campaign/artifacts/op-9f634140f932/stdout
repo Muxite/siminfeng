@@ -1,0 +1,6 @@
+- Added [routing-trace-generic.patch](/home/muk/projects/siminfeng/campaign/cc/routing_trace/patches/routing-trace-generic.patch), standalone on `31288c9c6`.
+- Tool target: `llama-routing-trace`.
+- Qwen35moe emits routing in every main decoder layer, including DeltaNet and attention; MTP excluded. Shared experts are recorded separately.
+- Added schema/footer validator and fixture tests; updated README with Jetson instructions.
+- Verification: `git apply --check` passed; 56 tests and 5 subtests passed.
+- Risks: C++ build/runtime remain unverified; alternate graph hooks may need adaptation. No builds or GPU work performed.

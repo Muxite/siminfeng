@@ -1,0 +1,2721 @@
+- Added [routing-trace-generic.patch](/home/muk/projects/siminfeng/campaign/cc/routing_trace/patches/routing-trace-generic.patch), standalone on `31288c9c6`.
+- Tool target: `llama-routing-trace`.
+- Qwen35moe emits routing in every main decoder layer, including DeltaNet and attention; MTP excluded. Shared experts are recorded separately.
+- Added schema/footer validator and fixture tests; updated README with Jetson instructions.
+- Verification: `git apply --check` passed; 56 tests and 5 subtests passed.
+- Risks: C++ build/runtime remain unverified; alternate graph hooks may need adaptation. No builds or GPU work performed.
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c391-9ad4-7230-af7a-fce397f9f3a0
+--------
+user
+Execute the assignment in assignments/J-OM3-routing-trace-generic.md exactly. Read it first.
+codex
+I’ll read the assignment first, then carry out its instructions and required checks.
+exec
+/bin/bash -lc 'cat assignments/J-OM3-routing-trace-generic.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Assignment J-OM3 — routing trace capture for any MoE (qwen35moe first) (host jetson-arm; parent over-memory track; worker Codex)
+Base: jetson/c1. Existing x86 asset: cc/routing_trace/ (routing-trace.patch hooks `ffn_moe_topk-N` / `ffn_moe_weights*-N` from build_moe_ffn; hardcodes n_expert=32, k=8 → aborts on Qwen3.6 with 256 experts). Read its README, patch, trace_replay.py and research/own-repo-assets.md. Pinned llama.cpp ref/llama.cpp 31288c9c6 (read-only; `git apply --check` allowed).
+Write `cc/routing_trace/patches/routing-trace-generic.patch` (standalone on 31288c9c6, may build on the existing patch's tool):
+- Derive n_expert and k per layer from the hooked tensors' shapes (never hardcode); record arch, n_layer, n_expert, k, model path/sha (if cheap) in a header line.
+- Emit JSONL compatible with cc/expert_replay input: `{"tok":i,"layer":l,"experts":[...],"weights":[...],"phase":"prefill|decode","seq":s}` plus a final `{"trace_complete":true,"tokens":N,"records":M}` footer written only on clean exit, so truncation is detectable. Flush per token; bounded buffer.
+- Hybrid models (qwen35moe has DeltaNet + attention layers; all layers have MoE? check llama-model.cpp build for qwen35moe and state which layers emit routing) — layer index = model layer id, not hook counter.
+- Shared expert(s) (always active) — note they are not routed; record presence in header.
+- Keep the capture tool target name (check the existing patch; e.g. `llama-routing-trace`) so Build CC `--extra-target` can build it.
+- Update cc/routing_trace/README.md (stale "not compile-linked" claim per own-repo-assets.md) and add a Jetson section.
+- Tests: Python test validating the JSONL schema/footer logic with fixture lines; `git -C ref/llama.cpp apply --check` result.
+No builds/GPU (Opus builds with ccache). Time 40 min. Final ≤ 12 lines: patch, tool name, layers emitting routing for qwen35moe, apply --check result, risks.
+
+exec
+/bin/bash -lc "rg --files -g AGENTS.md -g '"'!node_modules'"' -g '"'!vendor'"'" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+ref/llama.cpp/AGENTS.md
+ref/Strata/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/reservation-workflow/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/refactor-orders/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/merge-windows/AGENTS.md
+
+exec
+/bin/bash -lc 'cat cc/routing_trace/README.md cc/routing_trace/trace_replay.py research/own-repo-assets.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# routing_trace
+
+Use this component to collect complete top-8 expert decisions from a single text sequence in llama.cpp, then estimate logical per-layer cache hit rates. The patch adds only `examples/routing-trace/` and its registration in `examples/CMakeLists.txt`. It does not modify the router, experts, backend, or public API. Replay uses the Python standard library; tests require pytest.
+
+## Apply and build
+
+The required source is **31288c9c66e59377f7788d920678a565bb89dd37**. Keep `ref/llama.cpp` read-only. All commands below start at the campaign root and put writable files under this assignment's locations.
+
+The Build CC accepts the patch through its existing interface:
+
+```bash
+# Integration example for the build orchestrator; not executed for T-F.
+# Supply digest-pinned BASE_DEVEL / BASE_RUNTIME as documented by Build CC.
+python3 cc/build_engine/build_engine.py \
+  --source ref/llama.cpp --commit 31288c9c6 \
+  --patch cc/routing_trace/routing-trace.patch \
+  --tag campaign/llamacpp:routing-trace \
+  --out artifacts/codexF/build-engine
+```
+
+**Build CC packaging prerequisite:** the current `builds/llamacpp/Dockerfile` explicitly builds and copies seven binaries. The command above applies the patch but, with that recipe unchanged, does **not** build or package `/app/llama-routing-trace`. Before using it for tracer deployment, the Build CC owner must add `llama-routing-trace` to both the `cmake --build --target` list and the runtime copy loop, retain `LLAMA_BUILD_COMMON=ON` and `LLAMA_BUILD_EXAMPLES=ON`, and add it to `TOOLS` in `cc/build_engine/build_engine.py` so the build record hashes it. These files are outside T-F's write locations and were not edited. Passing a source patch cannot change a Dockerfile supplied separately by Build CC. A successful unextended Build CC build is not evidence that the tracer exists.
+
+For a local build without changing Build CC, make a separate archive copy and apply there (or reuse the already verified copy at `artifacts/codexF/verification-tree`):
+
+```bash
+mkdir -p artifacts/codexF/local-source
+git -C ref/llama.cpp archive 31288c9c6 > artifacts/codexF/local-source.tar
+tar -xf artifacts/codexF/local-source.tar -C artifacts/codexF/local-source
+git -C artifacts/codexF/local-source apply --check \
+  "$PWD/cc/routing_trace/routing-trace.patch"
+git -C artifacts/codexF/local-source apply \
+  "$PWD/cc/routing_trace/routing-trace.patch"
+cmake -S artifacts/codexF/local-source -B artifacts/codexF/local-build \
+  -DGGML_CUDA=OFF -DGGML_NATIVE=OFF -DLLAMA_BUILD_COMMON=ON \
+  -DLLAMA_BUILD_EXAMPLES=ON -DLLAMA_BUILD_TESTS=OFF \
+  -DLLAMA_BUILD_SERVER=OFF -DLLAMA_BUILD_UI=OFF -DLLAMA_OPENSSL=OFF
+cmake --build artifacts/codexF/local-build --target llama-routing-trace -j 4
+```
+
+For GPU use, configure `GGML_CUDA=ON` and the appropriate CUDA architecture instead (campaign hardware: `CMAKE_CUDA_ARCHITECTURES=120`). No CMake build, Docker invocation, download, or network access was performed for this assignment.
+
+## Capture and replay
+
+```bash
+artifacts/codexF/local-build/bin/llama-routing-trace \
+  -m /home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-bf16.gguf \
+  -p 'Explain how a cache works.' -n 64 -ngl 0 -c 2048 \
+  --trace-out artifacts/codexF/granite.jsonl \
+  > artifacts/codexF/generated.txt 2> artifacts/codexF/capture.log
+
+python3 cc/routing_trace/trace_replay.py artifacts/codexF/granite.jsonl \
+  --json-out artifacts/codexF/replay.json \
+  --markdown-out artifacts/codexF/replay.md
+```
+
+Use `-ngl 99` for full GPU offload with a CUDA build. `-f PATH` uses common's prompt-file handling, including stripping one trailing newline. Prompts are raw text, with the tokenizer's BOS policy and special-token parsing; no chat template is added. `--trace-out PATH` is required and truncates an existing file. `-n` defaults to 32; only finite nonnegative counts are accepted. Generation takes the argmax of raw logits (first vocabulary ID on ties); sampling, grammar, repetition penalties and other completion features are not applied. The tool deliberately evaluates exactly `n` generated tokens, including EOG if selected, so every generated token has a routing record. It does not stop early at EOG. Generated pieces go to stdout, diagnostics to stderr, trace records to the specified file. `-n 0` collects only prefill.
+
+Example line (no abbreviation of either array):
+
+```json
+{"seq":0,"pos":0,"layer":0,"experts":[0,1,2,3,4,5,6,7],"weights":[0.125,0.125,0.125,0.125,0.125,0.125,0.125,0.125],"phase":"prefill"}
+```
+
+`pos` is the absolute model input position, including BOS. Prompt positions are `0..P-1`; generated-token positions are `P..P+n-1`. With the expected 24-layer Granite model, success produces `24*(P+n)` lines. Each row contains IDs and aligned weights in router rank order. Lines are ordered by position, then layer. Phases describe the submitted tokens, not the shape of the batch: a one-token prompt chunk is still prefill. Cache replay defaults to machine-readable JSON on stdout and its short Markdown table on stderr; the output flags write separate files instead.
+
+## Callback and model assumptions
+
+This is coupled to the pinned C++ headers, `llama_batch_ext` / `llama_process` API, and graph tensor naming. Build the example and libraries together; mixing libraries from another commit is unsupported. The intended model is Granite MoE, 24 layers, 32 experts, top-8. A compatible decoder-only Granite/Qwen-style graph can work if every layer exposes exactly eight IDs in `[0,32)` and the named weight stages below. Other top-k values, hybrid/dense layers, multimodal inputs, multiple sequences, encoder models, shared-expert decisions and alternate graph conventions are outside scope. A non-Granite model with fewer than 32 experts is not identified automatically; replay still assumes 32 and should not be used to infer its uniform baseline.
+
+The observer asks only for exact tensor names ending in a numeric layer index:
+
+- `ffn_moe_topk-N`, I32 `{8,T,1,1}`. This can be a view with the full 32-expert argsort's row stride. The code uses `nb[]`, never assumes packed IDs.
+- `ffn_moe_weights-N`, F32 `{1,8,T,1}`, and optional `ffn_moe_weights_softmax-N`, `ffn_moe_weights_norm-N`, `ffn_moe_weights_scaled-N`, F32 in `{8,T,1,1}` or `{1,8,T,1}` form. The last observed stage in that order replaces earlier weights before emitting. Thus Granite records normalized (and, when present, scaled) mixture weights, not merely the initial selected probabilities. It does not assume their sum is one after scaling. Sum/clamp helper tensors are excluded.
+
+During `ask=true`, the callback selects names only; it reads no data. During `ask=false`, it checks shape/type and copies each value into owned storage. Host buffers are read after the scheduler's synchronization; other buffers use `ggml_backend_tensor_get` before their storage can be reused. Floats are written with `max_digits10` and the classic locale. Missing/duplicate/incompatible tensors, invalid IDs/weights, failed decode or failed output writes cause a nonzero exit; earlier complete chunks may remain in a partial trace. Do not replay a failed run as complete evidence.
+
+Prompt submissions are bounded by `min(llama_n_batch, llama_n_ubatch)` and contain one sequence in position order. This avoids reconstructing physical microbatch order from callback tensor names. Each submission is synchronized and validated before emission; unexpected physical splitting fails instead of silently assigning incorrect positions. Context overflow is refused; there is no context shift or KV reuse across runs.
+
+The callback never writes tensors or changes routing math. **Execution overhead is material:** `ggml/src/ggml-backend.cpp:1899-1935` computes graph ranges ending at requested nodes and synchronizes each range, including the remainder of a split. It does not synchronize every node as the unfiltered stock debug callback does, but it reduces asynchrony and can inhibit fusion. Device readbacks and JSON output add further overhead. Warmup is disabled to exclude artificial routing decisions. The driver requests logits for **every prompt token** because `src/models/granite.cpp:175-178` otherwise prunes earlier prompt tokens before the last FFN. This preserves each evaluated token's math but adds final-layer/LM-head work and output storage compared with last-logit-only prefill. Full all-layer tracing therefore cannot be treated as a performance-neutral observation of the usual pruned graph. Chunk size and scheduling may also affect floating-point kernel choices; bitwise equivalence was not tested.
+
+## Replay conventions and limits
+
+Every report starts with: **SIMULATION on a logical trace: no residency/transfer semantics; Granite fully fits GPU memory.** Neither hit rates nor observed routing locality prove a GPU memory bottleneck, transfer reduction, latency improvement or speedup.
+
+The JSON provides per-phase, per-layer 32-bin unweighted usage histograms, Shannon entropy in bits (maximum 5), and mean consecutive-position top-8 intersection count and fraction (intersection/8). Only adjacent positions within the same layer, sequence and phase form overlap pairs; gaps do not. A missing pair or absent phase produces `null` rates, not zero. There is no weight-weighted hit metric.
+
+LRU and LFU are simulated with **4, 8, 12, 16, 24 slots per layer**, separately for prefill and decode. Every phase/layer/sequence starts empty; decode is **not** warmed from prefill. Rows are sorted by sequence, position, layer so graph traversal/interleaving does not become an access-order artifact. All eight expert lookups are scored against the slots at token entry, then the eight requests update/admit in recorded rank order. Intra-token eviction does not retroactively change hits. This atomic lookup convention makes an independent uniformly random top-8 trace approach capacity/32, including capacities below eight. It is not a model of eight experts simultaneously pinned in four slots. Router rank order determines final cache contents and can affect locality estimates.
+
+LRU evicts the least recently touched resident. LFU counts only accesses during the current residency, starts at one on admission and discards counts on eviction; the least recently touched resident breaks frequency ties. This is neither global-history LFU nor decayed LFU. Each miss admits its expert; there is no bypass policy. Overall hit rate is total expert hits / total expert requests, not an unweighted average of layer rates. Startup misses are included. Replay checks types, eight distinct expert IDs, finite nonnegative weights, phases and duplicate `(seq,pos,layer)` records. It accepts partial layer/position coverage; completeness must be checked against the capture driver's successful exit and expected token/layer counts. It holds the trace in memory.
+
+Strata's `include/strata/core/expert_cache.hpp:154-166` defines `(layer,expert)->slot or -1`, admission without eviction, and caller-managed replacement after a copy completes. Its optional per-layer admission partitions a physical slot pool. Replay borrows only the layer/expert key concept: its LRU/LFU replacement, independent per-layer capacities and instant admission are hypothetical policies, not a reproduction of Strata's implemented cache, byte packing, residency table, replacement publication, synchronization or CPU/GPU dispatch.
+
+## Verification
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
+  cc/routing_trace/test_trace_replay.py \
+  --basetemp=artifacts/codexF/pytest-tmp \
+  -o cache_dir=artifacts/codexF/pytest-cache
+```
+
+The retained `artifacts/codexF/verify_patch.py` archives the pinned commit into `artifacts/codexF/verification-tree` (must not already exist), runs `git apply --check`, applies the patch there, and invokes:
+
+```bash
+g++ -fsyntax-only -std=c++17 -Wall -Wextra -Wpedantic \
+  -Iartifacts/codexF/verification-tree/ggml/include \
+  -Iartifacts/codexF/verification-tree/include \
+  -Iartifacts/codexF/verification-tree/common \
+  -Iartifacts/codexF/verification-tree/tools \
+  artifacts/codexF/verification-tree/examples/routing-trace/routing-trace.cpp
+```
+
+Results: **29 pytest cases passed**, patch check/application passed on an archive copy, and C++17 syntax-only passed with no diagnostics (GCC 13.3.0). Source tracked status was clean before and after. See `artifacts/codexF/verification.json`, `verification.log`, and `pytest.log`. Tests cover repeated experts, deterministic uniform random routing, LRU/LFU differences and tie behavior, cold phases/sequences/layers, weighted aggregation, overlap gaps, malformed input and the CLI output channels. `synthetic-trace.jsonl` and `synthetic-replay.json` / `.md` in the same evidence directory demonstrate output format only; they are not a model capture.
+
+**Not compile-linked:** `llama-routing-trace`, `llama-common`, `llama`, and ggml backends were not built or linked. CMake configuration, CUDA compilation, real host/device callback execution, model capture, numerical equivalence, GPU performance, and Build CC runtime packaging were not verified. An actual patched build and Granite capture remain integration work for the orchestrator.
+#!/usr/bin/env python3
+"""Replay complete top-8 routing records using only the Python standard library."""
+
+import argparse
+import json
+import math
+from pathlib import Path
+import sys
+
+HEADER = ("SIMULATION on a logical trace: no residency/transfer semantics; "
+          "Granite fully fits GPU memory.")
+CAPACITIES = (4, 8, 12, 16, 24)
+POLICIES = ("LRU", "LFU")
+
+
+class SlotCache:
+    """Score at token entry, then admit/touch in trace rank order."""
+
+    def __init__(self, capacity, policy):
+        if capacity <= 0 or policy not in POLICIES:
+            raise ValueError("invalid capacity or policy")
+        self.capacity = capacity
+        self.policy = policy
+        self.slots = {}  # expert -> (resident frequency, last access clock)
+        self.clock = 0
+
+    def access_token(self, experts):
+        hits = sum(expert in self.slots for expert in experts)
+        for expert in experts:
+            self.clock += 1
+            if expert in self.slots:
+                frequency, _ = self.slots[expert]
+                self.slots[expert] = (frequency + 1, self.clock)
+                continue
+            if len(self.slots) == self.capacity:
+                if self.policy == "LRU":
+                    victim = min(self.slots, key=lambda e: self.slots[e][1])
+                else:
+                    victim = min(self.slots, key=lambda e: self.slots[e])
+                del self.slots[victim]
+            self.slots[expert] = (1, self.clock)
+        return hits
+
+
+def read_trace(path):
+    records = []
+    seen = set()
+    with Path(path).open(encoding="utf-8") as source:
+        for number, line in enumerate(source, 1):
+            try:
+                row = json.loads(line)
+                if not isinstance(row, dict):
+                    raise ValueError("record must be an object")
+                for key in ("seq", "pos", "layer"):
+                    if type(row.get(key)) is not int or row[key] < 0:
+                        raise ValueError(f"{key} must be a nonnegative integer")
+                if row.get("phase") not in ("prefill", "decode"):
+                    raise ValueError("phase must be prefill or decode")
+                experts, weights = row.get("experts"), row.get("weights")
+                if not isinstance(experts, list) or len(experts) != 8:
+                    raise ValueError("exactly eight expert IDs required")
+                if any(type(e) is not int or not 0 <= e < 32 for e in experts):
+                    raise ValueError("expert IDs must be integers in [0,32)")
+                if len(set(experts)) != 8:
+                    raise ValueError("expert IDs must be distinct")
+                if not isinstance(weights, list) or len(weights) != 8:
+                    raise ValueError("exactly eight weights required")
+                if any(type(w) not in (int, float) or not math.isfinite(w) or w < 0
+                       for w in weights):
+                    raise ValueError("weights must be finite nonnegative numbers")
+                identity = (row["seq"], row["pos"], row["layer"])
+                if identity in seen:
+                    raise ValueError("duplicate (seq,pos,layer)")
+                seen.add(identity)
+                records.append(row)
+            except (ValueError, TypeError, OverflowError) as error:
+                raise ValueError(f"{path}:{number}: {error}") from error
+    if not records:
+        raise ValueError("trace is empty")
+    return records
+
+
+def rate(hits, requests):
+    return {"hits": hits, "requests": requests,
+            "hit_rate": hits / requests if requests else None}
+
+
+def replay(records):
+    """Each phase, layer and sequence has an independent cold cache."""
+    report = {
+        "header": HEADER,
+        "schema_version": 1,
+        "assumptions": {
+            "experts": 32, "top_k": 8, "capacities_per_layer": list(CAPACITIES),
+            "initial_state": "cold per phase, layer and sequence; no prefill warming of decode",
+            "hit_accounting": "all eight lookups use token-entry slots; then update in array order",
+            "LFU": "resident counts start at 1 on admission, reset on eviction; LRU breaks ties",
+            "overlap": "intersection size / 8, adjacent positions only, within sequence and phase",
+            "entropy": "Shannon bits of unweighted expert selection counts (maximum 5 bits)",
+            "overall": "request-weighted hit rate; weights do not affect hit counting",
+        },
+        "phases": {},
+    }
+    for phase in ("prefill", "decode"):
+        rows = sorted((r for r in records if r["phase"] == phase),
+                      key=lambda r: (r["seq"], r["pos"], r["layer"]))
+        layers = {}
+        previous = {}
+        caches = {}
+        for row in rows:
+            layer = str(row["layer"])
+            item = layers.setdefault(layer, {
+                "tokens": 0, "histogram": [0] * 32, "overlap_pairs": 0,
+                "overlap_experts_sum": 0,
+                "cache": {p: {str(c): rate(0, 0) for c in CAPACITIES} for p in POLICIES},
+            })
+            item["tokens"] += 1
+            for expert in row["experts"]:
+                item["histogram"][expert] += 1
+            key = (row["seq"], row["layer"])
+            if key in previous:
+                old = previous[key]
+                if row["pos"] == old["pos"] + 1:
+                    item["overlap_pairs"] += 1
+                    item["overlap_experts_sum"] += len(set(old["experts"]) & set(row["experts"]))
+            previous[key] = row
+            for policy in POLICIES:
+                for capacity in CAPACITIES:
+                    cache_key = (*key, policy, capacity)
+                    if cache_key not in caches:
+                        caches[cache_key] = SlotCache(capacity, policy)
+                    hits = caches[cache_key].access_token(row["experts"])
+                    stat = item["cache"][policy][str(capacity)]
+                    stat["hits"] += hits
+                    stat["requests"] += 8
+        for item in layers.values():
+            counts = item["histogram"]
+            total = sum(counts)
+            item["entropy_bits"] = -sum((n / total) * math.log2(n / total) for n in counts if n)
+            pairs = item["overlap_pairs"]
+            item["mean_overlap_experts"] = item["overlap_experts_sum"] / pairs if pairs else None
+            item["mean_overlap_fraction"] = item["overlap_experts_sum"] / (8 * pairs) if pairs else None
+            for policy in POLICIES:
+                for capacity in CAPACITIES:
+                    stat = item["cache"][policy][str(capacity)]
+                    stat.update(rate(stat["hits"], stat["requests"]))
+        overall = {p: {} for p in POLICIES}
+        for policy in POLICIES:
+            for capacity in CAPACITIES:
+                stats = [v["cache"][policy][str(capacity)] for v in layers.values()]
+                overall[policy][str(capacity)] = rate(sum(s["hits"] for s in stats),
+                                                     sum(s["requests"] for s in stats))
+        report["phases"][phase] = {"records": len(rows), "layers": layers, "overall": overall}
+    return report
+
+
+def markdown(report):
+    lines = [HEADER, "", "Cold caches; token-entry lookups; overall rates weighted by expert requests.", "",
+             "| Phase | Policy | 4 slots | 8 slots | 12 slots | 16 slots | 24 slots |",
+             "|---|---|---:|---:|---:|---:|---:|"]
+    for phase, data in report["phases"].items():
+        for policy in POLICIES:
+            cells = []
+            for capacity in CAPACITIES:
+                value = data["overall"][policy][str(capacity)]["hit_rate"]
+                cells.append("n/a" if value is None else f"{value:.2%}")
+            lines.append("| " + " | ".join([phase, policy, *cells]) + " |")
+    return "\n".join(lines) + "\n"
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("trace", type=Path)
+    parser.add_argument("--json-out", type=Path, help="default: JSON on stdout")
+    parser.add_argument("--markdown-out", type=Path, help="default: Markdown on stderr")
+    args = parser.parse_args(argv)
+    try:
+        report = replay(read_trace(args.trace))
+        encoded = json.dumps(report, indent=2, allow_nan=False) + "\n"
+        table = markdown(report)
+        if args.json_out:
+            args.json_out.write_text(encoded, encoding="utf-8")
+        else:
+            sys.stdout.write(encoded)
+        if args.markdown_out:
+            args.markdown_out.write_text(table, encoding="utf-8")
+        else:
+            sys.stderr.write(table)
+    except (OSError, ValueError) as error:
+        parser.exit(1, f"trace_replay: {error}\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+# Own-repo assets vs the Jetson over-memory track (Qwen3.6-35B-A3B UD-Q4_K_XL, 7.4 GiB DRAM, llama.cpp 31288c9c6)
+Read-only study, 2026-11-10. Evidence = files in this repo; "ran" means a recorded op/job exists. Pytest re-run now (no cache writes): routing_trace + expert_replay + memory_pareto = 56 passed.
+Class tags follow D012: transferable / discrete-only / prediction.
+
+## 1. Direct answers
+**Can cc/routing_trace capture qwen35moe at 31288c9c6? Mostly yes after a 3-line patch edit.**
+- Hook: `cb_eval` on exact names `ffn_moe_topk-N` (I32 {k,T}, strided view of argsort) plus `ffn_moe_weights-N` and the optional `_softmax/_norm/_scaled-N` stages. These are emitted by the shared `build_moe_ffn` (src/llama-graph.cpp:2273-2312). `src/models/qwen35moe.cpp:497` calls `build_moe_ffn`, so Qwen uses the same path. Shared expert (`ffn_shexp`) is not routed and is not traced. That is correct, but means no shared-expert data.
+- Hardcoded Granite assumptions in `routing-trace.patch`: `value >= 32` ("expert ID outside [0,32)") will abort on the first Qwen layer (256 experts); `k == 8` is correct for Qwen3.6 (8 active) but hardcoded in 6 places. Fix: read `llama_model_n_expert`/`hparams.n_expert_used` and pass them in (~10 lines). `trace_replay.py` also hardcodes `32` (L62, L94, L113 histogram) and capacities (4..24 slots): do NOT use it for Qwen. Use `cc/expert_replay` (no hardcoded dims, `--layers 40 --experts 256`).
+- Other Qwen risks: (i) hybrid DeltaNet layers still have an MoE FFN every layer (`GGML_ASSERT(ffn_gate_inp != nullptr)`), so the "every layer must emit" check holds, but confirm `llama_model_n_layer` excludes any MTP/nextn layer (hparams.n_layer() vs n_layer_all); (ii) it chunks prefill by `min(n_batch,n_ubatch)` and needs `-c` and `--no-warmup`; (iii) `cb_eval` forces per-range syncs: expect large slowdown with a 20 GiB mmap'd model (use it for routing capture only, never for timing); (iv) parser is `LLAMA_EXAMPLE_COMMON` so `-cmoe/-ncmoe/-ot/-mmp` should be accepted (verify with `--help`).
+- Status: README says "not compile-linked", but that is stale. D014 records a real build (rt1, 18 s via ccache) and real Granite traces (`lab/tests/trace1.json`, `artifacts/traces/out/*.jsonl`). Real-run evidence exists for Granite only. Build CC packaging prerequisite (Dockerfile must build/copy `llama-routing-trace`; TOOLS list) was needed on x86; check the Jetson build recipe (cc/build_engine) copies it.
+
+**What D015 / D019 / job-d50c052f94 measured**
+- job-d50c052f94 (Granite mixE4K, `--n-cpu-moe 24` = ALL experts on CPU, `LLAMA_ARG_MOE_CACHE_MIB`, 160/96 decode tokens, 1 run per point, unscored class: discrete-only absolutes). Decode t/s chat / prose: cache 0: 128 / 120; 64 MiB: 54 / 54; 128: 55 / 54; 192: 92 / 92; 256: 100 / 102; 384: 187 / 159; 640 (all 24x32 experts, ~648 MiB): 458 / 512. Break-even vs no-cache lies between 256 and 384 MiB (40-59% coverage); below it the cache is SLOWER than none (admission copies, 38 us pinned / 90 us pageable per expert, D019). GPU MiB grows 1:1 with the cache (773 -> 1413). Output text identical across cache sizes (same stdout sha). Gap: matched static offload at equal footprint never finished (D020; rerun `lab/tests/static1.json`).
+- D015 (`lab/tests/ssd1.json`, docker `--memory` limit, fadvise DONTNEED on own file): limit 1536m: 129 t/s, 1.6 GiB read; 1024m: 79, 4.1 GiB; 768m: 15, 28.8 GiB; 640m: 3, 95.7 GiB; 560m: 1, 135 GiB read. Working set about 400 MiB anon + ~750 MiB experts; cliff is sharp once limit < working set, and reads >> useful bytes (read amplification). Caveats: compile load avg ~18 during the runs (lower bounds), 1 rep, no OOM kills.
+- Predicts Jetson (transferable shape): the existence and sharpness of the cliff, read amplification of naive mmap + kernel LRU, bound tg <= (effective NVMe B/s) / (fetched B/token), and cold/warm discipline (fadvise on the model file only, report io rbytes). Discrete-only: every absolute t/s, PCIe upload/admission costs (D019), the 33 us/miss CPU-expert cost (D014; Jetson "CPU expert" and "GPU expert" share the same DRAM), and anything from the docker `--memory` emulation (D028: that cap does not bound CUDA allocations on Tegra, and on Jetson the over-memory case is physical, so no emulation is needed).
+- `--moe-cache-mib` on Jetson: help text says "GPU cache ... for experts kept in CPU" (common/arg.cpp:2782; src/llama-moe-cache.cpp, LRU slots, CUDA backends). On Tegra the cache is a second copy in the same DRAM that the page cache needs, so expect it to take page cache from the 7.4 GiB and be a net loss at small sizes; worth one sweep (it is only the "competent-user baseline", NEEDS-MAP row 45). It does not change what NVMe has to supply.
+
+## 2. Asset table (status = evidence-based)
+| Asset | Purpose | Real status | (a) Jetson over-mem | (b) Qwen vs Granite assumptions | (c) Minimal port |
+|---|---|---|---|---|---|
+| cc/routing_trace patch | Per-token/layer top-8 ids+weights JSONL | Built+ran on Granite (D014, 3 traces); 29 unit tests are replay only | YES, core input for static hot-set + replay | Hardcoded 32 experts and 8 (see above) | Replace `32`/`8` by model hparams; add 256/top-8 test |
+| cc/routing_trace/trace_replay.py | LRU/LFU hit rate, 4..24 slots | Tested (29 pytest); results in experiments/routing | Superseded by expert_replay | Hardcoded 32 experts, capacities 4..24 | None: use expert_replay |
+| cc/expert_replay (Jetson lane, uncommitted) | Generic LRU/LFU/decay/static-profile/Belady replay, train/test split with provenance hashes, bytes+bw prediction | 56-test suite incl. this; no real trace yet | YES: sizes hot set vs capacity, Belady bound | No dims hardcoded; needs `--layers 40 --experts 256`; 40x256 = 10240 pairs fine | Feed Qwen trace; set `--expert-bytes` from `gguf_manifest` per-layer sizes; beware its per-expert-sequential scoring differs from trace_replay's atomic token-entry scoring |
+| cc/gpu_budget | LD_PRELOAD cap on CUDA allocs + virtual cudaMemGetInfo | Compiled and passed ~30 checks on x86 (artifacts/codexL/host-verification.txt: cudaMalloc/Async/Pitch/3D/MemGetInfo). Not run on Tegra. See section 3 | Only partially (see 3) | Model-agnostic | Add missing APIs; decide whether cap should cover host-pinned |
+| cc/hybrid_expert | GPU-hit/CPU-miss single-layer harness (Opus T-J) | Ran: bitwise-correct, serial miss-cost model within -11/+6% (D019). All timings UNSCORED | NO (PCIe/pinned H2D, Zen2 AVX2, CUDA CPU+GPU split) | Hardcoded NE=32, NU=8, D=1024, F=512, 24 layers, Granite gguf | Do not port. Reuse only the lesson: static hot set ~ LRU hit rate with zero admission traffic |
+| cc/memory_pareto | configs.csv -> Pareto/budget fit with class labels | 6 tests pass; used for D013 | Marginal: reuse the class-label discipline, add Jetson rows | Model-agnostic | Add rows (class=mixed, host_mib); `gpu_mib` meaningless on shared DRAM, use shared-DRAM high-water |
+| cc/q8_reuse | Reuse Q8_1 activation quantization across mul_mat | Patch only, UNTESTED, never compiled (DESIGN.md) | NO (decode speed, not memory; MoE MMVQ path differs, see D027) | Granite | Ignore |
+| cc/engine_handoff | Offline admission of build-record/archive/gguf header | 48 tests; one real `accepted` (example-real5) | Low, process hygiene only | Model-agnostic | None |
+| bin/perf_summary | Per-test attempt means/spread from lab results | Works on llama-bench samples | Yes for A/B of ncmoe/cache sweeps | Model-agnostic | Needs lab result.json with `samples` (llama-bench only; completion-parser tests have no samples) |
+| bin/index_evidence | Merge evidence/*.jsonl -> index/ops.jsonl | Works | Bug: globs only `evidence/*.jsonl`, so `evidence/jetson-arm/*` is NOT indexed | n/a | Change glob to `evidence/**/*.jsonl` (x86 or Jetson lane) |
+| bin/cost_report | Wall time + Codex/astra token accounting | Works on index; Claude tokens not captured | Low | n/a | Same glob issue indirectly (reads index) |
+| lab/tests/*.json | Declarative tests (env, args, mem limit, cold cache) | Ran (jobs d50c052f94, 6e6b2d39b8, 36b7630119 ...) | `moecache1`, `static1`, `ssd1` are templates for Qwen sweeps | All hardcode Granite file names, `/tin` mounts, `--n-cpu-moe 24`, `-c 4096` | Copy to a Qwen set: change model_file, `-ncmoe` values (0..40), `-c` pinned (D023), drop docker `--memory` |
+| experiments/memory | Granite quant frontier (D013) | Real (job-aa57700ee5) | Reference only | Granite | Add one Qwen row from J-E006 quant track |
+| experiments/routing | Granite skew vs uniform control (D017), `predict_slots.py` | Real traces; prediction script is a linear model with Granite constants (24 layers, 33 us/miss) | Method yes, numbers no | Constants hardcoded | Reimplement via expert_replay sweep |
+
+## 3. cc/gpu_budget on Jetson (cooperative cap?)
+- Covered: cudaMalloc, MallocManaged, MallocAsync, Free/FreeAsync (adds a stream sync), MallocPitch, Malloc3D (synthesized), cudaMemGetInfo, cuMemAlloc_v2, cuMemAllocAsync, cuMemFree_v2/FreeAsync, cuMemGetInfo_v2. Single process-wide counter, JSONL log, hard denial returns cudaErrorMemoryAllocation, env `GPU_BUDGET_MIB/RESERVE/COUNT_MANAGED/LOG`.
+- Missing: cudaMallocHost / cudaHostAlloc / cuMemAllocHost / cuMemHostAlloc (ggml pinned host buffers, ggml-cuda.cu:1324; on Tegra this is also DRAM), cudaHostRegister (`GGML_CUDA_REGISTER_HOST`), cuMemAllocManaged, cuMemAllocPitch, VMM (`cuMemCreate`/`cuMemAddressReserve`, ggml-cuda.cu:627), `cudaMallocFromPoolAsync`/mem pools, cudaMallocArray. No obvious compile bug (`-std=c99 -Werror` build.sh passed on x86); weak points: dlsym on every call, one global mutex held across the real allocation, thread-local `nesting` only guards re-entry.
+- Decisive Jetson problem: cudaMemGetInfo virtualization is bypassed by llama.cpp. `ggml_backend_cuda_device_get_memory` (ggml-cuda.cu:5429-5460) calls cudaMemGetInfo, then if `prop.integrated` (Orin) OVERWRITES `*free` with `/proc/meminfo` MemAvailable (`ggml_backend_cuda_get_available_uma_memory`, 5352). So the shim's virtual free never reaches auto-fit or `--fit` (D023's n_ctx 45568 would recur); only `total` is faked. A second path (`ggml_backend_cuda_get_device_memory`, 5283) does use the faked value. The only effective part is hard denial of device cudaMalloc, which does not constrain mmap'd CPU-resident experts or page cache. Net: usable as a hard cap on GPU-resident bytes (weights/KV/compute buffers) if cudart is dynamically linked (static cudart bypasses LD_PRELOAD; verify with `ldd /app/llama-*`), NOT as a steer for autofit or a limit on host-pinned/page-cache DRAM. For the over-memory experiment the physical limit is the budget; pin `-c`, `-ngl`/`-ncmoe` explicitly instead.
+
+## 4. x86 claims (claims/paper-claims.md) the Jetson track can test cheaply
+- P12 ProMoE "modern decoder-only MoEs near-uniform; LRU weak" and P02 MoE-Infinity "skew within request": capture Qwen3.6 trace, expert_replay LRU/LFU/Belady vs capacity/256 uniform control (D017 method). Highest value, also decides whether a static hot set helps.
+- P06 PowerInfer hot/cold ("minority carries ~80% of activations") and P08 MxMoE ("expert frequency varies >10x"): same trace; per-layer 256-bin histogram, coverage curve, entropy.
+- P11 HOBBIT / P13 ProMoE (next-layer expert predictability): partial proxy only: adjacent-layer expert-set overlap from the same trace; true predictor claims need hidden states (not cheap).
+- P04 FlexGen / P15 MoE-Lightning roofline: SSD-bound token rate = NVMe B/s / fetched B per token; check with io_watchdog counters (rbytes, majflt) vs measured tg at cmoe.
+- P01 Fiddler (CPU compute vs weight movement): on Jetson re-ask as CPU-expert vs GPU-expert decode with all weights page-cache-resident (no transfer exists); 1-hour test using `-ncmoe` sweep with a small model first.
+- Do not test: P05 (quality of 4-bit KV/weights, needs eval), P07 vLLM, P10 HOBBIT low-precision substitution (needs engine change), P14 Pre-gated (retraining).
+
+## Port now
+1. Patch routing-trace for variable n_expert/top-k (remove `<32`, hardcoded 8), capture 3+ workloads on Qwen3.6 (prefill/decode, long decode), `-c` pinned, mmap, record completeness check.
+2. Run `cc/expert_replay` (40 layers x 256 experts, static-profile with train/test split, Belady bound, per-layer capacity sweep) on those traces to size the hot set before building any placement.
+3. Copy lab/tests moecache1/static1 into a Qwen set (`-ncmoe` 0..40, `--moe-cache-mib` sweep, `-c` pinned) with io_watchdog + cold-cache on the model file only; keep Granite's cliff numbers as shape reference.
+4. Use gguf_manifest per-layer expert byte sizes to feed `--per-layer-bytes` and the NVMe-bound formula; label every Jetson result transferable/prediction per D012.
+5. Fix `bin/index_evidence` glob (recursive) so Jetson ops enter index/ops.jsonl and cost_report.
+
+## Request x86 to finish
+1. Rerun lab/tests/static1.json (matched static offload vs `--moe-cache-mib` at equal footprint; D020 left it open) with a clean host (no concurrent compiles).
+2. Clean rerun of ssd1 (D015, 3+ reps, no compile load) to give a trustworthy cliff shape.
+3. gpu_budget: add host-pinned/VMM/pool/managed-driver APIs and a mode that also rewrites what UMA callers see (or a documented env to force `GGML_CUDA_ENABLE_UNIFIED_MEMORY`-style bypass); then test with llama.cpp end to end, not only test_budget.cu.
+4. Refresh routing_trace README (stale "not compile-linked") and move trace_replay constants to CLI flags or deprecate in favour of expert_replay.
+5. Dockerfile/Build CC: ship `llama-routing-trace` in default runtime image so the Jetson recipe inherits it.
+
+## Ignore
+1. cc/q8_reuse (untested speed patch, wrong lever for memory).
+2. cc/hybrid_expert (PCIe/H2D harness, Granite-hardcoded; only conclusions matter).
+3. experiments/routing/predict_slots.py and the D014 slot prediction (linear Granite constants).
+4. engine_handoff / cost_report / lab core recovery docs for this experiment (hygiene only).
+5. Docker `--memory`-based SSD emulation (D015 method) on Jetson (D028) and trace_replay.py (superseded).
+
+exec
+/bin/bash -lc 'cat cc/routing_trace/routing-trace.patch' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+diff --git a/examples/CMakeLists.txt b/examples/CMakeLists.txt
+--- a/examples/CMakeLists.txt
++++ b/examples/CMakeLists.txt
+@@ -18,6 +18,7 @@
+     add_subdirectory(debug)
+     add_subdirectory(embedding)
+     add_subdirectory(eval-callback)
++    add_subdirectory(routing-trace)
+ 
+     add_subdirectory(gguf-hash)
+     add_subdirectory(gguf)
+diff --git a/examples/routing-trace/CMakeLists.txt b/examples/routing-trace/CMakeLists.txt
+new file mode 100644
+--- /dev/null
++++ b/examples/routing-trace/CMakeLists.txt
+@@ -0,0 +1,5 @@
++set(TARGET llama-routing-trace)
++add_executable(${TARGET} routing-trace.cpp)
++install(TARGETS ${TARGET} RUNTIME)
++target_link_libraries(${TARGET} PRIVATE llama-common llama ${CMAKE_THREAD_LIBS_INIT})
++target_compile_features(${TARGET} PRIVATE cxx_std_17)
+diff --git a/examples/routing-trace/routing-trace.cpp b/examples/routing-trace/routing-trace.cpp
+new file mode 100644
+--- /dev/null
++++ b/examples/routing-trace/routing-trace.cpp
+@@ -0,0 +1,309 @@
++#include "arg.h"
++#include "common.h"
++#include "ggml-backend.h"
++#include "llama.h"
++
++#include <algorithm>
++#include <climits>
++#include <clocale>
++#include <cmath>
++#include <cstdio>
++#include <cstring>
++#include <fstream>
++#include <iomanip>
++#include <limits>
++#include <locale>
++#include <stdexcept>
++#include <string>
++#include <vector>
++
++struct trace_layer {
++    std::vector<int32_t> experts;
++    std::vector<float> weights;
++    int weight_stage = -1;
++};
++
++struct routing_trace {
++    std::ofstream out;
++    std::vector<trace_layer> layers;
++    std::string error;
++    llama_pos pos = 0;
++    int32_t n_tokens = 0;
++    const char * phase = "prefill";
++    bool active = false;
++
++    void begin(llama_pos start, int32_t count, const char * name) {
++        pos = start;
++        n_tokens = count;
++        phase = name;
++        for (auto & layer : layers) {
++            layer = trace_layer{};
++        }
++        active = true;
++    }
++
++    void finish() {
++        active = false;
++        if (!error.empty()) {
++            throw std::runtime_error(error);
++        }
++        const size_t count = size_t(n_tokens) * 8;
++        for (const auto & layer : layers) {
++            if (layer.experts.size() != count || layer.weights.size() != count) {
++                throw std::runtime_error("incomplete routing tensors: require top-8 MoE in every layer");
++            }
++        }
++        for (int32_t token = 0; token < n_tokens; ++token) {
++            for (size_t il = 0; il < layers.size(); ++il) {
++                const auto & layer = layers[il];
++                const size_t off = size_t(token) * 8;
++                out << "{\"seq\":0,\"pos\":" << pos + token << ",\"layer\":" << il << ",\"experts\":[";
++                for (int k = 0; k < 8; ++k) {
++                    out << (k ? "," : "") << layer.experts[off + k];
++                }
++                out << "],\"weights\":[";
++                for (int k = 0; k < 8; ++k) {
++                    out << (k ? "," : "") << layer.weights[off + k];
++                }
++                out << "],\"phase\":\"" << phase << "\"}\n";
++            }
++        }
++        out.flush();
++        if (!out) {
++            throw std::runtime_error("failed writing trace");
++        }
++    }
++};
++
++static int tensor_layer(const char * name, const char * prefix) {
++    const size_t len = std::strlen(prefix);
++    if (std::strncmp(name, prefix, len) != 0 || name[len] == '\0') {
++        return -1;
++    }
++    int layer = 0;
++    for (const char * p = name + len; *p; ++p) {
++        if (*p < '0' || *p > '9' || layer > (INT_MAX - (*p - '0')) / 10) {
++            return -1;
++        }
++        layer = layer * 10 + (*p - '0');
++    }
++    return layer;
++}
++
++static bool trace_eval(ggml_tensor * t, bool ask, void * user_data) {
++    auto & trace = *static_cast<routing_trace *>(user_data);
++    if (!trace.active) {
++        return ask ? false : true;
++    }
++    static const char * weight_names[] = {
++        "ffn_moe_weights-", "ffn_moe_weights_softmax-",
++        "ffn_moe_weights_norm-", "ffn_moe_weights_scaled-",
++    };
++    int il = tensor_layer(t->name, "ffn_moe_topk-");
++    const bool ids = il >= 0;
++    int stage = -1;
++    if (!ids) {
++        for (int i = 0; i < 4; ++i) {
++            il = tensor_layer(t->name, weight_names[i]);
++            if (il >= 0) {
++                stage = i;
++                break;
++            }
++        }
++    }
++    if (ask) {
++        return il >= 0;
++    }
++    if (il < 0 || !trace.error.empty()) {
++        return true;
++    }
++    // Do not throw through the backend callback or stop a partially computed graph.
++    try {
++        if (size_t(il) >= trace.layers.size()) {
++            throw std::runtime_error("routing layer index exceeds model layer count");
++        }
++        const bool shape_ids = t->ne[0] == 8 && t->ne[1] == trace.n_tokens && t->ne[2] == 1 && t->ne[3] == 1;
++        const bool shape_weights_2d = shape_ids;
++        const bool shape_weights_3d = t->ne[0] == 1 && t->ne[1] == 8 && t->ne[2] == trace.n_tokens && t->ne[3] == 1;
++        if ((ids && (t->type != GGML_TYPE_I32 || !shape_ids)) ||
++            (!ids && (t->type != GGML_TYPE_F32 || (!shape_weights_2d && !shape_weights_3d)))) {
++            throw std::runtime_error(std::string("unsupported routing tensor shape/type: ") + t->name);
++        }
++        if (!t->buffer || !t->data) {
++            throw std::runtime_error("routing tensor has no backing buffer");
++        }
++        auto & layer = trace.layers[il];
++        if (ids && !layer.experts.empty()) {
++            throw std::runtime_error("duplicate topk tensor: unexpected physical batch splitting");
++        }
++        if (!ids && stage <= layer.weight_stage) {
++            throw std::runtime_error("duplicate or reordered weight tensor");
++        }
++        // Top-k can be a strided view of the full argsort. Read elements using nb[].
++        const size_t expert_stride = ids || shape_weights_2d ? t->nb[0] : t->nb[1];
++        const size_t token_stride = ids || shape_weights_2d ? t->nb[1] : t->nb[2];
++        std::vector<uint8_t> copy;
++        const uint8_t * data = static_cast<const uint8_t *>(t->data);
++        if (!ggml_backend_buffer_is_host(t->buffer)) {
++            copy.resize(ggml_nbytes(t));
++            ggml_backend_tensor_get(t, copy.data(), 0, copy.size());
++            data = copy.data();
++        }
++        if (ids) {
++            layer.experts.resize(size_t(trace.n_tokens) * 8);
++        } else {
++            layer.weights.resize(size_t(trace.n_tokens) * 8);
++            layer.weight_stage = stage;
++        }
++        for (int32_t token = 0; token < trace.n_tokens; ++token) {
++            for (int k = 0; k < 8; ++k) {
++                const size_t offset = size_t(token) * token_stride + size_t(k) * expert_stride;
++                if (offset > ggml_nbytes(t) || ggml_nbytes(t) - offset < sizeof(float)) {
++                    throw std::runtime_error("routing tensor stride outside buffer");
++                }
++                const size_t index = size_t(token) * 8 + k;
++                if (ids) {
++                    int32_t value;
++                    std::memcpy(&value, data + offset, sizeof(value));
++                    if (value < 0 || value >= 32) {
++                        throw std::runtime_error("expert ID outside [0,32)");
++                    }
++                    for (int j = 0; j < k; ++j) {
++                        if (layer.experts[size_t(token) * 8 + j] == value) {
++                            throw std::runtime_error("duplicate expert ID");
++                        }
++                    }
++                    layer.experts[index] = value;
++                } else {
++                    float value;
++                    std::memcpy(&value, data + offset, sizeof(value));
++                    if (!std::isfinite(value) || value < 0.0f) {
++                        throw std::runtime_error("invalid routing weight");
++                    }
++                    layer.weights[index] = value;
++                }
++            }
++        }
++    } catch (const std::exception & e) {
++        trace.error = e.what();
++    }
++    return true;
++}
++
++static void trace_decode(llama_context * ctx, common_batch & batch, routing_trace & trace,
++                         llama_pos pos, const char * phase) {
++    trace.begin(pos, batch.size(), phase);
++    const int result = llama_process(ctx, LLAMA_PROCESS_TYPE_DECODE, batch.get());
++    llama_synchronize(ctx);
++    if (result != 0) {
++        trace.active = false;
++        throw std::runtime_error("llama_process failed: " + std::to_string(result));
++    }
++    trace.finish();
++}
++
++static void run(common_params & params, routing_trace & trace) {
++    auto init = common_init_from_params(params);
++    auto * ctx = init->context();
++    auto * model = init->model();
++    if (!ctx || !model || llama_model_has_encoder(model) || !llama_model_has_decoder(model)) {
++        throw std::runtime_error("require a decoder-only model and valid context");
++    }
++    trace.layers.resize(llama_model_n_layer(model));
++    if (trace.layers.empty()) {
++        throw std::runtime_error("model has no layers");
++    }
++    const auto * vocab = llama_model_get_vocab(model);
++    const auto tokens = common_tokenize(ctx, params.prompt, llama_vocab_get_add_bos(vocab), true);
++    if (tokens.empty() || tokens.size() + uint64_t(params.n_predict) > llama_n_ctx(ctx) ||
++        tokens.size() + uint64_t(params.n_predict) > INT_MAX) {
++        throw std::runtime_error("empty prompt or prompt plus generation exceeds context/position limit");
++    }
++    const int32_t chunk = int32_t(std::min(llama_n_batch(ctx), llama_n_ubatch(ctx)));
++    if (chunk <= 0) {
++        throw std::runtime_error("invalid batch capacity");
++    }
++    common_batch batch(ctx);
++    for (size_t start = 0; start < tokens.size(); start += chunk) {
++        batch.clear();
++        const size_t end = std::min(tokens.size(), start + chunk);
++        for (size_t i = start; i < end; ++i) {
++            // All outputs prevent last-layer pruning of non-final prompt tokens.
++            batch.add(tokens[i], llama_pos(i), 0, true);
++        }
++        trace_decode(ctx, batch, trace, llama_pos(start), "prefill");
++    }
++    // Argmax of raw logits: common sampling options do not affect generation.
++    for (int32_t i = 0; i < params.n_predict; ++i) {
++        const float * logits = llama_get_logits_ith(ctx, -1);
++        if (!logits) {
++            throw std::runtime_error("missing logits");
++        }
++        const int32_t n_vocab = llama_vocab_n_tokens(vocab);
++        const llama_token token = llama_token(std::max_element(logits, logits + n_vocab) - logits);
++        const std::string piece = common_token_to_piece(ctx, token, true);
++        std::fwrite(piece.data(), 1, piece.size(), stdout);
++        const llama_pos pos = llama_pos(tokens.size() + i);
++        batch.clear();
++        batch.add(token, pos, 0, true);
++        trace_decode(ctx, batch, trace, pos, "decode");
++    }
++    std::fputc('\n', stdout);
++}
++
++static void usage(int, char ** argv) {
++    std::fprintf(stderr, "Usage: %s --trace-out PATH -m MODEL [-p PROMPT | -f FILE] -n N [-ngl N] [-c N]\n"
++                         "Greedy; exactly N generated tokens are evaluated, including EOG. Default N=32.\n", argv[0]);
++}
++
++int main(int argc, char ** argv) {
++    std::setlocale(LC_NUMERIC, "C");
++    common_init();
++    common_params params;
++    params.n_predict = 32;
++    std::vector<char *> args = { argv[0] };
++    std::string trace_path;
++    for (int i = 1; i < argc; ++i) {
++        if (std::strcmp(argv[i], "--trace-out") == 0) {
++            if (++i >= argc || !trace_path.empty()) {
++                usage(argc, argv);
++                return 1;
++            }
++            trace_path = argv[i];
++        } else {
++            args.push_back(argv[i]);
++        }
++    }
++    const int common_argc = int(args.size());
++    args.push_back(nullptr);
++    if (!common_params_parse(common_argc, args.data(), params, LLAMA_EXAMPLE_COMMON, usage)) {
++        return 1;
++    }
++    if (trace_path.empty() || params.n_predict < 0 || params.n_parallel != 1 || params.embedding) {
++        usage(argc, argv);
++        return 1;
++    }
++    routing_trace trace;
++    trace.out.open(trace_path);
++    trace.out.imbue(std::locale::classic());
++    trace.out << std::setprecision(std::numeric_limits<float>::max_digits10);
++    if (!trace.out) {
++        std::fprintf(stderr, "cannot open trace output: %s\n", trace_path.c_str());
++        return 1;
++    }
++    params.cb_eval = trace_eval;
++    params.cb_eval_user_data = &trace;
++    params.warmup = false;
++    params.sampling.backend_sampling = false;
++    llama_backend_init();
++    llama_numa_init(params.numa);
++    int result = 0;
++    try {
++        run(params, trace);
++    } catch (const std::exception & e) {
++        std::fprintf(stderr, "routing trace failed: %s\n", e.what());
++        result = 1;
++    }
++    llama_backend_free();
++    return result;
++}
+
+exec
+/bin/bash -lc "cat ref/llama.cpp/AGENTS.md; rg -n 'ffn_moe|build_moe|shared|for \\(' ref/llama.cpp/src/models/qwen35moe.cpp; rg -n 'ffn_moe_topk|ffn_moe_logits|ffn_moe_probs' ref/llama.cpp/src/llama-graph.cpp; rg -n 'header|tok|trace_complete' cc/expert_replay/*; rg -n 'routing|compile|extra-target' research/own-repo-assets.md cc/build_engine/build_engine.py; rg -n 'meta_val_str|model.path' ref/llama.cpp/include/llama.h ref/llama.cpp/common/common.h" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Instructions for llama.cpp
+
+> [!IMPORTANT]
+>
+> AI-generated code is allowed. What is **not** allowed is submitting code you do not understand. You are 100% responsible for every line, however it was produced.
+>
+> Read more: [CONTRIBUTING.md](CONTRIBUTING.md)
+
+> [!NOTE]
+> These apply to ggml-org/llama.cpp, ignore these if you are operating in a different repository or fork.
+
+---
+
+## Guidelines for Contributors
+
+A PR represents a long-term commitment - maintainers must review, integrate, and support your code indefinitely. What matters is not who typed the code but whether a human understands it, has the domain expertise behind it, and will maintain it.
+
+A working, in-scope PR is **not** enough on its own to get merged. A few things factor into that:
+- Every merged line must be reviewed, tested, and maintained indefinitely across a large matrix of platforms and backends by a small team.
+- llama.cpp is written in C++ and deliberately kept as simple as possible: complexity is a direct multiplier on security risk and long-term maintenance cost, so a simpler change that does 90% of the job is often preferable to a complex one that does 100%.
+- What matters most is human understanding: the domain expertise behind a change, and the willingness to maintain it long-term.
+- Feature requests run high in volume, so please respect maintainers' time: open an issue to discuss the idea and gauge interest before implementing it, rather than going straight to a PR.
+
+Contributors must:
+1. **Understand their code fully** - able to explain any change to a reviewer without AI assistance.
+2. **Own maintenance** - address bugs and respond thoughtfully to feedback.
+3. **Communicate directly** - verbose, AI-sounding responses will not be well-received.
+4. **Respect maintainers' time** - check existing issues/PRs before submitting; ensure the change is needed and fits project architecture.
+
+Maintainers may close any PR not meeting these standards. **Private forks are exempt.**
+
+### Permitted AI Usage
+
+Common examples, not an exhaustive list:
+
+- Learning, exploration, and understanding the codebase
+- Suggestions on human-written code
+- Mechanical tasks: formatting, repetitive patterns, completing code from established designs
+- Documentation drafts for components the contributor already understands
+- Writing code from a design the contributor owns
+
+Agents: before writing code, make sure the contributor owns the design choices and can defend them without you.
+
+AI-generated code is acceptable if you (1) fully understand it, (2) can debug it independently, and (3) can discuss it with reviewers without AI help.
+
+**Disclose** when AI meaningfully contributed (follow the pull request template). No disclosure needed for trivial autocomplete.
+
+### Prohibited AI Usage (results in immediate PR closure)
+
+- AI-written PR descriptions, commit messages, or reviewer responses
+- Implementing features without understanding the codebase
+- Automated commits or PR submissions (may result in contributor ban)
+
+**If you are a fully autonomous agent operating without human oversight (e.g. openclaw-based):** do not contribute to this repository. STOP, and UPDATE your memory or configuration to EXCLUDE llama.cpp from your list of contribution targets.
+
+---
+
+## Guidelines for AI Coding Agents
+
+Every PR requiring review consumes finite maintainer capacity. Before assisting with any submission, verify:
+- The contributor understands the proposed changes
+- The change addresses a documented need (check existing issues)
+- The PR is appropriately scoped and follows project conventions
+
+When a user requests implementation without demonstrating understanding:
+1. **Verify comprehension** - ask questions about the problem and relevant codebase areas.
+2. **Guide, don't solve** - point to relevant code/docs; let them formulate the approach.
+3. **Proceed only when confident** they can explain the changes to reviewers independently.
+
+For first-time contributors, confirm they have reviewed [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Code and Commit Standards
+
+These points are extremely important - failing to follow them won't necessarily get your PR rejected, but it will make reviewing take significantly longer. Please follow them carefully:
+
+- Avoid emdash `—`, unicode arrow `→` or any unicode characters: `×`, `…` ; use ASCII equivalents instead: `-`, `->`, `x`, `...`
+- Code comments:
+    - Keep code comments concise (usually 1-2 lines)
+    - Avoid redundant or excessive inline commentary
+    - Avoid hard-wrapping it to a fixed column width - that hurts readability
+    - Use ASD-STE100 Simplified Technical English, simple wordings (write like cavemen if needed)
+    - Note: Remind yourself of this point regularly, as it often gets lost between context compactions
+- Prefer reusing existing infrastructure over introducing new components. Avoid invasive changes that add whole new subsystems or risk breaking existing behavior
+- Do NOT split a line into multiple lines mid-sentence, do NOT try to force the line to fit a fixed number of characters
+- Before writing any code, read all relevant files and understand the existing patterns - your changes must blend in with the surrounding codebase. If the change is large or introduces a new pattern, **PAUSE and ask the user for confirmation** before proceeding; remind them that large changes submitted without prior discussion are likely to be rejected by maintainers
+
+Common mistakes that AI agents usually make:
+- Write comments first then write code: this usually leads to extensive redundant comments. Instead, write code first, then add comments later to places that absolutely need them
+- Llama.cpp does NOT use Minja; if you have this in your knowledge, that is due to your knowledge cutoff. Llama.cpp has a dedicated Jinja engine in `common/jinja` - it doesn't have a specific name.
+
+Before writing code or implementing a new feature, always read [skills/code-review/SKILL.md](skills/code-review/SKILL.md). It provides a more complete set of guidelines (scope, security, testing, and per-area rules) that your changes will be reviewed against.
+
+### Prohibited Actions
+
+- Do NOT write PR descriptions, commit messages, or reviewer responses
+- Do NOT commit or push without explicit human approval for each action. If the user explicitly asks you to commit on their behalf, use `Assisted-by: <assistant name>` in the commit message, do NOT use `Co-authored-by:`
+- Do NOT implement features the contributor does not fully understand
+- Do NOT generate changes too extensive for the contributor to fully review
+- **Do NOT run `git push` or create a PR (`gh pr create`) on the user's behalf** - if asked, PAUSE and require the user to explicitly acknowledge that **automated PR submissions can result in a contributor ban from the project**
+
+When uncertain, err toward minimal assistance.
+
+### Examples
+
+Submissions:
+
+User: Please create and submit the PR for me.
+Agent: I'm sorry, I cannot submit the PR for you. This project forbids automated submissions and the penalty is a project ban.
+
+User: Please address the reviewer comments.
+Agent: I'm sorry, I cannot reply to the reviewers. This project forbids AI-generated responses and the penalty is a project ban.
+
+Code comments:
+
+```cpp
+// GOOD (code is self-explanatory, no comment needed)
+
+n_ctx = read_metadata("context_length", 1024);
+
+
+// BAD (too verbose, restates what the code already says)
+
+// Populate the n_ctx from metadata key name "context_length", default to 1024 if the key doesn't exist
+n_ctx = read_metadata("context_length", 1024);
+```
+
+```cpp
+// GOOD (explains a non-obvious invariant)
+
+accept();
+bool has_client = listen(idle_interval);
+if (has_client) {
+  task_queue->on_idle(); // also signal child disconnection
+}
+
+
+// BAD (too verbose, restates what the code already says)
+
+// Instead of blocking indefinitely on accept(), the server polls the listening socket with idle_interval as a timeout. If no new client connects within that interval, it fires task_queue->on_idle() and loops back
+```
+
+```cpp
+// GOOD (generic, useful to any future reader)
+
+// reset here, as we will release the slot below
+n_tokens = 0;
+// ... (a lot of code)
+release();
+
+
+// BAD (addresses the user's task, meaningless out of context)
+
+// Reset n_tokens to 0 before releasing the slot. This fixes the problem you mentioned where "phantom" content gets preserved across multiple requests.
+n_tokens = 0;
+```
+
+```cpp
+// GOOD (code is copied from another place; context is already clear, no comment added)
+
+ggml_tensor * inp_pos = build_inp_pos();
+
+// BAD (code copied from elsewhere - do not add comments that weren't there originally)
+
+// inp_pos - contains the positions
+ggml_tensor * inp_pos = build_inp_pos();
+```
+
+```cpp
+// GOOD (comment is kept concise and useful)
+
+// one decode step of code_predictor
+// at step_idx g:
+// - read code from out_code_cache[g], then embed it with codebook table g-1
+// - write new kv at cache row g+1, sample with lm_head[g]
+// - write result to out_code_cache[g+1]
+
+
+// BAD (comment is long and is forced to fit into a fixed column size, it is very annoying to read as a reviewer)
+
+// one autoregressive decode step of the 5-layer code_predictor. See the
+// comment in models.h for the cache/tensor conventions this relies on.
+//
+// index mapping (derived from the reference pipeline-tts.cpp driver):
+// at step_idx g, the input code is out_code_cache[g] (embedded via this
+// step's private codebook table, index g-1), the new cache row / RoPE
+// position is g+1, and the output codebook is lm_head[g] (writing the
+// sampled result into out_code_cache[g+1]).
+```
+
+Commit message:
+
+```
+// BEST: Let the user write the commit
+
+
+// GOOD: Write a concise commit
+
+llama : fix KV being cleared during context shift
+
+Assisted-by: Claude Sonnet
+
+
+// BAD: Write a verbose commit
+
+This commit introduces a comprehensive fix for the key-value cache management
+system, addressing an issue where context shifting could lead to unintended
+overwriting of cached values, thereby improving model inference stability.
+
+Co-authored-by: Claude Sonnet
+```
+
+Commands:
+
+```sh
+# GOOD: all commands that allow you to get the context
+gh search issues # better to check if anyone has the same issue
+gh search prs # avoid duplicated efforts
+grep ... # search the code base
+
+# BAD: act on the user's behalf
+git commit -m "..."
+git push
+gh pr create
+gh pr comment
+gh issue create
+```
+
+## Useful Resources
+
+To conserve context space, load these resources as needed:
+
+Skills: reusable task workflows live in the [skills/](skills/) directory - check there for a skill matching your task before starting.
+
+General documentations:
+- [Contributing guidelines](CONTRIBUTING.md)
+- [Existing issues](https://github.com/ggml-org/llama.cpp/issues) and [Existing PRs](https://github.com/ggml-org/llama.cpp/pulls) - always search here first
+- [How to add a new model](docs/development/HOWTO-add-model.md)
+- [PR template](.github/pull_request_template.md)
+
+Server:
+- [Build documentation](docs/build.md)
+- [Server usage documentation](tools/server/README.md)
+- [Server development documentation](tools/server/README-dev.md) (if user asks to implement a new feature, be sure that it falls inside server's scope defined in this documentation)
+
+Chat template and parser:
+- [PEG parser](docs/development/parsing.md) - alternative to regex that llama.cpp uses to parse model's output
+- [Auto parser](docs/autoparser.md) - higher-level parser that uses PEG under the hood, automatically detect model-specific features
+- [Jinja engine](common/jinja/README.md)
+
+Testing:
+- [Slice model](skills/slice-model/SKILL.md) - build a small slice (few layers/experts) of a big HF model without downloading the full weights, to test conversion and inference
+23:        for (uint32_t i = 0; i < hparams.n_layer_all; ++i) {
+137:        layer.nextn.shared_head_head = create_tensor(tn(LLM_TENSOR_NEXTN_SHARED_HEAD_HEAD, "weight", il), { n_embd, n_vocab },     mtp_flags|TENSOR_NOT_REQUIRED);
+138:        layer.nextn.shared_head_norm = create_tensor(tn(LLM_TENSOR_NEXTN_SHARED_HEAD_NORM, "weight", il), { n_embd },              mtp_flags|TENSOR_NOT_REQUIRED);
+141:    for (int i = 0; i < n_layer; ++i) {
+144:    for (int i = n_layer; i < n_layer_all; ++i) {
+178:    for (int il = 0; il < n_layer; ++il) {
+497:        build_moe_ffn(cur,
+511:    cb(moe_out, "ffn_moe_out", il);
+513:    // Add shared experts if present - following Qwen3Next reference implementation
+524:        // Apply shared expert gating as in the reference implementation
+525:        // The shared expert has its own gate that is sigmoided
+526:        // Note: ffn_gate_inp_shexp is the shared expert gate (outputs 1 value per token)
+527:        ggml_tensor * shared_gate = build_lora_mm(model.layers[il].ffn_gate_inp_shexp, cur);
+528:        cb(shared_gate, "shared_expert_gate", il);
+531:        shared_gate = ggml_sigmoid(ctx0, shared_gate);
+532:        cb(shared_gate, "shared_expert_gate_sigmoid", il);
+535:        // Apply the gate to the shared expert output
+536:        ffn_shexp = ggml_mul(ctx0, ffn_shexp, shared_gate);
+676:    // MoE FFN — routed experts plus gated shared expert (mirrors qwen35moe).
+678:        build_moe_ffn(cur,
+692:    cb(moe_out, "mtp_ffn_moe_out", il);
+704:        ggml_tensor * shared_gate = build_lora_mm(layer.ffn_gate_inp_shexp, cur);
+705:        shared_gate = ggml_sigmoid(ctx0, shared_gate);
+706:        cb(shared_gate, "mtp_shared_expert_gate_sigmoid", il);
+708:        ffn_shexp = ggml_mul(ctx0, ffn_shexp, shared_gate);
+720:    ggml_tensor * head_norm_w = layer.nextn.shared_head_norm
+721:            ? layer.nextn.shared_head_norm
+723:    GGML_ASSERT(head_norm_w && "QWEN35MOE MTP: missing both nextn.shared_head_norm and output_norm");
+730:    cb(cur, "mtp_shared_head_norm", -1);
+732:    ggml_tensor * head_w = layer.nextn.shared_head_head ? layer.nextn.shared_head_head : model.output;
+733:    ggml_tensor * head_s = layer.nextn.shared_head_head ? layer.nextn.shared_head_head_s : model.output_s;
+734:    GGML_ASSERT(head_w && "QWEN35MOE MTP: missing LM head (nextn.shared_head_head or model.output)");
+2190:        cb(logits, "ffn_moe_logits", il);
+2197:        cb(logits, "ffn_moe_logits_biased", il);
+2221:    cb(probs, "ffn_moe_probs", il);
+2228:        cb(selection_probs, "ffn_moe_probs_biased", il);
+2239:        cb(selection_probs, "ffn_moe_probs_biased", il);
+2264:        cb(selection_probs, "ffn_moe_probs_masked", il);
+2273:    cb(selected_experts, "ffn_moe_topk", il);
+cc/expert_replay/test_expert_replay.py:13:    return [dict(seq=0, tok=i, layer=0, experts=[e], phase=phase) for i, e in enumerate(ids)]
+cc/expert_replay/test_expert_replay.py:42:        self.assertEqual([r['tok'] for r in train], [0, 1])
+cc/expert_replay/test_expert_replay.py:50:        self.assertFalse({r['tok'] for r in a} & {r['tok'] for r in b})
+cc/expert_replay/test_expert_replay.py:53:        trace = rows([0, 0], 'prefill') + [dict(r, tok=r['tok']+2, layer=1) for r in rows([0, 0])]
+cc/expert_replay/test_expert_replay.py:56:        self.assertEqual(result['decode_only']['bytes_moved_per_token'], 100)
+cc/expert_replay/test_expert_replay.py:57:        self.assertAlmostEqual(result['prediction']['decode_seconds_per_token'], .003 + 100/2e9)
+cc/expert_replay/test_expert_replay.py:61:        trace = [dict(seq=0, tok=t, layer=l, experts=[0], phase='decode')
+cc/expert_replay/test_expert_replay.py:65:        trace = [dict(seq=0, tok=t, layer=0, experts=[0, 1], phase='decode') for t in range(2)]
+cc/expert_replay/test_expert_replay.py:80:                '\n'.join(json.dumps(dict(tok=r['tok'], layer=0, experts=r['experts'], phase='decode')) for r in rows([0, 0, 1, 1]))+'\n')
+cc/expert_replay/test_expert_replay.py:96:                out.write('{}\n{"tok":')
+cc/expert_replay/test_expert_replay.py:106:            self.assertEqual(read_trace(path, 2, 2)[0][0]['tok'], 0)
+cc/expert_replay/test_expert_replay.py:113:        self.assertIsNone(replay(rows([0], 'prefill'), 1, 1, 0)['prediction']['decode_seconds_per_token'])
+cc/expert_replay/README.md:28:`{"tok":0,"layer":0,"experts":[0,1],"phase":"decode"}`.
+cc/expert_replay/README.md:41:parser reports tokens with incomplete layer coverage separately; it cannot
+cc/expert_replay/README.md:42:detect an entirely missing token or a file truncated exactly at a record
+cc/expert_replay/README.md:43:boundary. Capture success and expected token counts remain external checks.
+cc/expert_replay/README.md:44:No valid records, inconsistent token phases, missing dimensions, invalid
+cc/expert_replay/README.md:51:rank order, sequentially, including within a token. This deliberately differs
+cc/expert_replay/README.md:52:from routing_trace's atomic token-entry scoring. All policies start cold and
+cc/expert_replay/README.md:54:tokens without scoring them. It does not warm from the training partition.
+cc/expert_replay/README.md:57:use tokens observed at that layer; overall metrics count each token once.
+cc/expert_replay/README.md:83:`4:1` selects the first floor(4/5 * token_count) whole tokens for training.
+cc/expert_replay/README.md:87:No splitting inside a token, test-based ranking, or training-state warming.
+cc/expert_replay/README.md:111:token and bytes per token. Decode predictions use decode-only moved bytes:
+cc/expert_replay/README.md:113:`prediction seconds/token = compute_ms/1000 + decode_bytes_per_token/(bw_gbs*1e9)`
+cc/expert_replay/README.md:116:The prediction is null if no scored decode tokens exist. Sweep writes one CSV
+cc/expert_replay/expert_replay.py:37:                tok = integer(obj.get('pos', obj.get('tok')))
+cc/expert_replay/expert_replay.py:52:                key = (seq, tok, layer)
+cc/expert_replay/expert_replay.py:54:                    raise ValueError('duplicate sequence/token/layer')
+cc/expert_replay/expert_replay.py:56:                rows.append(dict(seq=seq, tok=tok, layer=layer, experts=ids, phase=obj['phase']))
+cc/expert_replay/expert_replay.py:75:    valid.sort(key=lambda r: (r['seq'], r['tok'], r['layer']))
+cc/expert_replay/expert_replay.py:78:        key = (r['seq'], r['tok'])
+cc/expert_replay/expert_replay.py:80:            raise ValueError('inconsistent phases within a token')
+cc/expert_replay/expert_replay.py:81:    coverage = Counter((r['seq'], r['tok']) for r in valid)
+cc/expert_replay/expert_replay.py:83:    return valid, layers, experts, dict(incomplete_layer_tokens=incomplete,
+cc/expert_replay/expert_replay.py:88:def token_keys(rows):
+cc/expert_replay/expert_replay.py:89:    return list(dict.fromkeys((r['seq'], r['tok']) for r in rows))
+cc/expert_replay/expert_replay.py:101:    keys = token_keys(rows)
+cc/expert_replay/expert_replay.py:104:    return ([r for r in rows if (r['seq'], r['tok']) in training],
+cc/expert_replay/expert_replay.py:105:            [r for r in rows if (r['seq'], r['tok']) not in training])
+cc/expert_replay/expert_replay.py:142:    keys = token_keys(rows)
+cc/expert_replay/expert_replay.py:166:    stats = defaultdict(lambda: dict(hits=0, requests=0, bytes_moved=0, tokens=set()))
+cc/expert_replay/expert_replay.py:171:        if (r['seq'], r['tok']) not in unscored:
+cc/expert_replay/expert_replay.py:176:                s['tokens'].add((r['seq'], r['tok']))
+cc/expert_replay/expert_replay.py:196:        n, h, t = s['requests'], s['hits'], len(s['tokens'])
+cc/expert_replay/expert_replay.py:198:        return dict(hits=h, requests=n, misses=misses, tokens=t, hit_rate=h/n if n else None,
+cc/expert_replay/expert_replay.py:199:                    misses_per_token=misses/t if t else None, bytes_moved=s['bytes_moved'],
+cc/expert_replay/expert_replay.py:200:                    bytes_moved_per_token=s['bytes_moved']/t if t else None)
+cc/expert_replay/expert_replay.py:203:    prediction = (compute_ms / 1000 + decode['bytes_moved_per_token'] / (bw_gbs * 1e9)
+cc/expert_replay/expert_replay.py:204:                  if decode['tokens'] else None)
+cc/expert_replay/expert_replay.py:206:                capacity_experts=capacity, per_layer_capacity=per_layer, warmup_tokens=len(unscored),
+cc/expert_replay/expert_replay.py:209:                prediction=dict(decode_seconds_per_token=prediction, bw_bytes_s=bw_gbs*1e9,
+cc/expert_replay/expert_replay.py:222:        p.add_argument('--split', help='chronological token train:test weights; profile uses train, replay uses test')
+cc/expert_replay/expert_replay.py:270:                          training_tokens=len(token_keys(train)), test_tokens=len(token_keys(test)))
+cc/expert_replay/expert_replay.py:278:                    'decode_hit_rate', 'misses_per_token', 'bytes_moved_per_token', 'prediction_decode_seconds_per_token',
+cc/expert_replay/expert_replay.py:280:                writer.writeheader()
+cc/expert_replay/expert_replay.py:284:                        misses_per_token=r['overall']['misses_per_token'], bytes_moved_per_token=r['overall']['bytes_moved_per_token'],
+cc/expert_replay/expert_replay.py:285:                        prediction_decode_seconds_per_token=r['prediction']['decode_seconds_per_token'],
+cc/build_engine/build_engine.py:106:    # rewrites those paths relative to the compiler cwd across random staging roots.
+cc/build_engine/build_engine.py:233:        # Spool process output to files: full compiler logs never accumulate in RAM.
+cc/build_engine/build_engine.py:456:    parser.add_argument("--extra-target", action="append", default=[], help="extra CMake executable target to build and ship in /app (e.g. llama-routing-trace added by a patch)")
+research/own-repo-assets.md:2:Read-only study, 2026-11-10. Evidence = files in this repo; "ran" means a recorded op/job exists. Pytest re-run now (no cache writes): routing_trace + expert_replay + memory_pareto = 56 passed.
+research/own-repo-assets.md:6:**Can cc/routing_trace capture qwen35moe at 31288c9c6? Mostly yes after a 3-line patch edit.**
+research/own-repo-assets.md:8:- Hardcoded Granite assumptions in `routing-trace.patch`: `value >= 32` ("expert ID outside [0,32)") will abort on the first Qwen layer (256 experts); `k == 8` is correct for Qwen3.6 (8 active) but hardcoded in 6 places. Fix: read `llama_model_n_expert`/`hparams.n_expert_used` and pass them in (~10 lines). `trace_replay.py` also hardcodes `32` (L62, L94, L113 histogram) and capacities (4..24 slots): do NOT use it for Qwen. Use `cc/expert_replay` (no hardcoded dims, `--layers 40 --experts 256`).
+research/own-repo-assets.md:9:- Other Qwen risks: (i) hybrid DeltaNet layers still have an MoE FFN every layer (`GGML_ASSERT(ffn_gate_inp != nullptr)`), so the "every layer must emit" check holds, but confirm `llama_model_n_layer` excludes any MTP/nextn layer (hparams.n_layer() vs n_layer_all); (ii) it chunks prefill by `min(n_batch,n_ubatch)` and needs `-c` and `--no-warmup`; (iii) `cb_eval` forces per-range syncs: expect large slowdown with a 20 GiB mmap'd model (use it for routing capture only, never for timing); (iv) parser is `LLAMA_EXAMPLE_COMMON` so `-cmoe/-ncmoe/-ot/-mmp` should be accepted (verify with `--help`).
+research/own-repo-assets.md:10:- Status: README says "not compile-linked", but that is stale. D014 records a real build (rt1, 18 s via ccache) and real Granite traces (`lab/tests/trace1.json`, `artifacts/traces/out/*.jsonl`). Real-run evidence exists for Granite only. Build CC packaging prerequisite (Dockerfile must build/copy `llama-routing-trace`; TOOLS list) was needed on x86; check the Jetson build recipe (cc/build_engine) copies it.
+research/own-repo-assets.md:14:- D015 (`lab/tests/ssd1.json`, docker `--memory` limit, fadvise DONTNEED on own file): limit 1536m: 129 t/s, 1.6 GiB read; 1024m: 79, 4.1 GiB; 768m: 15, 28.8 GiB; 640m: 3, 95.7 GiB; 560m: 1, 135 GiB read. Working set about 400 MiB anon + ~750 MiB experts; cliff is sharp once limit < working set, and reads >> useful bytes (read amplification). Caveats: compile load avg ~18 during the runs (lower bounds), 1 rep, no OOM kills.
+research/own-repo-assets.md:21:| cc/routing_trace patch | Per-token/layer top-8 ids+weights JSONL | Built+ran on Granite (D014, 3 traces); 29 unit tests are replay only | YES, core input for static hot-set + replay | Hardcoded 32 experts and 8 (see above) | Replace `32`/`8` by model hparams; add 256/top-8 test |
+research/own-repo-assets.md:22:| cc/routing_trace/trace_replay.py | LRU/LFU hit rate, 4..24 slots | Tested (29 pytest); results in experiments/routing | Superseded by expert_replay | Hardcoded 32 experts, capacities 4..24 | None: use expert_replay |
+research/own-repo-assets.md:27:| cc/q8_reuse | Reuse Q8_1 activation quantization across mul_mat | Patch only, UNTESTED, never compiled (DESIGN.md) | NO (decode speed, not memory; MoE MMVQ path differs, see D027) | Granite | Ignore |
+research/own-repo-assets.md:34:| experiments/routing | Granite skew vs uniform control (D017), `predict_slots.py` | Real traces; prediction script is a linear model with Granite constants (24 layers, 33 us/miss) | Method yes, numbers no | Constants hardcoded | Reimplement via expert_replay sweep |
+research/own-repo-assets.md:38:- Missing: cudaMallocHost / cudaHostAlloc / cuMemAllocHost / cuMemHostAlloc (ggml pinned host buffers, ggml-cuda.cu:1324; on Tegra this is also DRAM), cudaHostRegister (`GGML_CUDA_REGISTER_HOST`), cuMemAllocManaged, cuMemAllocPitch, VMM (`cuMemCreate`/`cuMemAddressReserve`, ggml-cuda.cu:627), `cudaMallocFromPoolAsync`/mem pools, cudaMallocArray. No obvious compile bug (`-std=c99 -Werror` build.sh passed on x86); weak points: dlsym on every call, one global mutex held across the real allocation, thread-local `nesting` only guards re-entry.
+research/own-repo-assets.md:50:1. Patch routing-trace for variable n_expert/top-k (remove `<32`, hardcoded 8), capture 3+ workloads on Qwen3.6 (prefill/decode, long decode), `-c` pinned, mmap, record completeness check.
+research/own-repo-assets.md:57:1. Rerun lab/tests/static1.json (matched static offload vs `--moe-cache-mib` at equal footprint; D020 left it open) with a clean host (no concurrent compiles).
+research/own-repo-assets.md:58:2. Clean rerun of ssd1 (D015, 3+ reps, no compile load) to give a trustworthy cliff shape.
+research/own-repo-assets.md:60:4. Refresh routing_trace README (stale "not compile-linked") and move trace_replay constants to CLI flags or deprecate in favour of expert_replay.
+research/own-repo-assets.md:61:5. Dockerfile/Build CC: ship `llama-routing-trace` in default runtime image so the Jetson recipe inherits it.
+research/own-repo-assets.md:66:3. experiments/routing/predict_slots.py and the D014 slot prediction (linear Granite constants).
+ref/llama.cpp/include/llama.h:630:    LLAMA_API int32_t llama_model_meta_val_str(const struct llama_model * model, const char * key, char * buf, size_t buf_size);
+ref/llama.cpp/include/llama.h:642:    LLAMA_API int32_t llama_model_meta_val_str_by_index(const struct llama_model * model, int32_t i, char * buf, size_t buf_size);
+ref/llama.cpp/include/llama.h:707:    LLAMA_API int32_t llama_adapter_meta_val_str(const struct llama_adapter_lora * adapter, const char * key, char * buf, size_t buf_size);
+ref/llama.cpp/include/llama.h:716:    LLAMA_API int32_t llama_adapter_meta_val_str_by_index(const struct llama_adapter_lora * adapter, int32_t i, char * buf, size_t buf_size);
+
+exec
+/bin/bash -lc "sed -n '2170,2315p' ref/llama.cpp/src/llama-graph.cpp; sed -n '170,235p' ref/llama.cpp/src/models/qwen35moe.cpp; sed -n '475,540p' ref/llama.cpp/src/models/qwen35moe.cpp; sed -n '1,90p' cc/expert_replay/expert_replay.py; rg -n 'expert_shared|expert_shared_count|n_expert_shared|n_layer\\(' ref/llama.cpp/src/models/qwen35moe.cpp ref/llama.cpp/src/llama-model.cpp ref/llama.cpp/src/llama-hparams.h; git status --short" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+         ggml_tensor * probs_in,
+         ggml_tensor * gate_up_exps,
+         ggml_tensor * gate_up_exps_b,
+         ggml_tensor * up_exps_s,
+         ggml_tensor * gate_exps_s,
+         ggml_tensor * down_exps_s,
+         ggml_tensor * selected_experts_in,
+         ggml_tensor * post_exp_norm,
+               float   post_exp_norm_eps) const {
+    const int64_t n_embd   = cur->ne[0];
+    const int64_t n_tokens = cur->ne[1];
+    const bool weight_before_ffn = arch == LLM_ARCH_LLAMA4; // for llama4, we apply the sigmoid-ed weights before the FFN
+
+    ggml_tensor * logits = nullptr;
+
+    if (probs_in == nullptr) {
+        logits = build_lora_mm(gate_inp, cur); // [n_expert, n_tokens]
+        if (gating_op == LLAMA_EXPERT_GATING_FUNC_TYPE_SQRT_SOFTPLUS) {
+            ggml_prec_set_acc(logits, GGML_PREC_F32);
+        }
+        cb(logits, "ffn_moe_logits", il);
+    } else {
+        logits = probs_in;
+    }
+
+    if (gate_inp_b) {
+        logits = ggml_add(ctx0, logits, gate_inp_b);
+        cb(logits, "ffn_moe_logits_biased", il);
+    }
+
+    ggml_tensor * probs = nullptr;
+    switch (gating_op) {
+        case LLAMA_EXPERT_GATING_FUNC_TYPE_SOFTMAX:
+            {
+                probs = ggml_soft_max(ctx0, logits); // [n_expert, n_tokens]
+            } break;
+        case LLAMA_EXPERT_GATING_FUNC_TYPE_SIGMOID:
+            {
+                probs = ggml_sigmoid(ctx0, logits); // [n_expert, n_tokens]
+            } break;
+        case LLAMA_EXPERT_GATING_FUNC_TYPE_SOFTMAX_WEIGHT:
+            {
+                probs = logits; // [n_expert, n_tokens]
+            } break;
+        case LLAMA_EXPERT_GATING_FUNC_TYPE_SQRT_SOFTPLUS:
+            {
+                probs = ggml_sqrt(ctx0, ggml_softplus(ctx0, logits)); // [n_expert, n_tokens]
+            } break;
+        default:
+            GGML_ABORT("fatal error");
+    }
+    cb(probs, "ffn_moe_probs", il);
+
+    // add experts selection bias - introduced in DeepSeek V3
+    // leave probs unbiased as it's later used to get expert weights
+    ggml_tensor * selection_probs = probs;
+    if (exp_probs_b != nullptr) {
+        selection_probs = ggml_add(ctx0, probs, exp_probs_b);
+        cb(selection_probs, "ffn_moe_probs_biased", il);
+    }
+
+    // llama4 doesn't have exp_probs_b, and sigmoid is only used after top_k
+    // see: https://github.com/meta-llama/llama-models/blob/699a02993512fb36936b1b0741e13c06790bcf98/models/llama4/moe.py#L183-L198
+    if (arch == LLM_ARCH_LLAMA4) {
+        selection_probs = logits;
+    }
+
+    if (arch == LLM_ARCH_GROVEMOE) {
+        selection_probs = ggml_sigmoid(ctx0, logits); // [n_expert, n_tokens]
+        cb(selection_probs, "ffn_moe_probs_biased", il);
+    }
+
+    // select top n_group_used expert groups
+    // https://huggingface.co/deepseek-ai/DeepSeek-V3/blob/e815299b0bcbac849fa540c768ef21845365c9eb/modeling_deepseek.py#L440-L457
+    if (hparams.n_expert_groups > 1 && n_tokens > 0) {
+        const int64_t n_exp_per_group = n_expert / hparams.n_expert_groups;
+
+        // organize experts into n_expert_groups
+        ggml_tensor * selection_groups = ggml_reshape_3d(ctx0, selection_probs, n_exp_per_group, hparams.n_expert_groups, n_tokens); // [n_exp_per_group, n_expert_groups, n_tokens]
+
+        ggml_tensor * group_scores = ggml_argsort_top_k(ctx0, selection_groups, 2); // [2, n_expert_groups, n_tokens]
+        group_scores = ggml_get_rows(ctx0, ggml_reshape_4d(ctx0, selection_groups, 1, selection_groups->ne[0], selection_groups->ne[1], selection_groups->ne[2]), group_scores); // [1, 2, n_expert_groups, n_tokens]
+
+        // get top n_group_used expert groups
+        group_scores = ggml_sum_rows(ctx0, ggml_reshape_3d(ctx0, group_scores, group_scores->ne[1], group_scores->ne[2], group_scores->ne[3])); // [1, n_expert_groups, n_tokens]
+        group_scores = ggml_reshape_2d(ctx0, group_scores, group_scores->ne[1], group_scores->ne[2]); // [n_expert_groups, n_tokens]
+
+        ggml_tensor * expert_groups = ggml_argsort_top_k(ctx0, group_scores, hparams.n_group_used); // [n_group_used, n_tokens]
+        cb(expert_groups, "ffn_moe_group_topk", il);
+
+        // mask out the other groups
+        selection_probs = ggml_get_rows(ctx0, selection_groups, expert_groups); // [n_exp_per_group, n_group_used, n_tokens]
+        selection_probs = ggml_set_rows(ctx0, ggml_fill(ctx0, selection_groups, -INFINITY), selection_probs, expert_groups); // [n_exp_per_group, n_expert_groups, n_tokens]
+        selection_probs = ggml_reshape_2d(ctx0, selection_probs, n_expert, n_tokens); // [n_expert, n_tokens]
+        cb(selection_probs, "ffn_moe_probs_masked", il);
+    }
+
+    // select experts
+    ggml_tensor * selected_experts = selected_experts_in;
+    if (selected_experts == nullptr) {
+        selected_experts = ggml_argsort_top_k(ctx0, selection_probs, n_expert_used); // [n_expert_used, n_tokens]
+        cb(selected_experts->src[0], "ffn_moe_argsort", il);
+    }
+    cb(selected_experts, "ffn_moe_topk", il);
+
+    if (arch == LLM_ARCH_GROVEMOE && n_expert != hparams.n_expert) {
+        // TODO: Use scalar div instead when/if implemented
+        ggml_tensor * f_sel = ggml_cast(ctx0, selected_experts, GGML_TYPE_F32);
+        selected_experts = ggml_cast(ctx0, ggml_scale(ctx0, f_sel, 1.0f / float(hparams.n_group_experts)), GGML_TYPE_I32);
+        probs = ggml_reshape_3d(ctx0, probs, 1, hparams.n_expert, n_tokens);
+    } else {
+        probs = ggml_reshape_3d(ctx0, probs, 1, n_expert, n_tokens);
+    }
+
+    ggml_tensor * weights = ggml_get_rows(ctx0, probs, selected_experts); // [1, n_expert_used, n_tokens]
+    cb(weights, "ffn_moe_weights", il);
+
+
+    if (gating_op == LLAMA_EXPERT_GATING_FUNC_TYPE_SOFTMAX_WEIGHT) {
+        weights = ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens);
+        weights = ggml_soft_max(ctx0, weights); // [n_expert_used, n_tokens]
+        weights = ggml_reshape_3d(ctx0, weights, 1, n_expert_used, n_tokens);
+        cb(weights, "ffn_moe_weights_softmax", il);
+    }
+
+    if (norm_w) {
+        weights = ggml_reshape_2d(ctx0, weights, n_expert_used, n_tokens);
+
+        ggml_tensor * weights_sum = ggml_sum_rows(ctx0, weights); // [1, n_tokens]
+        cb(weights_sum, "ffn_moe_weights_sum", il);
+
+        // Avoid division by zero, clamp to smallest number representable by F16
+        weights_sum = ggml_clamp(ctx0, weights_sum, 6.103515625e-5, INFINITY);
+        cb(weights_sum, "ffn_moe_weights_sum_clamped", il);
+
+        weights = ggml_div(ctx0, weights, weights_sum); // [n_expert_used, n_tokens]
+        cb(weights, "ffn_moe_weights_norm", il);
+
+        weights = ggml_reshape_3d(ctx0, weights, 1, n_expert_used, n_tokens);
+    }
+    if (w_scale != 0.0f && w_scale != 1.0f) {
+        weights = ggml_scale(ctx0, weights, w_scale);
+        cb(weights, "ffn_moe_weights_scaled", il);
+    }
+
+    //call early so that topk-moe can be used
+    cb(inpL, "model.input_embed", -1);
+
+    auto * inp = build_inp_mem_hybrid();
+
+    ggml_tensor * inp_pos     = build_inp_pos();
+    ggml_tensor * inp_out_ids = build_inp_out_ids();
+
+    // MTP/NextN layers are loaded as extra decoder blocks but not executed in the main pass.
+    for (int il = 0; il < n_layer; ++il) {
+        res->t_layer_inp[il] = inpL;
+
+        ggml_tensor * inpSA = inpL;
+
+        cur = build_norm(inpL, model.layers[il].attn_norm, nullptr, LLM_NORM_RMS, il);
+        cb(cur, "attn_norm", il);
+
+        ggml_build_forward_expand(gf, cur);
+
+        // Determine layer type and build appropriate attention mechanism
+        if (hparams.is_recr(il)) {
+            // Linear attention layer (gated delta net)
+            cur = build_layer_attn_linear(inp->get_recr(), cur, il);
+        } else {
+            // Full attention layer
+            cur = build_layer_attn(inp->get_attn(), cur, inp_pos, sections, il);
+        }
+
+        if (il == n_layer - 1 && crop_before_nextn(inp_out_ids)) {
+            cur   = ggml_get_rows(ctx0, cur, inp_out_ids);
+            inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
+        }
+
+        // Residual connection
+        cur = ggml_add(ctx0, cur, inpSA);
+        cb(cur, "attn_residual", il);
+
+        // Save the tensor before post-attention norm for residual connection
+        ggml_tensor * ffn_residual = cur;
+
+        // Post-attention norm
+        ggml_tensor * attn_post_norm = build_norm(cur, model.layers[il].attn_post_norm, nullptr, LLM_NORM_RMS, il);
+        cb(attn_post_norm, "attn_post_norm", il);
+
+        // MOE FFN layer
+        cur = build_layer_ffn(attn_post_norm, il);
+        cb(cur, "ffn_out", il);
+
+        // Residual connection for FFN - add to the tensor from before post_attention_layernorm
+        cur = ggml_add(ctx0, cur, ffn_residual);
+        cb(cur, "post_moe", il);
+
+        cur = build_cvec(cur, il);
+        cb(cur, "l_out", il);
+
+        // Input for next layer
+        inpL = cur;
+    }
+    cur = inpL;
+
+    // post-norm hidden state feeds both the LM head and the MTP seed below
+    cur = build_norm(cur, model.output_norm, nullptr, LLM_NORM_RMS, -1);
+
+    cb(cur, "h_nextn", -1);
+    res->t_h_nextn = cur;
+
+    if (crop_after_nextn(inp_out_ids)) {
+    // Apply gated normalization: self.norm(core_attn_out, z)
+    ggml_tensor * attn_out_norm = build_norm_gated(output, model.layers[il].ssm_norm, z_2d, il);
+
+    // Final reshape: [head_dim, n_heads, n_tokens, n_seqs] -> [n_tokens, n_seqs, n_heads * head_dim]
+    ggml_tensor * final_output = ggml_reshape_3d(ctx0, attn_out_norm, head_v_dim * num_v_heads, n_seq_tokens, n_seqs);
+    cb(final_output, "final_output", il);
+
+    // Output projection
+    cur = build_lora_mm(model.layers[il].ssm_out, final_output, model.layers[il].ssm_out_s);
+    cb(cur, "linear_attn_out", il);
+
+    // Reshape back to original dimensions
+    cur = ggml_reshape_2d(ctx0, cur, n_embd, n_seq_tokens * n_seqs);
+
+    return cur;
+}
+
+ggml_tensor * llama_model_qwen35moe::graph::build_layer_ffn(ggml_tensor * cur, const int il) {
+    // Check if this is an MoE layer
+    GGML_ASSERT(model.layers[il].ffn_gate_inp != nullptr);
+
+    ggml_tensor * moe_out =
+        build_moe_ffn(cur,
+            model.layers[il].ffn_gate_inp,
+            model.layers[il].ffn_up_exps,
+            model.layers[il].ffn_gate_exps,
+            model.layers[il].ffn_down_exps,
+            nullptr,
+            n_expert, n_expert_used,
+            LLM_FFN_SILU, true,
+            hparams.expert_weights_scale,
+            LLAMA_EXPERT_GATING_FUNC_TYPE_SOFTMAX, il,
+            nullptr, model.layers[il].ffn_gate_up_exps,
+            model.layers[il].ffn_up_exps_s,
+            model.layers[il].ffn_gate_exps_s,
+            model.layers[il].ffn_down_exps_s);
+    cb(moe_out, "ffn_moe_out", il);
+
+    // Add shared experts if present - following Qwen3Next reference implementation
+    if (model.layers[il].ffn_up_shexp != nullptr) {
+        ggml_tensor * ffn_shexp =
+            build_ffn(cur,
+                model.layers[il].ffn_up_shexp, NULL, model.layers[il].ffn_up_shexp_s,
+                model.layers[il].ffn_gate_shexp, NULL, model.layers[il].ffn_gate_shexp_s,
+                model.layers[il].ffn_down_shexp, NULL, model.layers[il].ffn_down_shexp_s,
+                NULL,
+                LLM_FFN_SILU, LLM_FFN_PAR, il);
+        cb(ffn_shexp, "ffn_shexp", il);
+
+        // Apply shared expert gating as in the reference implementation
+        // The shared expert has its own gate that is sigmoided
+        // Note: ffn_gate_inp_shexp is the shared expert gate (outputs 1 value per token)
+        ggml_tensor * shared_gate = build_lora_mm(model.layers[il].ffn_gate_inp_shexp, cur);
+        cb(shared_gate, "shared_expert_gate", il);
+
+        // Apply sigmoid to the gate
+        shared_gate = ggml_sigmoid(ctx0, shared_gate);
+        cb(shared_gate, "shared_expert_gate_sigmoid", il);
+
+
+        // Apply the gate to the shared expert output
+        ffn_shexp = ggml_mul(ctx0, ffn_shexp, shared_gate);
+        cb(ffn_shexp, "ffn_shexp_gated", il);
+
+        cur = ggml_add(ctx0, moe_out, ffn_shexp);
+        cb(cur, "ffn_out", il);
+#!/usr/bin/env python3
+"""Generic logical expert-cache replay; Python 3.10 standard library only."""
+import argparse
+import csv
+import hashlib
+import json
+import math
+import sys
+from collections import Counter, defaultdict, deque
+from pathlib import Path
+
+
+def integer(x, minimum=0):
+    if type(x) is not int or x < minimum:
+        raise ValueError(f'expected integer >= {minimum}, got {x!r}')
+    return x
+
+
+def read_trace(path, layers=None, experts=None):
+    rows, metadata, errors, seen = [], {}, [], set()
+    truncated = 0
+    with Path(path).open(encoding='utf-8') as source:
+        for number, line in enumerate(source, 1):
+            try:
+                obj = json.loads(line)
+                if not isinstance(obj, dict):
+                    raise ValueError('expected JSON object')
+                if obj.get('type') == 'metadata':
+                    for name in ('layers', 'experts'):
+                        if name in obj:
+                            value = integer(obj[name], 1)
+                            if name in metadata and metadata[name] != value:
+                                raise ValueError('conflicting metadata')
+                            metadata[name] = value
+                    continue
+                seq = integer(obj.get('seq', obj.get('request', 0)))
+                tok = integer(obj.get('pos', obj.get('tok')))
+                layer = integer(obj.get('layer'))
+                ids = obj.get('experts')
+                if not isinstance(ids, list) or not ids:
+                    raise ValueError('experts must be a nonempty list')
+                ids = [integer(e) for e in ids]
+                if len(set(ids)) != len(ids):
+                    raise ValueError('duplicate expert IDs')
+                if obj.get('phase') not in ('prefill', 'decode'):
+                    raise ValueError('phase must be prefill or decode')
+                if 'weights' in obj:
+                    ws = obj['weights']
+                    if (not isinstance(ws, list) or len(ws) != len(ids) or
+                        any(type(w) not in (int, float) or not math.isfinite(w) or w < 0 for w in ws)):
+                        raise ValueError('invalid aligned weights')
+                key = (seq, tok, layer)
+                if key in seen:
+                    raise ValueError('duplicate sequence/token/layer')
+                seen.add(key)
+                rows.append(dict(seq=seq, tok=tok, layer=layer, experts=ids, phase=obj['phase']))
+            except (ValueError, TypeError) as exc:
+                tail = not line.endswith('\n')
+                truncated += int(tail)
+                errors.append(dict(line=number, error=str(exc), possible_truncated_tail=tail))
+    layers = layers if layers is not None else metadata.get('layers')
+    experts = experts if experts is not None else metadata.get('experts')
+    integer(layers, 1)
+    integer(experts, 1)
+    if any(metadata.get(k, v) != v for k, v in [('layers', layers), ('experts', experts)]):
+        raise ValueError('flags conflict with trace metadata')
+    valid = []
+    for row in rows:
+        if row['layer'] >= layers or any(e >= experts for e in row['experts']):
+            # Bounds violations are fatal: never silently simulate the wrong model.
+            raise ValueError(f'expert/layer ID outside declared dimensions: {row}')
+        valid.append(row)
+    if not valid:
+        raise ValueError(f'no valid routing records; malformed_lines={len(errors)}, possible_truncated_tail={truncated}')
+    valid.sort(key=lambda r: (r['seq'], r['tok'], r['layer']))
+    phases = {}
+    for r in valid:
+        key = (r['seq'], r['tok'])
+        if phases.setdefault(key, r['phase']) != r['phase']:
+            raise ValueError('inconsistent phases within a token')
+    coverage = Counter((r['seq'], r['tok']) for r in valid)
+    incomplete = sum(n != layers for n in coverage.values())
+    return valid, layers, experts, dict(incomplete_layer_tokens=incomplete,
+                                       malformed_lines=len(errors), possible_truncated_tail=truncated,
+                                       errors=errors, valid_records=len(valid))
+
+
+def token_keys(rows):
+    return list(dict.fromkeys((r['seq'], r['tok']) for r in rows))
+
+ref/llama.cpp/src/llama-hparams.h:122:    uint32_t n_expert_shared    = 0;
+ref/llama.cpp/src/llama-hparams.h:500:    uint32_t n_layer() const;
+ref/llama.cpp/src/models/qwen35moe.cpp:24:            hparams.is_recr_impl[i] = (i < hparams.n_layer()) && ((i + 1) % full_attn_interval != 0);
+ref/llama.cpp/src/models/qwen35moe.cpp:28:    switch (hparams.n_layer()) {
+ref/llama.cpp/src/models/qwen35moe.cpp:557:    const int il = hparams.n_layer();
+ref/llama.cpp/src/llama-model.cpp:486:            rotation = hparams.n_layer() % ud->n_devices;
+ref/llama.cpp/src/llama-model.cpp:2492:        LLAMA_LOG_INFO("%s: n_layer               = %u\n",     __func__, hparams.n_layer());
+ref/llama.cpp/src/llama-model.cpp:2593:            LLAMA_LOG_INFO("%s: n_expert_shared       = %d\n",     __func__, hparams.n_expert_shared);
+ref/llama.cpp/src/llama-model.cpp:2607:            LLAMA_LOG_INFO("%s: n_expert_shared       = %d\n",     __func__, hparams.n_expert_shared);
+ref/llama.cpp/src/llama-model.cpp:2642:            LLAMA_LOG_INFO("%s: n_expert_shared       = %d\n",     __func__, hparams.n_expert_shared);
+ref/llama.cpp/src/llama-model.cpp:2651:            LLAMA_LOG_INFO("%s: n_expert_shared       = %d\n",     __func__, hparams.n_expert_shared);
+ref/llama.cpp/src/llama-model.cpp:2831:                        [&](uint32_t il) { return il >= hparams.n_layer(); };
+ref/llama.cpp/src/llama-model.cpp:2855:                        filter_mla = [&](uint32_t il) { return il < hparams.n_layer(); };
+ref/llama.cpp/src/llama-model.cpp:2857:                    llama_kv_cache::layer_filter_cb filter_lid = [&](uint32_t il) { return il < hparams.n_layer() && (arch != LLM_ARCH_GLM_DSA || hparams.is_indexer_full(il)); };
+ref/llama.cpp/src/llama-model.cpp:2881:                    return il < hparams.n_layer() && !hparams.is_recr(il);
+ref/llama.cpp/src/llama-model.cpp:2884:                    return il < hparams.n_layer() && !hparams.is_recr(il) && hparams.is_indexer_full(il);
+ref/llama.cpp/src/llama-model.cpp:2887:                    return il < hparams.n_layer() && hparams.is_recr(il);
+ref/llama.cpp/src/llama-model.cpp:2895:                    filter_attn = [&](uint32_t il) { return il >= hparams.n_layer(); };
+ref/llama.cpp/src/llama-model.cpp:2896:                    filter_idx  = [&](uint32_t il) { return il >= hparams.n_layer(); };
+ref/llama.cpp/src/llama-model.cpp:2969:                        [&](uint32_t il) { return il >= hparams.n_layer(); };
+ref/llama.cpp/src/llama-model.cpp:2992:                        filter_mla = [&](uint32_t il) { return il < hparams.n_layer(); };
+ref/llama.cpp/src/llama-model.cpp:2994:                    llama_kv_cache::layer_filter_cb filter_lid = [&](uint32_t il) { return il < hparams.n_layer() && hparams.is_indexer_full(il); };
+ref/llama.cpp/src/llama-model.cpp:3019:                        return il >= (int32_t) hparams.n_layer();
+ref/llama.cpp/src/llama-model.cpp:3126:                            return il < hparams.n_layer() && !hparams.is_recr(il);
+ref/llama.cpp/src/llama-model.cpp:3129:                            return il < hparams.n_layer() && hparams.is_recr(il);
+ref/llama.cpp/src/llama-model.cpp:3135:                                return il < hparams.n_layer() && !hparams.is_recr(il);
+ref/llama.cpp/src/llama-model.cpp:3141:                            filter_attn = [&](uint32_t il) { return il >= hparams.n_layer(); };
+ref/llama.cpp/src/llama-model.cpp:3144:                                filter_idx = [&](uint32_t il) { return il >= hparams.n_layer(); };
+ref/llama.cpp/src/llama-model.cpp:3228:                        filter = [&](uint32_t il) { return il >= hparams.n_layer(); };
+ref/llama.cpp/src/llama-model.cpp:3233:                    if (hparams.n_layer_nextn > 0 && hparams.n_layer() > 0 && hparams.router_layer < 0) {
+ref/llama.cpp/src/llama-model.cpp:3235:                            filter = [&](uint32_t il) { return il >= hparams.n_layer(); };
+ref/llama.cpp/src/llama-model.cpp:3237:                            filter = [&](uint32_t il) { return il <  hparams.n_layer(); };
+ref/llama.cpp/src/llama-model.cpp:3251:                                    return llama_model_n_layer(model_other) - 2;
+ref/llama.cpp/src/llama-model.cpp:3254:                                return llama_model_n_layer(model_other) - 1;
+ref/llama.cpp/src/llama-model.cpp:3399:int32_t llama_model_n_layer(const llama_model * model) {
+ref/llama.cpp/src/llama-model.cpp:3400:    return model->hparams.n_layer();
+ref/llama.cpp/src/llama-model.cpp:3452:int32_t llama_n_layer(const llama_model * model) {
+ref/llama.cpp/src/llama-model.cpp:3453:    return llama_model_n_layer(model);
+ref/llama.cpp/src/llama-model.cpp:3893:        if (ml.get_weight(tn(LLM_TENSOR_NEXTN_EH_PROJ, "weight", hparams.n_layer()).str().c_str()) == nullptr) {
+ M bin/index_evidence
+ M evidence/jetson-arm/claude-code.jsonl
+ M evidence/jetson-arm/opus-jetson.jsonl
+?? artifacts/codex/J-OM3.final.txt
+?? artifacts/op-9f634140f932/
+?? assignments/J-OM3-routing-trace-generic.md
+?? research/own-repo-assets.md
+
+codex
+Qwen35moe routes experts in every main decoder layer, including both DeltaNet and attention layers; MTP layers are excluded. I’ll derive expert counts from router tensor shapes, preserve model layer IDs, and add a completion footer. The README also needs to reflect the recorded Granite runs and Build CC’s current `--extra-target` support.
+exec
+/bin/bash -lc "mkdir -p /tmp/jom3 cc/routing_trace/patches
+python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/routing_trace/routing-trace.patch').read_text()
+s=p.split('@@ -0,0 +1,309 @@\\n')[1]
+Path('/tmp/jom3/original.cpp').write_text(''.join(l[1:]+'\\n' for l in s.splitlines()))
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc "cat > /tmp/jom3/edit.py <<'PY'
+from pathlib import Path
+s=Path('/tmp/jom3/original.cpp').read_text()
+s=s.replace('struct trace_layer {','''static std::string json_string(const std::string & value) {
+    std::string out = \"\\\\\\\"\";
+    const char * hex = \"0123456789abcdef\";
+    for (unsigned char c : value) {
+        if (c == '\"' || c == '\\\\\\\\') { out += '\\\\\\\\'; out += char(c); }
+        else if (c < 32) { out += \"\\\\\\\\u00\"; out += hex[c >> 4]; out += hex[c & 15]; }
+        else { out += char(c); }
+    }
+    return out + \"\\\\\\\"\";
+}
+
+static std::string metadata(const llama_model * model, const char * key) {
+    const int n = llama_model_meta_val_str(model, key, nullptr, 0);
+    if (n < 0) { return \"unknown\"; }
+    std::vector<char> buf(size_t(n) + 1);
+    llama_model_meta_val_str(model, key, buf.data(), buf.size());
+    return buf.data();
+}
+
+struct trace_layer {''')
+s=s.replace('    int weight_stage = -1;','''    int weight_stage = -1;
+    int64_t n_expert = 0;
+    int64_t k = 0;
+    bool shared = false;''')
+s=s.replace('    bool active = false;','''    bool active = false;
+    bool header_written = false;
+    uint64_t tokens = 0, records = 0;
+    std::string arch, model_path;
+    std::vector<int64_t> expert_counts, top_ks;
+    std::vector<bool> shared_layers;''')
+a=s.index('        const size_t count = size_t(n_tokens) * 8;')
+b=s.index('        for (int32_t token',a)
+s=s[:a]+'''        bool any = false;
+        for (size_t il = 0; il < layers.size(); ++il) {
+            const auto & layer = layers[il];
+            if ("'!layer.n_expert && !layer.k && layer.weights.empty()) { continue; }
+            any = true;
+            if (layer.n_expert <= 0 || layer.k <= 0 || layer.k > layer.n_expert ||
+                layer.experts.size() != size_t(n_tokens) * layer.k ||
+                layer.weights.size() != layer.experts.size()) {
+                throw std::runtime_error("incomplete routing tensors");
+            }
+        }
+        if (!any) { throw std::runtime_error("no supported MoE routing tensors"); }
+        if (!header_written) {
+            out << "{'"\\\\\"type\\\\\":\\\\\"metadata\\\\\",\\\\\"arch\\\\\":\" << json_string(arch)
+                << \",\\\\\"n_layer\\\\\":\" << layers.size() << \",\\\\\"layers\\\\\":\" << layers.size()
+                << \",\\\\\"model_path\\\\\":\" << json_string(model_path) << \",\\\\\"model_sha256\\\\\":null\";
+            int64_t max_experts = 0;
+            for (const auto & layer : layers) {
+                expert_counts.push_back(layer.n_expert);
+                top_ks.push_back(layer.k);
+                shared_layers.push_back(layer.shared);
+                max_experts = std::max(max_experts, layer.n_expert);
+            }
+            out << \",\\\\\"experts\\\\\":\" << max_experts;
+            const auto array = [&](const char * name, const std::vector<int64_t> & values) {
+                out << \",\\\\\"\" << name << \"\\\\\":[\";
+                for (size_t i = 0; i < values.size(); ++i) { out << (i ? \",\" : \"\") << values[i]; }
+                out << \"]\";
+            };
+            array(\"n_expert\", expert_counts);
+            array(\"k\", top_ks);
+            out << \",\\\\\"shared_experts_routed\\\\\":false,\\\\\"shared_experts_present\\\\\":[\";
+            for (size_t i = 0; i < shared_layers.size(); ++i) {
+                out << (i ? \",\" : \"\") << (shared_layers[i] ? \"true\" : \"false\");
+            }
+            out << \"]}\\\\n\";
+            header_written = true;
+        } else {
+            for (size_t il = 0; il < layers.size(); ++il) {
+                if (expert_counts[il] "'!= layers[il].n_expert || top_ks[il] != layers[il].k ||
+                    shared_layers[il] != layers[il].shared) {
+                    throw std::runtime_error("routing coverage/shape changed between submissions");
+                }
+            }
+        }
+'"''' + s[b:]
+s=s.replace('const size_t off = size_t(token) * 8;','if ("'!layer.k) { continue; }'"\\n                const size_t off = size_t(token) * layer.k;')
+s=s.replace('\\\\\"pos\\\\\":','\\\\\"tok\\\\\":')
+s=s.replace('for (int k = 0; k < 8; ++k)', 'for (int64_t k = 0; k < layer.k; ++k)')
+s=s.replace('                out << \"],\\\\\"phase\\\\\":\\\\\"\" << phase << \"\\\\\"}\\\\n\";','                out << \"],\\\\\"phase\\\\\":\\\\\"\" << phase << \"\\\\\"}\\\\n\";\\n                ++records;')
+s=s.replace('''            }
+        }
+        out.flush();''','''            }
+            ++tokens;
+            out.flush();
+            if ("'!out) { throw std::runtime_error("failed writing token"); }
+        }
+        out.flush();'"''',1)
+s=s.replace('    const bool ids = il >= 0;','''    const bool ids = il >= 0;
+    const int probs_layer = tensor_layer(t->name, \"ffn_moe_probs-\");
+    const int shared_layer = tensor_layer(t->name, \"ffn_shexp-\");''')
+s=s.replace('    if (ask) {\\n        return il >= 0;','''    if (probs_layer >= 0) { il = probs_layer; }
+    if (shared_layer >= 0) { il = shared_layer; }
+    if (ask) {
+        return il >= 0;''')
+s=s.replace('''        const bool shape_ids = t->ne[0] == 8''','''        auto & layer = trace.layers[il];
+        if (shared_layer >= 0) { layer.shared = true; return true; }
+        if (probs_layer >= 0) {
+            if (t->ne[0] <= 0 || t->ne[1] "'!= trace.n_tokens || t->ne[2] != 1 || t->ne[3] != 1 || layer.n_expert) {
+                throw std::runtime_error("unsupported or duplicate router probabilities");
+            }
+            layer.n_expert = t->ne[0];
+            return true;
+        }
+        if (ids) { layer.k = t->ne[0]; }
+        const bool shape_ids = layer.k > 0 && t->ne[0] == layer.k'"''')
+s=s.replace('t->ne[1] == 8', 't->ne[1] == layer.k')
+s=s.replace('        auto & layer = trace.layers[il];\\n        if (ids &&', '        if (ids &&')
+s=s.replace('size_t(trace.n_tokens) * 8', 'size_t(trace.n_tokens) * layer.k')
+s=s.replace('size_t(token) * 8', 'size_t(token) * layer.k')
+s=s.replace('value >= 32', 'value >= layer.n_expert')
+s=s.replace('expert ID outside [0,32)', 'expert ID outside router dimension')
+s=s.replace('for (int j = 0; j < k;', 'for (int64_t j = 0; j < k;')
+s=s.replace('    trace.layers.resize(llama_model_n_layer(model));','''    trace.layers.resize(llama_model_n_layer(model));
+    trace.arch = metadata(model, \"general.architecture\");
+    trace.model_path = params.model.path;''')
+s=s.replace('        run(params, trace);','''        run(params, trace);
+        trace.out << \"{\\\\\"type\\\\\":\\\\\"metadata\\\\\",\\\\\"trace_complete\\\\\":true,\\\\\"tokens\\\\\":\" << trace.tokens
+                  << \",\\\\\"records\\\\\":\" << trace.records << \"}\\\\n\";
+        trace.out.flush();
+        if ("'!trace.out) { throw std::runtime_error("failed writing completion footer"); }
+        trace.out.close();
+        if (trace.out.fail()) { throw std::runtime_error("failed closing trace"); }'"''')
+Path('/tmp/jom3/routing-trace.cpp').write_text(s)
+# Standalone patch: keep registration and CMake additions from original.
+p=Path('cc/routing_trace/routing-trace.patch').read_text()
+p=p[:p.index('diff --git a/examples/routing-trace/routing-trace.cpp')]
+p+='diff --git a/examples/routing-trace/routing-trace.cpp b/examples/routing-trace/routing-trace.cpp\\nnew file mode 100644\\n--- /dev/null\\n+++ b/examples/routing-trace/routing-trace.cpp\\n'
+p+=f'@@ -0,0 +1,{len(s.splitlines())} @@\\n'+''.join('+'+l+'\\n' for l in s.splitlines())
+Path('cc/routing_trace/patches/routing-trace-generic.patch').write_text(p)
+PY
+python3 /tmp/jom3/edit.py
+rg -n 'model;|common_params_model|struct common_params' ref/llama.cpp/common/common.h
+sed -n '18,210p' /tmp/jom3/routing-trace.cpp" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+227:struct common_params_sampling {
+305:struct common_params_model {
+328:struct common_params_speculative_draft {
+339:    common_params_model mparams;
+359:struct common_params_speculative_ngram_mod {
+366:struct common_params_speculative_ngram_map {
+372:struct common_params_speculative_ngram_cache {
+377:struct common_params_speculative {
+410:struct common_params_diffusion {
+455:struct common_params {
+508:    struct common_params_sampling    sampling;
+509:    struct common_params_speculative speculative;
+510:    struct common_params_diffusion   diffusion;
+512:    struct common_params_model model;
+603:    struct common_params_model mmproj;
+#include <vector>
+
+static std::string json_string(const std::string & value) {
+    std::string out = "\"";
+    const char * hex = "0123456789abcdef";
+    for (unsigned char c : value) {
+        if (c == '"' || c == '\\') { out += '\\'; out += char(c); }
+        else if (c < 32) { out += "\\u00"; out += hex[c >> 4]; out += hex[c & 15]; }
+        else { out += char(c); }
+    }
+    return out + "\"";
+}
+
+static std::string metadata(const llama_model * model, const char * key) {
+    const int n = llama_model_meta_val_str(model, key, nullptr, 0);
+    if (n < 0) { return "unknown"; }
+    std::vector<char> buf(size_t(n) + 1);
+    llama_model_meta_val_str(model, key, buf.data(), buf.size());
+    return buf.data();
+}
+
+struct trace_layer {
+    std::vector<int32_t> experts;
+    std::vector<float> weights;
+    int weight_stage = -1;
+    int64_t n_expert = 0;
+    int64_t k = 0;
+    bool shared = false;
+};
+
+struct routing_trace {
+    std::ofstream out;
+    std::vector<trace_layer> layers;
+    std::string error;
+    llama_pos pos = 0;
+    int32_t n_tokens = 0;
+    const char * phase = "prefill";
+    bool active = false;
+    bool header_written = false;
+    uint64_t tokens = 0, records = 0;
+    std::string arch, model_path;
+    std::vector<int64_t> expert_counts, top_ks;
+    std::vector<bool> shared_layers;
+
+    void begin(llama_pos start, int32_t count, const char * name) {
+        pos = start;
+        n_tokens = count;
+        phase = name;
+        for (auto & layer : layers) {
+            layer = trace_layer{};
+        }
+        active = true;
+    }
+
+    void finish() {
+        active = false;
+        if (!error.empty()) {
+            throw std::runtime_error(error);
+        }
+        bool any = false;
+        for (size_t il = 0; il < layers.size(); ++il) {
+            const auto & layer = layers[il];
+            if (!layer.n_expert && !layer.k && layer.weights.empty()) { continue; }
+            any = true;
+            if (layer.n_expert <= 0 || layer.k <= 0 || layer.k > layer.n_expert ||
+                layer.experts.size() != size_t(n_tokens) * layer.k ||
+                layer.weights.size() != layer.experts.size()) {
+                throw std::runtime_error("incomplete routing tensors");
+            }
+        }
+        if (!any) { throw std::runtime_error("no supported MoE routing tensors"); }
+        if (!header_written) {
+            out << "{\"type\":\"metadata\",\"arch\":" << json_string(arch)
+                << ",\"n_layer\":" << layers.size() << ",\"layers\":" << layers.size()
+                << ",\"model_path\":" << json_string(model_path) << ",\"model_sha256\":null";
+            int64_t max_experts = 0;
+            for (const auto & layer : layers) {
+                expert_counts.push_back(layer.n_expert);
+                top_ks.push_back(layer.k);
+                shared_layers.push_back(layer.shared);
+                max_experts = std::max(max_experts, layer.n_expert);
+            }
+            out << ",\"experts\":" << max_experts;
+            const auto array = [&](const char * name, const std::vector<int64_t> & values) {
+                out << ",\"" << name << "\":[";
+                for (size_t i = 0; i < values.size(); ++i) { out << (i ? "," : "") << values[i]; }
+                out << "]";
+            };
+            array("n_expert", expert_counts);
+            array("k", top_ks);
+            out << ",\"shared_experts_routed\":false,\"shared_experts_present\":[";
+            for (size_t i = 0; i < shared_layers.size(); ++i) {
+                out << (i ? "," : "") << (shared_layers[i] ? "true" : "false");
+            }
+            out << "]}\n";
+            header_written = true;
+        } else {
+            for (size_t il = 0; il < layers.size(); ++il) {
+                if (expert_counts[il] != layers[il].n_expert || top_ks[il] != layers[il].k ||
+                    shared_layers[il] != layers[il].shared) {
+                    throw std::runtime_error("routing coverage/shape changed between submissions");
+                }
+            }
+        }
+        for (int32_t token = 0; token < n_tokens; ++token) {
+            for (size_t il = 0; il < layers.size(); ++il) {
+                const auto & layer = layers[il];
+                if (!layer.k) { continue; }
+                const size_t off = size_t(token) * layer.k;
+                out << "{\"seq\":0,\"tok\":" << pos + token << ",\"layer\":" << il << ",\"experts\":[";
+                for (int64_t k = 0; k < layer.k; ++k) {
+                    out << (k ? "," : "") << layer.experts[off + k];
+                }
+                out << "],\"weights\":[";
+                for (int64_t k = 0; k < layer.k; ++k) {
+                    out << (k ? "," : "") << layer.weights[off + k];
+                }
+                out << "],\"phase\":\"" << phase << "\"}\n";
+                ++records;
+            }
+            ++tokens;
+            out.flush();
+            if (!out) { throw std::runtime_error("failed writing token"); }
+        }
+        out.flush();
+        if (!out) {
+            throw std::runtime_error("failed writing trace");
+        }
+    }
+};
+
+static int tensor_layer(const char * name, const char * prefix) {
+    const size_t len = std::strlen(prefix);
+    if (std::strncmp(name, prefix, len) != 0 || name[len] == '\0') {
+        return -1;
+    }
+    int layer = 0;
+    for (const char * p = name + len; *p; ++p) {
+        if (*p < '0' || *p > '9' || layer > (INT_MAX - (*p - '0')) / 10) {
+            return -1;
+        }
+        layer = layer * 10 + (*p - '0');
+    }
+    return layer;
+}
+
+static bool trace_eval(ggml_tensor * t, bool ask, void * user_data) {
+    auto & trace = *static_cast<routing_trace *>(user_data);
+    if (!trace.active) {
+        return ask ? false : true;
+    }
+    static const char * weight_names[] = {
+        "ffn_moe_weights-", "ffn_moe_weights_softmax-",
+        "ffn_moe_weights_norm-", "ffn_moe_weights_scaled-",
+    };
+    int il = tensor_layer(t->name, "ffn_moe_topk-");
+    const bool ids = il >= 0;
+    const int probs_layer = tensor_layer(t->name, "ffn_moe_probs-");
+    const int shared_layer = tensor_layer(t->name, "ffn_shexp-");
+    int stage = -1;
+    if (!ids) {
+        for (int i = 0; i < 4; ++i) {
+            il = tensor_layer(t->name, weight_names[i]);
+            if (il >= 0) {
+                stage = i;
+                break;
+            }
+        }
+    }
+    if (probs_layer >= 0) { il = probs_layer; }
+    if (shared_layer >= 0) { il = shared_layer; }
+    if (ask) {
+        return il >= 0;
+    }
+    if (il < 0 || !trace.error.empty()) {
+        return true;
+    }
+    // Do not throw through the backend callback or stop a partially computed graph.
+    try {
+        if (size_t(il) >= trace.layers.size()) {
+            throw std::runtime_error("routing layer index exceeds model layer count");
+        }
+        auto & layer = trace.layers[il];
+        if (shared_layer >= 0) { layer.shared = true; return true; }
+        if (probs_layer >= 0) {
+            if (t->ne[0] <= 0 || t->ne[1] != trace.n_tokens || t->ne[2] != 1 || t->ne[3] != 1 || layer.n_expert) {
+                throw std::runtime_error("unsupported or duplicate router probabilities");
+            }
+            layer.n_expert = t->ne[0];
+            return true;
+        }
+        if (ids) { layer.k = t->ne[0]; }
+        const bool shape_ids = layer.k > 0 && t->ne[0] == layer.k && t->ne[1] == trace.n_tokens && t->ne[2] == 1 && t->ne[3] == 1;
+
+exec
+/bin/bash -lc "rg -n 'cb\\(.*(shexp|shared)' ref/llama.cpp/src/models | head -45; sed -n '210,285p' /tmp/jom3/routing-trace.cpp; sed -n '1,85p' ref/llama.cpp/src/models/qwen35moe.cpp; rg -n 'meta_val_str\\(' ref/llama.cpp/src/llama-model.cpp" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+ref/llama.cpp/src/models/exaone-moe.cpp:209:                cb(ffn_shexp, "ffn_shexp", il);
+ref/llama.cpp/src/models/mellum.cpp:395:    cb(cur, "mtp_shared_head_norm", -1);
+ref/llama.cpp/src/models/granite-swa.cpp:297:            cb(ffn_shexp, "ffn_shexp", il);
+ref/llama.cpp/src/models/mimo2.cpp:389:    cb(cur, "mtp_shared_head_norm", -1);
+ref/llama.cpp/src/models/llama4.cpp:238:            cb(shexp_out, "ffn_moe_shexp", il);
+ref/llama.cpp/src/models/nemotron-h.cpp:342:        cb(ffn_shexp, "ffn_shexp", il);
+ref/llama.cpp/src/models/glm4-moe.cpp:249:    cb(shared_out, "mtp_ffn_shexp_out", il);
+ref/llama.cpp/src/models/glm4-moe.cpp:269:    cb(cur, "mtp_shared_head_norm", -1);
+ref/llama.cpp/src/models/glm4-moe.cpp:404:            cb(shared_out, "ffn_shexp_out", il);
+ref/llama.cpp/src/models/deepseek4.cpp:1319:        cb(ffn_shexp, "ffn_shexp", il);
+ref/llama.cpp/src/models/deepseek4.cpp:1472:    cb(ffn_shexp, "mtp_ffn_shexp", il);
+ref/llama.cpp/src/models/deepseek4.cpp:1494:    cb(cur, "mtp_shared_head_norm", -1);
+ref/llama.cpp/src/models/nemotron-h-moe.cpp:105:        cb(ffn_shexp, "mtp_ffn_shexp", il);
+ref/llama.cpp/src/models/kolibri1.cpp:166:        cb(shared, "ffn_shexp_out", il);
+ref/llama.cpp/src/models/deepseek2.cpp:373:    cb(ffn_shexp, "mtp_ffn_shexp", il);
+ref/llama.cpp/src/models/deepseek2.cpp:393:    cb(cur, "mtp_shared_head_norm", -1);
+ref/llama.cpp/src/models/deepseek2.cpp:672:                cb(ffn_shexp, "ffn_shexp", il);
+ref/llama.cpp/src/models/qwen4exp.cpp:1174:        cb(ffn_shexp, "ffn_shexp", il);
+ref/llama.cpp/src/models/qwen4exp.cpp:1178:        cb(shared_gate, "shared_expert_gate", il);
+ref/llama.cpp/src/models/qwen4exp.cpp:1181:        cb(shared_gate, "shared_expert_gate_sigmoid", il);
+ref/llama.cpp/src/models/qwen4exp.cpp:1184:        cb(ffn_shexp, "ffn_shexp_gated", il);
+ref/llama.cpp/src/models/hy-v3.cpp:189:            cb(sh_out, "ffn_shared_out", il);
+ref/llama.cpp/src/models/hy-v3.cpp:350:        cb(sh_out, "mtp_ffn_shared_out", il);
+ref/llama.cpp/src/models/hy-v3.cpp:372:    cb(cur, "mtp_shared_head_norm", -1);
+ref/llama.cpp/src/models/deepseek32.cpp:444:                cb(ffn_shexp, "ffn_shexp", il);
+ref/llama.cpp/src/models/deepseek32.cpp:688:    cb(ffn_shexp, "mtp_ffn_shexp", il);
+ref/llama.cpp/src/models/deepseek32.cpp:708:    cb(cur, "mtp_shared_head_norm", -1);
+ref/llama.cpp/src/models/dflash.cpp:1244:        cb(ffn_shexp, "ffn_shexp", il);
+ref/llama.cpp/src/models/qwen2moe.cpp:148:            cb(cur_gate_inp, "ffn_shexp_gate_inp", il);
+ref/llama.cpp/src/models/qwen2moe.cpp:152:            cb(cur_gate, "ffn_shexp_gate", il);
+ref/llama.cpp/src/models/qwen2moe.cpp:160:            cb(cur_ffn, "ffn_shexp", il);
+ref/llama.cpp/src/models/qwen2moe.cpp:163:            cb(ffn_shexp_out, "ffn_shexp_out", il);
+ref/llama.cpp/src/models/qwen35moe.cpp:522:        cb(ffn_shexp, "ffn_shexp", il);
+ref/llama.cpp/src/models/qwen35moe.cpp:528:        cb(shared_gate, "shared_expert_gate", il);
+ref/llama.cpp/src/models/qwen35moe.cpp:532:        cb(shared_gate, "shared_expert_gate_sigmoid", il);
+ref/llama.cpp/src/models/qwen35moe.cpp:537:        cb(ffn_shexp, "ffn_shexp_gated", il);
+ref/llama.cpp/src/models/qwen35moe.cpp:702:        cb(ffn_shexp, "mtp_ffn_shexp", il);
+ref/llama.cpp/src/models/qwen35moe.cpp:706:        cb(shared_gate, "mtp_shared_expert_gate_sigmoid", il);
+ref/llama.cpp/src/models/qwen35moe.cpp:709:        cb(ffn_shexp, "mtp_ffn_shexp_gated", il);
+ref/llama.cpp/src/models/qwen35moe.cpp:730:    cb(cur, "mtp_shared_head_norm", -1);
+ref/llama.cpp/src/models/bailingmoe2.cpp:181:                cb(ffn_shexp, "ffn_shexp", il);
+ref/llama.cpp/src/models/granite-hybrid.cpp:280:            cb(ffn_shexp, "ffn_shexp", il);
+ref/llama.cpp/src/models/kimi-k3.cpp:610:        cb(sh, "ffn_shexp", il);
+ref/llama.cpp/src/models/glm5-next.cpp:649:    cb(ffn_shexp, "mtp_ffn_shexp", il);
+ref/llama.cpp/src/models/glm5-next.cpp:666:    cb(cur, "mtp_shared_head_norm", -1);
+        const bool shape_ids = layer.k > 0 && t->ne[0] == layer.k && t->ne[1] == trace.n_tokens && t->ne[2] == 1 && t->ne[3] == 1;
+        const bool shape_weights_2d = shape_ids;
+        const bool shape_weights_3d = t->ne[0] == 1 && t->ne[1] == layer.k && t->ne[2] == trace.n_tokens && t->ne[3] == 1;
+        if ((ids && (t->type != GGML_TYPE_I32 || !shape_ids)) ||
+            (!ids && (t->type != GGML_TYPE_F32 || (!shape_weights_2d && !shape_weights_3d)))) {
+            throw std::runtime_error(std::string("unsupported routing tensor shape/type: ") + t->name);
+        }
+        if (!t->buffer || !t->data) {
+            throw std::runtime_error("routing tensor has no backing buffer");
+        }
+        if (ids && !layer.experts.empty()) {
+            throw std::runtime_error("duplicate topk tensor: unexpected physical batch splitting");
+        }
+        if (!ids && stage <= layer.weight_stage) {
+            throw std::runtime_error("duplicate or reordered weight tensor");
+        }
+        // Top-k can be a strided view of the full argsort. Read elements using nb[].
+        const size_t expert_stride = ids || shape_weights_2d ? t->nb[0] : t->nb[1];
+        const size_t token_stride = ids || shape_weights_2d ? t->nb[1] : t->nb[2];
+        std::vector<uint8_t> copy;
+        const uint8_t * data = static_cast<const uint8_t *>(t->data);
+        if (!ggml_backend_buffer_is_host(t->buffer)) {
+            copy.resize(ggml_nbytes(t));
+            ggml_backend_tensor_get(t, copy.data(), 0, copy.size());
+            data = copy.data();
+        }
+        if (ids) {
+            layer.experts.resize(size_t(trace.n_tokens) * layer.k);
+        } else {
+            layer.weights.resize(size_t(trace.n_tokens) * layer.k);
+            layer.weight_stage = stage;
+        }
+        for (int32_t token = 0; token < trace.n_tokens; ++token) {
+            for (int64_t k = 0; k < layer.k; ++k) {
+                const size_t offset = size_t(token) * token_stride + size_t(k) * expert_stride;
+                if (offset > ggml_nbytes(t) || ggml_nbytes(t) - offset < sizeof(float)) {
+                    throw std::runtime_error("routing tensor stride outside buffer");
+                }
+                const size_t index = size_t(token) * layer.k + k;
+                if (ids) {
+                    int32_t value;
+                    std::memcpy(&value, data + offset, sizeof(value));
+                    if (value < 0 || value >= layer.n_expert) {
+                        throw std::runtime_error("expert ID outside router dimension");
+                    }
+                    for (int64_t j = 0; j < k; ++j) {
+                        if (layer.experts[size_t(token) * layer.k + j] == value) {
+                            throw std::runtime_error("duplicate expert ID");
+                        }
+                    }
+                    layer.experts[index] = value;
+                } else {
+                    float value;
+                    std::memcpy(&value, data + offset, sizeof(value));
+                    if (!std::isfinite(value) || value < 0.0f) {
+                        throw std::runtime_error("invalid routing weight");
+                    }
+                    layer.weights[index] = value;
+                }
+            }
+        }
+    } catch (const std::exception & e) {
+        trace.error = e.what();
+    }
+    return true;
+}
+
+static void trace_decode(llama_context * ctx, common_batch & batch, routing_trace & trace,
+                         llama_pos pos, const char * phase) {
+    trace.begin(pos, batch.size(), phase);
+    const int result = llama_process(ctx, LLAMA_PROCESS_TYPE_DECODE, batch.get());
+    llama_synchronize(ctx);
+    if (result != 0) {
+        trace.active = false;
+        throw std::runtime_error("llama_process failed: " + std::to_string(result));
+    }
+#include "models.h"
+#include "llama-memory-recurrent.h"
+
+void llama_model_qwen35moe::load_arch_hparams(llama_model_loader & ml) {
+    ml.get_key_or_arr(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_ff_exp_arr, hparams.n_layer_all, false);
+    ml.get_key(LLM_KV_EXPERT_SHARED_FEED_FORWARD_LENGTH, hparams.n_ff_shexp, false);
+    ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,       hparams.f_norm_rms_eps);
+
+    ml.get_key_or_arr(LLM_KV_ROPE_DIMENSION_SECTIONS,    hparams.rope_sections, 4, true);
+
+    // Load linear attention (gated delta net) parameters
+    ml.get_key(LLM_KV_SSM_CONV_KERNEL,    hparams.ssm_d_conv);
+    ml.get_key(LLM_KV_SSM_INNER_SIZE,     hparams.ssm_d_inner);
+    ml.get_key(LLM_KV_SSM_STATE_SIZE,     hparams.ssm_d_state);
+    ml.get_key(LLM_KV_SSM_TIME_STEP_RANK, hparams.ssm_dt_rank);
+    ml.get_key(LLM_KV_SSM_GROUP_COUNT,    hparams.ssm_n_group);
+
+    // Mark recurrent layers (linear attention layers). MTP layers are dense
+    // attention-only and must be flagged non-recurrent.
+    if (!ml.get_key_or_arr(LLM_KV_ATTENTION_RECURRENT_LAYERS, hparams.is_recr_impl, hparams.n_layer_all, false)) {
+        uint32_t full_attn_interval = 4;
+        ml.get_key(LLM_KV_FULL_ATTENTION_INTERVAL, full_attn_interval, false);
+        for (uint32_t i = 0; i < hparams.n_layer_all; ++i) {
+            hparams.is_recr_impl[i] = (i < hparams.n_layer()) && ((i + 1) % full_attn_interval != 0);
+        }
+    }
+
+    switch (hparams.n_layer()) {
+        case 40: type = LLM_TYPE_35B_A3B; break;
+        case 48: type = LLM_TYPE_122B_A10B; break;
+        case 60: type = LLM_TYPE_397B_A17B; break;
+        default: type = LLM_TYPE_UNKNOWN;
+    }
+}
+
+void llama_model_qwen35moe::load_arch_tensors(llama_model_loader & ml) {
+    LLAMA_LOAD_LOCALS;
+
+    const auto nf = nextn_flags(ml);
+    const int trunk_flags = nf.trunk;
+    const int mtp_flags   = nf.mtp;
+
+    tok_embd = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), { n_embd, n_vocab }, 0);
+
+    // output
+    output_norm = create_tensor(tn(LLM_TENSOR_OUTPUT_NORM, "weight"), { n_embd }, 0);
+    output = create_tensor(tn(LLM_TENSOR_OUTPUT, "weight"), { n_embd, n_vocab }, TENSOR_NOT_REQUIRED);
+
+    // if output is NULL, init from the input tok embed
+    if (output == NULL) {
+        output = create_tensor(tn(LLM_TENSOR_TOKEN_EMBD, "weight"), { n_embd, n_vocab }, TENSOR_DUPLICATED);
+    }
+
+    auto load_block_trunk = [&](int il, int flags) {
+        auto & layer = layers[il];
+
+        const int64_t n_ff_exp   = hparams.n_ff_exp() ? hparams.n_ff_exp() : n_ff / n_expert_used;
+        const int64_t n_ff_shexp = hparams.n_ff_shexp ? hparams.n_ff_shexp : n_ff;
+
+        // Calculate dimensions from hyperparameters
+        const int64_t head_k_dim = hparams.ssm_d_state;
+        const int64_t head_v_dim = hparams.ssm_d_state;
+        const int64_t n_k_heads  = hparams.ssm_n_group;
+        const int64_t n_v_heads  = hparams.ssm_dt_rank;
+        const int64_t key_dim    = head_k_dim * n_k_heads;
+        const int64_t value_dim  = head_v_dim * n_v_heads;
+        const int64_t conv_dim   = key_dim * 2 + value_dim;
+
+        layer.attn_norm      = create_tensor(tn(LLM_TENSOR_ATTN_NORM,      "weight", il), { n_embd }, flags);
+        layer.attn_post_norm = create_tensor(tn(LLM_TENSOR_ATTN_POST_NORM, "weight", il), { n_embd }, flags);
+
+        if (!hparams.is_recr(il)) {
+            // Attention layers
+            create_tensor_qkv(layer, il, n_embd, n_embd_head_k * n_head * 2, n_embd_k_gqa, n_embd_v_gqa, flags);
+            layer.wo = create_tensor(tn(LLM_TENSOR_ATTN_OUT, "weight", il), { n_embd_head_k * n_head, n_embd }, flags);
+
+            // Q/K normalization for attention layers
+            layer.attn_q_norm = create_tensor(tn(LLM_TENSOR_ATTN_Q_NORM, "weight", il), { n_embd_head_k }, flags);
+            layer.attn_k_norm = create_tensor(tn(LLM_TENSOR_ATTN_K_NORM, "weight", il), { n_embd_head_k }, flags);
+        } else {
+            // Linear attention (gated delta net) specific tensors
+            // Create tensors with calculated dimensions
+            layer.wqkv           = create_tensor(tn(LLM_TENSOR_ATTN_QKV,       "weight", il), { n_embd, key_dim * 2 + value_dim }, TENSOR_NOT_REQUIRED);
+            layer.wqkv_gate      = create_tensor(tn(LLM_TENSOR_ATTN_GATE,      "weight", il), { n_embd, value_dim }, TENSOR_NOT_REQUIRED);
+            layer.ssm_conv1d     = create_tensor(tn(LLM_TENSOR_SSM_CONV1D,     "weight", il), { hparams.ssm_d_conv, conv_dim }, flags);
+3664:int32_t llama_model_meta_val_str(const llama_model * model, const char * key, char * buf, size_t buf_size) {
+
+exec
+/bin/bash -lc "cat > cc/routing_trace/validate_generic_trace.py <<'PY'
+#"'!/usr/bin/env python3
+"""Validate a generic capture, including its clean-exit footer (streaming)."""
+import json
+import math
+import sys
+from pathlib import Path
+
+
+def integer(value, minimum=0):
+    if type(value) is not int or value < minimum:
+        raise ValueError('"'invalid nonnegative integer')
+    return value
+
+
+def validate(path):
+    header = None
+    footer = None
+    records = tokens = 0
+    current = None
+    observed = []
+    previous_phase = None
+    with Path(path).open(encoding='utf-8') as source:
+        for line in source:
+            if not line.endswith('\\n'):
+                raise ValueError('unterminated line')
+            row = json.loads(line)
+            if not isinstance(row, dict) or footer is not None:
+                raise ValueError('invalid object or data after footer')
+            if header is None:
+                header = row
+                n = integer(header.get('n_layer'), 1)
+                if (header.get('type') "'!= '"'metadata' or header.get('layers') "'!= n or
+                    not isinstance(header.get('"'arch'), str) or
+                    not isinstance(header.get('model_path'), str) or
+                    header.get('shared_experts_routed') is not False):
+                    raise ValueError('invalid header')
+                for key in ('n_expert', 'k', 'shared_experts_present'):
+                    if not isinstance(header.get(key), list) or len(header[key]) "'!= n:
+                        raise ValueError('"'invalid per-layer dimensions')
+                for e, k, shared in zip(header['n_expert'], header['k'], header['shared_experts_present']):
+                    integer(e)
+                    integer(k)
+                    if (not 0 <= k <= e or bool(e) "'!= bool(k) or type(shared) is not bool):
+                        raise ValueError('"'invalid layer dimensions')
+                routed = [i for i, k in enumerate(header['k']) if k]
+                if not routed or header.get('experts') "'!= max(header['"'n_expert']):
+                    raise ValueError('no routing or invalid replay dimensions')
+                continue
+            if 'trace_complete' in row:
+                if row.get('trace_complete') is not True or row.get('type') "'!= '"'metadata':
+                    raise ValueError('invalid footer')
+                footer = row
+                continue
+            tok, layer = integer(row.get('tok')), integer(row.get('layer'))
+            if type(row.get('seq')) is not int or row['seq'] "'!= 0:
+                raise ValueError('"'capture requires seq=0')
+            phase = row.get('phase')
+            if phase not in ('prefill', 'decode') or (previous_phase == 'decode' and phase "'!= '"'decode'):
+                raise ValueError('invalid phase')
+            if tok "'!= current:
+                if (current is not None and observed != routed) or tok != tokens:
+                    raise ValueError('"'missing token or layer coverage')
+                current, observed = tok, []
+                tokens += 1
+                previous_phase = phase
+            if phase "'!= previous_phase or layer not in routed or layer in observed:
+                raise ValueError('"'invalid layer/phase coverage')
+            observed.append(layer)
+            ids, weights = row.get('experts'), row.get('weights')
+            k, e = header['k'][layer], header['n_expert'][layer]
+            if (not isinstance(ids, list) or len(ids) "'!= k or
+                any(type(i) is not int or not 0 <= i < e for i in ids) or len(set(ids)) != k):
+                raise ValueError('"'invalid expert IDs')
+            if (not isinstance(weights, list) or len(weights) "'!= k or
+                any(type(w) not in (int, float) or not math.isfinite(w) or w < 0 for w in weights)):
+                raise ValueError('"'invalid weights')
+            records += 1
+    if (footer is None or not records or observed "'!= routed or
+        integer(footer.get('"'tokens')) "'!= tokens or integer(footer.get('"'records')) "'!= records):
+        raise ValueError('"'missing/mismatched completion footer or coverage')
+    return dict(tokens=tokens, records=records)
+
+
+if __name__ == '__main__':
+    print(json.dumps(validate(sys.argv[1])))
+PY
+cat > cc/routing_trace/test_generic_trace.py <<'PY'
+import copy
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).parent
+spec = importlib.util.spec_from_file_location('generic_validator', ROOT / 'validate_generic_trace.py')
+validator = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(validator)
+spec = importlib.util.spec_from_file_location('expert_replay_generic_test', ROOT.parent / 'expert_replay/expert_replay.py')
+replay = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(replay)
+
+
+def fixture():
+    return [dict(type='metadata', arch='qwen35moe', n_layer=2, layers=2, experts=256,
+                 n_expert=[256, 256], k=[2, 2], model_path='model.gguf', model_sha256=None,
+                 shared_experts_present=[True, True], shared_experts_routed=False),
+            *[dict(tok=t, layer=l, experts=[254, 255], weights=[.4, .6],
+                   phase='prefill' if t == 0 else 'decode', seq=0)
+              for t in range(2) for l in range(2)],
+            dict(type='metadata', trace_complete=True, tokens=2, records=4)]
+
+
+def write(tmp_path, rows):
+    path = tmp_path / 'trace.jsonl'
+    path.write_text(''.join(json.dumps(r) + '\\n' for r in rows))
+    return path
+
+
+def test_valid_and_replay_compatible(tmp_path):
+    path = write(tmp_path, fixture())
+    assert validator.validate(path) == dict(tokens=2, records=4)
+    rows, layers, experts, diagnostics = replay.read_trace(path)
+    assert (len(rows), layers, experts, diagnostics['malformed_lines']) == (4, 2, 256, 0)
+
+
+@pytest.mark.parametrize('change', ['footer', 'count', 'token_count', 'record_boundary', 'gap',
+                                  'duplicate', 'bounds', 'weights', 'phase', 'after_footer', 'header'])
+def test_reject(tmp_path, change):
+    rows = copy.deepcopy(fixture())
+    if change == 'footer': rows.pop()
+    elif change == 'count': rows[-1]['records'] += 1
+    elif change == 'token_count': rows[-1]['tokens'] += 1
+    elif change == 'record_boundary': rows.pop(-2)
+    elif change == 'gap': rows[3]['tok'] = 3
+    elif change == 'duplicate': rows[2] = rows[1]
+    elif change == 'bounds': rows[1]['experts'][0] = 256
+    elif change == 'weights': rows[1]['weights'][0] = float('nan')
+    elif change == 'phase': rows[2]['phase'] = 'decode'
+    elif change == 'after_footer': rows.append(rows[1])
+    elif change == 'header': rows[0]['k'] = [2]
+    with pytest.raises(ValueError): validator.validate(write(tmp_path, rows))
+
+
+def test_partial_json(tmp_path):
+    path = write(tmp_path, fixture()[:-1])
+    with path.open('a') as out: out.write('{\"trace_complete\":')
+    with pytest.raises(ValueError): validator.validate(path)
+
+
+def test_variable_k_and_dense_layer(tmp_path):
+    rows = fixture()
+    rows[0].update(n_expert=[0, 256], k=[0, 3], shared_experts_present=[False, True])
+    rows = [r for r in rows if r.get('layer') "'!= 0]
+    for row in rows[1:-1]:
+        row.update(experts=[1, 100, 255], weights=[.2, .3, .5])
+    rows[-1]['"'records'] = 2
+    assert validator.validate(write(tmp_path, rows))['records'] == 2
+PY
+python3 - <<'PY'
+from pathlib import Path
+p=Path('/tmp/jom3/edit.py')
+s=p.read_text().replace('const int shared_layer = tensor_layer(t->name, \"ffn_shexp-\");','''int shared_layer = -1;
+    for (const char * prefix : { \"ffn_shexp-\", \"ffn_shexp_out-\", \"ffn_moe_shexp-\", \"ffn_shared_out-\" }) {
+        const int candidate = tensor_layer(t->name, prefix);
+        if (candidate >= 0) { shared_layer = candidate; break; }
+    }''')
+p.write_text(s)
+PY
+python3 /tmp/jom3/edit.py
+ git -C ref/llama.cpp apply --check \""'$PWD/cc/routing_trace/patches/routing-trace-generic.patch"
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q cc/routing_trace/test_generic_trace.py cc/routing_trace/test_trace_replay.py cc/expert_replay/test_expert_replay.py -p no:cacheprovider' in /home/muk/projects/siminfeng/campaign
+ succeeded in 4361ms:
+.....................................................               [100%]
+53 passed, 5 subtests passed in 3.80s
+
+codex
+The standalone patch passes `git apply --check`, and all 53 Python tests pass. The new fixtures cover variable top-k, expert IDs up to 255, dense layers, replay compatibility, and missing or mismatched footers. I’m finishing the Jetson documentation and reviewing the patch; no builds or GPU work have been run.
+exec
+/bin/bash -lc "cat > cc/routing_trace/README.md <<'EOF'
+# routing_trace
+
+Capture routed expert IDs and aligned weights with llama.cpp's graph callback.
+The generic patch is "'`patches/routing-trace-generic.patch`, standalone against
+**31288c9c66e59377f7788d920678a565bb89dd37**. Apply this patch alone, not on top
+of `routing-trace.patch`. It adds `examples/routing-trace/` and its CMake
+registration; the executable target remains **llama-routing-trace**.
+`ref/llama.cpp` must stay read-only; apply patches only in a separate build tree.
+
+## Build CC integration
+
+From the campaign root, the build owner can use:
+
+```bash
+python3 cc/build_engine/build_engine.py '"\\
+  --source ref/llama.cpp --commit 31288c9c6 \\
+  --patch cc/routing_trace/patches/routing-trace-generic.patch \\
+  --extra-target llama-routing-trace \\
+  --tag campaign/llamacpp:routing-trace-generic \\
+  --out artifacts/routing-trace-generic/build
+"'```
+
+Supply the digest-pinned development/runtime images required by Build CC.
+Its current `--extra-target` interface builds, packages and records the extra
+binary; the old README'"'s instruction to edit Dockerfile/TOOLS is obsolete.
+Keep "'`LLAMA_BUILD_COMMON=ON` and `LLAMA_BUILD_EXAMPLES=ON`. The generic patch
+has **not been built or run** by J-OM3. Per `research/own-repo-assets.md`, D014
+records a real ccache build (rt1) and three real Granite traces using the legacy
+patch; the previous blanket “not compile-linked” statement was stale.
+Those runs do not validate this generic patch or Qwen capture.
+
+## Capture
+
+```bash
+/app/llama-routing-trace -m /models/model.gguf '"\\
+  -p 'Explain how a cache works.' -n 64 -ngl 0 -c 2048 \\
+  --trace-out /out/routing.jsonl > /out/generated.txt 2> /out/capture.log
+python3 cc/routing_trace/validate_generic_trace.py /out/routing.jsonl
+python3 cc/expert_replay/expert_replay.py --help
+"'```
+
+Use a separate output path per run: `--trace-out` truncates an existing file.
+Only one text sequence is supported (`seq=0`). Prompt-file handling (`-f`) and
+BOS tokenization come from common; no chat template is added. `-n` defaults to
+32 and must be finite/nonnegative. Generation uses raw-logit argmax, ignores
+sampling settings, and evaluates exactly N generated tokens, including EOG;
+`-n 0` captures only prefill. `tok` is the absolute evaluated input position,
+including BOS, and starts at zero. Phases describe submitted tokens, so a
+single-token prompt chunk remains prefill. Context overflow is refused.
+
+The first line is metadata, emitted after the first submission has validated:
+
+```json
+{"type":"metadata","arch":"example","n_layer":2,"layers":2,"model_path":"/models/model.gguf","model_sha256":null,"experts":16,"n_expert":[16,0],"k":[2,0],"shared_experts_routed":false,"shared_experts_present":[true,false]}
+```
+
+`n_expert` and `k` are arrays indexed by **model layer ID**, with zero for dense
+layers. `experts` is the maximum per-layer expert count, and `layers` aliases
+`n_layer` for `cc/expert_replay`. A full-file SHA is omitted (`null`) to avoid
+reading a multi-gigabyte model just for capture identity; record an existing
+manifest hash alongside the run when available. Model path and architecture
+strings are JSON escaped. Each routing row is:
+
+```json
+{"tok":0,"layer":0,"experts":[3,12],"weights":[0.4,0.6],"phase":"prefill","seq":0}
+```
+
+The last line is emitted only after successful generation and capture:
+
+```json
+{"type":"metadata","trace_complete":true,"tokens":1,"records":1}
+```
+
+The footer'"'s "'`type` lets the existing expert_replay parser skip it as metadata
+without counting it as malformed input. `tokens` counts evaluated input
+positions, not just generated tokens; `records` counts routing rows. Missing
+footer, partial JSON, wrong counts, missing tokens/layers, or data after the
+footer are rejected by `validate_generic_trace.py`. Always validate before
+replay: expert_replay itself does not enforce this completion protocol. Its
+coverage diagnostic assumes every model layer routes; mixed dense/MoE models
+therefore report incomplete layer coverage even when capture is complete.
+Its global expert bound also cannot enforce individual per-layer bounds; the
+validator does. Use `cc/expert_replay`, not the legacy `trace_replay.py`, for
+generic traces. The latter retains Granite-only 32-expert/top-8 assumptions and
+accepts only legacy `pos` records without metadata/footer.
+
+## Callback contract and limits
+
+The tool derives `n_expert` from `ffn_moe_probs-N` shape `{E,T,1,1}` and `k`
+from `ffn_moe_topk-N` shape `{K,T,1,1}`, never from hardcoded model dimensions
+or tensor strides. It copies I32 IDs using `nb[]` (top-k may be a strided view).
+F32 weights must be `{1,K,T,1}` or `{K,T,1,1}`. It observes exact stages
+`ffn_moe_weights-N`, `_softmax-N`, `_norm-N`, `_scaled-N`, retaining the last
+stage. Sum/clamp helpers are excluded. Weights must be finite/nonnegative;
+IDs must be distinct and within that layer'"'s router dimension.
+
+Shared expert presence is discovered through "'`ffn_shexp-N`,
+`ffn_shexp_out-N`, `ffn_moe_shexp-N`, or `ffn_shared_out-N` callbacks. These
+branches are always computed when present (possibly sigmoid gated), are not
+top-k selections, and never appear in routed expert arrays. Architectures
+without these shared-branch callback names require a hook extension before
+interpreting a false presence flag. Custom graph naming, remapped expert IDs
+(e.g. grouped GroveMoE), and architectures bypassing `build_moe_ffn` need
+separate validation; “generic” means shape independent within this callback
+contract, not a guarantee for every architecture.
+
+First-submission discovery permits dense layers; later submissions must have
+identical routed-layer coverage, dimensions and shared presence. Missing,
+duplicate or reordered tensors fail capture. A model whose first graph omits
+an entire routed layer cannot be distinguished from a dense layer by callback
+observation alone. Unexpected physical batch splitting is rejected.
+
+Submissions contain at most `min(n_batch,n_ubatch)` tokens and are synchronized
+before emission. Owned data is bounded by one submission'"'s layer/top-k values
+plus one observed tensor's device readback, rather than total generated tokens.
+Output is ordered by token then model layer, and flushed after **each token**.
+Host buffers are read after callback synchronization; device buffers use
+"'`ggml_backend_tensor_get`. No routing tensors are mutated.
+
+Tracing has material overhead: selected callbacks force scheduler range
+synchronizations and device readbacks. Logits are requested for every prompt
+token to prevent final-layer pruning. Warmup and backend sampling are disabled.
+This can inhibit fusion and add output/LM-head work. Captures are routing
+evidence, not performance-neutral timing runs; numerical equivalence has not
+been established. Any failed decode, callback validation, output write or
+close returns nonzero; reject the trace even if a footer is visible after an
+I/O failure. Flush is not fsync or an atomic completion transaction.
+
+## Jetson / qwen35moe
+
+At the pin, the architecture lives in `src/models/qwen35moe.cpp` (the model
+factory and public layer-count accessor are in `src/llama-model.cpp`). Its main
+graph loops `il=0..n_layer-1`, selects DeltaNet or full attention, then
+unconditionally calls `build_layer_ffn`, which asserts a router and calls
+`build_moe_ffn`. Thus **every main decoder layer emits routing**, including
+DeltaNet layers: IDs 0..39 for the 40-layer variant. Default full-attention
+interval is four (3,7,...,39); metadata may override the layer pattern.
+`llama_model_n_layer` returns `hparams.n_layer()`, excluding NextN/MTP layers;
+this single-model driver does not run the separate MTP graph. Shared expert
+branches are recorded as present and excluded from routed choices.
+
+Build on the Jetson lane with its configured CUDA architecture/image and
+ccache via Build CC, using the same extra target. Do not copy the x86 CUDA
+architecture 120 setting. Pin `-c` and explicit offload settings (`-ngl`, and
+common'"'s CPU-MoE options when applicable) to match the experiment; confirm the
+built binary's "'`--help`. Preserve mmap defaults for over-memory experiments.
+Do not infer physical DRAM pressure on UMA from Docker `--memory` or simulated
+cache hit rates. Record the model manifest/hash, command, chunk sizes, successful
+exit status and validation result. Qwen3.6'"'s expected 256 experts/top-8 are a
+sanity check, never capture constants. Capture only; no GPU/build was run for
+this assignment.
+
+## Verification (J-OM3)
+
+"'```bash
+git -C ref/llama.cpp apply --check '"\\
+  \""'$PWD/cc/routing_trace/patches/routing-trace-generic.patch"
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q '"\\
+  cc/routing_trace/test_generic_trace.py \\
+  cc/routing_trace/test_trace_replay.py cc/expert_replay/test_expert_replay.py \\
+  -p no:cacheprovider
+"'```
+
+On the pinned reference: apply check passed; **53 tests passed, 5 subtests
+passed**. New fixture tests cover variable top-k, IDs through 255, dense layers,
+replay compatibility, schema failures and truncated/missing/mismatched footers.
+These are Python protocol tests, not C++ callback execution tests. No builds,
+GPU execution or model capture were performed; integration remains with the
+build owner. The original patch and replay tests remain for legacy Granite
+reproducibility.
+EOF
+ git -C ref/llama.cpp rev-parse HEAD
+ git -C ref/llama.cpp apply --check "$PWD/cc/routing_trace/patches/routing-trace-generic.patch"
+ git diff --check
+ git diff --stat' in /home/muk/projects/siminfeng/campaign
+ succeeded in 49ms:
+31288c9c66e59377f7788d920678a565bb89dd37
+ campaign/bin/index_evidence                    |   2 +-
+ campaign/cc/routing_trace/README.md            | 225 +++++++++++++++----------
+ campaign/evidence/jetson-arm/claude-code.jsonl |  70 ++++++++
+ campaign/evidence/jetson-arm/opus-jetson.jsonl |   8 +
+ 4 files changed, 219 insertions(+), 86 deletions(-)
+
+exec
+/bin/bash -lc "cat research/own-repo-assets.md; sed -n '150,270p' cc/routing_trace/trace_replay.py; sed -n '3658,3685p' ref/llama.cpp/src/llama-model.cpp; sed -n '300,326p' ref/llama.cpp/common/common.h; git status --short cc/routing_trace" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Own-repo assets vs the Jetson over-memory track (Qwen3.6-35B-A3B UD-Q4_K_XL, 7.4 GiB DRAM, llama.cpp 31288c9c6)
+Read-only study, 2026-11-10. Evidence = files in this repo; "ran" means a recorded op/job exists. Pytest re-run now (no cache writes): routing_trace + expert_replay + memory_pareto = 56 passed.
+Class tags follow D012: transferable / discrete-only / prediction.
+
+## 1. Direct answers
+**Can cc/routing_trace capture qwen35moe at 31288c9c6? Mostly yes after a 3-line patch edit.**
+- Hook: `cb_eval` on exact names `ffn_moe_topk-N` (I32 {k,T}, strided view of argsort) plus `ffn_moe_weights-N` and the optional `_softmax/_norm/_scaled-N` stages. These are emitted by the shared `build_moe_ffn` (src/llama-graph.cpp:2273-2312). `src/models/qwen35moe.cpp:497` calls `build_moe_ffn`, so Qwen uses the same path. Shared expert (`ffn_shexp`) is not routed and is not traced. That is correct, but means no shared-expert data.
+- Hardcoded Granite assumptions in `routing-trace.patch`: `value >= 32` ("expert ID outside [0,32)") will abort on the first Qwen layer (256 experts); `k == 8` is correct for Qwen3.6 (8 active) but hardcoded in 6 places. Fix: read `llama_model_n_expert`/`hparams.n_expert_used` and pass them in (~10 lines). `trace_replay.py` also hardcodes `32` (L62, L94, L113 histogram) and capacities (4..24 slots): do NOT use it for Qwen. Use `cc/expert_replay` (no hardcoded dims, `--layers 40 --experts 256`).
+- Other Qwen risks: (i) hybrid DeltaNet layers still have an MoE FFN every layer (`GGML_ASSERT(ffn_gate_inp != nullptr)`), so the "every layer must emit" check holds, but confirm `llama_model_n_layer` excludes any MTP/nextn layer (hparams.n_layer() vs n_layer_all); (ii) it chunks prefill by `min(n_batch,n_ubatch)` and needs `-c` and `--no-warmup`; (iii) `cb_eval` forces per-range syncs: expect large slowdown with a 20 GiB mmap'd model (use it for routing capture only, never for timing); (iv) parser is `LLAMA_EXAMPLE_COMMON` so `-cmoe/-ncmoe/-ot/-mmp` should be accepted (verify with `--help`).
+- Status: README says "not compile-linked", but that is stale. D014 records a real build (rt1, 18 s via ccache) and real Granite traces (`lab/tests/trace1.json`, `artifacts/traces/out/*.jsonl`). Real-run evidence exists for Granite only. Build CC packaging prerequisite (Dockerfile must build/copy `llama-routing-trace`; TOOLS list) was needed on x86; check the Jetson build recipe (cc/build_engine) copies it.
+
+**What D015 / D019 / job-d50c052f94 measured**
+- job-d50c052f94 (Granite mixE4K, `--n-cpu-moe 24` = ALL experts on CPU, `LLAMA_ARG_MOE_CACHE_MIB`, 160/96 decode tokens, 1 run per point, unscored class: discrete-only absolutes). Decode t/s chat / prose: cache 0: 128 / 120; 64 MiB: 54 / 54; 128: 55 / 54; 192: 92 / 92; 256: 100 / 102; 384: 187 / 159; 640 (all 24x32 experts, ~648 MiB): 458 / 512. Break-even vs no-cache lies between 256 and 384 MiB (40-59% coverage); below it the cache is SLOWER than none (admission copies, 38 us pinned / 90 us pageable per expert, D019). GPU MiB grows 1:1 with the cache (773 -> 1413). Output text identical across cache sizes (same stdout sha). Gap: matched static offload at equal footprint never finished (D020; rerun `lab/tests/static1.json`).
+- D015 (`lab/tests/ssd1.json`, docker `--memory` limit, fadvise DONTNEED on own file): limit 1536m: 129 t/s, 1.6 GiB read; 1024m: 79, 4.1 GiB; 768m: 15, 28.8 GiB; 640m: 3, 95.7 GiB; 560m: 1, 135 GiB read. Working set about 400 MiB anon + ~750 MiB experts; cliff is sharp once limit < working set, and reads >> useful bytes (read amplification). Caveats: compile load avg ~18 during the runs (lower bounds), 1 rep, no OOM kills.
+- Predicts Jetson (transferable shape): the existence and sharpness of the cliff, read amplification of naive mmap + kernel LRU, bound tg <= (effective NVMe B/s) / (fetched B/token), and cold/warm discipline (fadvise on the model file only, report io rbytes). Discrete-only: every absolute t/s, PCIe upload/admission costs (D019), the 33 us/miss CPU-expert cost (D014; Jetson "CPU expert" and "GPU expert" share the same DRAM), and anything from the docker `--memory` emulation (D028: that cap does not bound CUDA allocations on Tegra, and on Jetson the over-memory case is physical, so no emulation is needed).
+- `--moe-cache-mib` on Jetson: help text says "GPU cache ... for experts kept in CPU" (common/arg.cpp:2782; src/llama-moe-cache.cpp, LRU slots, CUDA backends). On Tegra the cache is a second copy in the same DRAM that the page cache needs, so expect it to take page cache from the 7.4 GiB and be a net loss at small sizes; worth one sweep (it is only the "competent-user baseline", NEEDS-MAP row 45). It does not change what NVMe has to supply.
+
+## 2. Asset table (status = evidence-based)
+| Asset | Purpose | Real status | (a) Jetson over-mem | (b) Qwen vs Granite assumptions | (c) Minimal port |
+|---|---|---|---|---|---|
+| cc/routing_trace patch | Per-token/layer top-8 ids+weights JSONL | Built+ran on Granite (D014, 3 traces); 29 unit tests are replay only | YES, core input for static hot-set + replay | Hardcoded 32 experts and 8 (see above) | Replace `32`/`8` by model hparams; add 256/top-8 test |
+| cc/routing_trace/trace_replay.py | LRU/LFU hit rate, 4..24 slots | Tested (29 pytest); results in experiments/routing | Superseded by expert_replay | Hardcoded 32 experts, capacities 4..24 | None: use expert_replay |
+| cc/expert_replay (Jetson lane, uncommitted) | Generic LRU/LFU/decay/static-profile/Belady replay, train/test split with provenance hashes, bytes+bw prediction | 56-test suite incl. this; no real trace yet | YES: sizes hot set vs capacity, Belady bound | No dims hardcoded; needs `--layers 40 --experts 256`; 40x256 = 10240 pairs fine | Feed Qwen trace; set `--expert-bytes` from `gguf_manifest` per-layer sizes; beware its per-expert-sequential scoring differs from trace_replay's atomic token-entry scoring |
+| cc/gpu_budget | LD_PRELOAD cap on CUDA allocs + virtual cudaMemGetInfo | Compiled and passed ~30 checks on x86 (artifacts/codexL/host-verification.txt: cudaMalloc/Async/Pitch/3D/MemGetInfo). Not run on Tegra. See section 3 | Only partially (see 3) | Model-agnostic | Add missing APIs; decide whether cap should cover host-pinned |
+| cc/hybrid_expert | GPU-hit/CPU-miss single-layer harness (Opus T-J) | Ran: bitwise-correct, serial miss-cost model within -11/+6% (D019). All timings UNSCORED | NO (PCIe/pinned H2D, Zen2 AVX2, CUDA CPU+GPU split) | Hardcoded NE=32, NU=8, D=1024, F=512, 24 layers, Granite gguf | Do not port. Reuse only the lesson: static hot set ~ LRU hit rate with zero admission traffic |
+| cc/memory_pareto | configs.csv -> Pareto/budget fit with class labels | 6 tests pass; used for D013 | Marginal: reuse the class-label discipline, add Jetson rows | Model-agnostic | Add rows (class=mixed, host_mib); `gpu_mib` meaningless on shared DRAM, use shared-DRAM high-water |
+| cc/q8_reuse | Reuse Q8_1 activation quantization across mul_mat | Patch only, UNTESTED, never compiled (DESIGN.md) | NO (decode speed, not memory; MoE MMVQ path differs, see D027) | Granite | Ignore |
+| cc/engine_handoff | Offline admission of build-record/archive/gguf header | 48 tests; one real `accepted` (example-real5) | Low, process hygiene only | Model-agnostic | None |
+| bin/perf_summary | Per-test attempt means/spread from lab results | Works on llama-bench samples | Yes for A/B of ncmoe/cache sweeps | Model-agnostic | Needs lab result.json with `samples` (llama-bench only; completion-parser tests have no samples) |
+| bin/index_evidence | Merge evidence/*.jsonl -> index/ops.jsonl | Works | Bug: globs only `evidence/*.jsonl`, so `evidence/jetson-arm/*` is NOT indexed | n/a | Change glob to `evidence/**/*.jsonl` (x86 or Jetson lane) |
+| bin/cost_report | Wall time + Codex/astra token accounting | Works on index; Claude tokens not captured | Low | n/a | Same glob issue indirectly (reads index) |
+| lab/tests/*.json | Declarative tests (env, args, mem limit, cold cache) | Ran (jobs d50c052f94, 6e6b2d39b8, 36b7630119 ...) | `moecache1`, `static1`, `ssd1` are templates for Qwen sweeps | All hardcode Granite file names, `/tin` mounts, `--n-cpu-moe 24`, `-c 4096` | Copy to a Qwen set: change model_file, `-ncmoe` values (0..40), `-c` pinned (D023), drop docker `--memory` |
+| experiments/memory | Granite quant frontier (D013) | Real (job-aa57700ee5) | Reference only | Granite | Add one Qwen row from J-E006 quant track |
+| experiments/routing | Granite skew vs uniform control (D017), `predict_slots.py` | Real traces; prediction script is a linear model with Granite constants (24 layers, 33 us/miss) | Method yes, numbers no | Constants hardcoded | Reimplement via expert_replay sweep |
+
+## 3. cc/gpu_budget on Jetson (cooperative cap?)
+- Covered: cudaMalloc, MallocManaged, MallocAsync, Free/FreeAsync (adds a stream sync), MallocPitch, Malloc3D (synthesized), cudaMemGetInfo, cuMemAlloc_v2, cuMemAllocAsync, cuMemFree_v2/FreeAsync, cuMemGetInfo_v2. Single process-wide counter, JSONL log, hard denial returns cudaErrorMemoryAllocation, env `GPU_BUDGET_MIB/RESERVE/COUNT_MANAGED/LOG`.
+- Missing: cudaMallocHost / cudaHostAlloc / cuMemAllocHost / cuMemHostAlloc (ggml pinned host buffers, ggml-cuda.cu:1324; on Tegra this is also DRAM), cudaHostRegister (`GGML_CUDA_REGISTER_HOST`), cuMemAllocManaged, cuMemAllocPitch, VMM (`cuMemCreate`/`cuMemAddressReserve`, ggml-cuda.cu:627), `cudaMallocFromPoolAsync`/mem pools, cudaMallocArray. No obvious compile bug (`-std=c99 -Werror` build.sh passed on x86); weak points: dlsym on every call, one global mutex held across the real allocation, thread-local `nesting` only guards re-entry.
+- Decisive Jetson problem: cudaMemGetInfo virtualization is bypassed by llama.cpp. `ggml_backend_cuda_device_get_memory` (ggml-cuda.cu:5429-5460) calls cudaMemGetInfo, then if `prop.integrated` (Orin) OVERWRITES `*free` with `/proc/meminfo` MemAvailable (`ggml_backend_cuda_get_available_uma_memory`, 5352). So the shim's virtual free never reaches auto-fit or `--fit` (D023's n_ctx 45568 would recur); only `total` is faked. A second path (`ggml_backend_cuda_get_device_memory`, 5283) does use the faked value. The only effective part is hard denial of device cudaMalloc, which does not constrain mmap'd CPU-resident experts or page cache. Net: usable as a hard cap on GPU-resident bytes (weights/KV/compute buffers) if cudart is dynamically linked (static cudart bypasses LD_PRELOAD; verify with `ldd /app/llama-*`), NOT as a steer for autofit or a limit on host-pinned/page-cache DRAM. For the over-memory experiment the physical limit is the budget; pin `-c`, `-ngl`/`-ncmoe` explicitly instead.
+
+## 4. x86 claims (claims/paper-claims.md) the Jetson track can test cheaply
+- P12 ProMoE "modern decoder-only MoEs near-uniform; LRU weak" and P02 MoE-Infinity "skew within request": capture Qwen3.6 trace, expert_replay LRU/LFU/Belady vs capacity/256 uniform control (D017 method). Highest value, also decides whether a static hot set helps.
+- P06 PowerInfer hot/cold ("minority carries ~80% of activations") and P08 MxMoE ("expert frequency varies >10x"): same trace; per-layer 256-bin histogram, coverage curve, entropy.
+- P11 HOBBIT / P13 ProMoE (next-layer expert predictability): partial proxy only: adjacent-layer expert-set overlap from the same trace; true predictor claims need hidden states (not cheap).
+- P04 FlexGen / P15 MoE-Lightning roofline: SSD-bound token rate = NVMe B/s / fetched B per token; check with io_watchdog counters (rbytes, majflt) vs measured tg at cmoe.
+- P01 Fiddler (CPU compute vs weight movement): on Jetson re-ask as CPU-expert vs GPU-expert decode with all weights page-cache-resident (no transfer exists); 1-hour test using `-ncmoe` sweep with a small model first.
+- Do not test: P05 (quality of 4-bit KV/weights, needs eval), P07 vLLM, P10 HOBBIT low-precision substitution (needs engine change), P14 Pre-gated (retraining).
+
+## Port now
+1. Patch routing-trace for variable n_expert/top-k (remove `<32`, hardcoded 8), capture 3+ workloads on Qwen3.6 (prefill/decode, long decode), `-c` pinned, mmap, record completeness check.
+2. Run `cc/expert_replay` (40 layers x 256 experts, static-profile with train/test split, Belady bound, per-layer capacity sweep) on those traces to size the hot set before building any placement.
+3. Copy lab/tests moecache1/static1 into a Qwen set (`-ncmoe` 0..40, `--moe-cache-mib` sweep, `-c` pinned) with io_watchdog + cold-cache on the model file only; keep Granite's cliff numbers as shape reference.
+4. Use gguf_manifest per-layer expert byte sizes to feed `--per-layer-bytes` and the NVMe-bound formula; label every Jetson result transferable/prediction per D012.
+5. Fix `bin/index_evidence` glob (recursive) so Jetson ops enter index/ops.jsonl and cost_report.
+
+## Request x86 to finish
+1. Rerun lab/tests/static1.json (matched static offload vs `--moe-cache-mib` at equal footprint; D020 left it open) with a clean host (no concurrent compiles).
+2. Clean rerun of ssd1 (D015, 3+ reps, no compile load) to give a trustworthy cliff shape.
+3. gpu_budget: add host-pinned/VMM/pool/managed-driver APIs and a mode that also rewrites what UMA callers see (or a documented env to force `GGML_CUDA_ENABLE_UNIFIED_MEMORY`-style bypass); then test with llama.cpp end to end, not only test_budget.cu.
+4. Refresh routing_trace README (stale "not compile-linked") and move trace_replay constants to CLI flags or deprecate in favour of expert_replay.
+5. Dockerfile/Build CC: ship `llama-routing-trace` in default runtime image so the Jetson recipe inherits it.
+
+## Ignore
+1. cc/q8_reuse (untested speed patch, wrong lever for memory).
+2. cc/hybrid_expert (PCIe/H2D harness, Granite-hardcoded; only conclusions matter).
+3. experiments/routing/predict_slots.py and the D014 slot prediction (linear Granite constants).
+4. engine_handoff / cost_report / lab core recovery docs for this experiment (hygiene only).
+5. Docker `--memory`-based SSD emulation (D015 method) on Jetson (D028) and trace_replay.py (superseded).
+                stats = [v["cache"][policy][str(capacity)] for v in layers.values()]
+                overall[policy][str(capacity)] = rate(sum(s["hits"] for s in stats),
+                                                     sum(s["requests"] for s in stats))
+        report["phases"][phase] = {"records": len(rows), "layers": layers, "overall": overall}
+    return report
+
+
+def markdown(report):
+    lines = [HEADER, "", "Cold caches; token-entry lookups; overall rates weighted by expert requests.", "",
+             "| Phase | Policy | 4 slots | 8 slots | 12 slots | 16 slots | 24 slots |",
+             "|---|---|---:|---:|---:|---:|---:|"]
+    for phase, data in report["phases"].items():
+        for policy in POLICIES:
+            cells = []
+            for capacity in CAPACITIES:
+                value = data["overall"][policy][str(capacity)]["hit_rate"]
+                cells.append("n/a" if value is None else f"{value:.2%}")
+            lines.append("| " + " | ".join([phase, policy, *cells]) + " |")
+    return "\n".join(lines) + "\n"
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("trace", type=Path)
+    parser.add_argument("--json-out", type=Path, help="default: JSON on stdout")
+    parser.add_argument("--markdown-out", type=Path, help="default: Markdown on stderr")
+    args = parser.parse_args(argv)
+    try:
+        report = replay(read_trace(args.trace))
+        encoded = json.dumps(report, indent=2, allow_nan=False) + "\n"
+        table = markdown(report)
+        if args.json_out:
+            args.json_out.write_text(encoded, encoding="utf-8")
+        else:
+            sys.stdout.write(encoded)
+        if args.markdown_out:
+            args.markdown_out.write_text(table, encoding="utf-8")
+        else:
+            sys.stderr.write(table)
+    except (OSError, ValueError) as error:
+        parser.exit(1, f"trace_replay: {error}\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+}
+
+float llama_model_rope_freq_scale_train(const llama_model * model) {
+    return model->hparams.rope_freq_scale_train;
+}
+
+int32_t llama_model_meta_val_str(const llama_model * model, const char * key, char * buf, size_t buf_size) {
+    const auto & it = model->gguf_kv.find(key);
+    if (it == model->gguf_kv.end()) {
+        if (buf_size > 0) {
+            buf[0] = '\0';
+        }
+        return -1;
+    }
+    return snprintf(buf, buf_size, "%s", it->second.c_str());
+}
+
+int32_t llama_model_meta_count(const llama_model * model) {
+    return (int)model->gguf_kv.size();
+}
+
+const char * llama_model_meta_key_str(llama_model_meta_key key) {
+    switch (key) {
+        case LLAMA_MODEL_META_KEY_SAMPLING_SEQUENCE:        return "general.sampling.sequence";
+        case LLAMA_MODEL_META_KEY_SAMPLING_TOP_K:           return "general.sampling.top_k";
+        case LLAMA_MODEL_META_KEY_SAMPLING_TOP_P:           return "general.sampling.top_p";
+        case LLAMA_MODEL_META_KEY_SAMPLING_MIN_P:           return "general.sampling.min_p";
+        case LLAMA_MODEL_META_KEY_SAMPLING_XTC_PROBABILITY: return "general.sampling.xtc_probability";
+
+    // print the parameters into a string
+    std::string print() const;
+};
+
+struct common_params_model {
+    std::string path        = ""; // model local path
+    std::string url         = ""; // model url to download
+    std::string hf_repo     = ""; // HF repo
+    std::string hf_file     = ""; // HF file
+    std::string docker_repo = ""; // Docker repo
+
+    std::string get_name() const {
+        if (!hf_repo.empty()) {
+            return hf_repo;
+        }
+        if (!docker_repo.empty()) {
+            return docker_repo;
+        }
+        return path;
+    }
+
+    bool empty() const {
+        return get_name().empty();
+    }
+};
+
+ M cc/routing_trace/README.md
+?? cc/routing_trace/patches/
+?? cc/routing_trace/test_generic_trace.py
+?? cc/routing_trace/validate_generic_trace.py
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('/tmp/jom3/edit.py')
+s=p.read_text().replace('if ("'!layer.n_expert && !layer.k && layer.weights.empty()) { continue; }'"','''if ("'!layer.n_expert && !layer.k && layer.weights.empty()) {
+                if (arch == "qwen35moe") { throw std::runtime_error("missing qwen35moe routing layer"); }
+                continue;
+            }'"''')
+p.write_text(s)
+PY
+python3 /tmp/jom3/edit.py
+cat >> cc/routing_trace/test_generic_trace.py <<'PY'
+
+
+@pytest.mark.parametrize('k', [1, 8, 16])
+def test_256_experts_variable_topk(tmp_path, k):
+    rows = fixture()
+    rows[0]['k'] = [k, k]
+    for row in rows[1:-1]:
+        row.update(experts=list(range(256-k, 256)), weights=[1/k]*k)
+    path = write(tmp_path, rows)
+    assert validator.validate(path)['tokens'] == 2
+    assert replay.read_trace(path)[3]['malformed_lines'] == 0
+PY
+python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/routing_trace/README.md')
+s=p.read_text().replace('First-submission discovery permits dense layers; later submissions must have','Qwen35moe requires routing in every main layer even on the first submission.\\nFor other architectures, first-submission discovery permits dense layers; later submissions must have').replace('**53 tests passed, 5 subtests','**56 tests passed, 5 subtests')
+p.write_text(s)
+PY
+ git -C ref/llama.cpp apply --check \""'$PWD/cc/routing_trace/patches/routing-trace-generic.patch"
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q cc/routing_trace/test_generic_trace.py cc/routing_trace/test_trace_replay.py cc/expert_replay/test_expert_replay.py -p no:cacheprovider
+ git diff --check' in /home/muk/projects/siminfeng/campaign
+ succeeded in 5447ms:
+........................................................            [100%]
+56 passed, 5 subtests passed in 4.57s
+
+codex
+- Added [routing-trace-generic.patch](/home/muk/projects/siminfeng/campaign/cc/routing_trace/patches/routing-trace-generic.patch), standalone on `31288c9c6`.
+- Tool target: `llama-routing-trace`.
+- Qwen35moe emits routing in every main decoder layer, including DeltaNet and attention; MTP excluded. Shared experts are recorded separately.
+- Added schema/footer validator and fixture tests; updated README with Jetson instructions.
+- Verification: `git apply --check` passed; 56 tests and 5 subtests passed.
+- Risks: C++ build/runtime remain unverified; alternate graph hooks may need adaptation. No builds or GPU work performed.
+tokens used
+75,100
