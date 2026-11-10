@@ -27,6 +27,16 @@ Stopped: container `euaaa-llm-gpu-1` (`docker start euaaa-llm-gpu-1`) and user u
 ## Resume
 `pip`-free: python3 stdlib + PyYAML/pytest. Re-create the lab: `bin/lab image add llamacpp-31288c9 ghcr.io/ggml-org/llama.cpp@sha256:395d01bb47eb23d5e967129c6ebd2b5969365401621e16dd3db33e50fa7462e3`; build an engine: `python3 cc/build_engine/build_engine.py --source <llama.cpp> --commit 31288c9c6 [--patch P] [--extra-target T] --tag X --out builds/results/Y` (needs BASE_RUNTIME digest, see cc/build_engine/README.md).
 
-## Jetson lane (jetson-arm, branch jetson/c1) — added 2026-11-10
-Read `handoff/jetson-checkpoint-1.md`, `experiments/jetson/SUMMARY.md`, decisions D021–D025. Headline: **first measured full-engine gain** — on Orin Nano (sm_87, bf16, batch-1 decode) the env-gated component `cc/moe_dispatch_sm87` (`GGML_CUDA_J_MMF_IDS=1`) raises decode 50.3 → 60.1 t/s (+19%) with mean KLD 2.7e-4 (D025). Extended by D027: per-type switch `GGML_CUDA_J_UNFUSE_IDS_TYPES=bf16,q4_K` (patch 03) gives +23.6% on the Q4_K-expert model with identical outputs; Q8_0 must stay fused (−6%). Local to Jetson; x86 applicability untested.
-Jetson host state: docker.io + nvidia runtime installed (D022), buildx user plugin, venv ~/venvs/convert, models in ~/models/campaign (bf16 GGUF bb010fb6…), images campaign/llamacpp:jetson-c1 and :jetson-c1-j3 (archives on disk only). No services stopped on Jetson. Docker in old login sessions: `sg docker -c`.
+## Jetson lane (jetson-arm, branch jetson/c1) — CLOSED OUT 2026-11-10
+**Read `CLOSEOUT.md` first** (full experiment/attempt ledger, predictions vs observations, CC candidates, resume steps). Then `handoff/jetson-checkpoint-1.md`, `handoff/jetson/REPLY-1.md`, `research/x86-c2-digest.md`.
+Decision numbering: Jetson D021–D033 collide with x86 D021–D048 (proposal: rename ours J-D0xx; not yet agreed).
+
+Strongest findings (Jetson-local, Orin Nano sm_87):
+- **Full-engine gain:** per-type MoE gate/up unfuse (`cc/moe_dispatch_sm87` patch 03, `GGML_CUDA_J_UNFUSE_IDS_TYPES=bf16,q4_K`): bf16 +19.3% (KLD 2.7e-4), Q4_K-expert mixE4K +23.6% with identical outputs, Q8_0 must stay fused (−6.2%) (D025/D027). x86 applicability untested (request R1).
+- **Dependency gain:** upstream llama.cpp cf34d311 decodes +7% over the pin on the over-memory model (D031).
+- **Over-memory (Qwen3.6-35B-A3B 22.4 GB on 7.4 GiB):** best is the baseline `-lm mmap -ngl 99 -cmoe` at ~1.2–1.36 t/s, bound by a ~570 MiB/s budget NVMe. Default `-lm auto` cannot run (D030). Nothing we built beat the baseline: upstream GPU expert cache −17..−23% (D030/D032), dedupe/direct-fill no help (D032), whole-file MADV_RANDOM −50% (D033), router-informed WILLNEED prefetch −38% (J-OM7; bytes −57% but IO stays 4–5 KiB). The drive is IOPS-bound; any next loader must issue large aligned expert reads with lead time.
+- **Over-memory win (decoding strategy, workload-dependent):** upstream n-gram self-speculation (`--spec-type ngram-mod`, llama-server) on copy-heavy prompts: +63% (rewrite) / +97% (repeat), text identical, NVMe bytes −27..−35% (SPEC2-20261110-1634). Chat arm invalid (1-token output; needs chat template).
+- **Simulations:** page-cache LRU ≈ 62% hit at 12.7% capacity (Belady 80%); static cross-workload hot sets ≈ 17% (avoid). Window-union replay: speculative decoding gives no IO gain on natural text (J-SPEC1).
+- **Tool lesson:** `test-backend-ops` single-op kernel screen did NOT predict the D027 graph-fusion effect (KS-20261110-1620).
+
+Jetson host state: docker.io + nvidia runtime installed by the user (D022); buildx user plugin; venv `~/venvs/convert`; models in `~/models/campaign` (see CLOSEOUT §1); images `campaign/llamacpp:jetson-*` (local only). **No services were stopped on the Jetson; nothing to restore.** No clocks/power changes (MAXN_SUPER queried only). Docker in old sessions: `sg docker -c`.

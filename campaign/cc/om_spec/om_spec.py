@@ -31,7 +31,7 @@ try:
         try:
             if urllib.request.urlopen("http://127.0.0.1:18080/health", timeout=2).status == 200: break
         except Exception: pass
-        if time.time() - t0 > 900 or NAME not in dk("ps -q --filter name=" + NAME + " --format '{{.Names}}'").stdout: raise SystemExit("server not ready")
+        if time.time() - t0 > 900 or NAME not in dk("ps --filter name=" + NAME + " --format '{{.Names}}'").stdout: raise SystemExit("server not ready")
         time.sleep(2)
     load_s = round(time.time() - t0, 1)
     for pn, p in PROMPTS.items():

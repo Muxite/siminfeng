@@ -1,9 +1,8 @@
-# Jetson lane closeout (DRAFT) - campaign c1, lane jetson-arm, branch jetson/c1
+# Jetson lane closeout (FINAL) - campaign c1, lane jetson-arm, branch jetson/c1
 
 Drafted 2026-11-10 ~15:35 UTC on host `satay` (host id `jetson-arm`, Orin Nano 8GB Super) from files in this repo. Rules used: numbers are copied from the cited files; "not recorded" means I did not find it; nothing uncompiled or unrun is called validated. Raw t/s are local to this host and must not be pooled with x86 (different weights file hash, shared vs discrete memory).
 
-Placeholders still to fill (search for `<<PENDING`):
-- `<<PENDING: J-OM7 results>>`, `<<PENDING: kernel screen KS>>`, `<<PENDING: J-SPEC1 replay>>`, `<<PENDING: J-SPEC2 ngram>>`, `<<PENDING: final commit/push/GPU state>>`
+Final pass by the Jetson Opus lead 2026-11-10 ~17:30 UTC: J-OM7, KS, J-SPEC1, J-SPEC2 results filled in; tables below that still describe "uncommitted" state reflect the draft time - section 1.5 is authoritative.
 
 Jetson decisions are numbered D021-D033 and collide with x86's D021-D048 (different content). Proposed rename J-D021..J-D033 is unconfirmed (handoff/jetson/REPLY-1.md); this document cites them as "Jetson D0xx".
 
@@ -21,7 +20,30 @@ Jetson decisions are numbered D021-D033 and collide with x86's D021-D048 (differ
 | uncommitted at drafting time | 36 `git status` entries (modified evidence/telemetry, new J-SPEC1 files, om_spec, pipeline5/6, mmap_advice patch 02 + README, research/x86-c2-digest.md, handoff/jetson/, several build-result dirs). History was rewritten once before publication (D024). Nothing here is committed. |
 | x86 branch | none from x86 seen on Jetson besides `origin/x86/c2-resume` (digest in research/x86-c2-digest.md); x86 has not answered round 2 (handoff/x86-requests-2.md) |
 
-`<<PENDING: final commit/push/GPU state>>`
+### 1.5 Final state at closeout (authoritative)
+- Branch `jetson/c1` pushed to `origin/jetson/c1`; closeout commit = the commit titled "jetson-arm: CLOSEOUT ..." (parent `0402e2d`, checkpoint with J-OM7/J-SPEC1). `origin/main` untouched (f0e676b); `origin/x86/c2-resume` untouched (read only). No force-push.
+- Working tree clean after the closeout commit except gitignored build outputs (staging trees, `engine-image.docker.tar` archives, ccache) - deliberately not committed (D024).
+- Active processes: none campaign-owned (no pipeline/om_run/om_spec/build_engine/codex/llama processes). Delegated agents: all finished (Codex J-OM7, J-SPEC1; Sonnet REPLY-1/digest and CLOSEOUT draft). No Codex sessions running.
+- GPU: no containers (running or stopped) on the host; tegrastats GR3D_FREQ 0%. GPU released by the campaign; no service occupies it (Jetson has no stopped/restored GPU service - none was stopped, so nothing restored). docker/containerd and stock NVIDIA L4T services (nvargus, nvfancontrol, nvphs, ...) are running as before the campaign; none were touched.
+- Host settings unchanged by the campaign except user-approved installs: docker.io + nvidia runtime + user `docker` group (D022), buildx user plugin, `pip --user pytest`, `~/venvs/convert`. No clocks/power/driver changes.
+
+### 1.6 Large artifacts NOT in git (local only on host `satay`; no approved remote artifact store exists for the Jetson lane)
+| artifact | location | size | identity | retrieval |
+|---|---|---|---|---|
+| Qwen3.6-35B-A3B UD-Q4_K_XL | `~/models/campaign/qwen36-35b-a3b/` | 22,360,456,160 B | sha256 in 1.4 table (707a55a8...) | HF `unsloth/Qwen3.6-35B-A3B-GGUF` revision a483e9e6, file `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf`; verify sha256 |
+| Granite safetensors | `~/models/campaign/granite-3.1-1b-a400m-instruct/` | 2.5 GB | HF revision 0da7a48b | HF `ibm-granite/granite-3.1-1b-a400m-instruct@0da7a48b` |
+| Granite GGUFs (bf16, Q8_0, mixE4K) | `~/models/campaign/gguf/` | 4.6 GB | sha256 in 1.4 table | regenerate: convert_hf_to_gguf.py (pin 31288c9c6, `~/venvs/convert`) + llama-quantize recipes in experiments/jetson/J-E006-quant-track |
+| KL base logits | `~/models/campaign/kl/` | 48 MB | not hashed | regenerate with llama-perplexity `--kl-divergence-base` per J-E005 cmd files |
+| wikitext-2-raw | `~/models/campaign/data/` | 18 MB | - | standard dataset |
+| 12 engine images + archives | docker store; `cc/build_engine/results/*/engine-image.docker.tar` | 3.7 GB each | image Id + archive sha256 in 1.3 table | rebuild: `cc/build_engine/build_engine.py --target jetson-orin --source <tree> --commit <sha> --patch <patch>` (commands in each build-record.json) |
+| llama.cpp source trees | `ref/llama.cpp` (31288c9c6), `ref/llama.cpp-up1108` (cf34d311332e), `ref/Strata` (504b1433) | - | commit ids | `git clone https://github.com/ggml-org/llama.cpp` + checkout |
+Untransferred: everything in this table (by design: models/images are re-downloadable or rebuildable from committed recipes + checksums). All scripts, patches, manifests, raw logs/telemetry/results are committed.
+
+### 1.7 Resume (if the campaign restarts)
+1. `git fetch origin && git checkout jetson/c1`; read this file then START-HERE Jetson section.
+2. Verify models by sha256 (1.4/1.6); `sg docker -c "docker images"` should list `campaign/llamacpp:jetson-*` (else rebuild per 1.6).
+3. Highest-value next steps: (a) x86 to run D027 per-type unfuse on sm_120 (request R1); (b) SPEC2 chat arm with chat template + 2 more rounds; n-gram + `-lm mmap` default recommendation for copy-heavy workloads; (c) an aligned expert-read loader (pread 1.9 MB slices into pinned host buffers with >=1-layer lead time, using the J-OM7 host hook for IDs) - the only loader design not yet refuted; (d) KS q4_K rerun with `--types q4_K`; graph-level screen.
+4. Use `cc/om_run/om_run.sh` / `cc/om_spec/om_spec.py` for every over-memory run (watchdog + IO telemetry); chain jobs by PID, never `pgrep -f` patterns.
 
 ### 1.2 Host
 Orin Nano 8GB Super devkit (p3767-0005), L4T R36.5.2, JetPack 6.2.3, CUDA 12.6.68 (sm_87), kernel 5.15.199-tegra, 6x Cortex-A78AE, 7.4 GiB shared DRAM, zram swap 6 x 634 MB (~3.8 GiB), NVMe "X15 Lite SSD 128GB" PCIe Gen3 x4, nvpmodel MAXN_SUPER (queried only), GPU devfreq governor nvhost_podgov 306-1020 MHz (never pinned), nsys 2024.5.4, ncu 2024.3.1 (counters admin-only), Docker 29.1.3 (containerd snapshotter) + nvidia runtime, buildx v0.29.1 user plugin. Source: hosts/jetson-arm.json, handoff/jetson-checkpoint-1.md, D031.
@@ -62,8 +84,9 @@ With the containerd snapshotter `.Id` is the manifest/index digest (not the conf
 | jetson-up1108 (built by dir `jetson-up1108-a2`) | `sha256:7127623fe906093630e866e8f76f1b51cce32c18a94265f4c7ac323bcdcde87f` | `1db13059fce785df50beeb9a978214c6f334bfca50f4edad4b65d21d223ce75b` |
 | jetson-up1108-mc | `sha256:69b8ae28bf49e93b7ce20190023dc5819977852aabbf4b78508df639239efda1` | `7220d4fc952aca07dc0e19daa29632aef127040cf18cac8ff13e1fc827bb12a4` |
 | jetson-up1108-ra | `sha256:289ed0622cd1e6636ac8f746a9a3630083a32a788fe334d86d6ba54676b7a720` | `75ddea71785b14128c23e261d38856edf7e29cc9d7c63591ce0cd80a3f1dd3ca` |
-| jetson-up1108-om7 | not present (build running) | - |
-| jetson-c1-ks, jetson-pr31469 | not present (never built / no record) | - |
+| jetson-up1108-om7 | `sha256:4d0d6e6a04ffbd35816cc54d8aad5a484dda2a979bd18deb0c9e526f026527b6` | `fee04c8f34b50b12d25708c4e51bd34ce42e60553fbef791fe46db9a96684033` |
+| jetson-c1-ks | `sha256:8ec53cfa6fbf8e9cd3f1e46a62903ade1eb8503546a86a2f28fb06b8b2e93cae` | `c9b06f037acbb6ddca85adcac49724f98356fdeb80156c67385d4c81da9c5d96` |
+| jetson-pr31469 | not present (no record) | - |
 | ubuntu:22.04 (D022 smoke, D028 probe base) | `sha256:076e7bf82319619f28dd0aa9c02ab34b055ad37100395b4f49a2ffba04fb5e11` | - |
 
 Patch sha256 (full values are in the build records): 01-unfuse-bf16 `623340cc...`; 02-block128 `2d50eaa9...`; 03-unfuse-by-type `1369518f...`; combined-01-02 (moe_dispatch) `9cd5745b...`; combined-trace-p03 `c5e909e8...`; moe_cache_profile combined-01-02-03 `1215119e...`; mmap_advice 01 `1554b5b6...`, 02-router-prefetch `9fce108d...` (not in any finished build), combined-01-02 (mmap_advice) `631f1ed4...`; kernel_screen combined-p03-perf `72d7c8a0...`.
@@ -88,7 +111,7 @@ Conventions: "steady" = mean of llama-bench samples 2..n (sample 1 is GPU clock 
 | J-E006 | quantized track Q8_0 / mixE4K (x86 recipes), plus all-fusion-off screen | jetson-c1-p01q (+quantize) | ok | Q8_0 1.42 GB pp 3204 tg 83.1 KLD 0.0041 top-1 97.0%; mixE4K 0.82 GB pp 3254 tg 84.7 KLD 0.060 top-1 87.1%; all-fusion-off Q8_0 -12%, mixE4K +14% | J-E006-quant-track/ | single model |
 | J-P003 | nsys quantized decode | p01q | ok | fused Q4_K gate/up ~18 GB/s (about Q8_0 time for half the bytes) -> dequant/compute bound | J-P003-nsys-quant/FINDINGS.md | |
 | J-E007 | per-type unfuse (patch 03), order base,on,on,base per model, tg128 r5 | jetson-c1-p03 | ok | bf16 50.4/50.3 -> 60.1/60.0 (+19.3%); mixE4K 85.1/85.0 -> 105.3/105.0 (+23.6%); Q8_0 83.4/83.2 -> 78.2/78.0 (-6.2%); mixE4K quality unfused vs fused identical (PPL 8.548401, KLD 0.060395, top-1 87.103%, text sha a2beba5c...) | J-E007-unfuse-by-type/ | n=2/arm; unpinned devfreq |
-| SPEC1 | window-union replay (J-SPEC1) | - (CPU only) | pending: `experiments/jetson/SPEC1/` is empty; Codex run in progress | `<<PENDING: J-SPEC1 replay>>` | artifacts/codex/J-SPEC1.final.txt (partial log) | |
+| SPEC1 | window-union replay (J-SPEC1) | - (CPU only) | ok (simulation) | experiments/jetson/SPEC1/{SPEC1.md,results.json}; `expert_replay.py specwin` (Codex J-SPEC1; 14 tests + 5 subtests pass). 864 scenarios (4 workloads x W 1-8 x a 0.5/0.7/0.9 x LRU/Belady x 650/1300/2600 slots x optimistic/pessimistic). Best W>1 case 1.0011x (optimistic, LRU, code, 650 slots, a=0.9, W=2); a=0.7, W=4, LRU, 1300: 0.62-0.63x; all pessimistic cases slower. Reading: once a page/expert cache exists, consecutive-token expert overlap is already captured as hits at W=1, so verify batching adds no IO dedupe, while rejected drafts add misses. Simulation only; traces are natural text (no copy-heavy workload), so it does not cover n-gram on repeat text. | artifacts/codex/J-SPEC1.final.txt | |
 
 Other Granite-side attempts recorded in evidence but not under experiments/: J-EV1 run_op fixture (success, nonzero, non-UTF-8, background child, timeout; D021); J-ISO1 cgroup probe (D028); J5 lab jobs (below).
 
@@ -107,8 +130,8 @@ Other Granite-side attempts recorded in evidence but not under experiments/: J-E
 | jetson-up1108-mc | upstream + moe_cache_profile 01+02+03 | combined-01-02-03 (1215119e) | ok | 519 s | 201 / 121 | |
 | jetson-up1108-ra | upstream + mmap advice 01 | 01-mmap-advice-random (1554b5b6) | ok | 152 s | 306 / 16 | |
 | jetson-pr31469 | PR #31469 `fc4a5a77a` (queued by build_queue.sh) | - | **dropped / no outcome**: intent+started ops (op-c63b2bd59050, 04:35:40) but no outcome record and no build-record.json; only build.stdout (ccache stats) and a staging tree remain. Reason not recorded. Study concluded reuse as ideas only (UMA triple copy, qwen4exp-only graph path; research/upstream-moe-cache-study.md section 4) | - | - | cc/om_run/build_queue.sh |
-| jetson-up1108-om7 | upstream + mmap advice combined-01-02 (incl. router prefetch patch 02) | combined-01-02 (631f1ed4) | **running** (pipeline5.sh, started 15:15; no build-record yet; patch 02 had never been compiled) | - | - | `<<PENDING: J-OM7 results>>` |
-| jetson-c1-ks (kernel-screen image) | pin + p03 + perf cases + test-backend-ops | combined-p03-perf (72d7c8a0) | **never built** (pipeline4 deadlock, 2.3; now queued after OM7 in pipeline5) | - | - | `<<PENDING: kernel screen KS>>` |
+| jetson-up1108-om7 | upstream + mmap advice combined-01-02 (incl. router prefetch patch 02) | combined-01-02 (631f1ed4) | ok (first compile of patch 02 succeeded) | 2409 s (CUDA recompiled: patch touches ggml-backend) | - | build-record.json |
+| jetson-c1-ks (kernel-screen image) | pin + p03 + perf cases + test-backend-ops | combined-p03-perf (72d7c8a0) | ok (pipeline5, after the pipeline4 deadlock) | 199 s | - | build-record.json |
 
 Build-time facts: first native Jetson build 52 min; patched rebuild with ccache 2.3-2.4 min; BUILD_JOBS=3; each image archive ~1.39 GB (all archives and build/staging trees are gitignored, D024).
 
@@ -132,9 +155,9 @@ job-ecf12fd41a accepted+ran; job-0ec3b98dbb rejected (platform linux/amd64 x2, c
 | mc-20261110-0602 | upstream + cache components, p1, `-n 64 -lm mmap -ngl 99 -cmoe -lv 4` | jetson-up1108-mc | ok x7 | base 1.14/1.20; cache2048 0.97 (64.0% hit); +dedupe 0.89 (22,437 madvise, 0 fail); +direct-fill 0.88 (**fill never activated: GGUF tensor offset not 4 KiB aligned, mmap fallback**); direct-fill + cpu-share 0.5 1.12; cache1024+direct-fill 0.93; NVMe 56.7-62.7 GiB/run in all arms | cache arms change output text (sha dc4b37... vs base 7a1541...); no KL check done |
 | numa-20261110-0622 | base,numa,numa,base with `--numa distribute` | jetson-up1108 | ok x4 but **invalid test**: `ggml_is_numa()` is n_nodes>1 so the flag is inert on single-node Orin | eval 1.17/1.19/1.20/1.22, NVMe 55.4-57.0 GiB, identical output | any A/B read from it is meaningless (D032 addendum) |
 | ra-20261110-0635 | base,rand,rand,base; `LLAMA_MMAP_ADVICE=random` (advice_log=1 only in rand arms) | jetson-up1108-ra | ok x4 | base prompt 5.68/5.69, decode 1.19/1.20, NVMe 56.6/55.7 GiB, 93/95 KiB per IO; rand prompt 1.42/1.47, decode 0.56/0.59, NVMe 24.1/23.5 GiB, 4 KiB per IO; output identical (7a1541...) | switch verified active |
-| om7-* | base/pf/pfn ABCCBA with router-informed prefetch | jetson-up1108-om7 | not started (waiting on build) | `<<PENDING: J-OM7 results>>` | patch 02 uncompiled when written |
-| SPEC2-* | n-gram self-speculation ABBA on Qwen3.6 (cc/om_spec/om_spec.py) | jetson-up1108 | not started (pipeline6 waits on PID 599920) | `<<PENDING: J-SPEC2 ngram>>` | |
-| KS-* | kernel screen bf16/q4_K/q8_0 on test-backend-ops | jetson-c1-ks | not started | `<<PENDING: kernel screen KS>>` | |
+| om7-20261110-1555 | base/pf/pfn ABCCBA with router-informed prefetch (`LLAMA_EXPERT_PREFETCH[_NEXT]`) | jetson-up1108-om7 | ok x6, ABCCBA (om7-20261110-1555): base 1.18/1.22 t/s (prompt 5.69, NVMe 57.2/55.1 GiB, 95 KiB/IO); prefetch 0.72/0.76 (prompt 1.38/1.44, 24.4/23.7 GiB, 5 KiB/IO; 20,823 advise calls, 13.5 GB advised, 0 failures); prefetch+next 0.64/0.65 (29.1 GiB, 6 KiB/IO; 50,343 calls, next-layer precision 614/20263 = 3.0%); output identical in all 6 (7a1541...). **Negative: -38% vs base**, +30% vs whole-file RANDOM (0.57). WILLNEED issued at the first CPU consumer has ~zero lead time, so faults still read 4 KiB pages; next-layer reuse of the current union is useless (3%). | |
+| SPEC2-20261110-1634 | n-gram self-speculation ABBA on Qwen3.6 (cc/om_spec/om_spec.py) | jetson-up1108 | ok x4 servers (SPEC2-20261110-1634: llama-server, `-ngl 99 -cmoe -lm mmap -c 4096 -np 1`, n_predict 96, temp 0, seed 1, ABBA base/ngram-mod. rewrite: base 0.932/0.890 t/s -> ngram-mod 1.455/1.518 (**+63%**), draft 67/67 accepted; repeat: base 0.800/0.787 -> 1.534/1.590 (**+97%**), draft 72/72; text sha identical across arms (3f4bcde6..., 8377001f...); NVMe per request 54.9/58.1 -> 43.1/43.0 GiB (rewrite), 61.4/63.1 -> 40.0/40.6 GiB (repeat), IO size kept 81-101 KiB. chat arm INVALID: raw chat.txt prompt ends generation after 1 token in all arms (needs chat template). Server base decode (0.79-0.93) is below llama-completion's 1.2 (different harness/prompts); compare only within this run.) | first attempt SPEC2-20261110-1634-FAILED-pscheck-bug: my container-alive check used `docker ps -q` (IDs, not names) and aborted every arm before the health check |
+| KS-20261110-1620 | kernel screen bf16/q4_K/q8_0 on test-backend-ops | jetson-c1-ks | KS-20261110-1620, image jetson-c1-ks (built 199 s). bf16 and q8_0 screened (MUL_MAT, MUL_MAT_ID, MUL_MAT_VEC_FUSION x n_tokens 1/8 x b 0/1, A/A2/B x3): all A/B ratios 0.96-1.10, inside the A/A spread (0.98-1.06); decode-shape (n_tokens=1) MUL_MAT_ID A/B 0.99-1.03 for both types. **The micro-screen does NOT reproduce D027** (+19.3% bf16 / -6.2% q8_0 end-to-end): the unfuse effect lives in graph-level fusion that single-op test-backend-ops cases do not exercise. q4_K arm FAILED: pipeline upper-cased the type to `Q4_K` and test-backend-ops matched no cases (pipeline bug, not rerun at closeout). | |
 | qwen36-layout.json | per-expert slice layout | - | ok | see 1.4 | |
 
 ---------------------------------------------------------------------
@@ -170,7 +193,7 @@ Class key follows D012/NEEDS-MAP: full-engine improvement / quantization-offload
 - Engine cross-check: upstream cache measured 64.0% at 2048 MiB (about 1077 expert slots at 1.9 MB). Ledger (factory-ledger.html) states replay ~54% at ~12% capacity versus 64% measured and calls that "held". Slot-to-MiB mapping and prompt equivalence between trace and engine run were not audited here.
 - D031 projection "2.4-3.4 t/s if a cache holds bytes once, Belady bound ~7.8 t/s at 2048 slots" is a model output. D032 shows the real cache did not cut NVMe reads (57-63 GiB in all arms), so that projection was NOT realized by the components tested; it remains an upper-bound estimate for a design not yet built.
 - Caveats: one trace per workload (token counts not recorded in files I read); simulator assumes an expert-granular cache, the real system is a 4 KiB page cache; static-profile result is cross-workload only (leave-one-out), not same-workload.
-- J-SPEC1 window-union replay: `<<PENDING: J-SPEC1 replay>>`
+- J-SPEC1 window-union replay: experiments/jetson/SPEC1/{SPEC1.md,results.json}; `expert_replay.py specwin` (Codex J-SPEC1; 14 tests + 5 subtests pass). 864 scenarios (4 workloads x W 1-8 x a 0.5/0.7/0.9 x LRU/Belady x 650/1300/2600 slots x optimistic/pessimistic). Best W>1 case 1.0011x (optimistic, LRU, code, 650 slots, a=0.9, W=2); a=0.7, W=4, LRU, 1300: 0.62-0.63x; all pessimistic cases slower. Reading: once a page/expert cache exists, consecutive-token expert overlap is already captured as hits at W=1, so verify batching adds no IO dedupe, while rejected drafts add misses. Simulation only; traces are natural text (no copy-heavy workload), so it does not cover n-gram on repeat text.
 
 ### E. Negative and null results (all kept)
 1. Upstream moe-cache on UMA is a net loss: decode 0.91-0.98 vs 1.18-1.21 (-17 to -23%) at 64% hit (D030); also in D032 (0.97 vs 1.14-1.20).
@@ -178,6 +201,10 @@ Class key follows D012/NEEDS-MAP: full-engine improvement / quantization-offload
 3. Direct-fill never activated (alignment); no performance claim exists for it (D032). Fix idea J-OM6b (aligned-window read) not done.
 4. GPU expert cache does not reduce NVMe traffic on UMA: 56.7-62.7 GiB per run in every arm (D032).
 5. Whole-file MADV_RANDOM: half speed, though 57% fewer bytes (D033).
+6. Router-informed WILLNEED prefetch (J-OM7, om7-20261110-1555): -38% (0.72-0.76 vs 1.18-1.22), bytes -57%, IO still 5 KiB; next-layer prediction 3% precision.
+7. Kernel screen does not predict graph-level fusion effects (KS-20261110-1620).
+8. (Not negative, listed for contrast) n-gram self-spec on copy-heavy prompts is the only over-memory win: +63%/+97% (SPEC2).
+9. Window-union replay predicts no disk-bound gain from speculative decoding on natural text (J-SPEC1).
 6. `--numa distribute` test: invalid, switch inert (D032 addendum).
 7. Static hot set from other workloads: leave-one-out 16.6% vs LRU 62.4% decode hits (simulation).
 8. Q8_0 unfuse: -6.2% decode on Orin (D027).
@@ -213,11 +240,11 @@ Source: handoff/factory-ledger.html prediction register ("4 held, 7 missed or pa
 | UMA cache that holds bytes once -> 2.4-3.4 t/s | D031 | components tested did not cut NVMe reads | untested for a correct design / not realized |
 | readahead pollution is the bottleneck; removing it helps (H-RA) | D032 | 57% of bytes wasted (confirmed) but speed halves (drive IOPS-bound) | half right: bytes yes, speed no |
 | `--numa distribute` approximates H-RA with no code | D032 | switch inert | invalid / inconclusive |
-| router-informed exact prefetch gives up to ~2x decode (IO 46 s vs 140 s) | D033 | patch uncompiled; build in progress | untested `<<PENDING: J-OM7 results>>` |
+| router-informed exact prefetch gives up to ~2x decode (IO 46 s vs 140 s) | D033 | 0.72-0.76 vs 1.18-1.22 t/s; bytes -57% but IO stays 5 KiB (no lead time) | **wrong** (as implemented) |
 | direct-fill removes copy cost | J-OM6 | never activated | untested |
-| kernel screen (test-backend-ops perf, seconds) predicts the D027 per-type rule | NEEDS-MAP/pipeline4 | not run | untested `<<PENDING: kernel screen KS>>` |
+| kernel screen (test-backend-ops perf, seconds) predicts the D027 per-type rule | NEEDS-MAP/pipeline4 | bf16/q8_0 A/B within A/A noise; q4_K arm failed (type-name bug) | **wrong** for graph-fusion changes |
 | D025/D027 transfer to sm_120 | x86 request R1 | no x86 answer | untested |
-| n-gram speculation helps a disk-bound decoder (x86 saw 2.3-3.0x on repeat text) | research/x86-c2-digest.md | J-SPEC1/J-SPEC2 not finished | untested `<<PENDING: J-SPEC1 replay>>`, `<<PENDING: J-SPEC2 ngram>>` |
+| n-gram speculation helps a disk-bound decoder (x86 saw 2.3-3.0x on repeat text) | research/x86-c2-digest.md | J-SPEC2: copy-heavy +63% (rewrite) / +97% (repeat), text identical, NVMe bytes -27..-35%; J-SPEC1 replay: no gain on natural text; chat arm invalid | **correct for copy-heavy text** (smaller than x86's 2.3-3.0x); natural text untested live (replay says ~0) |
 | replay LRU hit rate matches the engine counter | ledger "good predictor" | ~54% (12% capacity) vs 64% measured: close, slot-to-MiB mapping not audited | inconclusive-to-correct |
 | first-order model fits other drives/models | D031 | one drive, one model | inconclusive |
 
@@ -279,7 +306,7 @@ Sandbox kill, runner SIGKILL, duplicate refusal, reconcile, retry-as-new-attempt
 | build | build queue with PID-based dependency | build_queue.sh, pipeline2-6 | job IDs not pgrep patterns; one heavy build at a time; no overlap with timed runs | missing |
 | profiling/test | `resource_observe` (+io, watchdog) | om_run telemetry: NVMe GiB, avg KiB/IO, refaults, MemAvailable, zram | scope field, null-with-reason, baseline required, `host_id` = campaign id | qualified (33 tests; live kill validated after fix) |
 | profiling/test | guarded run wrapper (`om_run.sh`) | 48 guarded runs (result.json count in OM/), 5 results labelled watchdog_killed (one of them a forced test) | kills only owned container; limits as data; results.json status must separate "tripped" from "killed" | in use |
-| profiling/test | kernel screen (`test-backend-ops perf` per op x type) | would have predicted D027 per-type rule in seconds | needs a test-backend-ops build with perf cases (patch); A/A arm; not yet run | built as tool, never run `<<PENDING: kernel screen KS>>` |
+| profiling/test | kernel screen (`test-backend-ops perf` per op x type) | ran (KS-20261110-1620): did NOT predict D027 | exact type names (q4_K, case-sensitive); A/A arm; add graph-level fused cases (MUL_MAT_ID+GLU chain) or screen with a 1-layer llama-bench graph | ran; useful for kernel-local changes only |
 | profiling/test | decode-path quality gate (ub 1 KL vs saved base logits) | J-E005: ppl20 identical, ub1 KL 2.7e-4 | stores base logits per model; bounded chunk count for large models | in use |
 | tool | `expert_replay` + `routing_trace` generic | replay sweep, leave-one-out profiles | trace schema + completeness footer (Strata reader silently dropped truncated tails); slot-to-bytes mapping | qualified (10 tests; trace 56 tests) |
 | tool | `gguf_manifest` | bf16 file sha differs from x86 | x86 to run the same on its file | implemented |
@@ -290,7 +317,7 @@ Sandbox kill, runner SIGKILL, duplicate refusal, reconcile, retry-as-new-attempt
 | methodology | fair over-memory baseline (`-lm mmap`, `-cmoe/-ncmoe`) and report the auto default failure separately | D030 | baseline recipe in the test spec | adopt |
 | methodology | do not read contaminated timing; mark UNSCORED | D029, upv | concurrency guard in scheduler | adopt |
 | component | `moe_dispatch_sm87` patch 03 | +19.3% bf16, +23.6% Q4_K, -6.2% Q8_0 | env-gated default = upstream; per-type x platform applicability table; qualify on the target with the 3-model A/B | qualified on Orin; x86 untested |
-| component | `mmap_advice` (01 random, 02 router prefetch) | 01 measured (D033); 02 uncompiled | opt-in env; startup log naming policy and consumer hook; counters at exit; no extra GPU sync | 01 tested; 02 `<<PENDING: J-OM7 results>>` |
+| component | `mmap_advice` (01 random, 02 router prefetch) | 01 measured (D033); 02 built + ABCCBA (om7): -38%, output identical | opt-in env; startup log naming policy and consumer hook; counters at exit; no extra GPU sync | tested, negative on this drive; retain as an instrumented hook (exact per-layer expert IDs on host) for an aligned-read/pinned-buffer loader |
 | component | `moe_cache_profile` (profile pin, dedupe, direct-fill) | D030/D032 negative | only for discrete GPUs; UMA double-copy; needs KL check because text changes | tested, negative on UMA |
 
 ### Upstream and external reuse
@@ -306,16 +333,13 @@ Sandbox kill, runner SIGKILL, duplicate refusal, reconcile, retry-as-new-attempt
 - Copying experts into a separate device bank on UMA (D030/D032).
 - Treating hit rate as speed on unified memory, batch-512 ppl as a decode-kernel check, binary hash equality as "same build" (D026), raw t/s across hosts.
 - Unfusing Q8_0 gate/up on Orin (-6.2%).
-- `pgrep -f` wait loops launched from a shell whose command line contains the pattern.
+- `pgrep -f`/`pkill -f` patterns launched from a shell whose command line contains the pattern (pipeline4 deadlocked ~8.7 h; a closeout `pkill -f` also killed its own shell).
 
 ---------------------------------------------------------------------
 
 ## 7. Open items, gaps and placeholders
 
-- `<<PENDING: J-OM7 results>>`: patch 02 (router-informed WILLNEED prefetch) was written without compiling or running; the build `jetson-up1108-om7` was in progress at drafting time. Nothing about its correctness, output equality, or speed is established. Planned arms: base, prefetch, prefetch+next, ABCCBA (om7-* dir).
-- `<<PENDING: kernel screen KS>>`: image jetson-c1-ks and KS-* results do not exist; queued after OM7 in pipeline5.
-- `<<PENDING: J-SPEC1 replay>>`: `cc/expert_replay/expert_replay.py` (+tests) is modified in the working tree and `experiments/jetson/SPEC1/` is empty; the Codex run's final.txt is a partial log with no final message.
-- `<<PENDING: J-SPEC2 ngram>>`: pipeline6.sh waits on pipeline5 (PID 599920).
-- `<<PENDING: final commit/push/GPU state>>`: final HEAD, push status, any running containers/builds, uncommitted files (36 entries now).
+- KS q4_K arm not rerun (type-name bug in pipeline5; use `--types q4_K`).
+- SPEC2 chat arm needs a chat-templated prompt (`/v1/chat/completions`) and >=2 rounds; MTP not tried (J-SPEC1 predicts ~break-even; would need the 22.66 GB -MTP GGUF).
 - Gaps found while drafting: Granite safetensors sha and the KL base file sha not recorded on Jetson; Qwen file sha not re-verified locally; trace token counts not recorded; J-OM6b not done; why pr31469 was dropped not recorded; early D028 kills unexplained; no x86 reply to R1-R6 (sm_120 transfer of D025/D027 is the highest-value open test); J-T2 Codex run in the artifact log ended with API 401 errors, how the resource_observe code was then completed is not documented in files I read; the factory-ledger register predates D031-D033 and needs regeneration.
-- Honest status: two local full-engine gains (A1, A2) and one dependency gain (A3) exist; no over-memory component of ours has beaten the best baseline (`-lm mmap -cmoe`, ~1.2-1.36 t/s) yet.
+- Honest status: two local full-engine gains (A1, A2) and one dependency gain (A3) exist; no over-memory *loader/cache* component of ours has beaten the baseline (`-lm mmap -cmoe`, ~1.2-1.36 t/s). The only over-memory speedup is upstream n-gram self-speculation on copy-heavy prompts (SPEC2: +63%/+97%, text identical), which is a decoding-strategy gain, workload-dependent.
