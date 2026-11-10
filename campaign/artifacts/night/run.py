@@ -222,11 +222,11 @@ def phase_e4(engine="up1"):
                 server_run("e4", arm, engine, Q36, a, P, rnd=rnd, extra={"B": B})
 
 
-def ppl(exp, arm, engine, model, args, kld_base=None, kld_save=None, chunks=8):
+def ppl(exp, arm, engine, model, args, kld_base=None, kld_save=None, chunks=8, ub=None):
     quiet = wait_quiet()
     mounts = ("-v", "/home/muk/models/campaign/data/wikitext/wikitext-2-raw:/w:ro", "-v", f"{OUT}/kl:/kl")
     cmd = docker_base(f"night-ppl-{os.getpid()}", engine, model, "/app/llama-perplexity", mounts) + [
-        "-m", f"/m/{model[1]}", "-f", "/w/wiki.test.raw", "--chunks", str(chunks), "-c", "512", "-fa", "on", "-lv", "4"] + args
+        "-m", f"/m/{model[1]}", "-f", "/w/wiki.test.raw", "--chunks", str(chunks), "-c", "512", "-fa", "on", "-lv", "4"] + args + (["-ub", str(ub)] if ub else [])
     if kld_save: cmd += ["--kl-divergence-base", f"/kl/{kld_save}"]
     if kld_base: cmd += ["--kl-divergence-base", f"/kl/{kld_base}", "--kl-divergence"]
     pk = Peak(); r = sh(cmd, timeout=3600); peak = pk.done()
@@ -234,7 +234,7 @@ def ppl(exp, arm, engine, model, args, kld_base=None, kld_save=None, chunks=8):
     open(f"{OUT}/logs/{exp}-{arm}-ppl.log", "w").write(txt)
     g = lambda pat: (re.findall(pat, txt) or [None])[-1]
     rec = dict(exp=exp, arm=arm, engine=engine, model=model[1], args=args, rc=r.returncode, peak_mib=peak, quiet=quiet,
-               ppl=g(r"Final estimate: PPL = ([\d.]+)"), mean_kld=g(r"Mean\s+KLD:\s+([\d.]+)"),
+               ppl=g(r"Final estimate: PPL = ([\d.]+)"), mean_kld=g(r"Mean\s+KLD:\s+(-?[\d.]+)"),
                same_top=g(r"Same top p:\s+([\d.]+)"), t=time.strftime("%H:%M:%S"))
     record(rec)
     return rec
@@ -247,6 +247,18 @@ def phase_kld():
                         ("C1-6000", "rel1", ["-ngl", "99", "--n-cpu-moe", "48", "--moe-cache-mib", "6000"])] + \
                        ([("C3-6000", "up1", ["-ngl", "99", "--n-cpu-moe", "48", "--moe-cache-mib", "6000", "--moe-cache-cpu-share", "0.9"])] if "up1" in ENG else []):
         ppl("kld", arm, eng, QWEN, a, kld_base="qwen-k18.kl")
+
+
+def phase_kld2():
+    """D043 amendment A2 (written AFTER E1 + first KLD results): decode-path KLD at -ub 1 against the same K18 reference."""
+    S = lambda K: ["-ngl", "99", "--n-cpu-moe", str(K)]
+    C = lambda mib, cs=None: ["-ngl", "99", "--n-cpu-moe", "48", "--moe-cache-mib", str(mib)] + (["--moe-cache-cpu-share", str(cs)] if cs is not None else [])
+    arms = [("S1-K18-ub1", "rel1", S(18)), ("S1-K42-ub1", "rel1", S(42)), ("S2-K42-ub1", "up1", S(42)),
+            ("C1-6000-ub1", "rel1", C(6000)), ("C2-6000-ub1", "up1", C(6000, 0)), ("C3-6000-ub1", "up1", C(6000, 0.9)),
+            ("C3-2005-ub1", "up1", C(2005, 0.9))]
+    for arm, eng, a in arms:
+        ppl("kld2", arm, eng, QWEN, a, kld_base="qwen-k18.kl", ub=1)
+    ppl("kld2", "C2-6000-ub2048", "up1", C(6000, 0), kld_base="qwen-k18.kl")
 
 
 if __name__ == "__main__":

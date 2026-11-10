@@ -61,3 +61,9 @@ Budgets: B ≈ 4, 6, 8 and 10 GB.
 ## Amendment A1 (made before any E1–E4 result exists)
 - HF downloads run at about 1.4 MB/s and take about 6 h. A throttled `curl` (nice 19) is allowed during timed arms. Compiles and Codex processes are still not allowed.
 - Interference control: the runner times the S1-K30 chat arm 3× with the download running, then 3× with it paused (SIGSTOP/SIGCONT on the curl process). If the medians differ by more than 2%, every arm timed during the download is marked `contaminated` and rerun after the download finishes.
+
+## Amendment A2 (made AFTER E1 and the first KLD results, so it is labelled as post-hoc)
+- **Finding that triggered it:** the frozen KLD ran `llama-perplexity` at the default batch of 2048. At large batches, ggml offloads CPU-resident expert matmuls to the GPU, so placement barely changes the math: S1-K42 vs the K18 reference gave same-top 100.000% and KLD around 0. That run therefore measured the prompt path, not decode-path drift. C3-6000 still drifted in that run (mean KLD 0.0054, same-top 96.72 ± 0.40%), because CPU-share computes some experts on the CPU even in batches.
+- **Added `kld2`:** the same 8×512 chunks and the same K18 reference, but at `-ub 1`, so every token takes the decode path. Arms: S1-K18, S1-K42, S2-K42, C1-6000, C2-6000, C3-6000, C3-2005, plus C2-6000 at the default batch.
+- **Gate unchanged:** mean KLD ≤ 0.01 and same-top ≥ 97%. The original KLD results stand as recorded. C3-6000 misses the 97% same-top gate at the default batch by 0.28 points, which is within 1σ.
+- A parser bug was fixed: the mean-KLD regex dropped negative values, so near-zero results were recorded as null.
