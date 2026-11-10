@@ -258,7 +258,7 @@ def phase_kld2():
             ("C3-2005-ub1", "up1", C(2005, 0.9))]
     for arm, eng, a in arms:
         ppl("kld2", arm, eng, QWEN, a, kld_base="qwen-k18.kl", ub=1)
-    ppl("kld2", "C2-6000-ub2048", "up1", C(6000, 0), kld_base="qwen-k18.kl")
+    ppl("kld2", "C2-6000-ub2048", "up1", QWEN, C(6000, 0), kld_base="qwen-k18.kl")
 
 
 if __name__ == "__main__":
