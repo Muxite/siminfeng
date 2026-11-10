@@ -46,7 +46,8 @@ def test_profiles_and_default(lab, monkeypatch, tmp_path):
     (home / 'host_id').write_text('')
     assert lab.load_host()[0]['host_id'] == 'x86-main'
     with pytest.raises(ValueError): lab.load_host('../escape')
-    with pytest.raises(FileNotFoundError): lab.load_host('unknown')
+    with pytest.raises(SystemExit) as ex: lab.load_host('unknown')
+    assert ex.value.code == 12
 
 
 def test_x86_golden_argv(lab):
@@ -118,6 +119,8 @@ def test_tegrastats_sampler_and_state(lab, monkeypatch):
         def terminate(self): calls.append('terminate')
         def wait(self, **kwargs): calls.append('wait')
     def popen(cmd, **kwargs):
+        assert not kwargs.get('start_new_session', False)
+        assert 'process_group' not in kwargs
         calls.append(cmd)
         return Child()
     monkeypatch.setattr(lab.subprocess, 'Popen', popen)
@@ -260,3 +263,202 @@ def test_run_admission_guard_without_running_job(lab, stored, current, capsys):
 def test_run_admission_guard_accepts_legacy_and_current(lab):
     lab.require_admission(None, {'decision': 'accepted', 'reasons': []})
     lab.require_admission({'decision': 'accepted'}, {'decision': 'accepted'})
+
+
+@pytest.mark.parametrize('text,value', [('16gb', 16*1024**3), ('512mb', 512*1024**2),
+                                      ('2kb', 2048), ('2b', 2), ('16g', 16*1024**3)])
+def test_docker_memory_suffixes(lab, text, value):
+    assert lab.memory_bytes(text) == value
+
+
+def test_legacy_run_skips_admission(lab, monkeypatch, tmp_path):
+    def forbidden(*args): pytest.fail('legacy admission was re-evaluated')
+    monkeypatch.setattr(lab, 'admission', forbidden)
+    assert lab.check_run_admission({}, str(tmp_path/'absent'), {}, {}, {}, '') == (None, 'legacy-unrecorded')
+
+
+def test_admission_exception_and_deduplication(lab, admission_case):
+    img, spec = admission_case
+    lab.TESTS['smoke'] = {'memory': 'invalid'}
+    result = lab.admission(img, spec, profile(lab), 'digest')
+    assert result['decision'] == 'needs_information'
+    assert 'invalid memory' in result['reasons'][0]
+    lab.TESTS['smoke'] = {}
+    img['platform'] = img['target_requirements']['platform'] = 'wrong'
+    result = lab.admission(img, spec, profile(lab), 'digest')
+    assert result['reasons'].count('platform mismatch: wrong') == 1
+
+
+def test_submit_unknown_and_exception_are_complete(lab, monkeypatch, admission_case, capsys):
+    img, spec = admission_case
+    host = profile(lab)
+    monkeypatch.setattr(lab, 'load_host', lambda: (host, 'digest'))
+    args = SimpleNamespace(image='missing', model=spec['model'], model_sha256=None,
+                           data=None, tests='smoke', key='unknown', res=None)
+    lab.cmd_submit(args)
+    jid = capsys.readouterr().out.strip()
+    directory = Path(lab.LAB)/'jobs'/jid
+    decision = json.loads((directory/'admission.json').read_text())
+    assert decision['decision'] == 'needs_information'
+    assert decision['reasons'] == ['unknown image record missing']
+    job = json.loads((directory/'job.json').read_text())
+    assert job['admission_sha256'] == lab.sha(directory/'admission.json')
+    images = Path(lab.LAB)/'images'; images.mkdir()
+    (images/'broken.json').write_text(json.dumps(img))
+    args.image = 'broken'; args.key = 'broken'
+    lab.TESTS['smoke'] = {'memory': 'bad'}
+    lab.cmd_submit(args)
+    directory = Path(lab.LAB)/'jobs'/capsys.readouterr().out.strip()
+    assert json.loads((directory/'admission.json').read_text())['decision'] == 'needs_information'
+    assert json.loads((directory/'job.json').read_text())['admission_sha256'] == lab.sha(directory/'admission.json')
+
+
+def test_admission_hash_guard(lab, monkeypatch, admission_case, tmp_path):
+    img, spec = admission_case
+    host = profile(lab)
+    path = tmp_path/'admission.json'
+    path.write_text(json.dumps({'decision': 'accepted'}))
+    job = {'admission_sha256': lab.sha(path)}
+    assert lab.check_run_admission(job, path, img, spec, host, 'digest') == (job['admission_sha256'], 'accepted')
+    path.write_text('tampered')
+    with pytest.raises(SystemExit) as ex:
+        lab.check_run_admission(job, path, img, spec, host, 'digest')
+    assert ex.value.code == 11
+    path.unlink()
+    with pytest.raises(SystemExit) as ex:
+        lab.check_run_admission(job, path, img, spec, host, 'digest')
+    assert ex.value.code == 11
+
+
+def test_declared_image_and_immutable_platform(lab, monkeypatch, admission_case):
+    monkeypatch.setattr(lab, 'sh', lambda *a, **kw: SimpleNamespace(returncode=1, stderr='missing'))
+    args = SimpleNamespace(name='declared', ref='remote:tag', declared=True, platform='linux/arm64', requirements=None)
+    lab.cmd_image(args)
+    path = Path(lab.LAB)/'images/declared.json'
+    img = json.loads(path.read_text())
+    assert img['verified_locally'] is False and img['provenance'] == 'declared'
+    template, spec = admission_case
+    img['target_requirements'] = template['target_requirements']
+    result = lab.admission(img, spec, profile(lab), 'digest')
+    assert result['decision'] == 'needs_information'
+    assert 'image not verified on this host' in result['reasons']
+    img['platform'] = 'linux/amd64'
+    assert lab.admission(img, spec, profile(lab), 'digest')['decision'] == 'rejected'
+    args.platform = 'linux/amd64'
+    with pytest.raises(SystemExit, match='different image id/platform'): lab.cmd_image(args)
+    assert json.loads(path.read_text())['platform'] == 'linux/arm64'
+    args.platform = 'linux/arm64'; args.declared = False
+    monkeypatch.setattr(lab, 'sh', lambda *a, **kw: SimpleNamespace(returncode=0, stdout='sha256:new|[]|today'))
+    with pytest.raises(SystemExit, match='different image id/platform'): lab.cmd_image(args)
+
+
+def test_image_load_metadata_passthrough(lab, monkeypatch):
+    args = lab.ap.parse_args(['image-load', 'x', '--archive', 'file', '--sha256', 'digest',
+                              '--expect-config-id', 'config', '--platform', 'linux/arm64',
+                              '--requirements', 'build.json'])
+    monkeypatch.setattr(lab, 'sha', lambda p: 'digest')
+    monkeypatch.setattr(lab, 'archive_ids', lambda p: {'config': 'config', 'index': 'index'})
+    monkeypatch.setattr(lab, 'sh', lambda *a: SimpleNamespace(returncode=0, stdout='index'))
+    seen = []
+    monkeypatch.setattr(lab, 'cmd_image', lambda a: seen.append((a.platform, a.requirements, a.ref)))
+    lab.cmd_imageload(args)
+    assert seen == [('linux/arm64', 'build.json', 'index')]
+
+
+def test_baseline_waits_and_times_out_with_reason(lab, monkeypatch):
+    sampler = lab.MemorySampler.__new__(lab.MemorySampler)
+    sampler.backend = 'tegrastats'; sampler.reader = object()
+    values = iter([(None, 'waiting'), (100, None)])
+    monkeypatch.setattr(sampler, 'sample', lambda: next(values))
+    sleeps = []
+    monkeypatch.setattr(lab.time, 'sleep', lambda seconds: sleeps.append(seconds))
+    assert sampler.baseline() == (100, None)
+    assert sleeps
+    clock = iter([0, 0, 2])
+    monkeypatch.setattr(lab.time, 'monotonic', lambda: next(clock))
+    monkeypatch.setattr(sampler, 'sample', lambda: (None, 'no sample'))
+    assert sampler.baseline() == (None, 'no sample')
+
+
+@pytest.mark.parametrize('apps', ['[N/A]', '[Not Supported]'])
+def test_optional_nvidia_fields_remain_raw(lab, monkeypatch, apps):
+    responses = iter([SimpleNamespace(returncode=0, stdout='123 MiB, [N/A], 40, [Not Supported]', stderr=''),
+                      SimpleNamespace(returncode=0, stdout=apps, stderr='')])
+    monkeypatch.setattr(lab, 'sh', lambda *a: next(responses))
+    result = lab.gpu_state(profile(lab, 'x86-main'))
+    assert result['gpu'] == '123 MiB, [N/A], 40, [Not Supported]'
+    assert result['compute_apps'] == [apps]
+    assert lab.exclusive_state(result) is False
+    assert lab.exclusive_state({'compute_apps': None}) is None
+    assert lab.exclusive_state({'compute_apps': []}) is True
+
+
+def test_missing_host_names_expected_path(lab, capsys):
+    with pytest.raises(SystemExit) as ex: lab.load_host('missing-host')
+    assert ex.value.code == 12
+    assert str(ROOT/'lab/hosts/missing-host.json') in capsys.readouterr().out
+
+
+def test_sampler_owner_signal_and_reconcile_cleanup(lab, monkeypatch, tmp_path):
+    calls = []
+    child = SimpleNamespace(pid=123)
+    sampler = SimpleNamespace(reader=SimpleNamespace(p=child), close=lambda: calls.append('close'))
+    owner = tmp_path/'owner.json'; owner.write_text('{}')
+    monkeypatch.setattr(lab, 'proc_start', lambda pid: 'start')
+    monkeypatch.setattr(lab.signal, 'signal', lambda sig, handler: calls.append((sig, handler)))
+    lab.record_sampler(sampler, owner)
+    saved = json.loads(owner.read_text())
+    assert saved == {'tegrastats_pid': 123, 'tegrastats_start': 'start'}
+    assert len(calls) == 3
+    with pytest.raises(SystemExit) as ex: lab.sampler_signal(lab.signal.SIGTERM, None)
+    assert ex.value.code == 128 + lab.signal.SIGTERM and calls[-1] == 'close'
+    monkeypatch.setattr(lab.os, 'kill', lambda pid, sig: calls.append((pid, sig)))
+    lab.cleanup_sampler(saved)
+    assert calls[-1] == (123, lab.signal.SIGKILL)
+    saved['tegrastats_start'] = 'other'
+    before = len(calls); lab.cleanup_sampler(saved)
+    assert len(calls) == before
+
+
+def test_submission_order_and_first_queued_hash(lab, monkeypatch, admission_case, capsys):
+    img, spec = admission_case
+    host = profile(lab)
+    monkeypatch.setattr(lab, 'load_host', lambda: (host, 'digest'))
+    images = Path(lab.LAB)/'images'; images.mkdir(parents=True)
+    (images/'test.json').write_text(json.dumps(img))
+    jdir = Path(lab.LAB)/'jobs'/('job-' + lab.sha_s('order')[:10])
+    original_admission = lab._admission
+    def compute(*args):
+        assert not jdir.exists(), 'admission must be computed before any job writes'
+        return original_admission(*args)
+    monkeypatch.setattr(lab, '_admission', compute)
+    writes = []
+    original_dump = lab.json.dump
+    def dump(value, target, **kwargs):
+        writes.append(Path(target.name).name)
+        if Path(target.name).name == 'job.json':
+            assert (jdir/'admission.json').is_file()
+            assert value['admission_sha256'] == lab.sha(jdir/'admission.json')
+        return original_dump(value, target, **kwargs)
+    monkeypatch.setattr(lab.json, 'dump', dump)
+    lab.cmd_submit(SimpleNamespace(image='test', model=spec['model'], model_sha256=None,
+                                   data=spec['data'], tests='smoke', key='order', res=None))
+    assert writes[:2] == ['admission.json', 'job.json']
+    job = json.loads((jdir/'job.json').read_text())
+    att, adir, token, state = lab.begin_attempt(str(jdir), job['job'], job['admission_sha256'], 'accepted')
+    rows = [json.loads(line) for line in (Path(adir)/'state.jsonl').read_text().splitlines()]
+    assert len(rows) == 1 and rows[0]['state'] == 'queued'
+    assert rows[0]['admission_sha256'] == job['admission_sha256']
+
+
+def test_reconcile_cleans_orphan_even_for_terminal_attempt(lab, monkeypatch):
+    adir = Path(lab.LAB)/'jobs/job-x/att-1'; adir.mkdir(parents=True)
+    owner = {'runner_pid': 100, 'runner_start': 'old', 'tegrastats_pid': 200,
+             'tegrastats_start': 'child', 'token': 'token'}
+    (adir/'owner.json').write_text(json.dumps(owner))
+    (adir/'state.jsonl').write_text(json.dumps({'state': 'terminal'}) + '\n')
+    monkeypatch.setattr(lab, 'proc_start', lambda pid: 'child' if pid == 200 else None)
+    killed = []
+    monkeypatch.setattr(lab.os, 'kill', lambda pid, sig: killed.append((pid, sig)))
+    lab.cmd_reconcile(SimpleNamespace())
+    assert killed == [(200, lab.signal.SIGKILL)]

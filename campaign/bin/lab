@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """lab — feasibility core of a "lab": image(container) + tests -> job -> attempts -> evidence. No UI. Discovery prototype.
-  lab image add NAME REF [--platform P] [--requirements BUILD.json]   register an image by immutable id/digest
+  lab image add NAME REF [--declared] [--platform P] [--requirements BUILD.json]   register an image by immutable id/digest
   lab submit --image N --model P --tests a,b --key K [--res cpus=8,memory=16g,timeout_s=300]   idempotent by key; job.json is immutable
   lab run JOB                       new attempt (retry = new attempt); no GPU admission control (lock removed)
   lab cancel JOB ATT                request cancellation (confirmed only when owned containers are gone)
   lab status [JOB]                  states
   lab reconcile                     inspect non-terminal attempts against REAL processes/containers; never trusts heartbeats
   lab register JOB ATT              register result into index (idempotent; stale/conflicting rejected)
+Tegrastats inherits the runner process group and is closed on exit/signals.
+SIGKILL of the runner can orphan it; reconcile kills the recorded lab child
+using owner.json PID + process start time.
 Store: $LAB/{images,jobs,index}. Fault injection for recovery tests: LAB_FAULT=die_after_start|die_in_export
 """
-import json, sys, os, re, time, uuid, hashlib, fcntl, subprocess, argparse, shutil, datetime as dt, glob, shlex, importlib.util, math
+import atexit, signal, json, sys, os, re, time, uuid, hashlib, fcntl, subprocess, argparse, shutil, datetime as dt, glob, shlex, importlib.util, math
 LAB = os.environ.get("LAB", os.path.expanduser("~/projects/siminfeng/campaign/lab"))
 CID = os.environ.get("CAMPAIGN_ID", "c1")
 now = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
@@ -34,7 +37,9 @@ def load_host(host_id=None):
         host_id = host_id or "x86-main"
     if not re.fullmatch(r"[A-Za-z0-9_-]+", host_id): raise ValueError("invalid host id")
     path = os.path.join(ROOT, "lab", "hosts", host_id + ".json")
-    profile = json.load(open(path))
+    try: profile = json.load(open(path))
+    except FileNotFoundError:
+        print("ERROR: unknown host or missing profile; expected " + path); sys.exit(12)
     if profile["host_id"] != host_id: raise ValueError("host profile id mismatch")
     return profile, sha(path)
 
@@ -45,12 +50,20 @@ def gpu_request(host):
     raise ValueError("unsupported GPU request")
 
 def memory_bytes(value):
-    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([bkmg]?)", str(value).lower())
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([bkmg]?)(?:b)?", str(value).lower())
     if not m: raise ValueError("invalid memory: " + str(value))
     return float(m[1]) * 1024 ** ("bkmg".index(m[2]) if m[2] else 0)
 
 def admission(img, spec, host, profile_sha):
+    try: return _admission(img, spec, host, profile_sha)
+    except Exception as ex:
+        return dict(decision="needs_information", reasons=["admission error: " + str(ex)], host_id=host["host_id"], host_profile_sha256=profile_sha)
+
+def _admission(img, spec, host, profile_sha):
     rejected, missing, notes = [], [], []
+    if img.get("unknown_record"):
+        return dict(decision="needs_information", reasons=["unknown image record " + img["unknown_record"]], host_id=host["host_id"], host_profile_sha256=profile_sha)
+    if img.get("verified_locally") is False: missing.append("image not verified on this host")
     req = img.get("target_requirements") or {}
     legacy = host["host_id"] == "x86-main" and not img.get("platform") and not req
     if legacy: notes.append("legacy image record: platform unverified")
@@ -77,7 +90,7 @@ def admission(img, spec, host, profile_sha):
         if td.get("model_file") and not os.path.isfile(os.path.join(os.path.dirname(spec["model"]), td["model_file"])): missing.append("test model path missing: " + test)
     for key in ("model", "data"):
         if (key == "model" or spec.get(key)) and not os.path.isfile(spec.get(key) or ""): missing.append(key + " path missing")
-    return dict(decision="rejected" if rejected else "needs_information" if missing else "accepted", reasons=rejected + missing + notes,
+    return dict(decision="rejected" if rejected else "needs_information" if missing else "accepted", reasons=list(dict.fromkeys(rejected + missing + notes)),
                 host_id=host["host_id"], host_profile_sha256=profile_sha)
 
 def require_admission(*decisions):
@@ -106,8 +119,19 @@ class MemorySampler:
     def __init__(self, host):
         self.backend = host["gpu"]["sampler"]; self.reader = None; self.reason = None
         if self.backend == "tegrastats":
-            try: self.reader = observer().TegrastatsReader(250)
+            try:
+                self.reader = observer().TegrastatsReader(250)
+                # Reader inherits the runner process group (no new session).
+                atexit.register(self.close)
             except OSError as ex: self.reason = str(ex)
+    def baseline(self):
+        deadline = time.monotonic() + 2
+        while True:
+            value, reason = self.sample()
+            remaining = deadline - time.monotonic()
+            if value is not None or self.backend != "tegrastats" or remaining <= 0 or not self.reader:
+                return value, reason
+            time.sleep(min(0.025, remaining))
     def sample(self):
         if self.backend == "tegrastats":
             lines = self.reader.drain() if self.reader else []
@@ -118,9 +142,11 @@ class MemorySampler:
         except OSError as ex: return None, str(ex)
     def close(self):
         if self.reader:
-            self.reader.close()
-            try: self.reader.p.wait(timeout=2)
-            except subprocess.TimeoutExpired: self.reader.p.kill(); self.reader.p.wait()
+            reader, self.reader = self.reader, None
+            try: reader.close()
+            except ProcessLookupError: pass
+            try: reader.p.wait(timeout=2)
+            except subprocess.TimeoutExpired: reader.p.kill(); reader.p.wait()
 
 def append(path, rec):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -173,9 +199,9 @@ def gpu_state(host=None):
         r = sh(["nvidia-smi","--query-gpu=memory.used,clocks.sm,temperature.gpu,power.draw","--format=csv,noheader"])
         a = sh(["nvidia-smi","--query-compute-apps=pid,used_memory","--format=csv,noheader"])
         q = r.stdout.strip(); apps = a.stdout.strip().splitlines()
-        if r.returncode or a.returncode or not q or re.search(r"N/A|Not Supported", q + a.stdout, re.I):
+        if r.returncode or not q or re.search(r"N/A|Not Supported", q.split(",")[0], re.I):
             return dict(gpu=None, compute_apps=None, unavailable=["nvidia-smi fields unavailable: " + (r.stderr + a.stderr + q).strip()])
-        return dict(gpu=q, compute_apps=apps)
+        return dict(gpu=q, compute_apps=None if a.returncode else apps)
     except OSError as ex: return dict(gpu=None, compute_apps=None, unavailable=[str(ex)])
 
 def read_int(path):
@@ -187,17 +213,23 @@ def cid_cgroup(cname):
     return f"/sys/fs/cgroup/system.slice/docker-{cid}.scope" if cid else None
 
 def cmd_image(a):
-    ref = a.ref; r = sh(["docker", "image", "inspect", ref, "-f", "{{.Id}}|{{json .RepoDigests}}|{{.Created}}"])
-    if r.returncode: sys.exit("image not present locally: " + r.stderr)
-    iid, rd, created = r.stdout.strip().split("|")
-    rec = dict(name=a.name, ref=ref, image_id=iid, repo_digests=json.loads(rd), created=created, registered=now())
+    ref = a.ref
+    declared = getattr(a, "declared", False)
+    if declared and not getattr(a, "platform", None): sys.exit("--declared requires --platform")
+    r = None if declared else sh(["docker", "image", "inspect", ref, "-f", "{{.Id}}|{{json .RepoDigests}}|{{.Created}}"])
+    if r and r.returncode: sys.exit("image not present locally: " + r.stderr)
+    iid, rd, created = (None, "[]", None) if declared else r.stdout.strip().split("|")
+    rec = dict(name=a.name, ref=ref, image_id=iid, repo_digests=json.loads(rd), created=created, registered=now(), verified_locally=not declared, provenance="declared" if declared else "local")
     requirements = getattr(a, "requirements", None)
     if requirements:
         build = json.load(open(requirements)); rec["target_requirements"] = build.get("target_requirements", {})
         rec["platform"] = build.get("platform") or rec["target_requirements"].get("platform")
     if getattr(a, "platform", None): rec["platform"] = a.platform
     p = os.path.join(LAB, "images", a.name + ".json"); os.makedirs(os.path.dirname(p), exist_ok=True)
-    if os.path.exists(p) and json.load(open(p))["image_id"] != iid: sys.exit("name already bound to a different image id (images are immutable)")
+    if os.path.exists(p):
+        old = json.load(open(p))
+        if old["image_id"] != iid or old.get("platform") != rec.get("platform") or (iid is None and old.get("ref") != ref):
+            sys.exit("name already bound to a different image id/platform (images are immutable)")
     json.dump(rec, open(p, "w"), indent=1); print(jd(rec))
 
 def archive_ids(path):
@@ -235,7 +267,8 @@ def cmd_chaos(a):
     append(os.path.join(LAB, "jobs", a.job, a.att, "chaos.jsonl"), dict(ts=now(), action="kill-sandbox", containers=cs)); print("killed owned containers:", cs)
 
 def cmd_submit(a):
-    img = json.load(open(os.path.join(LAB, "images", a.image + ".json")))
+    try: img = json.load(open(os.path.join(LAB, "images", a.image + ".json")))
+    except FileNotFoundError: img = dict(image_id=None, unknown_record=a.image)
     host, profile_sha = load_host()
     res = dict(cpus=str(host["resources_max"]["cpus"]), memory=host["resources_max"]["memory"], pids="512", timeout_s="300", gpu_wait_s="600"); res.update(dict(kv.split("=") for kv in (a.res or "").split(",") if kv))
     spec = dict(image=a.image, image_id=img["image_id"], model=os.path.abspath(a.model), model_sha256=a.model_sha256 or (sha(a.model) if os.path.isfile(a.model) else None),
@@ -245,10 +278,11 @@ def cmd_submit(a):
         old = json.load(open(p))["spec"]
         if old != spec: sys.exit(f"idempotency key reused with DIFFERENT spec -> rejected (job {jid})")
         print(f"duplicate submission: existing {jid}"); return
-    os.makedirs(jdir); json.dump(dict(job=jid, submitted=now(), spec=spec, spec_sha256=sha_s(jd(spec))), open(p, "w"), indent=1); os.chmod(p, 0o444)
     decision = admission(img, spec, host, profile_sha)
+    os.makedirs(jdir)
     apath = os.path.join(jdir, "admission.json")
     json.dump(decision, open(apath, "w"), indent=1); os.chmod(apath, 0o444)
+    json.dump(dict(job=jid, submitted=now(), spec=spec, spec_sha256=sha_s(jd(spec)), admission_sha256=sha(apath)), open(p, "w"), indent=1); os.chmod(p, 0o444)
     append(os.path.join(jdir, "job.log"), dict(ts=now(), ev="submitted")); print(jid)
 
 def owned_containers(att, token=None):
@@ -270,14 +304,59 @@ def container_argv(host, job, att, token, cname, spec, img, td):
     cmd += td["args"]
     return cmd
 
+def check_run_admission(job, apath, img, spec, host, profile_sha):
+    expected = job.get("admission_sha256")
+    if not os.path.exists(apath) and not expected:
+        return None, "legacy-unrecorded"
+    if os.path.exists(apath) and not expected:   # J-T4-era job: admission recorded before hashes existed
+        rec = json.load(open(apath)); require_admission(rec, admission(img, spec, host, profile_sha))
+        return None, "recorded-unhashed (pre-J-T4b)"
+    if not os.path.exists(apath) or sha(apath) != expected:
+        print("REJECT: admission hash mismatch"); sys.exit(11)
+    require_admission(json.load(open(apath)), admission(img, spec, host, profile_sha))
+    return expected, "accepted"
+
+def exclusive_state(post):
+    return None if post["compute_apps"] is None else post["compute_apps"] == []
+
+def sampler_signal(signum, frame):
+    for sampler in list(_samplers): sampler.close()
+    raise SystemExit(128 + signum)
+
+_samplers = []
+def record_sampler(sampler, owner_path):
+    _samplers.append(sampler)
+    if sampler.reader:
+        child = sampler.reader.p
+        owner = json.load(open(owner_path))
+        owner.update(tegrastats_pid=child.pid, tegrastats_start=proc_start(child.pid))
+        json.dump(owner, open(owner_path, "w"))
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(sig, sampler_signal)
+
+def cleanup_sampler(owner):
+    # SIGKILL cannot run handlers and can orphan tegrastats. Reconcile kills
+    # only the recorded lab child, checking start time to avoid PID reuse.
+    pid, start = owner.get("tegrastats_pid"), owner.get("tegrastats_start")
+    if pid and start and proc_start(pid) == start:
+        try: os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError: pass
+
+def begin_attempt(jdir, job, admission_sha, admission_status):
+    n = len(glob.glob(os.path.join(jdir, "att-*"))) + 1; att = f"att-{n}"; adir = os.path.join(jdir, att); os.makedirs(adir)
+    token = uuid.uuid4().hex
+    json.dump(dict(attempt=att, runner_pid=os.getpid(), runner_start=proc_start(os.getpid()), token=token, started=now()), open(os.path.join(adir, "owner.json"), "w"))
+    S = lambda s, **kw: append(os.path.join(adir, "state.jsonl"), dict(ts=now(), job=job, attempt=att, state=s, **kw))
+    S("queued", admission_sha256=admission_sha, admission=admission_status)
+    return att, adir, token, S
+
 def cmd_run(a):
     job = json.load(open(os.path.join(LAB, "jobs", a.job, "job.json"))); spec = job["spec"]; jdir = os.path.join(LAB, "jobs", a.job)
-    img = json.load(open(os.path.join(LAB, "images", spec["image"] + ".json")))
+    try: img = json.load(open(os.path.join(LAB, "images", spec["image"] + ".json")))
+    except FileNotFoundError: img = dict(image_id=None, unknown_record=spec["image"])
     host, profile_sha = load_host()
     apath = os.path.join(jdir, "admission.json")
-    recorded = json.load(open(apath)) if os.path.exists(apath) else None
-    current = admission(img, spec, host, profile_sha)
-    require_admission(recorded, current)
+    admission_sha, admission_status = check_run_admission(job, apath, img, spec, host, profile_sha)
     for prev in sorted(glob.glob(os.path.join(jdir, "att-*"))):   # duplicate-delivery / replacement guard
         ls = last_state(prev); pa = os.path.basename(prev)
         if ls and ls["state"] != "terminal":
@@ -285,11 +364,8 @@ def cmd_run(a):
             if proc_start(ow["runner_pid"]) == ow["runner_start"] or owned_containers(pa, ow["token"]):
                 print(f"REJECT: {pa} is still active (runner alive or owned containers present); no duplicate execution"); sys.exit(8)
             print(f"REJECT: {pa} is non-terminal and its owner is gone; run `lab reconcile` to confirm it stopped before replacement"); sys.exit(9)
-    n = len(glob.glob(os.path.join(jdir, "att-*"))) + 1; att = f"att-{n}"; adir = os.path.join(jdir, att); os.makedirs(adir)
-    token = uuid.uuid4().hex
-    json.dump(dict(attempt=att, runner_pid=os.getpid(), runner_start=proc_start(os.getpid()), token=token, started=now()), open(os.path.join(adir, "owner.json"), "w"))
-    S = lambda s, **kw: append(os.path.join(adir, "state.jsonl"), dict(ts=now(), job=a.job, attempt=att, state=s, **kw))
-    S("queued"); res = spec["resources"]
+    att, adir, token, S = begin_attempt(jdir, a.job, admission_sha, admission_status)
+    res = spec["resources"]
     S("preparing")
     if sha(spec["model"]) != spec["model_sha256"]: S("terminal", execution="not_started", reason="model hash mismatch"); sys.exit(4)
     S("running", admission="none (gpu lock removed by user decision)", gpu_pre=gpu_state(host))
@@ -302,18 +378,21 @@ def cmd_run(a):
             fd = os.open(os.path.join(os.path.dirname(spec["model"]), mfile), os.O_RDONLY); os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED); os.close(fd)
         o, e = os.path.join(adir, f"{t}#{ti}.stdout"), os.path.join(adir, f"{t}#{ti}.stderr"); ts = time.monotonic()
         with open(o,"w") as fo, open(e,"w") as fe:
-            p = subprocess.Popen(docker_argv(cmd), stdout=fo, stderr=fe, start_new_session=True)
-            S("running", test=t, container=cname)
-            if os.environ.get("LAB_FAULT") == "die_after_start": time.sleep(1.5); os.kill(os.getpid(), 9)
             sampler = MemorySampler(host)
             try:
-                base_gpu, sample_reason = sampler.sample()
-                peak_gpu, peak_host, io_rbytes, cg = None, 0, 0, None
-                nsamp = 0; tlast = 0
+                record_sampler(sampler, os.path.join(adir, "owner.json"))
+                base_gpu, baseline_reason = sampler.baseline()
+                p = subprocess.Popen(docker_argv(cmd), stdout=fo, stderr=fe, start_new_session=True)
+                S("running", test=t, container=cname)
+                if os.environ.get("LAB_FAULT") == "die_after_start": time.sleep(1.5); os.kill(os.getpid(), 9)
+                sample_reason = baseline_reason
+                peak_gpu, peak_host, io_rbytes, cg = base_gpu, 0, 0, None
+                nsamp = int(base_gpu is not None); tlast = 0
                 while p.poll() is None:
                     if time.monotonic() - tlast > 0.25:   # memory sampler: GPU total used (device is otherwise idle) + container cgroup
                         tlast = time.monotonic(); g, why = sampler.sample()
-                        if why: sample_reason = why
+                        if why and peak_gpu is None: sample_reason = why
+                        if g is not None: sample_reason = None
                         if g is not None: peak_gpu = max(peak_gpu, g) if peak_gpu is not None else g; nsamp += 1
                         cg = cg or cid_cgroup(cname)
                         if cg:
@@ -331,6 +410,7 @@ def cmd_run(a):
         mem = results[f"{t}#{ti}"]["mem"]
         if sampler.backend == "tegrastats":
             mem.update(shared_dram_peak_mib=peak_gpu, shared_dram_baseline_mib=base_gpu, scope="system-shared-dram", method="tegrastats RAM used polled 4Hz + cgroup memory.peak", gpu_memory_reason="shared DRAM is not GPU memory")
+        if base_gpu is None: mem["baseline_unavailable"] = baseline_reason or "no baseline sample"
         if sample_reason or peak_gpu is None:
             mem["unavailable"] = sample_reason or "no memory samples"
         if died: sandbox_died = True; S("sandbox_terminated", test=t, exit_code=rc, last_durable_bytes=os.path.getsize(o), last_durable_mtime=dt.datetime.fromtimestamp(os.path.getmtime(o), dt.timezone.utc).isoformat())
@@ -343,7 +423,7 @@ def cmd_run(a):
     result = dict(job=a.job, attempt=att, image_id=spec["image_id"], token_sha=sha_s(token),
       execution=dict(status="cancelled" if cancelled else "interrupted_sandbox_terminated" if sandbox_died else "timeout_killed" if interrupted else "completed" if all(r["exit_code"]==0 for r in results.values()) else "failed"),
       quality=dict(tests=results, all_ok=(not cancelled and not interrupted and not sandbox_died and len(results)==len(spec["tests"]) and all(r["ok"] for r in results.values()))),
-      performance=dict(gpu_post=post, exclusive_before_after=(post["compute_apps"] == []), note="exclusivity = no compute apps visible at end; during-run interference not observed by lab"),
+      performance=dict(gpu_post=post, exclusive_before_after=exclusive_state(post), note="exclusivity = no compute apps visible at end; during-run interference not observed by lab"),
       evidence=dict(files=files, coverage=dict(tests_expected=len(spec["tests"]), tests_started=len(results), tests_completed_cleanly=sum(1 for r in results.values() if not r.get("partial") and r["exit_code"]==0), interrupted=sandbox_died or interrupted or cancelled, note="incomplete data is never scored; affected comparisons invalid")), cleanup=dict(owned_containers_left=left, confirmed=not left))
     json.dump(result, open(os.path.join(adir,"result.json"),"w"), indent=1)
     S("exporting"); export(a.job, att, adir)
@@ -367,7 +447,7 @@ def cmd_cancel(a):
 def cmd_status(a):
     for path in sorted(glob.glob(os.path.join(LAB, "jobs", a.job or "*", "job.json"))):
         apath = os.path.join(os.path.dirname(path), "admission.json")
-        decision = json.load(open(apath)) if os.path.exists(apath) else {"decision": "legacy (unrecorded)"}
+        decision = json.load(open(apath)) if os.path.exists(apath) else {"decision": "legacy-unrecorded"}
         print(os.path.basename(os.path.dirname(path)), "admission=" + decision["decision"], "; ".join(decision.get("reasons", [])))
     for adir in sorted(glob.glob(os.path.join(LAB, "jobs", a.job or "*", "att-*"))):
         s = last_state(adir); print(adir.split("jobs/")[1], s["state"] if s else None, {k: v for k, v in (s or {}).items() if k in ("execution","reason","test")})
@@ -376,8 +456,9 @@ def cmd_reconcile(a):
     for adir in sorted(glob.glob(os.path.join(LAB, "jobs", "*", "att-*"))):
         job, att = adir.split("jobs/")[1].split("/"); s = last_state(adir); ow = json.load(open(os.path.join(adir, "owner.json")))
         stage = os.path.join(LAB, "export", job, att + ".staging")
-        if s and s["state"] == "terminal" and not os.path.exists(stage): continue
         alive = proc_start(ow["runner_pid"]) == ow["runner_start"]
+        if not alive: cleanup_sampler(ow)
+        if s and s["state"] == "terminal" and not os.path.exists(stage): continue
         owned = owned_containers(att, ow["token"]); S = lambda st, **kw: append(os.path.join(adir, "state.jsonl"), dict(ts=now(), job=job, attempt=att, state=st, reconciler=True, **kw))
         if alive: print(job, att, "runner ALIVE (pid %d) -> leave alone; state=%s" % (ow["runner_pid"], s["state"])); continue
         if s["state"] == "terminal" and os.path.exists(stage):   # died mid-export after terminal? finish export from retained staging
@@ -409,9 +490,9 @@ def cmd_register(a):
     append(idx, dict(job=a.job, attempt=a.att, result_sha256=rsha, registered=now())); print("registered")
 
 ap = argparse.ArgumentParser(); sp = ap.add_subparsers(dest="c", required=True)
-p = sp.add_parser("image"); p.add_argument("op"); p.add_argument("name"); p.add_argument("ref"); p.add_argument("--platform"); p.add_argument("--requirements"); p.set_defaults(f=cmd_image)
+p = sp.add_parser("image"); p.add_argument("op"); p.add_argument("name"); p.add_argument("ref"); p.add_argument("--platform"); p.add_argument("--requirements"); p.add_argument("--declared", action="store_true"); p.set_defaults(f=cmd_image)
 p = sp.add_parser("submit"); [p.add_argument("--" + x) for x in ("image","model","model-sha256","data","tests","key","res")]; p.set_defaults(f=cmd_submit)
-p = sp.add_parser("image-load"); p.add_argument("name"); p.add_argument("--archive", required=True); p.add_argument("--sha256", required=True); p.add_argument("--expect-config-id", required=True); p.set_defaults(f=cmd_imageload)
+p = sp.add_parser("image-load"); p.add_argument("name"); p.add_argument("--archive", required=True); p.add_argument("--sha256", required=True); p.add_argument("--expect-config-id", required=True); p.add_argument("--platform"); p.add_argument("--requirements"); p.set_defaults(f=cmd_imageload)
 p = sp.add_parser("chaos"); p.add_argument("job"); p.add_argument("att"); p.set_defaults(f=cmd_chaos)
 p = sp.add_parser("run"); p.add_argument("job"); p.set_defaults(f=cmd_run)
 p = sp.add_parser("cancel"); p.add_argument("job"); p.add_argument("att"); p.set_defaults(f=cmd_cancel)

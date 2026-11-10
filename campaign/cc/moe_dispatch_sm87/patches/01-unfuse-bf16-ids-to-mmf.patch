@@ -1,0 +1,15 @@
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -1857,6 +1857,12 @@
+ 
+     const int cc        = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
+     const int warp_size = ggml_cuda_info().devices[ggml_cuda_get_device()].warp_size;
++    static const bool j_mmf_ids = ggml_cuda_env_flag("GGML_CUDA_J_MMF_IDS");
++    if (j_mmf_ids && cc == 870 && is_mul_mat_id && src0->type == GGML_TYPE_BF16 &&
++        src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32 && dst->ne[2] == 1 &&
++        ggml_cuda_should_use_mmf(src0->type, cc, warp_size, src0->ne, src0->nb, src1->ne[2], /*mul_mat_id=*/true)) {
++        return false;
++    }
+     use_mul_mat_vec_f = use_mul_mat_vec_f && ggml_cuda_should_use_mmvf(src0->type, cc, warp_size, src0->ne, src0->nb, is_mul_mat_id ? src1->ne[2] : src1->ne[1]);
+ 
+     //we only support fusion for ncols_dst = 1
