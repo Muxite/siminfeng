@@ -23,7 +23,7 @@ Last updated 2026-11-10, after D041. Statuses come from the decision notes.
 | Host-load monitor (compiles/downloads/codex) | HAVE | `frozen-experiment/scripts/loadmon.sh` |
 | **Host calibration microbench**: GPU BW, CPU expert BW per quant, PCIe H2D, per-layer handoff | **GAP (top priority)** | PL4 showed constants don't transfer between models. Candidates: `test-backend-ops perf -o MUL_MAT_ID`, nvbandwidth, STREAM |
 | PCIe / NVLink bandwidth | TRY | `nvbandwidth`, CUDA `bandwidthTest`. Neither is installed, both can be built in cuda-tools |
-| CPU DRAM bandwidth / Zen 2 counters | TRY | STREAM/mbw, `likwid-perfctr`, AMD uProf. `perf` needs `perf_event_paranoid` lowered (currently 4, a host change needing approval) |
+| CPU DRAM bandwidth / Zen 2 counters | TRIED (D042) | No amd_df/UMC PMU on this kernel. perf gives only IPC and DC-fill proxies, so use the T-CAL microbench. `perf_event_paranoid`=1 at runtime; `sudo perf` for system-wide |
 | Jetson telemetry | TRY | `tegrastats`, jtop (jetson-stats) |
 
 ## 3. Planning and modeling
@@ -71,7 +71,7 @@ Last updated 2026-11-10, after D041. Statuses come from the decision notes.
 | **Profiler capture wrapper** (nsys/ncu flags, mounts, extracting the engine `/app` into cuda-tools) | **GAP** | The recipes live only in D004/D011/D041 |
 | ncu summarizer (by kernel: time share, GB/s, DRAM %) | GAP (inline script) | Promote from the D041 inline Python |
 | compute-sanitizer memcheck/racecheck for engine patches | TRY | Already in cuda-tools, never run |
-| eBPF uprobe tracer on `ggml_compute_forward_mul_mat_id` (ProfInfer method) | TRY | bpftrace installed; needs root |
+| eBPF uprobe split timer (`ggml_graph_compute` per CPU split) | HAVE (first use, D042) | sudo bpftrace on `/proc/<ctr pid>/root/app/libggml-cpu.so`. Confirmed 0.79 ms/CPU layer at 89% of decode wall time |
 | `cb_eval` per-node timing by `ffn_moe_*` tag | TRY | Pitfall: `ffn_moe_topk` is a strided view |
 | `GGML_SCHED_DEBUG=2` split/assignment dump | TRY | Explains backend splits and handoffs |
 
@@ -105,7 +105,8 @@ Last updated 2026-11-10, after D041. Statuses come from the decision notes.
 | moe_static_hot, hybrid_split, own LRU | REJECTED (D024, D030/31, D022) |
 | upstream `--moe-cache-mib` | **RE-OPENED (D041)**: wins on Qwen at 8 GB |
 | Kernel fusion: rms_norm+quantize_q8_1, scale+add, topk+reduce | TRY (from ncu, D041) |
-| Speculative decoding: n-gram self-spec (no model needed); MTP heads (`--spec-type draft-mtp`) | TRY. Verifying several tokens at once reads each expert once; watch the growth in the union of experts touched |
+| N-gram self-spec `--spec-type ngram-mod` | **WIN, workload-gated (D042)**: 2.4–3.0× on copy-heavy Qwen, lossless, 0 cost on chat |
+| MTP heads (`--spec-type draft-mtp`) | TRY. Verifying several tokens at once reads each expert once; watch the growth in the union of experts touched |
 | Shared-expert-on-GPU pinning, async CPU/GPU overlap (KTransformers ideas) | TRY (research) |
 
 ## 10. Provenance, orchestration, reporting
@@ -121,6 +122,11 @@ Last updated 2026-11-10, after D041. Statuses come from the decision notes.
 | Brief linter (catches wording that triggers provider refusals) | GAP | gaps.md: T-KVB refusal |
 | Real-fixture capture (snapshot real tool output to use as test fixtures) | GAP | Codex mocks hid real failures twice |
 | cc-inventory.csv refresh | GAP | Stale rows |
+
+## Research intake
+- Channels: paper-gatherer (arXiv/S2/OpenAlex; S2 rate-limits), `gh` for llama.cpp/ik_llama PRs and issues, HF API, web search.
+- The method is in `research/INTAKE.md` and the items are in `research/intake-1.json`.
+- Pipeline: intake item → smallest probe → indicative screen with an engagement counter → frozen experiment → planner lever.
 
 ## Methodologies (the rules the tools enforce)
 - **Pre-register, then measure.** Freeze the protocol before results exist (D026+).

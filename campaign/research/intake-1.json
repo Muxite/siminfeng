@@ -1,0 +1,325 @@
+[
+ {
+  "id": "U-30966",
+  "source": "https://github.com/ggml-org/llama.cpp/pull/30966",
+  "mechanism": "moe-cache-cpu-share: missed experts run on CPU instead of uploading; scripts/moe-cache-tune.py sweeps cache MiB x share",
+  "claimed_gain": "Qwen3.8-Flash-Next 6.4GB cache: 24.2 t/s (share0) -> 47.6 (share0.95); hit rate falls 73->61%",
+  "their_hardware": "desktop CUDA, 92GB card",
+  "their_baseline": "same cache, share 0 (upload misses)",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "decode-only lever; directly attacks the PCIe miss cost that made cache lose at 4GB in D041"
+  },
+  "applies_to": "x86",
+  "probe": "Rebase pin onto master (or cherry-pick 30966+31233+31853+31888+30637+31497); run moe-cache-tune.py on Qwen3-30B-A3B at 4/6/8 GB; compare to D041 static K=42/K=30",
+  "tools_needed": "Build CC with patch stack, lab, tune script",
+  "est_cost": "6h, 0 GB (Qwen Q4_K_M already local)",
+  "priority": 1
+ },
+ {
+  "id": "U-31233",
+  "source": "https://github.com/ggml-org/llama.cpp/pull/31233",
+  "mechanism": "ClassLRU/LRFU hybrid cache (8 classes, CRF half-life 128 tokens) + auto mode; 31853 picks CPU misses by CRF",
+  "claimed_gain": "+6% decode QFN, +7% GLM vs SLRU, 8% fewer uploads (SLRU #30637 itself +1-5% over LRU)",
+  "their_hardware": "not stated in extract (consumer CUDA)",
+  "their_baseline": "SLRU",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "eviction policy for batch-1 decode; coverage curves in T-QRT predict gains"
+  },
+  "applies_to": "x86",
+  "probe": "Same rebase as U-30966; replay T-QRT Qwen traces through ClassLRU vs LRU offline first (trace_replay.py) to predict hit rate before building",
+  "tools_needed": "trace_replay, Build CC",
+  "est_cost": "3h offline replay, +4h build",
+  "priority": 1
+ },
+ {
+  "id": "U-31888",
+  "source": "https://github.com/ggml-org/llama.cpp/pull/31888",
+  "mechanism": "moe-cache: CPU part no longer waits for cached-expert GPU matmuls (graph split order fix for models where router input differs, e.g. Gemma4)",
+  "claimed_gain": "+7-9% TG Gemma4 -cmoe w/ cpu-share; no change on Qwen-style (QFN)",
+  "their_hardware": "RTX 5090, Gemma4 26B-A4B",
+  "their_baseline": "master",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "decode"
+  },
+  "applies_to": "x86",
+  "probe": "Include in rebase; verify with GGML_SCHED_DEBUG=2 that Qwen3-30B-A3B split order unchanged (expected no-op)",
+  "tools_needed": "GGML_SCHED_DEBUG",
+  "est_cost": "1h",
+  "priority": 3
+ },
+ {
+  "id": "U-31188",
+  "source": "https://github.com/ggml-org/llama.cpp/pull/31188",
+  "mechanism": "CUDA fused MoE gate/up + GLU in MMQ (prefill; 29948 dense variant); 31047 linearized MoE MMQ layout",
+  "claimed_gain": "+5.7% pp RTX5090, +9-17% GB10 (Qwen3-30B-A3B Q4_K_M); PPL bit-identical",
+  "their_hardware": "RTX 5090, DGX Spark GB10",
+  "their_baseline": "master pre-PR",
+  "batch1_relevant": {
+   "relevant": false,
+   "why": "prefill/TTFT only (n=1 decode uses MMVQ). Helps offset cache TTFT penalty of D041 (-40%)"
+  },
+  "applies_to": "both",
+  "probe": "Rebase; llama-bench pp512/pp2048 on Qwen3-30B-A3B K=0 and cache config; check TTFT gap closes",
+  "tools_needed": "llama-bench",
+  "est_cost": "2h",
+  "priority": 3
+ },
+ {
+  "id": "U-31391+31419",
+  "source": "https://github.com/ggml-org/llama.cpp/pull/31419",
+  "mechanism": "ggml-backend: do not upload unread inputs; cuda gather batched tensor reads into mapped host memory",
+  "claimed_gain": "small per-token overhead cut (not quantified in extract)",
+  "their_hardware": "RTX 5090",
+  "their_baseline": "master",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "per-token launch/handoff overhead; relevant to 137us per-layer handoff"
+  },
+  "applies_to": "x86",
+  "probe": "Rebase and nsys per-token breakdown (analyze_nsys.py) Granite K>0 for handoff-time delta",
+  "tools_needed": "nsys",
+  "est_cost": "3h",
+  "priority": 3
+ },
+ {
+  "id": "U-31497+30141+31927",
+  "source": "https://github.com/ggml-org/llama.cpp/pull/31497",
+  "mechanism": "MTP/spec infrastructure: MoE cache not applied to draft model; MTP hidden state save/restore; MTP target hidden from device buffer; dflash2 drafts",
+  "claimed_gain": "enables --spec-type draft-mtp with moe-cache without cache pollution",
+  "their_hardware": "n/a",
+  "their_baseline": "pre-fix",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "verification of k tokens reads each expert once; only helps if expert union growth is sublinear"
+  },
+  "applies_to": "x86",
+  "probe": "Rebase; run MTP GGUF (unsloth/Qwen3.6-35B-A3B-MTP-GGUF) with --spec-type draft-mtp K=18 static offload: accept rate, tokens/step, decode t/s vs no-spec",
+  "tools_needed": "MTP GGUF",
+  "est_cost": "5h, ~21GB download",
+  "priority": 1
+ },
+ {
+  "id": "U-31288+31025",
+  "source": "https://github.com/ggml-org/llama.cpp/pull/31288",
+  "mechanism": "CUDA topk-MoE fusion for 384 experts; qwen MRoPE+set_rows fuse; CUDA graph chunking 30804",
+  "claimed_gain": "small-kernel fusion; decode launch-bound (D041 ncu: 40% time in tiny kernels)",
+  "their_hardware": "various",
+  "their_baseline": "master",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "batch-1 is launch-bound on small models"
+  },
+  "applies_to": "x86",
+  "probe": "Rebase; nsys kernel count/token and decode t/s on Granite Q8 all-GPU (the ncu-flagged case)",
+  "tools_needed": "nsys",
+  "est_cost": "3h",
+  "priority": 2
+ },
+ {
+  "id": "P-2610.34440",
+  "source": "arXiv:2610.34440 (Lan)",
+  "mechanism": "Spec decoding on MoE: model expert bytes and kernel bandwidth to pick best draft length",
+  "claimed_gain": "abstract unfetched (S2 429)",
+  "their_hardware": "?",
+  "their_baseline": "?",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "direct model of verification cost vs draft length"
+  },
+  "applies_to": "both",
+  "probe": "Fit model with our bandwidth decode model (PL4); predict break-even draft length for Qwen K=18 before running MTP",
+  "tools_needed": "none",
+  "est_cost": "2h read",
+  "priority": 2
+ },
+ {
+  "id": "P-2602.16052 MoE-Spec",
+  "source": "arXiv:2602.16052",
+  "mechanism": "Expert budgeting in verification: cap experts loaded during spec verification",
+  "claimed_gain": "abstract unfetched",
+  "their_hardware": "server GPUs likely",
+  "their_baseline": "vanilla spec",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "limits expert-union growth; relevant if MTP verify touches too many experts"
+  },
+  "applies_to": "both",
+  "probe": "After MTP probe, measure union of experts per verify step from routing tracer (cc/routing_trace)",
+  "tools_needed": "routing_trace",
+  "est_cost": "3h",
+  "priority": 2
+ },
+ {
+  "id": "P-2608.15018 S2-MoE",
+  "source": "arXiv:2608.15018 code github.com/angerybob/S2-MoE",
+  "mechanism": "Self-speculative decoding for MoE on edge in llama.cpp: routing-aware expansion, reuse-aware expert gating",
+  "claimed_gain": "up to 5.3x, ~2.0x avg vs autoregressive",
+  "their_hardware": "edge devices (unspecified)",
+  "their_baseline": "AR decode",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "batch-1 edge, llama.cpp based"
+  },
+  "applies_to": "both",
+  "probe": "Clone repo, diff against pin to size patch; run on Granite then Qwen K=18; Jetson candidate",
+  "tools_needed": "git",
+  "est_cost": "4h read + 6h port",
+  "priority": 1
+ },
+ {
+  "id": "P-2603.19172 DyMoE",
+  "source": "arXiv:2603.19172",
+  "mechanism": "Runtime dynamic mixed-precision experts by importance + depth-adaptive + lookahead prefetch",
+  "claimed_gain": "TPOT up to 14.6x vs offloading baselines, TTFT 3.4-22.7x",
+  "their_hardware": "commercial edge hardware",
+  "their_baseline": "offloading SOTA",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "edge batch-1; baselines weak though"
+  },
+  "applies_to": "jetson",
+  "probe": "Offline: use T-QRT traces to estimate how skewed per-expert importance is; static analogue = per-expert (not per-layer) tensor-type, rejected PAP warns caution (D040)",
+  "tools_needed": "routing_trace",
+  "est_cost": "3h",
+  "priority": 3
+ },
+ {
+  "id": "P-2602.03495 DALI",
+  "source": "arXiv:2602.03495",
+  "mechanism": "Workload-aware offloading on local PCs (dynamic CPU/GPU expert assignment)",
+  "claimed_gain": "abstract unfetched",
+  "their_hardware": "local PC",
+  "their_baseline": "llama.cpp / Fiddler-like",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "local PC batch-1"
+  },
+  "applies_to": "x86",
+  "probe": "Read; compare assignment rule to moe-cache-cpu-share",
+  "tools_needed": "none",
+  "est_cost": "1h",
+  "priority": 2
+ },
+ {
+  "id": "P-2610.01950 MoE-CORE / 2609.38090 Mira / 2608.11688 APEX",
+  "source": "arXiv:2610.01950, 2609.38090, 2608.11688",
+  "mechanism": "Residency/prefetch policies for memory-constrained and edge MoE",
+  "claimed_gain": "not extracted (S2 rate limit)",
+  "their_hardware": "edge/consumer",
+  "their_baseline": "LRU/prefetch baselines",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "cache policy and prefetch"
+  },
+  "applies_to": "both",
+  "probe": "Read abstracts; any policy beating ClassLRU on our traces gets replayed offline",
+  "tools_needed": "trace_replay",
+  "est_cost": "2h",
+  "priority": 2
+ },
+ {
+  "id": "P-HOBBIT 2411.01433",
+  "source": "arXiv:2411.01433",
+  "mechanism": "Load cache-miss experts at lower precision (mixed-precision offload)",
+  "claimed_gain": "up to 9.93x vs baselines",
+  "their_hardware": "Jetson Orin + RTX 4090",
+  "their_baseline": "Mixtral offload",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "batch-1 Jetson"
+  },
+  "applies_to": "both",
+  "probe": "Weak on our rig: PAP rejected (D040); probe only: Q2/Q3 miss-path on cache config via two GGUF copies is not supported upstream; skip unless cache wins",
+  "tools_needed": "none",
+  "est_cost": "-",
+  "priority": 3
+ },
+ {
+  "id": "P-2606? Unified-memory",
+  "source": "(no Jetson-unified paper found beyond HOBBIT/APEX/SMoE)",
+  "mechanism": "Unified memory makes offload moot; levers are quant/KV/mmap",
+  "claimed_gain": "-",
+  "their_hardware": "Jetson Orin Nano 8GB",
+  "their_baseline": "-",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "our Jetson case"
+  },
+  "applies_to": "jetson",
+  "probe": "Gap: run Qwen3-30B-A3B IQ3/REAP on Jetson with mmap; see M-REAP",
+  "tools_needed": "tegrastats",
+  "est_cost": "6h",
+  "priority": 2
+ },
+ {
+  "id": "M-REAP-Qwen3-30B",
+  "source": "https://huggingface.co/12bitmisfit/Qwen3-30B-A3B-Instruct-2507_Pruned_REAP-15B-A3B-GGUF (also 12bitmisfit/Qwen3-30B-A3B_Pruned_REAP-15B-A3B-GGUF, cerebras REAP 25B Coder bartowski)",
+  "mechanism": "Expert pruning 50% -> ~15B total A3B; halves bytes, fits 16GB and maybe Jetson 8GB at Q3/Q4",
+  "claimed_gain": "~half size; quality loss task-dependent",
+  "their_hardware": "n/a",
+  "their_baseline": "Qwen3-30B-A3B",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "fewer bytes -> higher GPU residency -> decode"
+  },
+  "applies_to": "both",
+  "probe": "Download Q4_K_M (~9GB), run K=0 on 5070Ti and compare KLD vs Qwen Q4_K_M (needs Qwen ref logits GAP) plus decode t/s; coder-pruned variants may fail general text",
+  "tools_needed": "Qwen KLD reference, lab",
+  "est_cost": "3h, ~9GB",
+  "priority": 1
+ },
+ {
+  "id": "M-MTP-GGUF",
+  "source": "unsloth/Qwen3.6-35B-A3B-MTP-GGUF; noctrex/Qwen3.6-35B-A3B-MTP-MXFP4_MOE-GGUF; meshllm/GLM-4.7-Flash-MTP-GGUF; mudler/*APEX-MTP-GGUF",
+  "mechanism": "MoE <=35B GGUFs with MTP heads (30B/35B-A3B)",
+  "claimed_gain": "-",
+  "their_hardware": "-",
+  "their_baseline": "-",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "needed for MTP probe"
+  },
+  "applies_to": "x86",
+  "probe": "Pick unsloth Qwen3.6-35B-A3B-MTP Q4 (note arch is Qwen3.6, not our Qwen3-30B-A3B; need new baseline)",
+  "tools_needed": "hf curl",
+  "est_cost": "download ~21GB",
+  "priority": 1
+ },
+ {
+  "id": "I-ik_2644+2861",
+  "source": "https://github.com/ikawrakow/ik_llama.cpp/pull/2644 , /2861",
+  "mechanism": "ik_llama GPU cache for host MoE experts (2644) and ClassLRU (2861); 'keep draft on GPU' 2838; 2831 MoE MMQ block per tile",
+  "claimed_gain": "not stated",
+  "their_hardware": "-",
+  "their_baseline": "-",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "alt engine with host-expert cache"
+  },
+  "applies_to": "x86",
+  "probe": "Build ik_llama in cuda-tools; same Qwen K sweep vs mainline cache; only if mainline rebase underwhelms",
+  "tools_needed": "docker build",
+  "est_cost": "6h",
+  "priority": 3
+ },
+ {
+  "id": "I-issue-31421",
+  "source": "https://github.com/ggml-org/llama.cpp/issues/31421",
+  "mechanism": "Bug: moe-cache hit rate drops to 0.6% at one token of slots since #30637",
+  "claimed_gain": "regression risk for batch-1",
+  "their_hardware": "-",
+  "their_baseline": "-",
+  "batch1_relevant": {
+   "relevant": true,
+   "why": "batch-1 decode hit rate"
+  },
+  "applies_to": "x86",
+  "probe": "Before adopting rebase, log hit rate on Qwen n=1; check whether ClassLRU (31233) fixes",
+  "tools_needed": "engine logs",
+  "est_cost": "1h",
+  "priority": 1
+ }
+]
