@@ -70,3 +70,8 @@ The user approved all of these overnight experiments ("overnight experiments all
 - Pushing `main`.
 - Host changes beyond the D042 perf setting.
 - Restarting `euaaa-llm-gpu-1` or Sunshine during measurements. Both are restored after X1–X8 finish.
+
+## Amendment A1 (after X1–X8 results, before the reruns)
+- **X8 is contaminated.** The same config varies more than 2× between rounds (C3-none chat: 28.3 and 66.9). K30-mtp3 chat gave 25.4 t/s, against 52.8 for the identical config in X1, and prompt times roughly doubled during 07:21–07:24. The host had 6.5 GB in swap; the cause is not proven.
+- **Rerun:** X8 in full, with free/vmstat recorded before each arm. The first X8 run stays in the record, labelled contaminated.
+- **X7 `--no-mmap` arms were invalid.** This engine rejects the flag ("invalid argument"). They are rerun with `-lm none`, and `-lm mmap+mlock` is added. The warm/cold mmap arms stand as measured.
