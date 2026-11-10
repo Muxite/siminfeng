@@ -1,0 +1,12 @@
+# Assignment J-T4b — fix review findings in bin/lab host profiles (parent J-T4; host jetson-arm; worker Codex)
+Base: current `jetson/c1` HEAD. Allowed: `bin/lab`, `lab/test_lab_hosts.py`. Do not touch `lab/jobs/*`, `lab/export/*`, `lab/images/*` (live evidence). No docker/GPU/`lab run`.
+Fix, with a test each:
+1. `lab run` must NOT re-evaluate admission for jobs lacking `admission.json` (pre-J-T4 x86 jobs): treat as `legacy-unrecorded`, run as before. Accept docker memory suffixes `b,k,m,g` with optional `b` (`16gb`, `512mb`).
+2. Admission computed BEFORE writing; write admission.json then job.json; store `admission_sha256` in job.json and in the attempt's first `queued` state record; `run` verifies the hash (mismatch → refuse exit 11). Exceptions inside admission → decision `needs_information` with the error text, never a traceback/half-written job.
+3. Unknown image name at submit → write job + admission `needs_information: unknown image record <name>` (today: FileNotFoundError traceback).
+4. `image add --declared --platform P [--requirements F]`: allow registering an image NOT present locally, marked `verified_locally: false` + `provenance: declared`; admission may REJECT from declared metadata but must never ACCEPT an image with verified_locally false (→ needs_information "image not verified on this host"). Re-adding an existing name with a different image_id/platform must fail (no silent overwrite). `image-load` must accept `--platform/--requirements` and pass them through.
+5. Tegrastats sampler: wait (≤2 s) for the first sample before taking the baseline; clear `unavailable` once any sample succeeds; baseline null only with a reason.
+6. `exclusive_before_after` = null (not false) when compute_apps is unavailable; x86 nvidia-smi `[N/A]`/`[Not Supported]` in optional fields (power, clocks, compute-apps) → keep the raw string as before, only memory.used governs null.
+7. De-duplicate admission reasons. Unknown host id / missing profile → clear error message naming the expected file (exit 12), not a traceback.
+8. Ensure the tegrastats child is in the runner's process group/killed via atexit+signal handlers; document that SIGKILL of the runner can orphan it and `reconcile` should kill stray `tegrastats` children started by the lab (record pid in owner.json).
+Run `python3 -m pytest -q lab/test_lab_hosts.py`. Time 40 min. Final ≤ 15 lines: what changed per item, pytest line, risks.

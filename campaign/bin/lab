@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """lab — feasibility core of a "lab": image(container) + tests -> job -> attempts -> evidence. No UI. Discovery prototype.
-  lab image add NAME REF            register an image by immutable id/digest
+  lab image add NAME REF [--platform P] [--requirements BUILD.json]   register an image by immutable id/digest
   lab submit --image N --model P --tests a,b --key K [--res cpus=8,memory=16g,timeout_s=300]   idempotent by key; job.json is immutable
   lab run JOB                       new attempt (retry = new attempt); no GPU admission control (lock removed)
   lab cancel JOB ATT                request cancellation (confirmed only when owned containers are gone)
@@ -9,7 +9,7 @@
   lab register JOB ATT              register result into index (idempotent; stale/conflicting rejected)
 Store: $LAB/{images,jobs,index}. Fault injection for recovery tests: LAB_FAULT=die_after_start|die_in_export
 """
-import json, sys, os, re, time, uuid, hashlib, fcntl, subprocess, argparse, shutil, datetime as dt, glob
+import json, sys, os, re, time, uuid, hashlib, fcntl, subprocess, argparse, shutil, datetime as dt, glob, shlex, importlib.util, math
 LAB = os.environ.get("LAB", os.path.expanduser("~/projects/siminfeng/campaign/lab"))
 CID = os.environ.get("CAMPAIGN_ID", "c1")
 now = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
@@ -20,7 +20,108 @@ def sha(p):
         for b in iter(lambda: f.read(1 << 20), b""): h.update(b)
     return h.hexdigest()
 def sha_s(s): return hashlib.sha256(s.encode()).hexdigest()
-def sh(cmd, **kw): return subprocess.run(cmd, capture_output=True, text=True, **kw)
+ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+def docker_argv(cmd):
+    prefix = os.environ.get("DOCKER_CMD_PREFIX", "")
+    return shlex.split(prefix) + [shlex.join(cmd)] if prefix and cmd[0] == "docker" else cmd
+
+def sh(cmd, **kw): return subprocess.run(docker_argv(cmd), capture_output=True, text=True, **kw)
+
+def load_host(host_id=None):
+    if host_id is None:
+        try: host_id = open(os.path.expanduser("~/.config/siminfeng/host_id")).read().strip()
+        except FileNotFoundError: host_id = "x86-main"
+        host_id = host_id or "x86-main"
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", host_id): raise ValueError("invalid host id")
+    path = os.path.join(ROOT, "lab", "hosts", host_id + ".json")
+    profile = json.load(open(path))
+    if profile["host_id"] != host_id: raise ValueError("host profile id mismatch")
+    return profile, sha(path)
+
+def gpu_request(host):
+    if host["gpu"]["request"] == "gpus-all": return ["--gpus", "all"]
+    if host["gpu"]["request"] == "nvidia-runtime-env":
+        return ["--runtime", "nvidia", "-e", "NVIDIA_VISIBLE_DEVICES=all", "-e", "NVIDIA_DRIVER_CAPABILITIES=compute,utility"]
+    raise ValueError("unsupported GPU request")
+
+def memory_bytes(value):
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([bkmg]?)", str(value).lower())
+    if not m: raise ValueError("invalid memory: " + str(value))
+    return float(m[1]) * 1024 ** ("bkmg".index(m[2]) if m[2] else 0)
+
+def admission(img, spec, host, profile_sha):
+    rejected, missing, notes = [], [], []
+    req = img.get("target_requirements") or {}
+    legacy = host["host_id"] == "x86-main" and not img.get("platform") and not req
+    if legacy: notes.append("legacy image record: platform unverified")
+    else:
+        if not img.get("platform"): missing.append("image platform missing")
+        if not req: missing.append("image target_requirements missing")
+        for source in (img, req):
+            if source.get("platform") and source["platform"] != host["platform"]: rejected.append("platform mismatch: " + str(source["platform"]))
+        for key, expected in (("cuda_arch", host["gpu"]["arch"]), ("l4t_major", host.get("l4t_major"))):
+            if key in req and str(req[key]) != str(expected): rejected.append(key + " mismatch")
+        if req:
+            for key in ("platform", "cuda_arch", "runtime") + (("l4t_major",) if host.get("l4t_major") else ()):
+                if not req.get(key): missing.append("image requirement missing: " + key)
+    for key in ("cpus", "memory"):
+        try:
+            convert = float if key == "cpus" else memory_bytes
+            value = convert(spec["resources"][key]); limit = convert(host["resources_max"][key])
+            if not math.isfinite(value) or value <= 0 or value > limit: rejected.append(key + " exceeds host max or is invalid")
+        except (ValueError, TypeError): rejected.append("invalid resource: " + key)
+    for test in spec["tests"]:
+        td = TESTS.get(test, {})
+        if td.get("memory") and memory_bytes(td["memory"]) > memory_bytes(host["resources_max"]["memory"]): rejected.append("test memory exceeds host max: " + test)
+        if td.get("needs_data") and not spec.get("data"): missing.append("data path missing")
+        if td.get("model_file") and not os.path.isfile(os.path.join(os.path.dirname(spec["model"]), td["model_file"])): missing.append("test model path missing: " + test)
+    for key in ("model", "data"):
+        if (key == "model" or spec.get(key)) and not os.path.isfile(spec.get(key) or ""): missing.append(key + " path missing")
+    return dict(decision="rejected" if rejected else "needs_information" if missing else "accepted", reasons=rejected + missing + notes,
+                host_id=host["host_id"], host_profile_sha256=profile_sha)
+
+def require_admission(*decisions):
+    for decision in decisions:
+        if decision and decision["decision"] != "accepted":
+            print("REJECT: " + decision["decision"] + ": " + "; ".join(decision["reasons"])); sys.exit(10)
+
+_observer = None
+def observer():
+    global _observer
+    if _observer is None:
+        spec = importlib.util.spec_from_file_location("lab_resource_observe", os.path.join(ROOT, "cc/resource_observe/resource_observe.py"))
+        _observer = importlib.util.module_from_spec(spec); spec.loader.exec_module(_observer)
+    return _observer
+
+def parse_memory(text, backend):
+    if backend == "tegrastats":
+        metrics, unavailable, errors = observer().parse_tegrastats(text)
+        value = next((m["value"] for m in metrics if m["name"] == "ram_used"), None)
+        return value, None if value is not None else "tegrastats RAM field missing or unparseable"
+    text = text.strip()
+    if re.fullmatch(r"\d+", text): return int(text), None
+    return None, "nvidia-smi memory.used unavailable or unparseable: " + repr(text)
+
+class MemorySampler:
+    def __init__(self, host):
+        self.backend = host["gpu"]["sampler"]; self.reader = None; self.reason = None
+        if self.backend == "tegrastats":
+            try: self.reader = observer().TegrastatsReader(250)
+            except OSError as ex: self.reason = str(ex)
+    def sample(self):
+        if self.backend == "tegrastats":
+            lines = self.reader.drain() if self.reader else []
+            return parse_memory(lines[-1], self.backend) if lines else (None, self.reason or "no tegrastats sample available")
+        try:
+            r = sh(["nvidia-smi","--query-gpu=memory.used","--format=csv,noheader,nounits"])
+            return parse_memory(r.stdout, self.backend) if not r.returncode else (None, "nvidia-smi failed: " + r.stderr.strip())
+        except OSError as ex: return None, str(ex)
+    def close(self):
+        if self.reader:
+            self.reader.close()
+            try: self.reader.p.wait(timeout=2)
+            except subprocess.TimeoutExpired: self.reader.p.kill(); self.reader.p.wait()
+
 def append(path, rec):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
@@ -64,10 +165,18 @@ def assess(test, out, err, rc):
         return dict(ok=rc == 0 and bool(rows), samples=[dict(n_prompt=r["n_prompt"], n_gen=r["n_gen"], avg_ts=r["avg_ts"], samples_ts=r.get("samples_ts")) for r in rows])
     return dict(ok=rc == 0)
 
-def gpu_state():
-    q = sh(["nvidia-smi","--query-gpu=memory.used,clocks.sm,temperature.gpu,power.draw","--format=csv,noheader"]).stdout.strip()
-    apps = sh(["nvidia-smi","--query-compute-apps=pid,used_memory","--format=csv,noheader"]).stdout.strip().splitlines()
-    return dict(gpu=q, compute_apps=apps)
+def gpu_state(host=None):
+    host = host or load_host()[0]
+    if host["gpu"]["sampler"] == "tegrastats":
+        return dict(gpu=None, compute_apps=None, unavailable=["GPU memory and compute-app enumeration unavailable on shared DRAM; tegrastats RAM is system-shared-dram"])
+    try:
+        r = sh(["nvidia-smi","--query-gpu=memory.used,clocks.sm,temperature.gpu,power.draw","--format=csv,noheader"])
+        a = sh(["nvidia-smi","--query-compute-apps=pid,used_memory","--format=csv,noheader"])
+        q = r.stdout.strip(); apps = a.stdout.strip().splitlines()
+        if r.returncode or a.returncode or not q or re.search(r"N/A|Not Supported", q + a.stdout, re.I):
+            return dict(gpu=None, compute_apps=None, unavailable=["nvidia-smi fields unavailable: " + (r.stderr + a.stderr + q).strip()])
+        return dict(gpu=q, compute_apps=apps)
+    except OSError as ex: return dict(gpu=None, compute_apps=None, unavailable=[str(ex)])
 
 def read_int(path):
     try: return int(open(path).read().strip())
@@ -82,6 +191,11 @@ def cmd_image(a):
     if r.returncode: sys.exit("image not present locally: " + r.stderr)
     iid, rd, created = r.stdout.strip().split("|")
     rec = dict(name=a.name, ref=ref, image_id=iid, repo_digests=json.loads(rd), created=created, registered=now())
+    requirements = getattr(a, "requirements", None)
+    if requirements:
+        build = json.load(open(requirements)); rec["target_requirements"] = build.get("target_requirements", {})
+        rec["platform"] = build.get("platform") or rec["target_requirements"].get("platform")
+    if getattr(a, "platform", None): rec["platform"] = a.platform
     p = os.path.join(LAB, "images", a.name + ".json"); os.makedirs(os.path.dirname(p), exist_ok=True)
     if os.path.exists(p) and json.load(open(p))["image_id"] != iid: sys.exit("name already bound to a different image id (images are immutable)")
     json.dump(rec, open(p, "w"), indent=1); print(jd(rec))
@@ -122,15 +236,19 @@ def cmd_chaos(a):
 
 def cmd_submit(a):
     img = json.load(open(os.path.join(LAB, "images", a.image + ".json")))
-    res = dict(cpus="8", memory="16g", pids="512", timeout_s="300", gpu_wait_s="600"); res.update(dict(kv.split("=") for kv in (a.res or "").split(",") if kv))
-    spec = dict(image=a.image, image_id=img["image_id"], model=os.path.abspath(a.model), model_sha256=a.model_sha256 or sha(a.model),
-                data=a.data, data_sha256=(sha(a.data) if a.data else None), tests=a.tests.split(","), resources=res, key=a.key)
+    host, profile_sha = load_host()
+    res = dict(cpus=str(host["resources_max"]["cpus"]), memory=host["resources_max"]["memory"], pids="512", timeout_s="300", gpu_wait_s="600"); res.update(dict(kv.split("=") for kv in (a.res or "").split(",") if kv))
+    spec = dict(image=a.image, image_id=img["image_id"], model=os.path.abspath(a.model), model_sha256=a.model_sha256 or (sha(a.model) if os.path.isfile(a.model) else None),
+                data=a.data, data_sha256=(sha(a.data) if a.data and os.path.isfile(a.data) else None), tests=a.tests.split(","), resources=res, key=a.key)
     jid = "job-" + sha_s(a.key)[:10]; jdir = os.path.join(LAB, "jobs", jid); p = os.path.join(jdir, "job.json")
     if os.path.exists(p):
         old = json.load(open(p))["spec"]
         if old != spec: sys.exit(f"idempotency key reused with DIFFERENT spec -> rejected (job {jid})")
         print(f"duplicate submission: existing {jid}"); return
     os.makedirs(jdir); json.dump(dict(job=jid, submitted=now(), spec=spec, spec_sha256=sha_s(jd(spec))), open(p, "w"), indent=1); os.chmod(p, 0o444)
+    decision = admission(img, spec, host, profile_sha)
+    apath = os.path.join(jdir, "admission.json")
+    json.dump(decision, open(apath, "w"), indent=1); os.chmod(apath, 0o444)
     append(os.path.join(jdir, "job.log"), dict(ts=now(), ev="submitted")); print(jid)
 
 def owned_containers(att, token=None):
@@ -140,9 +258,26 @@ def owned_containers(att, token=None):
         if token is None or lab.get("lab_token") == token: out.append(c)
     return out
 
+
+def container_argv(host, job, att, token, cname, spec, img, td):
+    res = spec["resources"]
+    cmd = ["docker","run","--rm","--name",cname,"--label",f"campaign={CID}","--label",f"lab_job={job}","--label",f"lab_attempt={att}","--label",f"lab_token={token}",
+           *sum([["-e", f"{k}={v}"] for k, v in td.get("env", {}).items()], []),*gpu_request(host),"--cpus",res["cpus"],"--memory",td.get("memory", res["memory"]),"--memory-swap",td.get("memory", res["memory"]),"--pids-limit",res["pids"],"-v",f"{os.path.dirname(spec['model'])}:/m:ro",*td.get("docker_args", [])]
+    if spec.get("data"): cmd += ["-v", f"{os.path.dirname(spec['data'])}:/d:ro"]
+    mfile = td.get("model_file", os.path.basename(spec["model"]))
+    cmd += ["--entrypoint","/app/"+td["tool"], img["image_id"], "-m", "/m/"+mfile]
+    if td.get("needs_data"): cmd += ["-f", "/d/"+os.path.basename(spec["data"])]
+    cmd += td["args"]
+    return cmd
+
 def cmd_run(a):
     job = json.load(open(os.path.join(LAB, "jobs", a.job, "job.json"))); spec = job["spec"]; jdir = os.path.join(LAB, "jobs", a.job)
     img = json.load(open(os.path.join(LAB, "images", spec["image"] + ".json")))
+    host, profile_sha = load_host()
+    apath = os.path.join(jdir, "admission.json")
+    recorded = json.load(open(apath)) if os.path.exists(apath) else None
+    current = admission(img, spec, host, profile_sha)
+    require_admission(recorded, current)
     for prev in sorted(glob.glob(os.path.join(jdir, "att-*"))):   # duplicate-delivery / replacement guard
         ls = last_state(prev); pa = os.path.basename(prev)
         if ls and ls["state"] != "terminal":
@@ -157,43 +292,50 @@ def cmd_run(a):
     S("queued"); res = spec["resources"]
     S("preparing")
     if sha(spec["model"]) != spec["model_sha256"]: S("terminal", execution="not_started", reason="model hash mismatch"); sys.exit(4)
-    S("running", admission="none (gpu lock removed by user decision)", gpu_pre=gpu_state())
+    S("running", admission="none (gpu lock removed by user decision)", gpu_pre=gpu_state(host))
     results = {}; cancelled = False; interrupted = False; sandbox_died = False
     for ti, tfull in enumerate(spec["tests"]):
         t = tfull; td = TESTS[t]; cname = f"lab-{CID}-{a.job}-{att}-{t}-{ti}".lower()
-        cmd = ["docker","run","--rm","--name",cname,"--label",f"campaign={CID}","--label",f"lab_job={a.job}","--label",f"lab_attempt={att}","--label",f"lab_token={token}",
-               *sum([["-e", f"{k}={v}"] for k, v in td.get("env", {}).items()], []),"--gpus","all","--cpus",res["cpus"],"--memory",td.get("memory", res["memory"]),"--memory-swap",td.get("memory", res["memory"]),"--pids-limit",res["pids"],"-v",f"{os.path.dirname(spec['model'])}:/m:ro",*td.get("docker_args", [])]
-        if spec.get("data"): cmd += ["-v", f"{os.path.dirname(spec['data'])}:/d:ro"]
+        cmd = container_argv(host, a.job, att, token, cname, spec, img, td)
         mfile = td.get("model_file", os.path.basename(spec["model"]))
-        cmd += ["--entrypoint","/app/"+td["tool"], img["image_id"], "-m", "/m/"+mfile]
-        if td.get("needs_data"): cmd += ["-f", "/d/"+os.path.basename(spec["data"])]
-        cmd += td["args"]
         if td.get("cold_cache"):   # evict ONLY this model file's cached pages (posix_fadvise); never a host-wide flush
             fd = os.open(os.path.join(os.path.dirname(spec["model"]), mfile), os.O_RDONLY); os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED); os.close(fd)
         o, e = os.path.join(adir, f"{t}#{ti}.stdout"), os.path.join(adir, f"{t}#{ti}.stderr"); ts = time.monotonic()
         with open(o,"w") as fo, open(e,"w") as fe:
-            p = subprocess.Popen(cmd, stdout=fo, stderr=fe, start_new_session=True)
+            p = subprocess.Popen(docker_argv(cmd), stdout=fo, stderr=fe, start_new_session=True)
             S("running", test=t, container=cname)
             if os.environ.get("LAB_FAULT") == "die_after_start": time.sleep(1.5); os.kill(os.getpid(), 9)
-            peak_gpu, peak_host, io_rbytes, cg, base_gpu = 0, 0, 0, None, int(sh(["nvidia-smi","--query-gpu=memory.used","--format=csv,noheader,nounits"]).stdout.strip() or 0); nsamp = 0; tlast = 0
-            while p.poll() is None:
-                if time.monotonic() - tlast > 0.25:   # memory sampler: GPU total used (device is otherwise idle) + container cgroup
-                    tlast = time.monotonic(); g = sh(["nvidia-smi","--query-gpu=memory.used","--format=csv,noheader,nounits"]).stdout.strip()
-                    if g: peak_gpu = max(peak_gpu, int(g)); nsamp += 1
-                    cg = cg or cid_cgroup(cname)
-                    if cg:
-                        v = read_int(cg + "/memory.peak") or read_int(cg + "/memory.current"); peak_host = max(peak_host, v or 0)
-                        try: io_rbytes = max(io_rbytes, sum(int(x.split("=")[1]) for l in open(cg + "/io.stat") for x in l.split() if x.startswith("rbytes=")))
-                        except Exception: pass
-                if os.path.exists(os.path.join(adir, "cancel_requested")): cancelled = True; sh(["docker","kill",cname]); break
-                if time.monotonic() - ts > float(res["timeout_s"]): sh(["docker","kill",cname]); interrupted = True; break
-                time.sleep(0.3)
-            rc = p.wait()
+            sampler = MemorySampler(host)
+            try:
+                base_gpu, sample_reason = sampler.sample()
+                peak_gpu, peak_host, io_rbytes, cg = None, 0, 0, None
+                nsamp = 0; tlast = 0
+                while p.poll() is None:
+                    if time.monotonic() - tlast > 0.25:   # memory sampler: GPU total used (device is otherwise idle) + container cgroup
+                        tlast = time.monotonic(); g, why = sampler.sample()
+                        if why: sample_reason = why
+                        if g is not None: peak_gpu = max(peak_gpu, g) if peak_gpu is not None else g; nsamp += 1
+                        cg = cg or cid_cgroup(cname)
+                        if cg:
+                            v = read_int(cg + "/memory.peak") or read_int(cg + "/memory.current"); peak_host = max(peak_host, v or 0)
+                            try: io_rbytes = max(io_rbytes, sum(int(x.split("=")[1]) for l in open(cg + "/io.stat") for x in l.split() if x.startswith("rbytes=")))
+                            except Exception: pass
+                    if os.path.exists(os.path.join(adir, "cancel_requested")): cancelled = True; sh(["docker","kill",cname]); break
+                    if time.monotonic() - ts > float(res["timeout_s"]): sh(["docker","kill",cname]); interrupted = True; break
+                    time.sleep(0.3)
+                rc = p.wait()
+            finally:
+                sampler.close()
         died = (not cancelled) and (not interrupted) and rc in (137, 143)   # SIGKILL/SIGTERM not requested by us: sandbox/container terminated externally (or OOM)
-        results[f"{t}#{ti}"] = dict(exit_code=rc, elapsed_s=round(time.monotonic()-ts,3), partial=died, mem=dict(gpu_peak_mib=peak_gpu, gpu_baseline_mib=base_gpu, gpu_delta_mib=peak_gpu-base_gpu, host_cgroup_peak_mib=round(peak_host/2**20,1), io_read_mib=round(io_rbytes/2**20,1), samples=nsamp, method="nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"), **assess(t, open(o, errors="replace").read(), open(e, errors="replace").read(), rc))
+        results[f"{t}#{ti}"] = dict(exit_code=rc, elapsed_s=round(time.monotonic()-ts,3), partial=died, mem=dict(gpu_peak_mib=peak_gpu if sampler.backend == "nvml" else None, gpu_baseline_mib=base_gpu if sampler.backend == "nvml" else None, gpu_delta_mib=(peak_gpu-base_gpu if sampler.backend == "nvml" and peak_gpu is not None and base_gpu is not None else None), host_cgroup_peak_mib=round(peak_host/2**20,1), io_read_mib=round(io_rbytes/2**20,1), samples=nsamp, method="nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"), **assess(t, open(o, errors="replace").read(), open(e, errors="replace").read(), rc))
+        mem = results[f"{t}#{ti}"]["mem"]
+        if sampler.backend == "tegrastats":
+            mem.update(shared_dram_peak_mib=peak_gpu, shared_dram_baseline_mib=base_gpu, scope="system-shared-dram", method="tegrastats RAM used polled 4Hz + cgroup memory.peak", gpu_memory_reason="shared DRAM is not GPU memory")
+        if sample_reason or peak_gpu is None:
+            mem["unavailable"] = sample_reason or "no memory samples"
         if died: sandbox_died = True; S("sandbox_terminated", test=t, exit_code=rc, last_durable_bytes=os.path.getsize(o), last_durable_mtime=dt.datetime.fromtimestamp(os.path.getmtime(o), dt.timezone.utc).isoformat())
         if cancelled or interrupted or died: break
-    post = gpu_state()
+    post = gpu_state(host)
     S("assessing")
     left = owned_containers(att, token)
     if cancelled: S("cancel_confirmed" if not left else "cancel_unconfirmed", owned_left=left)
@@ -201,7 +343,7 @@ def cmd_run(a):
     result = dict(job=a.job, attempt=att, image_id=spec["image_id"], token_sha=sha_s(token),
       execution=dict(status="cancelled" if cancelled else "interrupted_sandbox_terminated" if sandbox_died else "timeout_killed" if interrupted else "completed" if all(r["exit_code"]==0 for r in results.values()) else "failed"),
       quality=dict(tests=results, all_ok=(not cancelled and not interrupted and not sandbox_died and len(results)==len(spec["tests"]) and all(r["ok"] for r in results.values()))),
-      performance=dict(gpu_post=post, exclusive_before_after=(not post["compute_apps"]), note="exclusivity = no compute apps visible at end; during-run interference not observed by lab"),
+      performance=dict(gpu_post=post, exclusive_before_after=(post["compute_apps"] == []), note="exclusivity = no compute apps visible at end; during-run interference not observed by lab"),
       evidence=dict(files=files, coverage=dict(tests_expected=len(spec["tests"]), tests_started=len(results), tests_completed_cleanly=sum(1 for r in results.values() if not r.get("partial") and r["exit_code"]==0), interrupted=sandbox_died or interrupted or cancelled, note="incomplete data is never scored; affected comparisons invalid")), cleanup=dict(owned_containers_left=left, confirmed=not left))
     json.dump(result, open(os.path.join(adir,"result.json"),"w"), indent=1)
     S("exporting"); export(a.job, att, adir)
@@ -223,6 +365,10 @@ def cmd_cancel(a):
     append(os.path.join(adir, "state.jsonl"), dict(ts=now(), attempt=a.att, state="cancel_requested")); print("cancel requested (NOT confirmed)")
 
 def cmd_status(a):
+    for path in sorted(glob.glob(os.path.join(LAB, "jobs", a.job or "*", "job.json"))):
+        apath = os.path.join(os.path.dirname(path), "admission.json")
+        decision = json.load(open(apath)) if os.path.exists(apath) else {"decision": "legacy (unrecorded)"}
+        print(os.path.basename(os.path.dirname(path)), "admission=" + decision["decision"], "; ".join(decision.get("reasons", [])))
     for adir in sorted(glob.glob(os.path.join(LAB, "jobs", a.job or "*", "att-*"))):
         s = last_state(adir); print(adir.split("jobs/")[1], s["state"] if s else None, {k: v for k, v in (s or {}).items() if k in ("execution","reason","test")})
 
@@ -263,7 +409,7 @@ def cmd_register(a):
     append(idx, dict(job=a.job, attempt=a.att, result_sha256=rsha, registered=now())); print("registered")
 
 ap = argparse.ArgumentParser(); sp = ap.add_subparsers(dest="c", required=True)
-p = sp.add_parser("image"); p.add_argument("op"); p.add_argument("name"); p.add_argument("ref"); p.set_defaults(f=cmd_image)
+p = sp.add_parser("image"); p.add_argument("op"); p.add_argument("name"); p.add_argument("ref"); p.add_argument("--platform"); p.add_argument("--requirements"); p.set_defaults(f=cmd_image)
 p = sp.add_parser("submit"); [p.add_argument("--" + x) for x in ("image","model","model-sha256","data","tests","key","res")]; p.set_defaults(f=cmd_submit)
 p = sp.add_parser("image-load"); p.add_argument("name"); p.add_argument("--archive", required=True); p.add_argument("--sha256", required=True); p.add_argument("--expect-config-id", required=True); p.set_defaults(f=cmd_imageload)
 p = sp.add_parser("chaos"); p.add_argument("job"); p.add_argument("att"); p.set_defaults(f=cmd_chaos)
@@ -272,4 +418,5 @@ p = sp.add_parser("cancel"); p.add_argument("job"); p.add_argument("att"); p.set
 p = sp.add_parser("status"); p.add_argument("job", nargs="?"); p.set_defaults(f=cmd_status)
 p = sp.add_parser("reconcile"); p.set_defaults(f=cmd_reconcile)
 p = sp.add_parser("register"); p.add_argument("job"); p.add_argument("att"); p.set_defaults(f=cmd_register)
-a = ap.parse_args(); a.model_sha256 = getattr(a, "model_sha256", None); a.f(a)
+if __name__ == "__main__":
+    a = ap.parse_args(); a.model_sha256 = getattr(a, "model_sha256", None); a.f(a)

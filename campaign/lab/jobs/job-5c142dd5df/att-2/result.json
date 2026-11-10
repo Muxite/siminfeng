@@ -1,0 +1,88 @@
+{
+ "job": "job-5c142dd5df",
+ "attempt": "att-2",
+ "image_id": "sha256:0b6c97b1ef6dab8523013f515c1b567f9ca9e16e991891e6785b6a571d98b1e1",
+ "token_sha": "efb7d98def1582dc81de4b3472fcd39e3a1e45bc94801ef6651717f93270d2fb",
+ "execution": {
+  "status": "completed"
+ },
+ "quality": {
+  "tests": {
+   "ppl20#0": {
+    "exit_code": 0,
+    "elapsed_s": 15.787,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": null,
+     "gpu_baseline_mib": null,
+     "gpu_delta_mib": null,
+     "host_cgroup_peak_mib": 3524.3,
+     "io_read_mib": 62.5,
+     "samples": 48,
+     "method": "tegrastats RAM used polled 4Hz + cgroup memory.peak",
+     "shared_dram_peak_mib": 4696,
+     "shared_dram_baseline_mib": null,
+     "scope": "system-shared-dram",
+     "gpu_memory_reason": "shared DRAM is not GPU memory",
+     "unavailable": "no tegrastats sample available"
+    },
+    "ok": true,
+    "ppl": 10.0094,
+    "ppl_stderr": 0.36964
+   },
+   "gen_smoke#1": {
+    "exit_code": 0,
+    "elapsed_s": 6.517,
+    "partial": false,
+    "mem": {
+     "gpu_peak_mib": null,
+     "gpu_baseline_mib": null,
+     "gpu_delta_mib": null,
+     "host_cgroup_peak_mib": 3638.0,
+     "io_read_mib": 256.4,
+     "samples": 20,
+     "method": "tegrastats RAM used polled 4Hz + cgroup memory.peak",
+     "shared_dram_peak_mib": 5705,
+     "shared_dram_baseline_mib": null,
+     "scope": "system-shared-dram",
+     "gpu_memory_reason": "shared DRAM is not GPU memory",
+     "unavailable": "no tegrastats sample available"
+    },
+    "ok": true,
+    "chars": 113,
+    "head": "The capital of France is Paris.\nParagraph 0 states that \"Paris is the capital of France.\"\nParagraph 0 states that"
+   }
+  },
+  "all_ok": true
+ },
+ "performance": {
+  "gpu_post": {
+   "gpu": null,
+   "compute_apps": null,
+   "unavailable": [
+    "GPU memory and compute-app enumeration unavailable on shared DRAM; tegrastats RAM is system-shared-dram"
+   ]
+  },
+  "exclusive_before_after": false,
+  "note": "exclusivity = no compute apps visible at end; during-run interference not observed by lab"
+ },
+ "evidence": {
+  "files": {
+   "gen_smoke#1.stderr": "5a9f478867479904d08404b97ed389bd0d04572aba0795ff5ae5c86784d90dd2",
+   "gen_smoke#1.stdout": "13c57efd69b4c39f484750de97c5e3469791434cb7a9ce8bf1c553c027ff8491",
+   "ppl20#0.stderr": "9b57075d7b40fe511e2b21e76913f10923ae801b9617394c6a44ff9784883c82",
+   "ppl20#0.stdout": "40966c789ec1cc7a281969329871e2b5f79ef592f135f5440356fd027fd72c3b"
+  },
+  "coverage": {
+   "tests_expected": 2,
+   "tests_started": 2,
+   "tests_completed_cleanly": 2,
+   "interrupted": false,
+   "note": "incomplete data is never scored; affected comparisons invalid"
+  }
+ },
+ "cleanup": {
+  "owned_containers_left": [],
+  "confirmed": true
+ }
+}
