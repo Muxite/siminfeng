@@ -9,7 +9,7 @@ Read sections 1-3 and 6 first (about 10 minutes). The unedited c1 wrap-up text i
 - Resume: CLOSEOUT section 8. Sections 2, 6 and 7 below are **pre-overnight snapshots**: T-PL4/T-QRT were delivered (review pending), and the services were restored.
 
 ## 0. Latest: D041–D048 (2026-11-10 overnight). Read this first.
-The progress ledger with every table is at https://claude.ai/artifact/8Uqsnssn6R6KY2EtAyTiyD (private to the owner).
+The progress ledger with every table is at https://claude.ai/artifact/8Uqsnssn6R6KY2EtAyTiyD (sharing: anyone with the link).
 
 | ID | Verdict | Category | One line |
 |---|---|---|---|

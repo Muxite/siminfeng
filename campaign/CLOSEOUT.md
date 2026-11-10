@@ -381,7 +381,7 @@ These add to R-A..R-E in MANAGER-DESIGN.
   - gpu_budget;
   - T-PL4/T-QRT (review pending);
   - the stale factory tests.
-- **Ledger artifact:** https://claude.ai/artifact/8Uqsnssn6R6KY2EtAyTiyD (private to the owner; v5 + closeout note).
+- **Ledger artifact:** https://claude.ai/artifact/8Uqsnssn6R6KY2EtAyTiyD (v6, closeout state; sharing reported as "anyone with the link", change it from the page's Share menu if unwanted).
 
 ## 7. Large artifacts NOT in git (local only; checksums in `ARTIFACT-MANIFEST.tsv`)
 **No approved remote artifact store exists for this campaign.** MANAGER-DESIGN's evidence store is the local `lab/export/`. Nothing was uploaded anywhere. All of the following are **untransferred** and live only on the x86 host under `~/projects/siminfeng/campaign/` or `~/models/campaign/`.
