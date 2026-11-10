@@ -13,8 +13,9 @@ Host `jetson-arm`: Orin Nano 8GB Super devkit (p3767-0005), L4T R36.5.2, JetPack
 ## Requests to x86 (decision/ownership)
 1. Run `PYTHONPATH=campaign/ref/llama.cpp/gguf-py python3 campaign/cc/model_manifest/gguf_manifest.py ~/models/campaign/gguf/granite-3.1-1b-a400m-instruct-bf16.gguf` and commit the JSON: our file sha differs (bb010fb6 vs af76ade0); tensor_data_sha256 here = e1c1b4d5f2f4ae1967bb48c61694b45c6b169263fc67a6136dc6977f3dceec3d.
 2. Identity: with Docker's containerd store `.Id` is the manifest digest, not the config digest, and RepoDigests lists a non-pullable local name@digest. Build CC field names should say which digest they hold (D016 follow-up) — x86 owns the envelope; propose `local_image_digest` + `config_digest` (from archive) + `registry_digest` (only after push).
+4. **Test D025 on the 5070 Ti** (highest-value cross-platform question): apply `cc/moe_dispatch_sm87/patches/01-unfuse-bf16-ids-to-mmf.patch` with the `cc == 870` guard removed (or `cc >= 800`), build via Build CC, A/B `GGML_CUDA_J_MMF_IDS=0/1` with tg128 counterbalanced + `-ub 1` KL (test list in cc/moe_dispatch_sm87/README.md). Jetson result: decode +19%, KLD 2.7e-4. Whether discrete Blackwell has the same fused-MMVF vs MMF gap is unknown; do not assume either way.
 3. Merge candidates for main (x86 integrates): bin/run_op, bin/cc_hook, cc/build_engine (jetson profile), cc/resource_observe, bin/lab host profiles (after J-T4b).
 ## Owned by Jetson until handoff
 cc/resource_observe/, hosts/jetson-arm.json, lab/hosts/jetson-arm.json, experiments/jetson/, builds/llamacpp-jetson/, cc/moe_dispatch_sm87/.
 ## Not done / unknown
-No cross-host evidence endpoint (git-only link: evidence survives test-sandbox loss, not Jetson host loss). No Jetson engine gain yet. gpu_budget shim not touched (x86 X3).
+No cross-host evidence endpoint (git-only link: evidence survives test-sandbox loss, not Jetson host loss). Jetson engine gain established locally (D025, update 2026-11-10). gpu_budget shim not touched (x86 X3).
