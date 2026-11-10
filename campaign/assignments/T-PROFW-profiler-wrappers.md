@@ -1,0 +1,6 @@
+# T-PROFW — Profiler capture CCs: bpf split timer, ncu summarizer, nsys capture wrapper
+Write ONLY cc/profilers/** and artifacts/codexPROFW/**. You have no Docker/GPU/sudo; produce command generators + parsers, tested on REAL captured outputs.
+1. bpf_split_timer: generate a bpftrace script for a container (`docker inspect -f '{{.State.Pid}}' NAME` → /proc/PID/root/app/libggml-cpu.so.*), probing ggml_graph_compute entry/return (+ optional per-thread), print-format stable; parser for its output → JSON {splits, splits_per_token (given t/s), cpu_time_frac, hist}. Fixture: artifacts/bpf1/bpf.txt (real). Document pitfalls from decisions/D042 §3.
+2. ncu_summary: parse ncu --csv (real fixture artifacts/ncu1/ncu.csv) → per-kernel-class time share, GB/s, dram%, sm%, launch-bound flag (time < 5us and dram% < 5); units handling (ns/us/ms, byte/Kbyte/Mbyte/Gbyte). Reproduce D041's numbers (222 GB/s effective, ~40% tiny kernels).
+3. capture.py: emit docker argv for (a) extracting /app from an engine image into a dir, (b) running nsys or ncu from campaign/cuda-tools:c1 against that /app with the flags recorded in decisions D004/D011/D041 (nsys --sample=none --cpuctxsw=none; ncu --cap-add SYS_ADMIN, launch-skip/count) and model mounts read-only.
+pytest. README with exact commands. Final message: files, tests, reproduced D041 numbers.

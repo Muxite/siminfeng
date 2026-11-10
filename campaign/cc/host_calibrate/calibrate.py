@@ -12,7 +12,7 @@ import statistics
 import sys
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / 'artifacts/codexCAL'
+OUT = ROOT / 'artifacts/codexCAL2'
 PIN = '31288c9c66e59377f7788d920678a565bb89dd37'
 # GGML block sizes and bytes, from pinned ggml-common.h.
 BLOCK = {'Q2_K': (256, 84), 'Q3_K': (256, 110), 'Q4_K': (256, 144),
@@ -23,7 +23,7 @@ TYPES = ('q2_K', 'q3_K', 'q4_K', 'q6_K', 'q8_0')
 def output_path(path):
     p = Path(path).resolve()
     if not p.is_relative_to(OUT):
-        raise ValueError('output must stay under artifacts/codexCAL')
+        raise ValueError('output must stay under artifacts/codexCAL2')
     return p
 
 
@@ -119,6 +119,67 @@ def identity(nvidia, lscpu):
                 note='Raw identity text; unavailable GPU information remains unknown.')
 
 
+# Decimal GB/s theoretical ceilings supplied by the T-CAL2 assignment.
+GPU_CEILINGS = {'rtx 5070 ti': 896., 'jetson orin nano': 68.}
+
+
+def bandwidth_ceilings(nvidia, lscpu, memory_identity=None):
+    names = [name for name in GPU_CEILINGS if name in nvidia.lower()]
+    if len(names) != 1:
+        raise ValueError('unknown/ambiguous GPU identity: no stated bandwidth ceiling; fail closed')
+    memory_identity = memory_identity or {}
+    if memory_identity:
+        channels = positive(memory_identity['channels'])
+        rate = positive(memory_identity['rate_mts'])
+        if channels != int(channels) or channels > 32 or rate > 20000:
+            raise ValueError('invalid host memory identity')
+        cpu = channels * rate * 8 / 1000
+        reason = 'operator-supplied host memory identity: channels x DDR MT/s x 8 bytes / 1000'
+    else:
+        # lscpu describes caches/topology, not populated DRAM channels or DDR rate.
+        cpu, reason = 60., 'lscpu lacks populated DRAM channels/rate; conservative 60 GB/s fallback'
+    return dict(gpu_gbs=GPU_CEILINGS[names[0]], gpu_reason=names[0]+' stated theoretical peak',
+                cpu_gbs=cpu, cpu_reason=reason, memory_identity=memory_identity)
+
+
+def guard_bandwidth(samples, ceilings):
+    failures = []
+    for name, rows in samples.items():
+        device = 'gpu' if name.startswith('CUDA') else 'cpu'
+        limit = ceilings[device+'_gbs']
+        for row in rows:
+            value = positive(row['weight_gbs'])
+            if value > limit:
+                failures.append(f"{name} {row.get('kind', 'stream')}: {value:.3f} GB/s > "
+                                f"{limit:g} GB/s ceiling ({ceilings[device+'_reason']})")
+    if failures:
+        raise ValueError('implausible bandwidth; cache residency suspected; fail closed: '+'; '.join(failures))
+
+
+def parse_stream(text, device, max_threads=8):
+    rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+    expected = {(t,r) for t in range(1,(max_threads if device=='cpu' else 1)+1) for r in range(3)}
+    if len(rows)!=len(expected) or {(r['threads'],r['repeat']) for r in rows}!=expected:
+        raise ValueError('incomplete rotating stream sweep')
+    metadata = set()
+    for r in rows:
+        pool, cache, count = (r[k] for k in ('working_set_bytes','cache_bytes','bytes_read'))
+        if (r['probe']!=device+'-stream-v1' or r['buffers']!=8 or
+            any(type(v) is not int or v<=0 for v in (pool,cache,count)) or
+            not 512*1048576<=pool<=1024**3 or pool<8*cache or
+            count<pool or count%pool or positive(r['ms'])>25000):
+            raise ValueError('invalid stream footprint/timing: require >=8x cache, >=512 MiB, <=1 GiB')
+        positive(r['checksum'])
+        measured=count/(positive(r['ms'])*1e6)
+        if not math.isclose(positive(r['gbs']),measured,rel_tol=1e-5):
+            raise ValueError('stream GB/s disagrees with byte/time accounting')
+        r['weight_gbs']=measured
+        metadata.add((pool,cache,r['buffers']))
+    if len(metadata)!=1:
+        raise ValueError('stream footprint changed within sweep')
+    return rows
+
+
 def model_profile(model):
     """Header-only check: qualify the supplied small Granite allocation envelope."""
     sys.path.insert(0, str(ROOT/'cc/model_inspect'))
@@ -149,17 +210,19 @@ def command_plan(image, model, k0, k1, out):
         jobs.append(dict(name=name, argv=cmd))
     add('nvidia', ['nvidia-smi','-L'], True)
     add('lscpu', ['lscpu'])
-    for backend in ('CUDA0','CPU'):
-        for op in ('MUL_MAT_ID','MUL_MAT'):
-            if op == 'MUL_MAT_ID':
-                pattern = r'^type_a=(q4_K|q6_K|q8_0),type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1\.000000,m_v=0,ids_offset=0$'
-            else:
-                pattern = '^type_a=('+'|'.join(TYPES)+'),type_b=f32,m=4096,n=1,k=14336,bs=\\[1,1\\],nr=\\[1,1\\],per=\\[0,1,2,3\\],k_v=0,o=1,src_overlap=0,m_v=0,pad=0$'
-            add(f'{backend}-{op}', ['/app/test-backend-ops','perf','-b',backend,'-o',op,'-p',pattern], True)  # engine binary links libcuda even for -b CPU
     add('build-h2d', ['nvcc','-O2','/src/h2d.cu','-o','/out/h2d'], mounts=(
         '--mount',f'type=bind,src={ROOT}/cc/host_calibrate,dst=/src,readonly',
         '--mount',f'type=bind,src={out},dst=/out'), run_image='campaign/cuda-tools:c1')
     add('h2d', ['/probe/h2d'], True, ('--mount',f'type=bind,src={out},dst=/probe,readonly'))
+    for name, compiler in (
+        ('bw', ['nvcc','-O3','/src/bw.cu','-o','/out/bw']),
+        ('bw_cpu', ['gcc','-O3','-mavx2','-fopenmp','-Wall','-Wextra','/src/bw_cpu.c','-o','/out/bw_cpu'])):
+        add('build-'+name, compiler, mounts=(
+            '--mount',f'type=bind,src={ROOT}/cc/host_calibrate,dst=/src,readonly',
+            '--mount',f'type=bind,src={out},dst=/out'), run_image='campaign/cuda-tools:c1')
+    add('cuda-stream', ['/probe/bw'], True, ('--mount',f'type=bind,src={out},dst=/probe,readonly'))
+    add('cpu-stream', ['/probe/bw_cpu','8'], mounts=(
+        '--mount',f'type=bind,src={out},dst=/probe,readonly'), run_image='campaign/cuda-tools:c1')
     for k in (k0,k1):
         add(f'bench-{k}', ['/app/llama-bench','-m','/model/input.gguf','-ngl','999',
             '--n-cpu-moe',str(k),'-p','0','-n','64','-r','2','-t','8','-b','64','-ub','64','-o','json'],
@@ -176,15 +239,18 @@ def parse_capture(manifest, capture, stats):
             raise ValueError(f'{name} failed: {meta}')
         raw[name] = (capture/f'{name}.stdout').read_text()
     samples = {name:parse_perf(text) for name,text in raw.items() if '-MUL_MAT' in name}
-    cpu = {}
-    spreads = {}
-    for kind in BLOCK:
-        # Expert path when independently available; Q2/Q3 use dense decode screen.
-        source = 'CPU-MUL_MAT_ID' if kind in ('Q4_K','Q6_K','Q8_0') else 'CPU-MUL_MAT'
-        vals = [r['weight_gbs'] for r in samples[source] if r['kind']==kind]
-        spreads[kind] = summary(vals)
-        cpu[kind] = spreads[kind]['median']
-    gpu = summary([r['weight_gbs'] for r in samples['CUDA0-MUL_MAT'] if r['kind']=='Q4_K'])
+    ceilings = bandwidth_ceilings(raw['nvidia'],raw['lscpu'],manifest.get('memory_identity'))
+    # Legacy captures MUST be rejected before any tensor/model algebra or output.
+    guard_bandwidth(samples,ceilings)
+    streams = {}
+    if 'cpu-stream' in raw or 'cuda-stream' in raw:
+        streams = {d:parse_stream(raw[d+'-stream'],d) for d in ('cpu','cuda')}
+        guard_bandwidth({'CPU-stream':streams['cpu'],'CUDA-stream':streams['cuda']},ceilings)
+        spreads = {q:summary([r['weight_gbs'] for r in streams['cpu'] if r['threads']==8]) for q in BLOCK}
+        cpu = {q:spreads[q]['median'] for q in BLOCK}
+        gpu = summary([r['weight_gbs'] for r in streams['cuda']])
+    else:
+        raise ValueError('legacy perf is not a DRAM measurement; rotating stream captures required')
     h2d = parse_h2d(raw['h2d'])
     bw_h2d = summary([r['gbs'] for r in h2d if r['bytes']>=64*1048576])
     k0,k1 = manifest['cpu_layers']
@@ -208,16 +274,17 @@ def parse_capture(manifest, capture, stats):
     constants = dict(bw_gpu_gbs=gpu['median'],bw_cpu_gbs=cpu,bw_h2d_gbs=bw_h2d['median'],handoff_us=h,cache_miss_us=0.)
     return dict(schema='host-calibration/1', source_commit=PIN, image=manifest['image'],
                 host=identity(raw['nvidia'],raw['lscpu']), constants=constants,
-                raw_samples=dict(perf=samples,h2d=h2d,bench_us=times,handoff_us=hs),
+                plausibility=ceilings, raw_samples=dict(perf=samples,streams=streams,h2d=h2d,bench_us=times,handoff_us=hs),
                 uncertainty=dict(gpu=gpu,cpu=spreads,h2d=bw_h2d,handoff=dict(min=min(hs),max=max(hs),count=len(hs),
                     note='Correlated pairwise repeat residuals; not independent samples or a CI.')),
                 handoff_terms=dict(delta_cpu_us=dc,delta_gpu_us=dg,delta_layers=k1-k0),
                 provenance=dict(manifest=manifest,raw_outputs=raw),
-                caveats=['Microbenchmark effective bandwidth, not validated end-to-end fit.',
-                    'Q2_K/Q3_K use dense GEMV, not expert MUL_MAT_ID (absent in pinned perf cases).',
-                    'Q4_K dense GPU screen represents all GPU types; raw expert and other dense screens retained.',
+                caveats=['Rotating FP32 read bandwidth is a DRAM screen; quantization/dequantization throughput is unmeasured.',
+                    'All CPU quant types use the same eight-thread DRAM proxy; validate with model benchmarks.',
+                    'H2D probe and two-K residual handoff algebra unchanged; old captures are never overwritten.',
                     'Raw pinned H2D excludes cache dispatch; cache_miss_us remains unmeasured zero.',
-                    'Single shape/reruns may be cache-resident. Sample spread excludes systematic error.'])
+                    'Observed spread excludes systematic model error; no whole-model fit validation.'])
+
 
 
 def main():
@@ -227,6 +294,8 @@ def main():
     plan.add_argument('--image',required=True)
     plan.add_argument('--model',required=True)
     plan.add_argument('--cpu-layers',nargs=2,type=int,required=True)
+    plan.add_argument('--memory-channels',type=int)
+    plan.add_argument('--memory-rate-mts',type=float)
     plan.add_argument('--out',default=str(OUT/'gpu'))
     parse = sub.add_parser('parse')
     parse.add_argument('--capture',required=True)
@@ -238,13 +307,17 @@ def main():
             out = output_path(args.out)
             jobs = command_plan(args.image,args.model,*args.cpu_layers,out)
             manifest = dict(schema='host-calibration-plan/1',image=args.image,model=str(Path(args.model).resolve()),cpu_layers=args.cpu_layers,jobs=jobs)
+            if (args.memory_channels is None) != (args.memory_rate_mts is None):
+                raise ValueError('supply both memory channels and DDR rate or neither')
+            if args.memory_channels is not None:
+                manifest['memory_identity'] = dict(channels=positive(args.memory_channels),rate_mts=positive(args.memory_rate_mts))
             emit(out/'manifest.json',manifest)
             emit(out/'commands.json',[j['argv'] for j in jobs])
             print(json.dumps([j['argv'] for j in jobs],indent=2))
         else:
             capture = Path(args.capture)
             emit(args.out,parse_capture(read(capture/'manifest.json'),capture,read(args.stats)))
-    except (ValueError,KeyError,OSError) as exc:
+    except (ValueError,KeyError,OSError,TypeError) as exc:
         p.error(str(exc))
 
 if __name__ == '__main__':

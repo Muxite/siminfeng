@@ -1,0 +1,33 @@
+{
+  "returncode": 0,
+  "argv": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "host-cal-1794283080645946935",
+    "--init",
+    "--network=none",
+    "--read-only",
+    "--memory=2g",
+    "--memory-swap=2g",
+    "--pids-limit=128",
+    "--tmpfs",
+    "/tmp:rw,size=64m",
+    "--stop-timeout=1",
+    "--mount",
+    "type=bind,src=/home/muk/projects/siminfeng/campaign/cc/host_calibrate,dst=/src,readonly",
+    "--mount",
+    "type=bind,src=/home/muk/projects/siminfeng/campaign/artifacts/codexCAL/gpu,dst=/out",
+    "campaign/cuda-tools:c1",
+    "timeout",
+    "-k",
+    "1s",
+    "25s",
+    "nvcc",
+    "-O2",
+    "/src/h2d.cu",
+    "-o",
+    "/out/h2d"
+  ]
+}

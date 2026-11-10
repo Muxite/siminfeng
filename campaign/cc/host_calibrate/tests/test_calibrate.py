@@ -41,7 +41,7 @@ def test_real_cpu_identity():
     assert host['nvidia_smi_text']==''
 
 
-def test_plan_bounded_and_filters(tmp_path,monkeypatch):
+def test_plan_bounded(tmp_path,monkeypatch):
     monkeypatch.setattr(c,'model_profile',lambda _: {'n_layer':24})
     model=tmp_path/'small.gguf';model.write_bytes(b'GGUF')
     jobs=c.command_plan('sha256:release',model,0,4,c.OUT/'test')
@@ -50,12 +50,7 @@ def test_plan_bounded_and_filters(tmp_path,monkeypatch):
         a=j['argv']
         assert a[:3]==['docker','run','--rm']
         assert '--memory=2g' in a and a[a.index('timeout')+3]=='25s'
-    for j in jobs:
-        if '-p' in j['argv'] and 'perf' in j['argv']:
-            import re
-            fixture='cpu-expert-real.txt' if j['name'].endswith('_ID') else 'cpu-perf-real.txt'
-            params=c.parse_perf((F/fixture).read_text())[0]['params']
-            assert re.search(j['argv'][-1],params)
+
 
 
 def test_write_escape():
@@ -87,13 +82,9 @@ def test_apply_consumed_by_real_decode_model():
 
 def test_handoff_pipeline_synthetic_explicit(tmp_path):
     # Synthetic mechanism test; benchmark formats separately have real captures above.
-    names=['nvidia','lscpu','CPU-MUL_MAT','CPU-MUL_MAT_ID','CUDA0-MUL_MAT','CUDA0-MUL_MAT_ID','h2d','bench-0','bench-1']
-    dense=(F/'cpu-perf-real.txt').read_text()
-    expert=(F/'cpu-expert-real.txt').read_text()
-    texts={'nvidia':'synthetic GPU', 'lscpu':(F/'lscpu-real.txt').read_text()}
-    for backend in ('CPU','CUDA0'):
-        texts[backend+'-MUL_MAT']='\n'.join(dense.replace('q4_K',q) for q in c.TYPES)
-        texts[backend+'-MUL_MAT_ID']='\n'.join(expert.replace('q4_K',q) for q in ('q4_K','q6_K','q8_0'))
+    names=['nvidia','lscpu','cpu-stream','cuda-stream','h2d','bench-0','bench-1']
+    texts={'nvidia':'GPU 0: NVIDIA GeForce RTX 5070 Ti (synthetic)', 'lscpu':(F/'lscpu-real.txt').read_text()}
+    texts.update({'cpu-stream':stream_text('cpu'),'cuda-stream':stream_text('cuda')})
     texts['h2d']='\n'.join(json.dumps(dict(direction='H2D',pinned=True,bytes=2**i*1048576,repeat=r,ms=1)) for i in range(9) for r in range(3))
     bench=json.loads((F/'bench-real.json').read_text())
     bench[0].update(n_gen=64,n_cpu_moe=0,samples_ts=[1000,1000])
@@ -119,3 +110,94 @@ def test_real_model_header_bounds():
     if not model.is_file():
         pytest.skip('campaign real model absent')
     assert c.model_profile(model)['n_layer']==24
+
+
+# Explicitly synthetic stream schema/algebra cases, distinct from real CAL captures.
+def stream_text(device):
+    pool=512*1048576
+    return '\n'.join(json.dumps(dict(probe=device+'-stream-v1',threads=t,repeat=r,
+        working_set_bytes=pool,cache_bytes=32*1048576,buffers=8,bytes_read=pool,
+        ms=pool/(20*1e6),checksum=100.,gbs=20.))
+        for t in range(1,9 if device=='cpu' else 2) for r in range(3))
+
+
+@pytest.mark.parametrize('name,device',[
+    ('CUDA0-MUL_MAT','gpu'), ('CPU-MUL_MAT_ID','cpu')])
+def test_real_cal_cache_residency_rejected(name,device):
+    f=F/'cal2'
+    limits=c.bandwidth_ceilings((f/'nvidia.stdout').read_text(),(f/'lscpu.stdout').read_text())
+    rows=c.parse_perf((f/(name+'.stdout')).read_text())
+    q4=next(r for r in rows if r['kind']=='Q4_K')
+    assert q4['weight_gbs']>limits[device+'_gbs']
+    with pytest.raises(ValueError,match='implausible bandwidth.*ceiling'):
+        c.guard_bandwidth({name:rows},limits)
+
+
+def test_real_cal_capture_fails_before_model_algebra():
+    f=F/'cal2'
+    with pytest.raises(ValueError,match='implausible bandwidth'):
+        c.parse_capture(c.read(f/'manifest.json'),f,{})
+
+
+def test_identity_ceilings_fail_closed():
+    assert c.bandwidth_ceilings('Jetson Orin Nano','')['gpu_gbs']==68
+    with pytest.raises(ValueError,match='unknown/ambiguous GPU'):
+        c.bandwidth_ceilings('unlisted GPU','')
+    limits=c.bandwidth_ceilings('RTX 5070 Ti','',dict(channels=2,rate_mts=3200))
+    assert limits['cpu_gbs']==51.2
+    with pytest.raises(ValueError):
+        c.bandwidth_ceilings('RTX 5070 Ti','',dict(channels=0,rate_mts=3200))
+    with pytest.raises(ValueError):
+        c.guard_bandwidth({'CPU-stream':[dict(weight_gbs=float('nan'))]},limits)
+
+
+@pytest.mark.parametrize('device',['cpu','cuda'])
+def test_stream_accounting(device):
+    text=stream_text(device)
+    rows=c.parse_stream(text,device)
+    assert all(r['weight_gbs']==pytest.approx(20.) for r in rows)
+    for key,value in [('working_set_bytes',32*1048576),('cache_bytes',128*1048576),
+                      ('bytes_read',1),('gbs',4000),('checksum',0),('ms',30000)]:
+        bad=json.loads(text.splitlines()[0]); bad[key]=value
+        lines=text.splitlines(); lines[0]=json.dumps(bad)
+        with pytest.raises(ValueError): c.parse_stream('\n'.join(lines),device)
+    with pytest.raises(ValueError): c.parse_stream('\n'.join(text.splitlines()[:-1]),device)
+
+
+def test_new_plan_stream_commands(tmp_path,monkeypatch):
+    monkeypatch.setattr(c,'model_profile',lambda _: {'n_layer':24})
+    model=tmp_path/'m.gguf';model.write_bytes(b'GGUF')
+    jobs={j['name']:j['argv'] for j in c.command_plan('release',model,0,12,c.OUT/'gpu')}
+    assert not any('MUL_MAT' in n for n in jobs)
+    assert 'campaign/cuda-tools:c1' in jobs['build-bw']
+    assert all(flag in jobs['build-bw_cpu'] for flag in ('gcc','-O3','-mavx2','-fopenmp'))
+    assert jobs['cpu-stream'][-2:]==['/probe/bw_cpu','8']
+    with pytest.raises(ValueError): c.output_path(c.ROOT/'artifacts/codexCAL/forbidden.json')
+
+
+def test_native_cpu_stream_real_capture():
+    rows=c.parse_stream((F/'cpu-stream-native-real.jsonl').read_text(),'cpu')
+    assert len(rows)==24
+    assert rows[0]['working_set_bytes']>=8*rows[0]['cache_bytes']
+    limits=c.bandwidth_ceilings((F/'cal2/nvidia.stdout').read_text(),'')
+    c.guard_bandwidth({'CPU-stream':rows},limits)
+
+
+def test_real_cal_h2d_and_benches_preserved():
+    rows=c.parse_h2d((F/'cal2/h2d.stdout').read_text())
+    bw=c.summary([r['gbs'] for r in rows if r['bytes']>=64*1048576])['median']
+    assert bw==pytest.approx(28.7,rel=.02)
+    for k in (0,12):
+        assert len(c.parse_bench((F/f'cal2/bench-{k}.stdout').read_text(),coord=k))==2
+
+
+def test_ceiling_boundary_and_stream_upper_allocation():
+    limits=c.bandwidth_ceilings('RTX 5070 Ti','')
+    c.guard_bandwidth({'CPU-stream':[dict(weight_gbs=60)],'CUDA-stream':[dict(weight_gbs=896)]},limits)
+    for name,value in [('CPU-stream',60.01),('CUDA-stream',896.01)]:
+        with pytest.raises(ValueError,match='implausible bandwidth'):
+            c.guard_bandwidth({name:[dict(weight_gbs=value)]},limits)
+    rows=[json.loads(line) for line in stream_text('cuda').splitlines()]
+    for row in rows:
+        row['working_set_bytes']=2*1024**3
+    with pytest.raises(ValueError): c.parse_stream('\n'.join(map(json.dumps,rows)),'cuda')

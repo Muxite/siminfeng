@@ -35,7 +35,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('host_calibration')
     p.add_argument('--base',default=str(ROOT/'cc/moe_planner/calibration.json'))
-    p.add_argument('--out',default=str(ROOT/'artifacts/codexCAL/planner-calibration.json'))
+    p.add_argument('--out',default=str(ROOT/'artifacts/codexCAL2/planner-calibration.json'))
     a = p.parse_args()
     try:
         emit(a.out,apply(read(a.host_calibration),read(a.base)))

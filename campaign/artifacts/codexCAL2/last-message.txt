@@ -1,0 +1,14 @@
+Implemented within the two permitted write locations.
+
+- Added fail-closed bandwidth guards, CUDA/AVX2 rotating-buffer probes, and real-capture fixtures in [cc/host_calibrate](/home/muk/projects/siminfeng/campaign/cc/host_calibrate/README.md).
+- **25 tests passed.** Original GPU/CPU captures now fail plausibility checks.
+- Native CPU sweep: **30.3 GB/s at eight threads**, completed in **2.36 seconds**.
+- CUDA/tools-image validation remains unverified because Docker socket access was denied.
+
+Exact commands are in the README; the generated command plan is [here](/home/muk/projects/siminfeng/campaign/artifacts/codexCAL2/command-plan.json). Execute it with:
+
+```bash
+python3 -B cc/host_calibrate/run_plan.py artifacts/codexCAL2/gpu
+```
+
+Historical H2D and handoff results remain untouched.
