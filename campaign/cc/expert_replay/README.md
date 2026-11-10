@@ -130,3 +130,18 @@ oracle comparisons on all 729 length-six traces over three experts and four
 capacities, train/test and warmup isolation, profile leakage rejection,
 primary/simple formats, malformed/truncated tails, byte predictions, weighting,
 CLI JSON/CSV, dimensions and invalid configuration.
+
+## Speculative verify windows
+
+`python3 cc/expert_replay/expert_replay.py specwin --trace routing.jsonl --out results.json`
+
+Repeat `--trace` for multiple workloads (the parent directory names label them).
+This decode-only sweep covers W=1,2,3,4,6,8, acceptance=.5,.7,.9,
+LRU/Belady and global capacities 650/1300/2600 expert slots. W counts total
+verify positions; expected output is `(1-a**W)/(1-a)`, including one guaranteed
+position. Partial windows use actual length. Requires explicit decode phases
+and complete per-token layer coverage, and refuses malformed records.
+The pessimistic variant adds seeded independent random top-k routes after a
+sampled prefix rejection, retaining realized routes. `--seed` defaults to
+20261110. It is one conservative realization, not a measured draft trace.
+See `experiments/jetson/SPEC1/SPEC1.md` for assumptions and full tables.

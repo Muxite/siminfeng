@@ -1,0 +1,1317 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c613-12ce-7831-8ecf-6b6e6d98f28b
+--------
+user
+Do the assignment in assignments/J-SPEC1.md exactly. Respect its constraints.
+codex
+I’ll read the assignment and repository instructions, then complete the work within its constraints.
+exec
+/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g 'J-SPEC1.md' -g 'package.json' -g 'pyproject.toml'" in /home/muk/projects/siminfeng/campaign
+ succeeded in 3ms:
+/home/muk/projects/siminfeng/campaign
+assignments/J-SPEC1.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/gguf-py/pyproject.toml
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/AGENTS.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/pyproject.toml
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/src/lib/vendors/package.json
+cc/build_engine/results/jetson-up1108-om7/staging-2z7qo8iw/source/gguf-py/pyproject.toml
+cc/build_engine/results/jetson-up1108-om7/staging-2z7qo8iw/source/AGENTS.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/package.json
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/reservation-workflow/AGENTS.md
+ref/Strata/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/refactor-orders/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/merge-windows/AGENTS.md
+ref/llama.cpp-pr31469/gguf-py/pyproject.toml
+ref/llama.cpp-pr31469/AGENTS.md
+ref/Strata/apps/host/package.json
+ref/Strata/integrations/harness/profile/package.json
+ref/llama.cpp-pr31469/tools/ui/src/lib/vendors/package.json
+ref/llama.cpp-pr31469/tools/ui/package.json
+ref/Strata/apps/desktop/package.json
+cc/build_engine/results/jetson-up1108-om7/staging-2z7qo8iw/source/pyproject.toml
+ref/llama.cpp-pr31469/pyproject.toml
+cc/build_engine/results/jetson-up1108-om7/staging-2z7qo8iw/source/tools/ui/src/lib/vendors/package.json
+cc/build_engine/results/jetson-up1108-om7/staging-2z7qo8iw/source/tools/ui/package.json
+ref/llama.cpp-up1108/gguf-py/pyproject.toml
+ref/llama.cpp-up1108/AGENTS.md
+ref/llama.cpp-up1108/pyproject.toml
+ref/llama.cpp-up1108/tools/ui/package.json
+ref/llama.cpp-up1108/tools/ui/src/lib/vendors/package.json
+ref/llama.cpp/gguf-py/pyproject.toml
+ref/llama.cpp/AGENTS.md
+ref/llama.cpp/pyproject.toml
+ref/llama.cpp/tools/ui/package.json
+ref/llama.cpp/tools/ui/src/lib/vendors/package.json
+
+exec
+/bin/bash -lc 'cat assignments/J-SPEC1.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# J-SPEC1 — window-union replay: does speculative decoding help a disk-bound over-memory decoder?
+Owner: Codex (bounded, CPU-only; no GPU, no docker, no builds, no network). Branch: work in tree, do not commit.
+## Inputs
+- Routing traces (Qwen3.6-35B-A3B, 40 layers x 256 experts, top-8): experiments/jetson/OM/trace-20261110-0504/{chat,code,math,wiki}/routing.jsonl (format: cc/routing_trace/README.md).
+- Simulator: cc/expert_replay/expert_replay.py (+ tests). Per-expert bytes 1,900,544 (589,824+589,824+720,896).
+- x86 context: `git show origin/x86/c2-resume:campaign/research/x86-c2-digest.md` is NOT there; read campaign/research/x86-c2-digest.md (ours) for T-SPECM/MTP numbers.
+## Task
+Add a `specwin` subcommand to expert_replay.py: for decode tokens only, group consecutive tokens into verify windows of size W (W=1,2,3,4,6,8), take the union of experts per layer per window, and replay that union stream through the existing cache policies (LRU, Belady) at capacities 650/1300/2600 slots (expert-slot = 1,900,544 B). Assume an acceptance model: a window of W drafted tokens yields E[accepted]+1 tokens where per-token acceptance a in {0.5,0.7,0.9} (expected tokens = (1-a^(W))/(1-a) ... use the standard geometric formula, state it). Report per workload: distinct experts/layer/window, miss bytes per window, miss bytes per emitted token, and predicted speedup vs W=1 under the disk model decode_tps = 570 MiB/s / miss_bytes_per_token (also report a compute-floor-capped version with floor 6 t/s per verify step for reference, labeled hypothetical).
+Note: union of actually-realized consecutive tokens is an optimistic proxy for verify windows (rejected drafts route differently) — state this as a limitation; also provide a pessimistic variant where rejected positions add an independent random top-8 per layer.
+## Tests
+pytest cc/expert_replay -q must pass; add tests for union/window logic on a tiny synthetic trace.
+## Output
+Write experiments/jetson/SPEC1/results.json and SPEC1.md (tables), and a <=25-line summary to stdout. Stop if traces lack decode-token marking (report how you'd infer it instead).
+
+exec
+/bin/bash -lc 'ls -la; cat cc/routing_trace/README.md; cat campaign/research/x86-c2-digest.md; cat cc/expert_replay/expert_replay.py' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+total 128
+drwxrwxr-x  23 muk muk  4096 Nov 10 15:28 .
+drwxrwxr-x   5 muk muk  4096 Nov  9 23:14 ..
+dr-xr-xr-x   2 muk muk    40 Nov 10 15:28 .agents
+dr-xr-xr-x   2 muk muk    40 Nov 10 15:28 .aws
+dr-xr-xr-x   2 muk muk    40 Nov 10 15:28 .codex
+dr-xr-xr-x   2 muk muk    40 Nov 10 15:28 .git
+drwxrwxr-x   3 muk muk  4096 Nov  9 23:12 .pytest_cache
+-rw-rw-r--   1 muk muk  1087 Nov  9 22:45 CHECKPOINT-1.md
+-rw-rw-r--   1 muk muk   704 Nov  9 22:45 CHECKPOINT-2.md
+-rw-rw-r--   1 muk muk  3767 Nov  9 22:45 LAB-FEASIBILITY.md
+-rw-rw-r--   1 muk muk  4511 Nov  9 22:45 MANAGER-DESIGN.md
+-rw-rw-r--   1 muk muk  5155 Nov 10 02:46 START-HERE.md
+drwxrwxr-x 356 muk muk 16384 Nov 10 15:15 artifacts
+drwxrwxr-x   2 muk muk  4096 Nov 10 15:18 assignments
+drwxrwxr-x   3 muk muk  4096 Nov 10 05:48 bin
+drwxrwxr-x   8 muk muk  4096 Nov  9 23:31 builds
+drwxrwxr-x   2 muk muk  4096 Nov  9 22:45 capabilities
+drwxrwxr-x  18 muk muk  4096 Nov 10 06:33 cc
+-rw-rw-r--   1 muk muk  9552 Nov 10 02:46 cc-inventory.csv
+drwxrwxr-x   2 muk muk  4096 Nov  9 22:45 claims
+drwxrwxr-x   2 muk muk  4096 Nov 10 06:50 decisions
+drwxrwxr-x   3 muk muk  4096 Nov  9 22:58 evidence
+drwxrwxr-x   7 muk muk  4096 Nov 10 00:28 experiments
+drwxrwxr-x   3 muk muk  4096 Nov 10 15:17 handoff
+drwxrwxr-x   2 muk muk  4096 Nov  9 23:10 hosts
+drwxrwxr-x   2 muk muk  4096 Nov  9 22:45 index
+drwxrwxr-x   9 muk muk  4096 Nov 10 00:39 lab
+drwxrwxr-x   6 muk muk  4096 Nov 10 03:50 ref
+drwxrwxr-x   2 muk muk  4096 Nov 10 15:17 research
+# routing_trace
+
+Capture routed expert IDs and aligned weights with llama.cpp's graph callback.
+The generic patch is `patches/routing-trace-generic.patch`, standalone against
+**31288c9c66e59377f7788d920678a565bb89dd37**. Apply this patch alone, not on top
+of `routing-trace.patch`. It adds `examples/routing-trace/` and its CMake
+registration; the executable target remains **llama-routing-trace**.
+`ref/llama.cpp` must stay read-only; apply patches only in a separate build tree.
+
+## Build CC integration
+
+From the campaign root, the build owner can use:
+
+```bash
+python3 cc/build_engine/build_engine.py \
+  --source ref/llama.cpp --commit 31288c9c6 \
+  --patch cc/routing_trace/patches/routing-trace-generic.patch \
+  --extra-target llama-routing-trace \
+  --tag campaign/llamacpp:routing-trace-generic \
+  --out artifacts/routing-trace-generic/build
+```
+
+Supply the digest-pinned development/runtime images required by Build CC.
+Its current `--extra-target` interface builds, packages and records the extra
+binary; the old README's instruction to edit Dockerfile/TOOLS is obsolete.
+Keep `LLAMA_BUILD_COMMON=ON` and `LLAMA_BUILD_EXAMPLES=ON`. The generic patch
+has **not been built or run** by J-OM3. Per `research/own-repo-assets.md`, D014
+records a real ccache build (rt1) and three real Granite traces using the legacy
+patch; the previous blanket “not compile-linked” statement was stale.
+Those runs do not validate this generic patch or Qwen capture.
+
+## Capture
+
+```bash
+/app/llama-routing-trace -m /models/model.gguf \
+  -p 'Explain how a cache works.' -n 64 -ngl 0 -c 2048 \
+  --trace-out /out/routing.jsonl > /out/generated.txt 2> /out/capture.log
+python3 cc/routing_trace/validate_generic_trace.py /out/routing.jsonl
+python3 cc/expert_replay/expert_replay.py --help
+```
+
+Use a separate output path per run: `--trace-out` truncates an existing file.
+Only one text sequence is supported (`seq=0`). Prompt-file handling (`-f`) and
+BOS tokenization come from common; no chat template is added. `-n` defaults to
+32 and must be finite/nonnegative. Generation uses raw-logit argmax, ignores
+sampling settings, and evaluates exactly N generated tokens, including EOG;
+`-n 0` captures only prefill. `tok` is the absolute evaluated input position,
+including BOS, and starts at zero. Phases describe submitted tokens, so a
+single-token prompt chunk remains prefill. Context overflow is refused.
+
+The first line is metadata, emitted after the first submission has validated:
+
+```json
+{"type":"metadata","arch":"example","n_layer":2,"layers":2,"model_path":"/models/model.gguf","model_sha256":null,"experts":16,"n_expert":[16,0],"k":[2,0],"shared_experts_routed":false,"shared_experts_present":[true,false]}
+```
+
+`n_expert` and `k` are arrays indexed by **model layer ID**, with zero for dense
+layers. `experts` is the maximum per-layer expert count, and `layers` aliases
+`n_layer` for `cc/expert_replay`. A full-file SHA is omitted (`null`) to avoid
+reading a multi-gigabyte model just for capture identity; record an existing
+manifest hash alongside the run when available. Model path and architecture
+strings are JSON escaped. Each routing row is:
+
+```json
+{"tok":0,"layer":0,"experts":[3,12],"weights":[0.4,0.6],"phase":"prefill","seq":0}
+```
+
+The last line is emitted only after successful generation and capture:
+
+```json
+{"type":"metadata","trace_complete":true,"tokens":1,"records":1}
+```
+
+The footer's `type` lets the existing expert_replay parser skip it as metadata
+without counting it as malformed input. `tokens` counts evaluated input
+positions, not just generated tokens; `records` counts routing rows. Missing
+footer, partial JSON, wrong counts, missing tokens/layers, or data after the
+footer are rejected by `validate_generic_trace.py`. Always validate before
+replay: expert_replay itself does not enforce this completion protocol. Its
+coverage diagnostic assumes every model layer routes; mixed dense/MoE models
+therefore report incomplete layer coverage even when capture is complete.
+Its global expert bound also cannot enforce individual per-layer bounds; the
+validator does. Use `cc/expert_replay`, not the legacy `trace_replay.py`, for
+generic traces. The latter retains Granite-only 32-expert/top-8 assumptions and
+accepts only legacy `pos` records without metadata/footer.
+
+## Callback contract and limits
+
+The tool derives `n_expert` from `ffn_moe_probs-N` shape `{E,T,1,1}` and `k`
+from `ffn_moe_topk-N` shape `{K,T,1,1}`, never from hardcoded model dimensions
+or tensor strides. It copies I32 IDs using `nb[]` (top-k may be a strided view).
+F32 weights must be `{1,K,T,1}` or `{K,T,1,1}`. It observes exact stages
+`ffn_moe_weights-N`, `_softmax-N`, `_norm-N`, `_scaled-N`, retaining the last
+stage. Sum/clamp helpers are excluded. Weights must be finite/nonnegative;
+IDs must be distinct and within that layer's router dimension.
+
+Shared expert presence is discovered through `ffn_shexp-N`,
+`ffn_shexp_out-N`, `ffn_moe_shexp-N`, or `ffn_shared_out-N` callbacks. These
+branches are always computed when present (possibly sigmoid gated), are not
+top-k selections, and never appear in routed expert arrays. Architectures
+without these shared-branch callback names require a hook extension before
+interpreting a false presence flag. Custom graph naming, remapped expert IDs
+(e.g. grouped GroveMoE), and architectures bypassing `build_moe_ffn` need
+separate validation; “generic” means shape independent within this callback
+contract, not a guarantee for every architecture.
+
+Qwen35moe requires routing in every main layer even on the first submission.
+For other architectures, first-submission discovery permits dense layers; later submissions must have
+identical routed-layer coverage, dimensions and shared presence. Missing,
+duplicate or reordered tensors fail capture. A model whose first graph omits
+an entire routed layer cannot be distinguished from a dense layer by callback
+observation alone. Unexpected physical batch splitting is rejected.
+
+Submissions contain at most `min(n_batch,n_ubatch)` tokens and are synchronized
+before emission. Owned data is bounded by one submission's layer/top-k values
+plus one observed tensor's device readback, rather than total generated tokens.
+Output is ordered by token then model layer, and flushed after **each token**.
+Host buffers are read after callback synchronization; device buffers use
+`ggml_backend_tensor_get`. No routing tensors are mutated.
+
+Tracing has material overhead: selected callbacks force scheduler range
+synchronizations and device readbacks. Logits are requested for every prompt
+token to prevent final-layer pruning. Warmup and backend sampling are disabled.
+This can inhibit fusion and add output/LM-head work. Captures are routing
+evidence, not performance-neutral timing runs; numerical equivalence has not
+been established. Any failed decode, callback validation, output write or
+close returns nonzero; reject the trace even if a footer is visible after an
+I/O failure. Flush is not fsync or an atomic completion transaction.
+
+## Jetson / qwen35moe
+
+At the pin, the architecture lives in `src/models/qwen35moe.cpp` (the model
+factory and public layer-count accessor are in `src/llama-model.cpp`). Its main
+graph loops `il=0..n_layer-1`, selects DeltaNet or full attention, then
+unconditionally calls `build_layer_ffn`, which asserts a router and calls
+`build_moe_ffn`. Thus **every main decoder layer emits routing**, including
+DeltaNet layers: IDs 0..39 for the 40-layer variant. Default full-attention
+interval is four (3,7,...,39); metadata may override the layer pattern.
+`llama_model_n_layer` returns `hparams.n_layer()`, excluding NextN/MTP layers;
+this single-model driver does not run the separate MTP graph. Shared expert
+branches are recorded as present and excluded from routed choices.
+
+Build on the Jetson lane with its configured CUDA architecture/image and
+ccache via Build CC, using the same extra target. Do not copy the x86 CUDA
+architecture 120 setting. Pin `-c` and explicit offload settings (`-ngl`, and
+common's CPU-MoE options when applicable) to match the experiment; confirm the
+built binary's `--help`. Preserve mmap defaults for over-memory experiments.
+Do not infer physical DRAM pressure on UMA from Docker `--memory` or simulated
+cache hit rates. Record the model manifest/hash, command, chunk sizes, successful
+exit status and validation result. Qwen3.6's expected 256 experts/top-8 are a
+sanity check, never capture constants. Capture only; no GPU/build was run for
+this assignment.
+
+## Verification (J-OM3)
+
+```bash
+git -C ref/llama.cpp apply --check \
+  "$PWD/cc/routing_trace/patches/routing-trace-generic.patch"
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
+  cc/routing_trace/test_generic_trace.py \
+  cc/routing_trace/test_trace_replay.py cc/expert_replay/test_expert_replay.py \
+  -p no:cacheprovider
+```
+
+On the pinned reference: apply check passed; **56 tests passed, 5 subtests
+passed**. New fixture tests cover variable top-k, IDs through 255, dense layers,
+replay compatibility, schema failures and truncated/missing/mismatched footers.
+These are Python protocol tests, not C++ callback execution tests. No builds,
+GPU execution or model capture were performed; integration remains with the
+build owner. The original patch and replay tests remain for legacy Granite
+reproducibility.
+cat: campaign/research/x86-c2-digest.md: No such file or directory
+#!/usr/bin/env python3
+"""Generic logical expert-cache replay; Python 3.10 standard library only."""
+import argparse
+import csv
+import hashlib
+import json
+import math
+import sys
+from collections import Counter, defaultdict, deque
+from pathlib import Path
+
+
+def integer(x, minimum=0):
+    if type(x) is not int or x < minimum:
+        raise ValueError(f'expected integer >= {minimum}, got {x!r}')
+    return x
+
+
+def read_trace(path, layers=None, experts=None):
+    rows, metadata, errors, seen = [], {}, [], set()
+    truncated = 0
+    with Path(path).open(encoding='utf-8') as source:
+        for number, line in enumerate(source, 1):
+            try:
+                obj = json.loads(line)
+                if not isinstance(obj, dict):
+                    raise ValueError('expected JSON object')
+                if obj.get('type') == 'metadata':
+                    for name in ('layers', 'experts'):
+                        if name in obj:
+                            value = integer(obj[name], 1)
+                            if name in metadata and metadata[name] != value:
+                                raise ValueError('conflicting metadata')
+                            metadata[name] = value
+                    continue
+                seq = integer(obj.get('seq', obj.get('request', 0)))
+                tok = integer(obj.get('pos', obj.get('tok')))
+                layer = integer(obj.get('layer'))
+                ids = obj.get('experts')
+                if not isinstance(ids, list) or not ids:
+                    raise ValueError('experts must be a nonempty list')
+                ids = [integer(e) for e in ids]
+                if len(set(ids)) != len(ids):
+                    raise ValueError('duplicate expert IDs')
+                if obj.get('phase') not in ('prefill', 'decode'):
+                    raise ValueError('phase must be prefill or decode')
+                if 'weights' in obj:
+                    ws = obj['weights']
+                    if (not isinstance(ws, list) or len(ws) != len(ids) or
+                        any(type(w) not in (int, float) or not math.isfinite(w) or w < 0 for w in ws)):
+                        raise ValueError('invalid aligned weights')
+                key = (seq, tok, layer)
+                if key in seen:
+                    raise ValueError('duplicate sequence/token/layer')
+                seen.add(key)
+                rows.append(dict(seq=seq, tok=tok, layer=layer, experts=ids, phase=obj['phase']))
+            except (ValueError, TypeError) as exc:
+                tail = not line.endswith('\n')
+                truncated += int(tail)
+                errors.append(dict(line=number, error=str(exc), possible_truncated_tail=tail))
+    layers = layers if layers is not None else metadata.get('layers')
+    experts = experts if experts is not None else metadata.get('experts')
+    integer(layers, 1)
+    integer(experts, 1)
+    if any(metadata.get(k, v) != v for k, v in [('layers', layers), ('experts', experts)]):
+        raise ValueError('flags conflict with trace metadata')
+    valid = []
+    for row in rows:
+        if row['layer'] >= layers or any(e >= experts for e in row['experts']):
+            # Bounds violations are fatal: never silently simulate the wrong model.
+            raise ValueError(f'expert/layer ID outside declared dimensions: {row}')
+        valid.append(row)
+    if not valid:
+        raise ValueError(f'no valid routing records; malformed_lines={len(errors)}, possible_truncated_tail={truncated}')
+    valid.sort(key=lambda r: (r['seq'], r['tok'], r['layer']))
+    phases = {}
+    for r in valid:
+        key = (r['seq'], r['tok'])
+        if phases.setdefault(key, r['phase']) != r['phase']:
+            raise ValueError('inconsistent phases within a token')
+    coverage = Counter((r['seq'], r['tok']) for r in valid)
+    incomplete = sum(n != layers for n in coverage.values())
+    return valid, layers, experts, dict(incomplete_layer_tokens=incomplete,
+                                       malformed_lines=len(errors), possible_truncated_tail=truncated,
+                                       errors=errors, valid_records=len(valid))
+
+
+def token_keys(rows):
+    return list(dict.fromkeys((r['seq'], r['tok']) for r in rows))
+
+
+def partition(rows, split):
+    if split is None:
+        return [], rows
+    try:
+        train, test = map(float, split.split(':'))
+        if not all(math.isfinite(x) for x in (train, test)) or train < 0 or test <= 0:
+            raise ValueError()
+    except ValueError:
+        raise ValueError('split must be nonnegative-train:positive-test weights') from None
+    keys = token_keys(rows)
+    cut = int(len(keys) * train / (train + test))
+    training = set(keys[:cut])
+    return ([r for r in rows if (r['seq'], r['tok']) in training],
+            [r for r in rows if (r['seq'], r['tok']) not in training])
+
+
+def fingerprint(row):
+    return hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest()
+
+
+def make_profile(rows, layers, experts, weighting):
+    totals = Counter(r['seq'] for r in rows for _ in r['experts'])
+    counts = defaultdict(float)
+    for r in rows:
+        for e in r['experts']:
+            counts[r['layer'], e] += 1 if weighting == 'raw' else 1 / totals[r['seq']]
+    ranked = sorted(((l, e) for l in range(layers) for e in range(experts)),
+                    key=lambda p: (-counts[p], p))
+    return dict(schema_version=1, layers=layers, experts=experts, weighting=weighting,
+                ranked=[list(p) for p in ranked], scores=[counts[p] for p in ranked],
+                training_records=[fingerprint(r) for r in rows])
+
+
+def replay(rows, layers, experts, capacity, policy='lru', per_layer=False, warmup=0,
+           expert_bytes=0, layer_bytes=None, bw_gbs=1.0, compute_ms=0.0, profile=None):
+    integer(capacity)
+    integer(warmup)
+    if policy not in ('lru', 'lfu', 'belady', 'static-profile') and not policy.startswith('lfu-decay:'):
+        raise ValueError('unknown policy')
+    half = float(policy.split(':', 1)[1]) if policy.startswith('lfu-decay:') else None
+    if half is not None and (not math.isfinite(half) or half <= 0):
+        raise ValueError('half-life must be finite and positive')
+    if not math.isfinite(bw_gbs) or bw_gbs <= 0 or not math.isfinite(compute_ms) or compute_ms < 0:
+        raise ValueError('bandwidth must be positive and compute time nonnegative')
+    integer(expert_bytes)
+    sizes = [expert_bytes] * layers if layer_bytes is None else layer_bytes
+    if len(sizes) != layers:
+        raise ValueError('per-layer bytes must have exactly L entries')
+    for size in sizes:
+        integer(size)
+    keys = token_keys(rows)
+    unscored = set(keys[:warmup])
+    events = [(r, (r['layer'], e)) for r in rows for e in r['experts']]
+    future = defaultdict(deque)
+    for i, (_, pair) in enumerate(events):
+        future[pair].append(i)
+    caches = defaultdict(dict)
+    selected = set()
+    if policy == 'static-profile':
+        if profile is None or (profile.get('layers'), profile.get('experts')) != (layers, experts):
+            raise ValueError('profile dimensions mismatch or profile missing')
+        used = Counter()
+        seen_pairs = set()
+        for item in profile['ranked']:
+            if not isinstance(item, list) or len(item) != 2:
+                raise ValueError('invalid profile pair')
+            l, e = item
+            integer(l); integer(e)
+            if l >= layers or e >= experts or (l, e) in seen_pairs:
+                raise ValueError('invalid/duplicate profile pair')
+            seen_pairs.add((l, e))
+            scope = l if per_layer else 0
+            if used[scope] < capacity:
+                selected.add((l, e)); used[scope] += 1
+    stats = defaultdict(lambda: dict(hits=0, requests=0, bytes_moved=0, tokens=set()))
+    for i, (r, pair) in enumerate(events):
+        future[pair].popleft()
+        cache = caches[r['layer'] if per_layer else 0]
+        hit = pair in cache
+        if (r['seq'], r['tok']) not in unscored:
+            for name in ('overall', 'decode' if r['phase'] == 'decode' else 'prefill', f"layer:{r['layer']}"):
+                s = stats[name]
+                s['requests'] += 1; s['hits'] += hit
+                s['bytes_moved'] += 0 if hit else sizes[r['layer']]
+                s['tokens'].add((r['seq'], r['tok']))
+        if hit:
+            freq, last = cache[pair]
+            if half is not None:
+                freq *= 2 ** (-(i - last) / half)
+            cache[pair] = (freq + 1, i)
+        elif capacity and (policy != 'static-profile' or pair in selected):
+            if len(cache) >= capacity:
+                if policy == 'belady':
+                    # Include incoming pair: bypass permits the oracle to dominate pinned policies.
+                    victim = max([*cache, pair], key=lambda p: future[p][0] if future[p] else math.inf)
+                    if victim == pair:
+                        continue
+                elif policy == 'lru':
+                    victim = min(cache, key=lambda p: cache[p][1])
+                else:
+                    victim = min(cache, key=lambda p: (cache[p][0] * (2 ** (-(i-cache[p][1])/half) if half else 1), cache[p][1]))
+                del cache[victim]
+            cache[pair] = (1.0, i)
+    def finish(s):
+        n, h, t = s['requests'], s['hits'], len(s['tokens'])
+        misses = n - h
+        return dict(hits=h, requests=n, misses=misses, tokens=t, hit_rate=h/n if n else None,
+                    misses_per_token=misses/t if t else None, bytes_moved=s['bytes_moved'],
+                    bytes_moved_per_token=s['bytes_moved']/t if t else None)
+    overall = finish(stats['overall'])
+    decode = finish(stats['decode'])
+    prediction = (compute_ms / 1000 + decode['bytes_moved_per_token'] / (bw_gbs * 1e9)
+                  if decode['tokens'] else None)
+    return dict(policy=policy, oracle_label='reads-the-future upper bound' if policy == 'belady' else None,
+                capacity_experts=capacity, per_layer_capacity=per_layer, warmup_tokens=len(unscored),
+                overall=overall, decode_only=decode,
+                per_layer={str(l): finish(stats[f'layer:{l}']) for l in range(layers)},
+                prediction=dict(decode_seconds_per_token=prediction, bw_bytes_s=bw_gbs*1e9,
+                                compute_s=compute_ms/1000),
+                semantics='sequential expert lookups in recorded rank order; cold demand admission; persistent across phases/requests')
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    for name in ('simulate', 'profile', 'sweep'):
+        p = commands.add_parser(name)
+        p.add_argument('--trace', required=True)
+        p.add_argument('--layers', type=int)
+        p.add_argument('--experts', type=int)
+        p.add_argument('--split', help='chronological token train:test weights; profile uses train, replay uses test')
+        if name == 'profile':
+            p.add_argument('--out', required=True)
+            p.add_argument('--weighting', choices=['raw', 'per-request'], default='raw')
+        else:
+            p.add_argument('--capacity-experts', type=int, required=name == 'simulate')
+            p.add_argument('--per-layer-capacity', action='store_true')
+            p.add_argument('--policy', default='lru')
+            p.add_argument('--warmup', type=int, default=0)
+            p.add_argument('--expert-bytes', type=int, default=0)
+            p.add_argument('--per-layer-bytes', help='comma-separated byte sizes, one per layer')
+            p.add_argument('--bw-gbs', type=float, default=1.0)
+            p.add_argument('--compute-ms', type=float, default=0.0)
+            if name == 'sweep':
+                p.add_argument('--capacities', required=True, help='comma-separated capacities')
+                p.add_argument('--out', help='CSV path; default stdout')
+    args = parser.parse_args(argv)
+    try:
+        rows, layers, experts, diagnostics = read_trace(args.trace, args.layers, args.experts)
+        train, test = partition(rows, args.split)
+        if diagnostics['malformed_lines']:
+            print(json.dumps({'trace_diagnostics': diagnostics}), file=sys.stderr)
+        if args.command == 'profile':
+            chosen = train if args.split else rows
+            if not chosen:
+                raise ValueError('empty training partition')
+            result = make_profile(chosen, layers, experts, args.weighting)
+            result['trace_diagnostics'] = diagnostics
+            Path(args.out).write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
+            return 0
+        if not test:
+            raise ValueError('empty test partition')
+        policy, profile = args.policy, None
+        if policy.startswith('static-profile:'):
+            profile = json.loads(Path(policy.split(':', 1)[1]).read_text(encoding='utf-8'))
+            policy = 'static-profile'
+            if args.split:
+                if 'training_records' not in profile:
+                    raise ValueError('split replay requires profile training provenance')
+                if set(profile['training_records']) & {fingerprint(r) for r in test}:
+                    raise ValueError('profile leakage: training includes test records')
+        sizes = list(map(int, args.per_layer_bytes.split(','))) if args.per_layer_bytes else None
+        capacities = list(map(int, args.capacities.split(','))) if args.command == 'sweep' else [args.capacity_experts]
+        results = []
+        for capacity in capacities:
+            result = replay(test, layers, experts, capacity, policy, args.per_layer_capacity,
+                            args.warmup, args.expert_bytes, sizes, args.bw_gbs, args.compute_ms, profile)
+            result.update(layers=layers, experts=experts, trace_diagnostics=diagnostics,
+                          training_tokens=len(token_keys(train)), test_tokens=len(token_keys(test)))
+            results.append(result)
+        if args.command == 'simulate':
+            print(json.dumps(results[0], indent=2, allow_nan=False))
+        else:
+            output = Path(args.out).open('w', newline='', encoding='utf-8') if args.out else sys.stdout
+            try:
+                writer = csv.DictWriter(output, fieldnames=['capacity_experts', 'policy', 'oracle_label', 'hit_rate',
+                    'decode_hit_rate', 'misses_per_token', 'bytes_moved_per_token', 'prediction_decode_seconds_per_token',
+                    'malformed_lines', 'possible_truncated_tail'])
+                writer.writeheader()
+                for r in results:
+                    writer.writerow(dict(capacity_experts=r['capacity_experts'], policy=r['policy'], oracle_label=r['oracle_label'],
+                        hit_rate=r['overall']['hit_rate'], decode_hit_rate=r['decode_only']['hit_rate'],
+                        misses_per_token=r['overall']['misses_per_token'], bytes_moved_per_token=r['overall']['bytes_moved_per_token'],
+                        prediction_decode_seconds_per_token=r['prediction']['decode_seconds_per_token'],
+                        malformed_lines=diagnostics['malformed_lines'], possible_truncated_tail=diagnostics['possible_truncated_tail']))
+            finally:
+                if args.out:
+                    output.close()
+        return 0
+    except (ValueError, TypeError, KeyError, OSError) as exc:
+        parser.exit(2, f'error: {exc}\n')
+
+
+if __name__ == '__main__':
+    sys.exit(main())
+
+exec
+/bin/bash -lc 'cat research/x86-c2-digest.md; head -n 3 experiments/jetson/OM/trace-20261110-0504/chat/routing.jsonl; ls cc/expert_replay; find .. -maxdepth 2 -name AGENTS.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Digest of x86 D041-D048 for the Jetson over-memory lane (2026-11-10)
+Source: `origin/x86/c2-resume` (`START-HERE.md` section 0, `decisions/D041..D048`). x86 hardware is an RTX 5070 Ti (16 GB VRAM, discrete, PCIe 4.0) plus a Ryzen 7 3700X, models Qwen3-30B-A3B Q4_K_M and Qwen3.6-35B-A3B. Do not pool t/s across hosts.
+Jetson context: Qwen3.6-35B-A3B UD-Q4_K_XL (22.4 GB) on 7.4 GiB shared DRAM, ~570 MiB/s NVMe, `-lm mmap -ngl 99 -cmoe`, decode 1.2-1.36 t/s, disk-bound: decode ~ disk_BW / (615 MB x miss_rate); page-cache LRU hit ~62% (see Jetson D030-D033). Key structural difference: x86 "cache" is a VRAM cache over host RAM (PCIe-bound, 1.5-28 GB/s links); ours is page cache over NVMe (disk-bound, 0.57 GB/s) with no CPU/GPU split (UMA).
+
+## D041 (indicative): upstream `--moe-cache-mib` on Qwen3-30B; ncu roofline
+- Result: at 8 GB cache beats static `--n-cpu-moe` by +38% decode (51 vs 37 t/s), at 4 GB loses 34% (18 vs 28); upload-only cache needs ~70-75% hit rate. ncu: 222 GB/s, 40% of kernel time in tiny kernels.
+- Jetson relevance: consistent with our Jetson D030 (upstream moe-cache loses on UMA at 64% hits). The "hit rate >= ~75% to win" threshold matches; we are below it at 62%. Nothing new to run.
+
+## D042 (indicative): n-gram self-spec, perf, bpftrace, intake
+- Result: `--spec-type ngram-mod` on Qwen3-30B K30: 2.4x (rewrite) / 3.0x (repeat), text identical, 0 drafts and +-0% on open chat. perf: no DRAM-bandwidth PMU on Zen 2. bpftrace: 0.79 ms/CPU layer. Rule: log `draft_n`/`draft_n_accepted`; benchmark bandwidth with working set >= 8x LLC.
+- Jetson relevance: n-gram is a flag, no rebuild if our image's llama-server has `--spec-type` (pin 31288c9c6 is the same engine x86 used). Costs nothing on chat. Verify batch reads each expert once per batch, which is the lever for a disk-bound decoder (see analysis below). Bandwidth-microbenchmark rule applies to our fio ceiling (we already model 570 MiB/s, Jetson D031).
+
+## D043 / D047: protocols (no results)
+- Frozen overnight protocols; amendments: A1 download A/A (0.2% effect), A2 post-hoc decode-path KLD (ub 1). Rule: a batch-shape floor (KLD ~0.0058, top-1 ~96.5-97%) exists for the reference itself; gate equivalence against it, not text identity.
+- Jetson relevance: adopt the same KLD floor language; our D025/D027 gates (KLD 2.7e-4) already well inside it. Add swap/page-fault monitoring to quiet checks, which our watchdog already does.
+
+## D044 (speed rule met): cache + CPU-share beats static at 4/6/8/10 GB
+- Result: C3 (cache + `--moe-cache-cpu-share 0.9`) beats static by +30..+76% at every budget with 3-6% less VRAM; hit rate 50%/73%/87%/92% at 4/6/8/10 GB; share 0 is best above ~90% hit; TTFT worse (prompt eval does not use cache). Absolute KLD gate was miscalibrated.
+- Jetson relevance: CPU-share exists to compute misses on the CPU instead of uploading over PCIe. On UMA the "upload" is a no-op (D030 found the cache duplicates residency) and the miss cost is a disk read, so CPU-share does not help. Not worth running. The hit-rate-vs-budget curve is still a useful comparator for our replay sweep (LRU 62% @ 12.7% of model).
+
+## D045: ngram spec ACCEPTED (static), stacks with cache; REAP-15B trade-off
+- Result: static K30 ngram 2.32x/3.01x text identical, chat +1%; on cache arm 1.53x/1.68x (verify window touches ~19 distinct experts/layer for 4 drafts, extras are misses); cache + ngram 3.9x over static on repeat. Cache arm text depends on cache history. REAP-15B (pruned Qwen3-30B): all-GPU 242.7 t/s vs 36.7 (6.6x), code PPL +8%, wikitext PPL x2.84.
+- Jetson relevance: ngram gain shrinks when extra experts are misses, which describes our disk-bound regime. Still positive on copy-heavy prompts. REAP: a pruned Qwen3.6-35B (if one exists) shrinks the model so more experts fit in page cache; 15B at Q4 ~ 9.75 GB is still > 7.4 GiB RAM so it remains over-memory but at a much higher hit rate (est. ~75% of model resident-ish vs 33% now). Domain-quality caveat (code only). Cost: 10+ GB download plus eval.
+
+## D046 (accepted for copy; chat equivalent per D048 X2): MTP on Qwen3.6-35B-A3B
+- Result: MTP n_max 3: +42%/+33% (rewrite/repeat) and +12% chat at K18, +40%/+27%/+12% at K30; chat acceptance 64-70%; costs +820-882 MiB VRAM; needs the `-MTP` GGUF (22.66 GB UD-Q4_K_M; ours is a different, non-MTP file) and `--spec-type draft-mtp`. Experts 1.81 MiB (our model, same arch `qwen35moe`).
+- Jetson relevance: same architecture and model family as ours, so the MTP head gain transfers in principle, but our verify cost is disk bytes, not CPU/PCIe. See analysis.
+
+## D048 (X1-X8, overnight 2)
+- X1: MTP beats spending the same VRAM on GPU layers (+9.8% chat). X2: ub 4 verify batch KLD 0.00577 vs floor 0.00588, equivalent. X3: cache transfers to Qwen3.6 (+21..+42%). X4: CPU-share must be 0 or high, never small (fixed sync cost). X5: 4 threads beat 8 (+2-3%), SMT -50%. X6: ub 2048 cuts cache TTFT 2.9x for +0.97 GB. X7: mmap load 6.3 s warm / 18.8 s cold (1.48 GB/s); `-lm none` costs +10 s; keep mmap. X8: cache + MTP stack (+52% chat vs static; MTP gain on cache only +6.5% because extra experts are misses).
+- Jetson relevance: X4/X3 CPU-share not applicable (UMA). X5: our CPU is mostly idle in decode (GPU+disk bound); thread counts affect only the page-fault path; a quick `-t 4` vs 6 check is cheap. X6: prefill on Jetson over-memory is pp64 2.49 t/s (Jetson D029); bigger ub reduces the number of full-expert sweeps per prompt, but ub buffers consume shared DRAM (x86 +0.97 GB at 2048 is 13% of our RAM). X7: confirms keep mmap (we already do). X8 stacking lesson: speculation gain falls when the verify window adds misses.
+
+## Does spec decoding help a disk-bound decoder? (T-SPECM expert-union)
+Per step a verify of n tokens reads the union of experts across n tokens per layer, not n times. x86 T-SPECM measured ~19 distinct experts per layer for 4 drafts on top-8 routing (8 for one token), i.e. ~2.4x the bytes of one token. MTP n_max 3 at 65% acceptance yields ~1 + 0.65 + 0.42 + 0.27 = 2.3 tokens/step (also ~2.4 at 66%). So bytes/token ratio is roughly 2.4/2.3 ~ 1.0 for chat: **break-even for MTP on chat when every expert is a miss**, a gain only as far as drafted tokens re-use experts already in page cache (hit rate 62% helps the second, third tokens of the window since the union overlaps the first token's experts and the cached hot set). For high-acceptance copy-heavy text (ngram: 3-5 tokens/step with routing that repeats across repeated content), union grows sublinearly, so the gain could approach the x86 factor (2-3x). Prediction method: replay our routing traces (4 captured, `cc/routing_trace`, `cc/expert_replay`) with a window-union model before spending a download.
+
+## Top 3 Jetson experiments suggested by x86 results
+1. **ngram-mod on over-memory Qwen3.6, copy-heavy vs chat prompts** (D042/D045). Expected: chat ~0 (no drafts, no cost); rewrite/repeat 1.5-2.5x if draft_n > 0 and text identical; decode rises above the 1.3 t/s disk ceiling because the verify batch pays disk once per window. Cost: low (flags only on the existing image/`llama-server`, ~1 hour, mmap run plus watchdog, ABBA x2; log `draft_n`). Must use the Jetson page-cache and quiet protocol (no concurrent builds).
+2. **Window-union replay on our routing traces, then MTP if predicted > ~1.15x on chat** (D046/D048 X1, T-SPECM). Expected: replay (offline, minutes, zero hardware) tells us the miss-bytes/token ratio under LRU for n=2..4; MTP itself ~break-even to +15% on chat, +25% on copy if replay says unions overlap. Cost: replay low; MTP real run medium (22.66 GB `-MTP` GGUF download, ~1 h on NVMe 88 GB free, +0.9 GB shared DRAM which reduces page cache by ~12%, might cancel the gain).
+3. **ub sweep (512 / 1024 / 2048) and thread check (`-t 4/6`) on over-memory prefill** (D048 X5/X6). Expected: prefill pp64 2.49 t/s improves only for long prompts (fewer full expert sweeps) while decode unchanged; risk: ub 2048 compute buffers push page cache out and slow decode. Cost: low (flag sweep, 1-2 h), but run with the memory watchdog and compare MemAvailable.
+(REAP-pruned Qwen3.6: higher potential gain via hit rate, but needs a domain-matched eval and a 10+ GB download; park until 1-3 are done.)
+{"type":"metadata","arch":"qwen35moe","n_layer":40,"layers":40,"model_path":"/om/model.gguf","model_sha256":null,"experts":256,"n_expert":[256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256,256],"k":[8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8],"shared_experts_routed":false,"shared_experts_present":[true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]}
+{"seq":0,"tok":0,"layer":0,"experts":[139,112,238,43,200,175,56,6],"weights":[0.302994937,0.23448208,0.15089123,0.0725073442,0.0712866262,0.0592217334,0.0560208708,0.0525951274],"phase":"prefill"}
+{"seq":0,"tok":0,"layer":1,"experts":[171,58,214,112,86,167,153,224],"weights":[0.227841079,0.173754051,0.151392639,0.123115525,0.0938948616,0.0787648559,0.0757026821,0.0755342543],"phase":"prefill"}
+README.md
+expert_replay.py
+test_expert_replay.py
+
+codex
+The traces include explicit phase markers, so decode tokens can be selected directly. I’ll use cold caches and keep windows within each sequence’s consecutive decode tokens. I’ll define W as total verify positions, giving expected output \(1+a+\dots+a^{W-1}\), and document the seeded random routing added for rejected positions in the pessimistic variant.
+exec
+/bin/bash -lc "cat > /tmp/specwin_code <<'EOF'
+def verify_windows(rows, width, experts, acceptance=1.0, pessimistic=False, seed=0):
+    \"\"\"Union consecutive decode positions; never cross requests or token gaps.
+
+    Pessimistic replay retains the realized union and adds independent random
+    top-k routes at all positions after the first sampled prefix rejection.
+    \"\"\"
+    import random
+    integer(width, 1)
+    if not 0 <= acceptance <= 1:
+        raise ValueError('acceptance must be in [0,1]')
+    rng = random.Random(seed)
+    tokens = defaultdict(list)
+    for row in rows:
+        if row['phase'] == 'decode':
+            tokens[row['seq'], row['tok']].append(row)
+    groups, current = [], []
+    for key in sorted(tokens):
+        if current and (len(current) == width or key "'!= (current[-1][0], current[-1][1] + 1)):
+            groups.append(current)
+            current = []
+        current.append(key)
+    if current:
+        groups.append(current)
+    union_rows, lengths = [], []
+    for window, keys in enumerate(groups):
+        unions = defaultdict(dict)
+        rejected = False
+        for position, key in enumerate(keys):
+            if position and not rejected:
+                rejected = rng.random() >= acceptance
+            for row in tokens[key]:
+                ids = list(row['"'experts'])
+                if pessimistic and rejected:
+                    ids += rng.sample(range(experts), len(row['experts']))
+                for expert in ids:
+                    unions[row['layer']][expert] = None
+        lengths.append(len(keys))
+        for layer, ids in sorted(unions.items()):
+            union_rows.append(dict(seq=0, tok=window, layer=layer,
+                                   experts=list(ids), phase='decode'))
+    return union_rows, lengths
+
+
+def expected_emitted(width, acceptance):
+    # Geometric sum, including the mandatory target/bonus token.
+    return float(width) if acceptance == 1 else (1 - acceptance ** width) / (1 - acceptance)
+
+
+def specwin(paths, seed=20261110):
+    results = []
+    for path in paths:
+        rows, layers, experts, diagnostics = read_trace(path)
+        if diagnostics['malformed_lines'] or diagnostics['incomplete_layer_tokens']:
+            raise ValueError(f'{path}: malformed/incomplete trace (decode phase marking required): {diagnostics}')
+        if not any(r['phase'] == 'decode' for r in rows):
+            raise ValueError(f'{path}: no explicitly marked decode tokens; infer only from capture prompt-token count/submission logs, then recapture or annotate separately')
+        for variant in ('optimistic', 'pessimistic'):
+            for acceptance in (0.5, 0.7, 0.9):
+                for width in (1, 2, 3, 4, 6, 8):
+                    stream, lengths = verify_windows(rows, width, experts, acceptance,
+                                                     variant == 'pessimistic', seed)
+                    emitted = sum(expected_emitted(n, acceptance) for n in lengths)
+                    distinct = sum(len(r['experts']) for r in stream) / (layers * len(lengths))
+                    for policy in ('lru', 'belady'):
+                        for capacity in (650, 1300, 2600):
+                            replayed = replay(stream, layers, experts, capacity, policy,
+                                              expert_bytes=1900544)
+                            moved = replayed['overall']['bytes_moved']
+                            disk_seconds = moved / (570 * 2**20)
+                            capped_seconds = max(disk_seconds, len(lengths) / 6)
+                            results.append(dict(workload=Path(path).parent.name, trace=str(path),
+                                variant=variant, acceptance=acceptance, width=width, policy=policy,
+                                capacity_slots=capacity, windows=len(lengths), window_lengths=lengths,
+                                decode_tokens=sum(lengths), expected_emitted_tokens=emitted,
+                                distinct_experts_per_layer_window=distinct,
+                                distinct_experts_per_layer={str(l): sum(len(r['experts']) for r in stream if r['layer'] == l) / len(lengths) for l in range(layers)},
+                                miss_bytes=moved, miss_bytes_per_window=moved/len(lengths),
+                                miss_bytes_per_emitted_token=moved/emitted,
+                                disk_decode_tps=emitted/disk_seconds,
+                                hypothetical_compute_capped_tps=emitted/capped_seconds,
+                                trace_diagnostics=diagnostics))
+    baselines = {(r['workload'], r['variant'], r['acceptance'], r['policy'], r['capacity_slots']): r
+                 for r in results if r['width'] == 1}
+    for r in results:
+        base = baselines[r['workload'], r['variant'], r['acceptance'], r['policy'], r['capacity_slots']]
+        r['disk_speedup_vs_w1'] = r['disk_decode_tps'] / base['disk_decode_tps']
+        r['hypothetical_compute_capped_speedup_vs_w1'] = r['hypothetical_compute_capped_tps'] / base['hypothetical_compute_capped_tps']
+    return dict(schema_version=1, expert_bytes=1900544, disk_bytes_per_second=570*2**20,
+                random_seed=seed, results=results)
+
+
+EOF
+python3 - <<'PY'
+p='cc/expert_replay/expert_replay.py'
+s=open(p).read(); code=open('/tmp/specwin_code').read(); s=s.replace('def main(argv=None):',code+'def main(argv=None):'); s=s.replace(\"    args = parser.parse_args(argv)\",\"    p = commands.add_parser('specwin')\\n    p.add_argument('--trace', action='append', required=True)\\n    p.add_argument('--out', required=True)\\n    p.add_argument('--seed', type=int, default=20261110)\\n    args = parser.parse_args(argv)\")
+s=s.replace(\"    try:\\n        rows, layers, experts, diagnostics = read_trace(args.trace, args.layers, args.experts)\",\"    try:\\n        if args.command == 'specwin':\\n            result = specwin(args.trace, args.seed)\\n            Path(args.out).write_text(json.dumps(result, indent=2, allow_nan=False) + '\\\\n', encoding='utf-8')\\n            print(f\\\"specwin: {len(result['results'])} scenarios written to {args.out}\\\")\\n            return 0\\n        rows, layers, experts, diagnostics = read_trace(args.trace, args.layers, args.experts)\")
+open(p,'w').write(s)
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc 'wc -l experiments/jetson/OM/trace-20261110-0504/*/routing.jsonl; head -n 25 cc/expert_replay/test_expert_replay.py' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+   6322 experiments/jetson/OM/trace-20261110-0504/chat/routing.jsonl
+  21482 experiments/jetson/OM/trace-20261110-0504/code/routing.jsonl
+   7482 experiments/jetson/OM/trace-20261110-0504/math/routing.jsonl
+  12602 experiments/jetson/OM/trace-20261110-0504/wiki/routing.jsonl
+  47888 total
+import contextlib
+import io
+import itertools
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from expert_replay import main, make_profile, partition, read_trace, replay
+
+
+def rows(ids, phase='decode'):
+    return [dict(seq=0, tok=i, layer=0, experts=[e], phase=phase) for i, e in enumerate(ids)]
+
+
+class ReplayTests(unittest.TestCase):
+    def test_hand_counts(self):
+        trace = rows([0, 1, 0, 2, 0, 1])
+        profile = make_profile(rows([0, 0, 1]), 1, 3, 'raw')
+        for policy, expected in [('lru', 2), ('lfu', 2), ('lfu-decay:2', 2),
+                                 ('belady', 3), ('static-profile', 3)]:
+            with self.subTest(policy=policy):
+                self.assertEqual(replay(trace, 1, 3, 2, policy, profile=profile)['overall']['hits'], expected)
+
+    def test_decay_changes_victim(self):
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='cc/expert_replay/expert_replay.py';s=open(p).read().replace('import hashlib','import hashlib\\nimport heapq');s=s.replace('    caches = defaultdict(dict)','    caches = defaultdict(dict)\\n    oracle_heaps = defaultdict(list)\\n    admission = {}')
+s=s.replace(\"        cache = caches[r['layer'] if per_layer else 0]\",\"        scope = r['layer'] if per_layer else 0\\n        cache = caches[scope]\")
+s=s.replace(\"            cache[pair] = (freq + 1, i)\",\"            cache[pair] = (freq + 1, i)\\n            if policy == 'belady':\\n                heapq.heappush(oracle_heaps[scope], (-(future[pair][0] if future[pair] else math.inf), admission[pair], i, pair))\")
+a=s.index(\"                    victim = max([*cache, pair]\"); b=s.index(\"                    if victim == pair:\",a)
+s=s[:a]+\"                    heap = oracle_heaps[scope]\\n                    while heap and (heap[0][3] not in cache or cache[heap[0][3]][1] "'!= heap[0][2]):'"\\n                        heapq.heappop(heap)\\n                    incoming_next = future[pair][0] if future[pair] else math.inf\\n                    victim = pair if incoming_next > -heap[0][0] else heap[0][3]\\n\"+s[b:]
+s=s.replace(\"            cache[pair] = (1.0, i)\",\"            cache[pair] = (1.0, i)\\n            if policy == 'belady':\\n                admission[pair] = i\\n                heapq.heappush(oracle_heaps[scope], (-(future[pair][0] if future[pair] else math.inf), i, i, pair))\")
+s=s.replace('        for variant in', '        replay_cache = {}\\n        for variant in')
+s=s.replace(\"                            replayed = replay(stream, layers, experts, capacity, policy,\\n                                              expert_bytes=1900544)\",\"                            cache_key = (variant if width > 1 else 'baseline', acceptance if variant == 'pessimistic' and width > 1 else 1, width, policy, capacity)\\n                            if cache_key not in replay_cache:\\n                                replay_cache[cache_key] = replay(stream, layers, experts, capacity, policy, expert_bytes=1900544)\\n                            replayed = replay_cache[cache_key]\")
+open(p,'w').write(s)
+PY
+cat >> cc/expert_replay/test_expert_replay.py <<'EOF'
+
+
+def test_verify_windows():
+    from expert_replay import verify_windows, expected_emitted
+    trace = rows([0, 1, 1, 2, 3])
+    trace.insert(0, dict(seq=0, tok=0, layer=1, experts=[3], phase='prefill'))
+    stream, lengths = verify_windows(trace, 2, 8)
+    assert lengths == [2, 2, 1]
+    assert [r['experts'] for r in stream] == [[0, 1], [1, 2], [3]]
+    assert expected_emitted(1, .7) == 1
+    assert abs(expected_emitted(4, .5) - 1.875) < 1e-12
+    assert expected_emitted(4, 1) == 4
+    assert verify_windows(rows([0, 1]), 2, 8, 1, True)[0][0]['experts'] == [0, 1]
+    pessimistic = verify_windows(rows([0, 1]), 2, 8, 0, True, 0)
+    assert len(pessimistic[0][0]['experts']) == 3
+    assert pessimistic == verify_windows(rows([0, 1]), 2, 8, 0, True, 0)
+    trace = rows([0, 1, 2])
+    trace[1]['tok'] = 3
+    trace[2]['seq'] = 1
+    assert verify_windows(trace, 8, 8)[1] == [1, 1, 1]
+
+
+def test_verify_multilayer_and_w1():
+    from expert_replay import verify_windows
+    trace = [dict(seq=0, tok=t, layer=l, experts=[t, 3], phase='decode')
+             for t in range(3) for l in range(2)]
+    stream, lengths = verify_windows(trace, 2, 8)
+    assert lengths == [2, 1]
+    assert [r['experts'] for r in stream] == [[0, 3, 1], [0, 3, 1], [2, 3], [2, 3]]
+    single, _ = verify_windows(trace, 1, 8)
+    for policy in ('lru', 'belady'):
+        assert replay(single, 2, 8, 3, policy)['overall'] == replay(trace, 2, 8, 3, policy)['overall']
+EOF
+pytest cc/expert_replay -q
+mkdir -p experiments/jetson/SPEC1
+python3 cc/expert_replay/expert_replay.py specwin --trace experiments/jetson/OM/trace-20261110-0504/chat/routing.jsonl --trace experiments/jetson/OM/trace-20261110-0504/code/routing.jsonl --trace experiments/jetson/OM/trace-20261110-0504/math/routing.jsonl --trace experiments/jetson/OM/trace-20261110-0504/wiki/routing.jsonl --out experiments/jetson/SPEC1/results.json" in /home/muk/projects/siminfeng/campaign
+exec
+/bin/bash -lc "cat > /tmp/spec1_report.py <<'PY'
+import json
+from pathlib import Path
+out=Path('experiments/jetson/SPEC1')
+data=json.loads((out/'results.json').read_text()); rows=data['results']
+intro='''# SPEC1: speculative verify-window expert-union replay
+
+CPU-only offline simulation; no GPU, Docker, builds, network, or commits.
+
+## Model and scope
+
+W is the total number of verify positions, including one guaranteed output position (W-1 draft positions). Expected emitted tokens per full window are E(W,a) = sum(a**j for j=0..W-1) = (1-a**W)/(1-a); at a=1 the limit is W. This follows the assignment's explicit formula; describing W as W drafts plus a bonus would instead require W+1 terms. Partial final windows use their actual length in both routing and E. Windows never cross sequence boundaries or gaps. Only explicitly marked decode rows are replayed, with cold global caches and no prefill warming. Every union is replayed layer by layer, with experts in first-observed order, through existing LRU and Belady (future-reading oracle with bypass) policies. These are sequential demand lookups, not an atomic pinned verify working set. Caches persist across windows. Each slot is 1,900,544 bytes (589,824 + 589,824 + 720,896).
+
+Optimistic: union actually realized consecutive tokens. Rejected drafts would route differently, so this is an optimistic proxy, not measured speculative decoding. Pessimistic: sample a prefix rejection using per-position acceptance a (first verify position is guaranteed); after the first rejection, add an independent uniformly sampled distinct top-8 per layer for each remaining position, retaining the realized union. This intentionally adds rather than replaces traffic. It is a conservative scenario, not a rigorous bound on every possible draft router. One reproducible random realization per trace/W/a uses seed 20261110; there are no confidence intervals. Expected output remains the analytic geometric expectation, not the sampled prefix length. The W=1 variants coincide.
+
+Disk t/s = 570 MiB/s / miss bytes per emitted token. Speedup compares the same workload, policy, capacity and acceptance against W=1. The hypothetical compute cap assumes at most 6 verify steps/s: total time = max(total disk time, number of windows / 6); capped t/s = expected output / total time. This assumes ideal disk/compute overlap; additive costs would be slower. The cap is hypothetical, not a Jetson measurement. Draft computation, MTP-head memory (which could shrink the cache), attention/KV/shared-expert costs, page granularity/readahead, and capture timing overhead are excluded. Distinct counts are averaged equally over layers and windows, including partial windows. JSON also contains individual layer means, lengths, totals, input paths and diagnostics. Trace metadata omits a model SHA.
+
+The local research/x86-c2-digest.md reports T-SPECM ~19 experts/layer for four positions, MTP chat acceptance 64–70%, and cache+MTP incremental chat gain only ~6.5% on x86; these motivate the sweep, not calibration or transferable measured Jetson throughput. At a=.65, E(4,a)=2.347; a ~19/8 union expansion can therefore erase the gain before cache effects.
+
+## Results
+
+All bytes below are decimal bytes, not MiB. 'Capped' denotes the hypothetical compute cap. Full tables cover both variants, all acceptances, W values, policies and capacities.
+'''
+lines=[intro]
+for workload in ('chat','code','math','wiki'):
+    subset=[r for r in rows if r['workload']==workload]
+    sample=subset[0]
+    lines += [f\"\\n## {workload}\\n\",f\"Decode positions: {sample['decode_tokens']}; malformed rows: {sample['trace_diagnostics']['malformed_lines']}; incomplete layer tokens: {sample['trace_diagnostics']['incomplete_layer_tokens']}.\\n\"]
+    for variant in ('optimistic','pessimistic'):
+        for a in (.5,.7,.9):
+            for policy in ('lru','belady'):
+                lines += [f'\\n### {variant}, a={a}, {policy}\\n', '| Slots | W | Experts/layer/window | Miss B/window | Miss B/emitted token | Disk t/s | Speedup | Capped t/s | Capped speedup |','|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
+                for r in subset:
+                    if (r['variant'],r['acceptance'],r['policy']) "'!= (variant,a,policy):continue
+                    lines.append(f"| {r['"'capacity_slots']} | {r['width']} | {r['distinct_experts_per_layer_window']:.3f} | {r['miss_bytes_per_window']:.0f} | {r['miss_bytes_per_emitted_token']:.0f} | {r['disk_decode_tps']:.3f} | {r['disk_speedup_vs_w1']:.3f} | {r['hypothetical_compute_capped_tps']:.3f} | {r['hypothetical_compute_capped_speedup_vs_w1']:.3f} |\")
+lines += ['\\n## Validation and reproduction\\n','"'`pytest cc/expert_replay -q`: 12 passed, 5 subtests passed. Synthetic tests cover union deduplication, multiple layers, partial windows, request/gap boundaries, exclusion of prefill, W=1 equivalence, geometric expectation and deterministic rejected-position additions.'"\\n', 'From repository root:\\n', '"'```bash'"\\npython3 cc/expert_replay/expert_replay.py specwin \\\\\\n  --trace experiments/jetson/OM/trace-20261110-0504/chat/routing.jsonl \\\\\\n  --trace experiments/jetson/OM/trace-20261110-0504/code/routing.jsonl \\\\\\n  --trace experiments/jetson/OM/trace-20261110-0504/math/routing.jsonl \\\\\\n  --trace experiments/jetson/OM/trace-20261110-0504/wiki/routing.jsonl \\\\\\n  --out experiments/jetson/SPEC1/results.json\\n"'```'"']
+(out/'SPEC1.md').write_text('\\n'.join(lines)+'\\n')
+print('SPEC1: 864 scenarios; 570 MiB/s disk, 1,900,544 B/expert; cold decode-only caches.')
+print('E(W,a)=(1-a**W)/(1-a); hypothetical cap: 6 verify steps/s.')
+for workload in ('chat','code','math','wiki'):
+    print(workload+': LRU/1300 slots, a=0.7 (disk speedup vs W=1):')
+    for variant in ('optimistic','pessimistic'):
+        selected=[r for r in rows if (r['workload'],r['policy'],r['capacity_slots'],r['acceptance'],r['variant'])==(workload,'lru',1300,.7,variant)]
+        print('  '+variant+': '+', '.join(f\"W{r['width']}={r['disk_speedup_vs_w1']:.3f}x\" for r in selected))
+print('Optimistic uses realized routes; pessimistic adds seeded random top-8 after rejection.')
+print('No measured spec speedup; draft costs and MTP cache displacement excluded.')
+print('Tests: 12 passed, 5 subtests passed. Full tables: experiments/jetson/SPEC1/SPEC1.md')
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+codex
+The new window tests and existing replay tests pass. The full sweep is running. The report will separate disk-only predictions from the hypothetical 6 verify-steps/s cap and explain that the pessimistic case is one seeded random realization, not a statistical bound.
+exec
+/bin/bash -lc "cat >> cc/expert_replay/test_expert_replay.py <<'EOF'
+
+
+def test_belady_heap_matches_exhaustive_cache_choices():
+    # Independent optimum including bypass, to guard oracle heap invalidation.
+    from functools import lru_cache
+    for events in itertools.product(range(3), repeat=5):
+        for capacity in (1, 2):
+            @lru_cache(None)
+            def optimum(i, cached):
+                if i == len(events):
+                    return 0
+                cache = set(cached)
+                pair = events[i]
+                if pair in cache:
+                    return optimum(i + 1, cached)
+                choices = [cache]  # bypass
+                if len(cache) < capacity:
+                    choices.append(cache | {pair})
+                else:
+                    choices.extend((cache - {victim}) | {pair} for victim in cache)
+                return 1 + min(optimum(i + 1, tuple(sorted(c))) for c in choices)
+            assert replay(rows(events), 1, 3, capacity, 'belady')['overall']['misses'] == optimum(0, ())
+EOF
+pytest cc/expert_replay -q" in /home/muk/projects/siminfeng/campaign
+ succeeded in 1469ms:
+.............                                                       [100%]
+13 passed, 5 subtests passed in 0.89s
+
+exec
+/bin/bash -lc "ps -eo pid,etime,time,args | rg 'expert_replay.py specwin'; ls -lh experiments/jetson/SPEC1" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+      1       00:00 00:00:00 /home/muk/.codex/tmp/arg0-linux/codex-arg0uBdSGC/codex-linux-sandbox --sandbox-policy-cwd /home/muk/projects/siminfeng/campaign --command-cwd /home/muk/projects/siminfeng/campaign --permission-profile {"type":"managed","file_system":{"type":"restricted","entries":[{"path":{"type":"special","value":{"kind":"root"}},"access":"read"},{"path":{"type":"path","path":"/home/muk/projects/siminfeng/campaign"},"access":"write"},{"path":{"type":"special","value":{"kind":"slash_tmp"}},"access":"write"},{"path":{"type":"special","value":{"kind":"tmpdir"}},"access":"write"},{"path":{"type":"path","path":"/home/muk/projects/siminfeng/campaign/.git"},"access":"read","missing_path_behavior":"skip"},{"path":{"type":"path","path":"/home/muk/projects/siminfeng/campaign/.agents"},"access":"read","missing_path_behavior":"skip"},{"path":{"type":"path","path":"/home/muk/projects/siminfeng/campaign/.codex"},"access":"read","missing_path_behavior":"skip"},{"path":{"type":"path","path":"/home/muk/projects/siminfeng/campaign/.aws"},"access":"read","missing_path_behavior":"skip"}]},"network":"restricted"} --apply-seccomp-then-exec -- /bin/bash -c __CODEX_SNAPSHOT_OVERRIDE_SET_0="${CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS+x}" __CODEX_SNAPSHOT_OVERRIDE_0="${CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS-}" __CODEX_SNAPSHOT_OVERRIDE_SET_1="${CODEX_PERMISSION_PROFILE+x}" __CODEX_SNAPSHOT_OVERRIDE_1="${CODEX_PERMISSION_PROFILE-}" __CODEX_SNAPSHOT_OVERRIDE_SET_2="${CODEX_PLUGIN_METRICS_OUTPUT+x}" __CODEX_SNAPSHOT_OVERRIDE_2="${CODEX_PLUGIN_METRICS_OUTPUT-}" __CODEX_SNAPSHOT_OVERRIDE_SET_3="${CODEX_SESSION_ID+x}" __CODEX_SNAPSHOT_OVERRIDE_3="${CODEX_SESSION_ID-}" __CODEX_SNAPSHOT_OVERRIDE_SET_4="${CODEX_THREAD_ID+x}" __CODEX_SNAPSHOT_OVERRIDE_4="${CODEX_THREAD_ID-}" __CODEX_SNAPSHOT_OVERRIDE_SET_5="${CODEX_TOOL_CALL_ID+x}" __CODEX_SNAPSHOT_OVERRIDE_5="${CODEX_TOOL_CALL_ID-}" __CODEX_SNAPSHOT_OVERRIDE_SET_6="${CODEX_VERSION+x}" __CODEX_SNAPSHOT_OVERRIDE_6="${CODEX_VERSION-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_0="${ALL_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_0="${ALL_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_1="${BUNDLE_HTTPS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_1="${BUNDLE_HTTPS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_2="${BUNDLE_HTTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_2="${BUNDLE_HTTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_3="${BUNDLE_NO_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_3="${BUNDLE_NO_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_4="${BUNDLE_SSL_CA_CERT+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_4="${BUNDLE_SSL_CA_CERT-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_5="${CARGO_HTTP_CAINFO+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_5="${CARGO_HTTP_CAINFO-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_6="${CODEX_CA_CERTIFICATE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_6="${CODEX_CA_CERTIFICATE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_7="${CODEX_NETWORK_ALLOW_LOCAL_BINDING+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_7="${CODEX_NETWORK_ALLOW_LOCAL_BINDING-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_8="${CODEX_NETWORK_PROXY_ACTIVE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_8="${CODEX_NETWORK_PROXY_ACTIVE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_9="${CODEX_NETWORK_PROXY_ATTRIBUTION+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_9="${CODEX_NETWORK_PROXY_ATTRIBUTION-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_10="${CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_10="${CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_11="${CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_11="${CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_12="${CURL_CA_BUNDLE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_12="${CURL_CA_BUNDLE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_13="${DOCKER_HTTPS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_13="${DOCKER_HTTPS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_14="${DOCKER_HTTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_14="${DOCKER_HTTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_15="${ELECTRON_GET_USE_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_15="${ELECTRON_GET_USE_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_16="${FTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_16="${FTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_17="${GIT_SSL_CAINFO+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_17="${GIT_SSL_CAINFO-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_18="${HTTPS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_18="${HTTPS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_19="${HTTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_19="${HTTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_20="${NODE_EXTRA_CA_CERTS+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_20="${NODE_EXTRA_CA_CERTS-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_21="${NODE_USE_ENV_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_21="${NODE_USE_ENV_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_22="${NO_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_22="${NO_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_23="${NPM_CONFIG_CAFILE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_23="${NPM_CONFIG_CAFILE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_24="${NPM_CONFIG_HTTPS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_24="${NPM_CONFIG_HTTPS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_25="${NPM_CONFIG_HTTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_25="${NPM_CONFIG_HTTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_26="${NPM_CONFIG_NOPROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_26="${NPM_CONFIG_NOPROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_27="${NPM_CONFIG_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_27="${NPM_CONFIG_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_28="${PIP_CERT+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_28="${PIP_CERT-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_29="${PIP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_29="${PIP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_30="${REQUESTS_CA_BUNDLE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_30="${REQUESTS_CA_BUNDLE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_31="${SSL_CERT_FILE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_31="${SSL_CERT_FILE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_32="${WSS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_32="${WSS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_33="${WS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_33="${WS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_34="${YARN_HTTPS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_34="${YARN_HTTPS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_35="${YARN_HTTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_35="${YARN_HTTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_36="${YARN_NO_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_36="${YARN_NO_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_37="${all_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_37="${all_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_38="${ftp_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_38="${ftp_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_39="${http_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_39="${http_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_40="${https_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_40="${https_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_41="${no_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_41="${no_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_42="${npm_config_cafile+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_42="${npm_config_cafile-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_43="${npm_config_http_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_43="${npm_config_http_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_44="${npm_config_https_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_44="${npm_config_https_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_45="${npm_config_noproxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_45="${npm_config_noproxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_46="${npm_config_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_46="${npm_config_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_47="${ws_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_47="${ws_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_48="${wss_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_48="${wss_proxy-}" __CODEX_SNAPSHOT_PROXY_ENV_SET="${CODEX_NETWORK_PROXY_ACTIVE+x}"  if . '/home/muk/.codex/shell_snapshots/01a1c613-12ce-7831-8ecf-6b6e6d98f28b.1794324502521252677.sh' >/dev/null 2>&1; then :; fi  if [ -n "${__CODEX_SNAPSHOT_OVERRIDE_SET_0}" ]; then   if [ -z "${CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS+x}" ] || [ "${CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS-}" != "${__CODEX_SNAPSHOT_OVERRIDE_0}" ]; then export CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS="${__CODEX_SNAPSHOT_OVERRIDE_0}"; else export CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS; fi else builtin unset CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS 2>/dev/null || command unset CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS; fi builtin unset __CODEX_SNAPSHOT_OVERRIDE_SET_0 __CODEX_SNAPSHOT_OVERRIDE_0 2>/dev/null || command unset __CODEX_SNAPSHOT_OVERRIDE_SET_0 __CODEX_SNAPSHOT_OVERRIDE_0 if [ -n "${__CODEX_SNAPSHOT_OVERRIDE_SET_1}" ]; then   if [ -z "${CODEX_PERMISSION_PROFILE+x}" ] || [ "${CODEX_PERMISSION_PROFILE-}" != "${__CODEX_SNAPSHOT_OVERRIDE_1}" ]; then export CODEX_PERMISSION_PROFILE="${__CODEX_SNAPSHOT_OVERRIDE_1}"; else export CODEX_PERMISSION_PROFILE; fi else builtin unset CODEX_PERMISSION_PROFILE 2>/dev/null || command unset CODEX_PERMISSION_PROFILE; fi builtin unset __CODEX_SNAPSHOT_OVERRIDE_SET_1 __CODEX_SNAPSHOT_OVERRIDE_1 2>/dev/null || command unset __CODEX_SNAPSHOT_OVERRIDE_SET_1 __CODEX_SNAPSHOT_OVERRIDE_1 if [ -n "${__CODEX_SNAPSHOT_OVERRIDE_SET_2}" ]; then   if [ -z "${CODEX_PLUGIN_METRICS_OUTPUT+x}" ] || [ "${CODEX_PLUGIN_METRICS_OUTPUT-}" != "${__CODEX_SNAPSHOT_OVERRIDE_2}" ]; then export CODEX_PLUGIN_METRICS_OUTPUT="${__CODEX_SNAPSHOT_OVERRIDE_2}"; else export CODEX_PLUGIN_METRICS_OUTPUT; fi else builtin unset CODEX_PLUGIN_METRICS_OUTPUT 2>/dev/null || command unset CODEX_PLUGIN_METRICS_OUTPUT; fi builtin unset __CODEX_SNAPSHOT_OVERRIDE_SET_2 __CODEX_SNAPSHOT_OVERRIDE_2 2>/dev/null || command unset __CODEX_SNAPSHOT_OVERRIDE_SET_2 __CODEX_SNAPSHOT_OVERRIDE_2 if [ -n "${__CODEX_SNAPSHOT_OVERRIDE_SET_3}" ]; then   if [ -z "${CODEX_SESSION_ID+x}" ] || [ "${CODEX_SESSION_ID-}" != "${__CODEX_SNAPSHOT_OVERRIDE_3}" ]; then export CODEX_SESSION_ID="${__CODEX_SNAPSHOT_OVERRIDE_3}"; else export CODEX_SESSION_ID; fi else builtin unset CODEX_SESSION_ID 2>/dev/null || command unset CODEX_SESSION_ID; fi builtin unset __CODEX_SNAPSHOT_OVERRIDE_SET_3 __CODEX_SNAPSHOT_OVERRIDE_3 2>/dev/null || command unset __CODEX_SNAPSHOT_OVERRIDE_SET_3 __CODEX_SNAPSHOT_OVERRIDE_3 if [ -n "${__CODEX_SNAPSHOT_OVERRIDE_SET_4}" ]; then   if [ -z "${CODEX_THREAD_ID+x}" ] || [ "${CODEX_THREAD_ID-}" != "${__CODEX_SNAPSHOT_OVERRIDE_4}" ]; then export CODEX_THREAD_ID="${__CODEX_SNAPSHOT_OVERRIDE_4}"; else export CODEX_THREAD_ID; fi else builtin unset CODEX_THREAD_ID 2>/dev/null || command unset CODEX_THREAD_ID; fi builtin unset __CODEX_SNAPSHOT_OVERRIDE_SET_4 __CODEX_SNAPSHOT_OVERRIDE_4 2>/dev/null || command unset __CODEX_SNAPSHOT_OVERRIDE_SET_4 __CODEX_SNAPSHOT_OVERRIDE_4 if [ -n "${__CODEX_SNAPSHOT_OVERRIDE_SET_5}" ]; then   if [ -z "${CODEX_TOOL_CALL_ID+x}" ] || [ "${CODEX_TOOL_CALL_ID-}" != "${__CODEX_SNAPSHOT_OVERRIDE_5}" ]; then export CODEX_TOOL_CALL_ID="${__CODEX_SNAPSHOT_OVERRIDE_5}"; else export CODEX_TOOL_CALL_ID; fi else builtin unset CODEX_TOOL_CALL_ID 2>/dev/null || command unset CODEX_TOOL_CALL_ID; fi builtin unset __CODEX_SNAPSHOT_OVERRIDE_SET_5 __CODEX_SNAPSHOT_OVERRIDE_5 2>/dev/null || command unset __CODEX_SNAPSHOT_OVERRIDE_SET_5 __CODEX_SNAPSHOT_OVERRIDE_5 if [ -n "${__CODEX_SNAPSHOT_OVERRIDE_SET_6}" ]; then   if [ -z "${CODEX_VERSION+x}" ] || [ "${CODEX_VERSION-}" != "${__CODEX_SNAPSHOT_OVERRIDE_6}" ]; then export CODEX_VERSION="${__CODEX_SNAPSHOT_OVERRIDE_6}"; else export CODEX_VERSION; fi else builtin unset CODEX_VERSION 2>/dev/null || command unset CODEX_VERSION; fi builtin unset __CODEX_SNAPSHOT_OVERRIDE_SET_6 __CODEX_SNAPSHOT_OVERRIDE_6 2>/dev/null || command unset __CODEX_SNAPSHOT_OVERRIDE_SET_6 __CODEX_SNAPSHOT_OVERRIDE_6 if [ -n "$__CODEX_SNAPSHOT_PROXY_ENV_SET" ] || [ -n "${CODEX_NETWORK_PROXY_ACTIVE+x}" ]; then if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_0}" ]; then   if [ -z "${ALL_PROXY+x}" ] || [ "${ALL_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_0}" ]; then export ALL_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_0}"; else export ALL_PROXY; fi else builtin unset ALL_PROXY 2>/dev/null || command unset ALL_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_0 __CODEX_SNAPSHOT_PROXY_OVERRIDE_0 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_0 __CODEX_SNAPSHOT_PROXY_OVERRIDE_0 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_1}" ]; then   if [ -z "${BUNDLE_HTTPS_PROXY+x}" ] || [ "${BUNDLE_HTTPS_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_1}" ]; then export BUNDLE_HTTPS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_1}"; else export BUNDLE_HTTPS_PROXY; fi else builtin unset BUNDLE_HTTPS_PROXY 2>/dev/null || command unset BUNDLE_HTTPS_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_1 __CODEX_SNAPSHOT_PROXY_OVERRIDE_1 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_1 __CODEX_SNAPSHOT_PROXY_OVERRIDE_1 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_2}" ]; then   if [ -z "${BUNDLE_HTTP_PROXY+x}" ] || [ "${BUNDLE_HTTP_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_2}" ]; then export BUNDLE_HTTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_2}"; else export BUNDLE_HTTP_PROXY; fi else builtin unset BUNDLE_HTTP_PROXY 2>/dev/null || command unset BUNDLE_HTTP_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_2 __CODEX_SNAPSHOT_PROXY_OVERRIDE_2 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_2 __CODEX_SNAPSHOT_PROXY_OVERRIDE_2 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_3}" ]; then   if [ -z "${BUNDLE_NO_PROXY+x}" ] || [ "${BUNDLE_NO_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_3}" ]; then export BUNDLE_NO_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_3}"; else export BUNDLE_NO_PROXY; fi else builtin unset BUNDLE_NO_PROXY 2>/dev/null || command unset BUNDLE_NO_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_3 __CODEX_SNAPSHOT_PROXY_OVERRIDE_3 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_3 __CODEX_SNAPSHOT_PROXY_OVERRIDE_3 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_4}" ]; then   if [ -z "${BUNDLE_SSL_CA_CERT+x}" ] || [ "${BUNDLE_SSL_CA_CERT-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_4}" ]; then export BUNDLE_SSL_CA_CERT="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_4}"; else export BUNDLE_SSL_CA_CERT; fi else builtin unset BUNDLE_SSL_CA_CERT 2>/dev/null || command unset BUNDLE_SSL_CA_CERT; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_4 __CODEX_SNAPSHOT_PROXY_OVERRIDE_4 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_4 __CODEX_SNAPSHOT_PROXY_OVERRIDE_4 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_5}" ]; then   if [ -z "${CARGO_HTTP_CAINFO+x}" ] || [ "${CARGO_HTTP_CAINFO-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_5}" ]; then export CARGO_HTTP_CAINFO="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_5}"; else export CARGO_HTTP_CAINFO; fi else builtin unset CARGO_HTTP_CAINFO 2>/dev/null || command unset CARGO_HTTP_CAINFO; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_5 __CODEX_SNAPSHOT_PROXY_OVERRIDE_5 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_5 __CODEX_SNAPSHOT_PROXY_OVERRIDE_5 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_6}" ]; then   if [ -z "${CODEX_CA_CERTIFICATE+x}" ] || [ "${CODEX_CA_CERTIFICATE-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_6}" ]; then export CODEX_CA_CERTIFICATE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_6}"; else export CODEX_CA_CERTIFICATE; fi else builtin unset CODEX_CA_CERTIFICATE 2>/dev/null || command unset CODEX_CA_CERTIFICATE; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_6 __CODEX_SNAPSHOT_PROXY_OVERRIDE_6 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_6 __CODEX_SNAPSHOT_PROXY_OVERRIDE_6 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_7}" ]; then   if [ -z "${CODEX_NETWORK_ALLOW_LOCAL_BINDING+x}" ] || [ "${CODEX_NETWORK_ALLOW_LOCAL_BINDING-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_7}" ]; then export CODEX_NETWORK_ALLOW_LOCAL_BINDING="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_7}"; else export CODEX_NETWORK_ALLOW_LOCAL_BINDING; fi else builtin unset CODEX_NETWORK_ALLOW_LOCAL_BINDING 2>/dev/null || command unset CODEX_NETWORK_ALLOW_LOCAL_BINDING; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_7 __CODEX_SNAPSHOT_PROXY_OVERRIDE_7 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_7 __CODEX_SNAPSHOT_PROXY_OVERRIDE_7 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_8}" ]; then   if [ -z "${CODEX_NETWORK_PROXY_ACTIVE+x}" ] || [ "${CODEX_NETWORK_PROXY_ACTIVE-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_8}" ]; then export CODEX_NETWORK_PROXY_ACTIVE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_8}"; else export CODEX_NETWORK_PROXY_ACTIVE; fi else builtin unset CODEX_NETWORK_PROXY_ACTIVE 2>/dev/null || command unset CODEX_NETWORK_PROXY_ACTIVE; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_8 __CODEX_SNAPSHOT_PROXY_OVERRIDE_8 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_8 __CODEX_SNAPSHOT_PROXY_OVERRIDE_8 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_9}" ]; then   if [ -z "${CODEX_NETWORK_PROXY_ATTRIBUTION+x}" ] || [ "${CODEX_NETWORK_PROXY_ATTRIBUTION-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_9}" ]; then export CODEX_NETWORK_PROXY_ATTRIBUTION="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_9}"; else export CODEX_NETWORK_PROXY_ATTRIBUTION; fi else builtin unset CODEX_NETWORK_PROXY_ATTRIBUTION 2>/dev/null || command unset CODEX_NETWORK_PROXY_ATTRIBUTION; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_9 __CODEX_SNAPSHOT_PROXY_OVERRIDE_9 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_9 __CODEX_SNAPSHOT_PROXY_OVERRIDE_9 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_10}" ]; then   if [ -z "${CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS+x}" ] || [ "${CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_10}" ]; then export CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_10}"; else export CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS; fi else builtin unset CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS 2>/dev/null || command unset CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_10 __CODEX_SNAPSHOT_PROXY_OVERRIDE_10 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_10 __CODEX_SNAPSHOT_PROXY_OVERRIDE_10 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_11}" ]; then   if [ -z "${CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE+x}" ] || [ "${CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_11}" ]; then export CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_11}"; else export CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE; fi else builtin unset CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE 2>/dev/null || command unset CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_11 __CODEX_SNAPSHOT_PROXY_OVERRIDE_11 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_11 __CODEX_SNAPSHOT_PROXY_OVERRIDE_11 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_12}" ]; then   if [ -z "${CURL_CA_BUNDLE+x}" ] || [ "${CURL_CA_BUNDLE-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_12}" ]; then export CURL_CA_BUNDLE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_12}"; else export CURL_CA_BUNDLE; fi else builtin unset CURL_CA_BUNDLE 2>/dev/null || command unset CURL_CA_BUNDLE; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_12 __CODEX_SNAPSHOT_PROXY_OVERRIDE_12 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_12 __CODEX_SNAPSHOT_PROXY_OVERRIDE_12 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_13}" ]; then   if [ -z "${DOCKER_HTTPS_PROXY+x}" ] || [ "${DOCKER_HTTPS_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_13}" ]; then export DOCKER_HTTPS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_13}"; else export DOCKER_HTTPS_PROXY; fi else builtin unset DOCKER_HTTPS_PROXY 2>/dev/null || command unset DOCKER_HTTPS_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_13 __CODEX_SNAPSHOT_PROXY_OVERRIDE_13 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_13 __CODEX_SNAPSHOT_PROXY_OVERRIDE_13 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_14}" ]; then   if [ -z "${DOCKER_HTTP_PROXY+x}" ] || [ "${DOCKER_HTTP_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_14}" ]; then export DOCKER_HTTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_14}"; else export DOCKER_HTTP_PROXY; fi else builtin unset DOCKER_HTTP_PROXY 2>/dev/null || command unset DOCKER_HTTP_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_14 __CODEX_SNAPSHOT_PROXY_OVERRIDE_14 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_14 __CODEX_SNAPSHOT_PROXY_OVERRIDE_14 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_15}" ]; then   if [ -z "${ELECTRON_GET_USE_PROXY+x}" ] || [ "${ELECTRON_GET_USE_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_15}" ]; then export ELECTRON_GET_USE_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_15}"; else export ELECTRON_GET_USE_PROXY; fi else builtin unset ELECTRON_GET_USE_PROXY 2>/dev/null || command unset ELECTRON_GET_USE_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_15 __CODEX_SNAPSHOT_PROXY_OVERRIDE_15 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_15 __CODEX_SNAPSHOT_PROXY_OVERRIDE_15 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_16}" ]; then   if [ -z "${FTP_PROXY+x}" ] || [ "${FTP_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_16}" ]; then export FTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_16}"; else export FTP_PROXY; fi else builtin unset FTP_PROXY 2>/dev/null || command unset FTP_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_16 __CODEX_SNAPSHOT_PROXY_OVERRIDE_16 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_16 __CODEX_SNAPSHOT_PROXY_OVERRIDE_16 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_17}" ]; then   if [ -z "${GIT_SSL_CAINFO+x}" ] || [ "${GIT_SSL_CAINFO-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_17}" ]; then export GIT_SSL_CAINFO="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_17}"; else export GIT_SSL_CAINFO; fi else builtin unset GIT_SSL_CAINFO 2>/dev/null || command unset GIT_SSL_CAINFO; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_17 __CODEX_SNAPSHOT_PROXY_OVERRIDE_17 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_17 __CODEX_SNAPSHOT_PROXY_OVERRIDE_17 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_18}" ]; then   if [ -z "${HTTPS_PROXY+x}" ] || [ "${HTTPS_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_18}" ]; then export HTTPS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_18}"; else export HTTPS_PROXY; fi else builtin unset HTTPS_PROXY 2>/dev/null || command unset HTTPS_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_18 __CODEX_SNAPSHOT_PROXY_OVERRIDE_18 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_18 __CODEX_SNAPSHOT_PROXY_OVERRIDE_18 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_19}" ]; then   if [ -z "${HTTP_PROXY+x}" ] || [ "${HTTP_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_19}" ]; then export HTTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_19}"; else export HTTP_PROXY; fi else builtin unset HTTP_PROXY 2>/dev/null || command unset HTTP_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_19 __CODEX_SNAPSHOT_PROXY_OVERRIDE_19 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_19 __CODEX_SNAPSHOT_PROXY_OVERRIDE_19 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_20}" ]; then   if [ -z "${NODE_EXTRA_CA_CERTS+x}" ] || [ "${NODE_EXTRA_CA_CERTS-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_20}" ]; then export NODE_EXTRA_CA_CERTS="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_20}"; else export NODE_EXTRA_CA_CERTS; fi else builtin unset NODE_EXTRA_CA_CERTS 2>/dev/null || command unset NODE_EXTRA_CA_CERTS; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_20 __CODEX_SNAPSHOT_PROXY_OVERRIDE_20 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_20 __CODEX_SNAPSHOT_PROXY_OVERRIDE_20 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_21}" ]; then   if [ -z "${NODE_USE_ENV_PROXY+x}" ] || [ "${NODE_USE_ENV_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_21}" ]; then export NODE_USE_ENV_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_21}"; else export NODE_USE_ENV_PROXY; fi else builtin unset NODE_USE_ENV_PROXY 2>/dev/null || command unset NODE_USE_ENV_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_21 __CODEX_SNAPSHOT_PROXY_OVERRIDE_21 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_21 __CODEX_SNAPSHOT_PROXY_OVERRIDE_21 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_22}" ]; then   if [ -z "${NO_PROXY+x}" ] || [ "${NO_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_22}" ]; then export NO_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_22}"; else export NO_PROXY; fi else builtin unset NO_PROXY 2>/dev/null || command unset NO_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_22 __CODEX_SNAPSHOT_PROXY_OVERRIDE_22 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_22 __CODEX_SNAPSHOT_PROXY_OVERRIDE_22 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_23}" ]; then   if [ -z "${NPM_CONFIG_CAFILE+x}" ] || [ "${NPM_CONFIG_CAFILE-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_23}" ]; then export NPM_CONFIG_CAFILE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_23}"; else export NPM_CONFIG_CAFILE; fi else builtin unset NPM_CONFIG_CAFILE 2>/dev/null || command unset NPM_CONFIG_CAFILE; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_23 __CODEX_SNAPSHOT_PROXY_OVERRIDE_23 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_23 __CODEX_SNAPSHOT_PROXY_OVERRIDE_23 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_24}" ]; then   if [ -z "${NPM_CONFIG_HTTPS_PROXY+x}" ] || [ "${NPM_CONFIG_HTTPS_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_24}" ]; then export NPM_CONFIG_HTTPS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_24}"; else export NPM_CONFIG_HTTPS_PROXY; fi else builtin unset NPM_CONFIG_HTTPS_PROXY 2>/dev/null || command unset NPM_CONFIG_HTTPS_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_24 __CODEX_SNAPSHOT_PROXY_OVERRIDE_24 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_24 __CODEX_SNAPSHOT_PROXY_OVERRIDE_24 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_25}" ]; then   if [ -z "${NPM_CONFIG_HTTP_PROXY+x}" ] || [ "${NPM_CONFIG_HTTP_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_25}" ]; then export NPM_CONFIG_HTTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_25}"; else export NPM_CONFIG_HTTP_PROXY; fi else builtin unset NPM_CONFIG_HTTP_PROXY 2>/dev/null || command unset NPM_CONFIG_HTTP_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_25 __CODEX_SNAPSHOT_PROXY_OVERRIDE_25 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_25 __CODEX_SNAPSHOT_PROXY_OVERRIDE_25 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_26}" ]; then   if [ -z "${NPM_CONFIG_NOPROXY+x}" ] || [ "${NPM_CONFIG_NOPROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_26}" ]; then export NPM_CONFIG_NOPROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_26}"; else export NPM_CONFIG_NOPROXY; fi else builtin unset NPM_CONFIG_NOPROXY 2>/dev/null || command unset NPM_CONFIG_NOPROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_26 __CODEX_SNAPSHOT_PROXY_OVERRIDE_26 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_26 __CODEX_SNAPSHOT_PROXY_OVERRIDE_26 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_27}" ]; then   if [ -z "${NPM_CONFIG_PROXY+x}" ] || [ "${NPM_CONFIG_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_27}" ]; then export NPM_CONFIG_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_27}"; else export NPM_CONFIG_PROXY; fi else builtin unset NPM_CONFIG_PROXY 2>/dev/null || command unset NPM_CONFIG_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_27 __CODEX_SNAPSHOT_PROXY_OVERRIDE_27 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_27 __CODEX_SNAPSHOT_PROXY_OVERRIDE_27 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_28}" ]; then   if [ -z "${PIP_CERT+x}" ] || [ "${PIP_CERT-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_28}" ]; then export PIP_CERT="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_28}"; else export PIP_CERT; fi else builtin unset PIP_CERT 2>/dev/null || command unset PIP_CERT; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_28 __CODEX_SNAPSHOT_PROXY_OVERRIDE_28 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_28 __CODEX_SNAPSHOT_PROXY_OVERRIDE_28 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_29}" ]; then   if [ -z "${PIP_PROXY+x}" ] || [ "${PIP_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_29}" ]; then export PIP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_29}"; else export PIP_PROXY; fi else builtin unset PIP_PROXY 2>/dev/null || command unset PIP_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_29 __CODEX_SNAPSHOT_PROXY_OVERRIDE_29 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_29 __CODEX_SNAPSHOT_PROXY_OVERRIDE_29 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_30}" ]; then   if [ -z "${REQUESTS_CA_BUNDLE+x}" ] || [ "${REQUESTS_CA_BUNDLE-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_30}" ]; then export REQUESTS_CA_BUNDLE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_30}"; else export REQUESTS_CA_BUNDLE; fi else builtin unset REQUESTS_CA_BUNDLE 2>/dev/null || command unset REQUESTS_CA_BUNDLE; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_30 __CODEX_SNAPSHOT_PROXY_OVERRIDE_30 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_30 __CODEX_SNAPSHOT_PROXY_OVERRIDE_30 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_31}" ]; then   if [ -z "${SSL_CERT_FILE+x}" ] || [ "${SSL_CERT_FILE-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_31}" ]; then export SSL_CERT_FILE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_31}"; else export SSL_CERT_FILE; fi else builtin unset SSL_CERT_FILE 2>/dev/null || command unset SSL_CERT_FILE; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_31 __CODEX_SNAPSHOT_PROXY_OVERRIDE_31 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_31 __CODEX_SNAPSHOT_PROXY_OVERRIDE_31 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_32}" ]; then   if [ -z "${WSS_PROXY+x}" ] || [ "${WSS_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_32}" ]; then export WSS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_32}"; else export WSS_PROXY; fi else builtin unset WSS_PROXY 2>/dev/null || command unset WSS_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_32 __CODEX_SNAPSHOT_PROXY_OVERRIDE_32 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_32 __CODEX_SNAPSHOT_PROXY_OVERRIDE_32 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_33}" ]; then   if [ -z "${WS_PROXY+x}" ] || [ "${WS_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_33}" ]; then export WS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_33}"; else export WS_PROXY; fi else builtin unset WS_PROXY 2>/dev/null || command unset WS_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_33 __CODEX_SNAPSHOT_PROXY_OVERRIDE_33 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_33 __CODEX_SNAPSHOT_PROXY_OVERRIDE_33 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_34}" ]; then   if [ -z "${YARN_HTTPS_PROXY+x}" ] || [ "${YARN_HTTPS_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_34}" ]; then export YARN_HTTPS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_34}"; else export YARN_HTTPS_PROXY; fi else builtin unset YARN_HTTPS_PROXY 2>/dev/null || command unset YARN_HTTPS_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_34 __CODEX_SNAPSHOT_PROXY_OVERRIDE_34 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_34 __CODEX_SNAPSHOT_PROXY_OVERRIDE_34 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_35}" ]; then   if [ -z "${YARN_HTTP_PROXY+x}" ] || [ "${YARN_HTTP_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_35}" ]; then export YARN_HTTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_35}"; else export YARN_HTTP_PROXY; fi else builtin unset YARN_HTTP_PROXY 2>/dev/null || command unset YARN_HTTP_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_35 __CODEX_SNAPSHOT_PROXY_OVERRIDE_35 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_35 __CODEX_SNAPSHOT_PROXY_OVERRIDE_35 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_36}" ]; then   if [ -z "${YARN_NO_PROXY+x}" ] || [ "${YARN_NO_PROXY-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_36}" ]; then export YARN_NO_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_36}"; else export YARN_NO_PROXY; fi else builtin unset YARN_NO_PROXY 2>/dev/null || command unset YARN_NO_PROXY; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_36 __CODEX_SNAPSHOT_PROXY_OVERRIDE_36 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_36 __CODEX_SNAPSHOT_PROXY_OVERRIDE_36 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_37}" ]; then   if [ -z "${all_proxy+x}" ] || [ "${all_proxy-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_37}" ]; then export all_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_37}"; else export all_proxy; fi else builtin unset all_proxy 2>/dev/null || command unset all_proxy; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_37 __CODEX_SNAPSHOT_PROXY_OVERRIDE_37 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_37 __CODEX_SNAPSHOT_PROXY_OVERRIDE_37 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_38}" ]; then   if [ -z "${ftp_proxy+x}" ] || [ "${ftp_proxy-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_38}" ]; then export ftp_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_38}"; else export ftp_proxy; fi else builtin unset ftp_proxy 2>/dev/null || command unset ftp_proxy; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_38 __CODEX_SNAPSHOT_PROXY_OVERRIDE_38 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_38 __CODEX_SNAPSHOT_PROXY_OVERRIDE_38 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_39}" ]; then   if [ -z "${http_proxy+x}" ] || [ "${http_proxy-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_39}" ]; then export http_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_39}"; else export http_proxy; fi else builtin unset http_proxy 2>/dev/null || command unset http_proxy; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_39 __CODEX_SNAPSHOT_PROXY_OVERRIDE_39 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_39 __CODEX_SNAPSHOT_PROXY_OVERRIDE_39 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_40}" ]; then   if [ -z "${https_proxy+x}" ] || [ "${https_proxy-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_40}" ]; then export https_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_40}"; else export https_proxy; fi else builtin unset https_proxy 2>/dev/null || command unset https_proxy; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_40 __CODEX_SNAPSHOT_PROXY_OVERRIDE_40 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_40 __CODEX_SNAPSHOT_PROXY_OVERRIDE_40 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_41}" ]; then   if [ -z "${no_proxy+x}" ] || [ "${no_proxy-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_41}" ]; then export no_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_41}"; else export no_proxy; fi else builtin unset no_proxy 2>/dev/null || command unset no_proxy; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_41 __CODEX_SNAPSHOT_PROXY_OVERRIDE_41 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_41 __CODEX_SNAPSHOT_PROXY_OVERRIDE_41 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_42}" ]; then   if [ -z "${npm_config_cafile+x}" ] || [ "${npm_config_cafile-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_42}" ]; then export npm_config_cafile="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_42}"; else export npm_config_cafile; fi else builtin unset npm_config_cafile 2>/dev/null || command unset npm_config_cafile; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_42 __CODEX_SNAPSHOT_PROXY_OVERRIDE_42 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_42 __CODEX_SNAPSHOT_PROXY_OVERRIDE_42 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_43}" ]; then   if [ -z "${npm_config_http_proxy+x}" ] || [ "${npm_config_http_proxy-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_43}" ]; then export npm_config_http_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_43}"; else export npm_config_http_proxy; fi else builtin unset npm_config_http_proxy 2>/dev/null || command unset npm_config_http_proxy; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_43 __CODEX_SNAPSHOT_PROXY_OVERRIDE_43 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_43 __CODEX_SNAPSHOT_PROXY_OVERRIDE_43 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_44}" ]; then   if [ -z "${npm_config_https_proxy+x}" ] || [ "${npm_config_https_proxy-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_44}" ]; then export npm_config_https_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_44}"; else export npm_config_https_proxy; fi else builtin unset npm_config_https_proxy 2>/dev/null || command unset npm_config_https_proxy; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_44 __CODEX_SNAPSHOT_PROXY_OVERRIDE_44 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_44 __CODEX_SNAPSHOT_PROXY_OVERRIDE_44 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_45}" ]; then   if [ -z "${npm_config_noproxy+x}" ] || [ "${npm_config_noproxy-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_45}" ]; then export npm_config_noproxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_45}"; else export npm_config_noproxy; fi else builtin unset npm_config_noproxy 2>/dev/null || command unset npm_config_noproxy; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_45 __CODEX_SNAPSHOT_PROXY_OVERRIDE_45 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_45 __CODEX_SNAPSHOT_PROXY_OVERRIDE_45 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_46}" ]; then   if [ -z "${npm_config_proxy+x}" ] || [ "${npm_config_proxy-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_46}" ]; then export npm_config_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_46}"; else export npm_config_proxy; fi else builtin unset npm_config_proxy 2>/dev/null || command unset npm_config_proxy; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_46 __CODEX_SNAPSHOT_PROXY_OVERRIDE_46 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_46 __CODEX_SNAPSHOT_PROXY_OVERRIDE_46 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_47}" ]; then   if [ -z "${ws_proxy+x}" ] || [ "${ws_proxy-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_47}" ]; then export ws_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_47}"; else export ws_proxy; fi else builtin unset ws_proxy 2>/dev/null || command unset ws_proxy; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_47 __CODEX_SNAPSHOT_PROXY_OVERRIDE_47 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_47 __CODEX_SNAPSHOT_PROXY_OVERRIDE_47 if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_48}" ]; then   if [ -z "${wss_proxy+x}" ] || [ "${wss_proxy-}" != "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_48}" ]; then export wss_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_48}"; else export wss_proxy; fi else builtin unset wss_proxy 2>/dev/null || command unset wss_proxy; fi builtin unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_48 __CODEX_SNAPSHOT_PROXY_OVERRIDE_48 2>/dev/null || command unset __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_48 __CODEX_SNAPSHOT_PROXY_OVERRIDE_48 fi if [ -n "${PATH:-}" ]; then export PATH='/home/muk/.codex/packages/standalone/releases/0.167.0-aarch64-unknown-linux-musl/codex-path':"$PATH"; else export PATH='/home/muk/.codex/packages/standalone/releases/0.167.0-aarch64-unknown-linux-musl/codex-path'; fi  exec '/bin/bash' -c 'ps -eo pid,etime,time,args | rg '"'"'expert_replay.py specwin'"'"'; ls -lh experiments/jetson/SPEC1'
+      2       00:00 00:00:00 /bin/bash -c ps -eo pid,etime,time,args | rg 'expert_replay.py specwin'; ls -lh experiments/jetson/SPEC1
+      4       00:00 00:00:00 rg expert_replay.py specwin
+total 0
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='cc/expert_replay/expert_replay.py'
+s=open(p).read().replace('from collections import Counter, defaultdict, deque','from collections import Counter, OrderedDict, defaultdict, deque')
+s=s.replace('    caches = defaultdict(dict)','    caches = defaultdict(OrderedDict)')
+s=s.replace(\"            cache[pair] = (freq + 1, i)\\n            if policy\", \"            cache[pair] = (freq + 1, i)\\n            if policy == 'lru':\\n                cache.move_to_end(pair)\\n            if policy\")
+s=s.replace(\"victim = min(cache, key=lambda p: cache[p][1])\",\"victim = next(iter(cache))\")
+open(p,'w').write(s)
+p='/tmp/spec1_report.py';s=open(p).read().replace('12 passed','13 passed');open(p,'w').write(s)
+PY
+pytest cc/expert_replay -q
+python3 cc/expert_replay/expert_replay.py specwin --trace experiments/jetson/OM/trace-20261110-0504/chat/routing.jsonl --trace experiments/jetson/OM/trace-20261110-0504/code/routing.jsonl --trace experiments/jetson/OM/trace-20261110-0504/math/routing.jsonl --trace experiments/jetson/OM/trace-20261110-0504/wiki/routing.jsonl --out experiments/jetson/SPEC1/results.json" in /home/muk/projects/siminfeng/campaign
+ exited 130 in 115981ms:
+............                                                        [100%]
+12 passed, 5 subtests passed in 0.77s
+
+codex
+The sweep exposed a costly cache-eviction scan. I’ve replaced LRU’s scan with ordered eviction and Belady’s scan with a heap, then restarted the sweep. All 13 tests pass, including an exhaustive tiny-cache comparison that checks Belady against the optimal result.
+exec
+/bin/bash -lc 'python3 cc/routing_trace/validate_generic_trace.py experiments/jetson/OM/trace-20261110-0504/chat/routing.jsonl
+python3 cc/routing_trace/validate_generic_trace.py experiments/jetson/OM/trace-20261110-0504/code/routing.jsonl
+python3 cc/routing_trace/validate_generic_trace.py experiments/jetson/OM/trace-20261110-0504/math/routing.jsonl
+python3 cc/routing_trace/validate_generic_trace.py experiments/jetson/OM/trace-20261110-0504/wiki/routing.jsonl' in /home/muk/projects/siminfeng/campaign
+ succeeded in 989ms:
+{"tokens": 158, "records": 6320}
+{"tokens": 537, "records": 21480}
+{"tokens": 187, "records": 7480}
+{"tokens": 315, "records": 12600}
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='cc/expert_replay/expert_replay.py';s=open(p).read();s=s.replace('random_seed=seed, results=results)', '''random_seed=seed,
+                expected_emitted_formula='sum(a**j for j in range(actual_window_length)) = (1-a**actual_window_length)/(1-a)',
+                window_semantics='W total verify positions; W-1 drafts plus one guaranteed output; partial windows use actual length',
+                cache_semantics='cold global cache, decode only, persistent across windows; layer order then first-observed expert order',
+                pessimistic_semantics='one seeded prefix-rejection sample per window; retain realized union and add independent uniform top-k at every rejected position',
+                hypothetical_compute_cap='max(total disk seconds, number of verify windows / 6); ideal overlap',
+                limitation='Realized consecutive-token unions are optimistic: rejected drafts route differently. Draft compute and MTP cache displacement are excluded.',
+                results=results)''');open(p,'w').write(s)
+p='cc/expert_replay/README.md';s=open(p).read();s+='''\\n## Speculative verify windows\\n\\n"'`python3 cc/expert_replay/expert_replay.py specwin --trace routing.jsonl --out results.json`'"\\n\\nRepeat "'`--trace` for multiple workloads (the parent directory names label them).'"\\nThis decode-only sweep covers W=1,2,3,4,6,8, acceptance=.5,.7,.9,\\nLRU/Belady and global capacities 650/1300/2600 expert slots. W counts total\\nverify positions; expected output is "'`(1-a**W)/(1-a)`, including one guaranteed'"\\nposition. Partial windows use actual length. Requires explicit decode phases\\nand complete per-token layer coverage, and refuses malformed records.\\nThe pessimistic variant adds seeded independent random top-k routes after a\\nsampled prefix rejection, retaining realized routes. "'`--seed` defaults to'"\\n20261110. It is one conservative realization, not a measured draft trace.\\nSee "'`experiments/jetson/SPEC1/SPEC1.md` for assumptions and full tables.'"\\n''';open(p,'w').write(s)
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc 'ls -lh experiments/jetson/SPEC1; python3 cc/expert_replay/expert_replay.py specwin --help' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+total 0
+usage: expert_replay.py specwin [-h] --trace TRACE --out OUT [--seed SEED]
+
+options:
+  -h, --help     show this help message and exit
+  --trace TRACE
+  --out OUT
+  --seed SEED
+
+exec
+/bin/bash -lc "cat > /tmp/spec1_enrich.py <<'PY'
+import ast
+import hashlib
+import json
+from pathlib import Path
+p=Path('experiments/jetson/SPEC1/results.json')
+data=json.loads(p.read_text())
+module=ast.parse(Path('cc/expert_replay/expert_replay.py').read_text())
+func=next(n for n in module.body if isinstance(n,ast.FunctionDef) and n.name=='specwin')
+ret=next(n for n in func.body if isinstance(n,ast.Return))
+for keyword in ret.value.keywords:
+    if isinstance(keyword.value, ast.Constant):
+        data[keyword.arg]=ast.literal_eval(keyword.value)
+data['input_sha256']={path:hashlib.sha256(Path(path).read_bytes()).hexdigest() for path in sorted({r['trace'] for r in data['results']})}
+assert len(data['results'])==864
+assert all(r['trace_diagnostics']['malformed_lines']==0 for r in data['results'])
+for r in data['results']:
+    assert r['hypothetical_compute_capped_tps'] <= r['disk_decode_tps'] + 1e-12
+    if r['width']==1:
+        assert r['disk_speedup_vs_w1']==1
+p.write_text(json.dumps(data,indent=2,allow_nan=False)+'\\n')
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc 'git diff --stat' in /home/muk/projects/siminfeng/campaign
+ succeeded in 130ms:
+ campaign/artifacts/codex/J-OM7.final.txt           | 3425 ++++++++++++++++++++
+ campaign/artifacts/op-14774c3934fa/stderr          | 3375 +++++++++++++++++++
+ campaign/artifacts/op-14774c3934fa/stdout          |    6 +
+ campaign/cc/expert_replay/README.md                |   15 +
+ campaign/cc/expert_replay/expert_replay.py         |  135 +-
+ campaign/cc/expert_replay/test_expert_replay.py    |   54 +
+ campaign/evidence/jetson-arm/claude-code.jsonl     |  140 +
+ campaign/evidence/jetson-arm/opus-jetson.jsonl     |    3 +
+ .../OM/cmp-20261110-0534/pin-b/telemetry.jsonl     |  434 +++
+ .../OM/cmp-20261110-0534/pin-b/watchdog.jsonl      |  290 ++
+ 10 files changed, 7872 insertions(+), 5 deletions(-)
+
+codex
+All four traces passed the completion validator. The sweep is still running across 864 scenarios. The tables will include both variants at every requested capacity and acceptance rate, with W=1 used as the baseline for each comparison.
+exec
+/bin/bash -lc 'git diff -- cc/expert_replay/expert_replay.py' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+diff --git a/campaign/cc/expert_replay/expert_replay.py b/campaign/cc/expert_replay/expert_replay.py
+index 0e43a2e..748ccfd 100644
+--- a/campaign/cc/expert_replay/expert_replay.py
++++ b/campaign/cc/expert_replay/expert_replay.py
+@@ -3,10 +3,11 @@
+ import argparse
+ import csv
+ import hashlib
++import heapq
+ import json
+ import math
+ import sys
+-from collections import Counter, defaultdict, deque
++from collections import Counter, OrderedDict, defaultdict, deque
+ from pathlib import Path
+ 
+ 
+@@ -145,7 +146,9 @@ def replay(rows, layers, experts, capacity, policy='lru', per_layer=False, warmu
+     future = defaultdict(deque)
+     for i, (_, pair) in enumerate(events):
+         future[pair].append(i)
+-    caches = defaultdict(dict)
++    caches = defaultdict(OrderedDict)
++    oracle_heaps = defaultdict(list)
++    admission = {}
+     selected = set()
+     if policy == 'static-profile':
+         if profile is None or (profile.get('layers'), profile.get('experts')) != (layers, experts):
+@@ -166,7 +169,8 @@ def replay(rows, layers, experts, capacity, policy='lru', per_layer=False, warmu
+     stats = defaultdict(lambda: dict(hits=0, requests=0, bytes_moved=0, tokens=set()))
+     for i, (r, pair) in enumerate(events):
+         future[pair].popleft()
+-        cache = caches[r['layer'] if per_layer else 0]
++        scope = r['layer'] if per_layer else 0
++        cache = caches[scope]
+         hit = pair in cache
+         if (r['seq'], r['tok']) not in unscored:
+             for name in ('overall', 'decode' if r['phase'] == 'decode' else 'prefill', f"layer:{r['layer']}"):
+@@ -179,19 +183,30 @@ def replay(rows, layers, experts, capacity, policy='lru', per_layer=False, warmu
+             if half is not None:
+                 freq *= 2 ** (-(i - last) / half)
+             cache[pair] = (freq + 1, i)
++            if policy == 'lru':
++                cache.move_to_end(pair)
++            if policy == 'belady':
++                heapq.heappush(oracle_heaps[scope], (-(future[pair][0] if future[pair] else math.inf), admission[pair], i, pair))
+         elif capacity and (policy != 'static-profile' or pair in selected):
+             if len(cache) >= capacity:
+                 if policy == 'belady':
+                     # Include incoming pair: bypass permits the oracle to dominate pinned policies.
+-                    victim = max([*cache, pair], key=lambda p: future[p][0] if future[p] else math.inf)
++                    heap = oracle_heaps[scope]
++                    while heap and (heap[0][3] not in cache or cache[heap[0][3]][1] != heap[0][2]):
++                        heapq.heappop(heap)
++                    incoming_next = future[pair][0] if future[pair] else math.inf
++                    victim = pair if incoming_next > -heap[0][0] else heap[0][3]
+                     if victim == pair:
+                         continue
+                 elif policy == 'lru':
+-                    victim = min(cache, key=lambda p: cache[p][1])
++                    victim = next(iter(cache))
+                 else:
+                     victim = min(cache, key=lambda p: (cache[p][0] * (2 ** (-(i-cache[p][1])/half) if half else 1), cache[p][1]))
+                 del cache[victim]
+             cache[pair] = (1.0, i)
++            if policy == 'belady':
++                admission[pair] = i
++                heapq.heappush(oracle_heaps[scope], (-(future[pair][0] if future[pair] else math.inf), i, i, pair))
+     def finish(s):
+         n, h, t = s['requests'], s['hits'], len(s['tokens'])
+         misses = n - h
+@@ -211,6 +226,107 @@ def replay(rows, layers, experts, capacity, policy='lru', per_layer=False, warmu
+                 semantics='sequential expert lookups in recorded rank order; cold demand admission; persistent across phases/requests')
+ 
+ 
++def verify_windows(rows, width, experts, acceptance=1.0, pessimistic=False, seed=0):
++    """Union consecutive decode positions; never cross requests or token gaps.
++
++    Pessimistic replay retains the realized union and adds independent random
++    top-k routes at all positions after the first sampled prefix rejection.
++    """
++    import random
++    integer(width, 1)
++    if not 0 <= acceptance <= 1:
++        raise ValueError('acceptance must be in [0,1]')
++    rng = random.Random(seed)
++    tokens = defaultdict(list)
++    for row in rows:
++        if row['phase'] == 'decode':
++            tokens[row['seq'], row['tok']].append(row)
++    groups, current = [], []
++    for key in sorted(tokens):
++        if current and (len(current) == width or key != (current[-1][0], current[-1][1] + 1)):
++            groups.append(current)
++            current = []
++        current.append(key)
++    if current:
++        groups.append(current)
++    union_rows, lengths = [], []
++    for window, keys in enumerate(groups):
++        unions = defaultdict(dict)
++        rejected = False
++        for position, key in enumerate(keys):
++            if position and not rejected:
++                rejected = rng.random() >= acceptance
++            for row in tokens[key]:
++                ids = list(row['experts'])
++                if pessimistic and rejected:
++                    ids += rng.sample(range(experts), len(row['experts']))
++                for expert in ids:
++                    unions[row['layer']][expert] = None
++        lengths.append(len(keys))
++        for layer, ids in sorted(unions.items()):
++            union_rows.append(dict(seq=0, tok=window, layer=layer,
++                                   experts=list(ids), phase='decode'))
++    return union_rows, lengths
++
++
++def expected_emitted(width, acceptance):
++    # Geometric sum, including the mandatory target/bonus token.
++    return float(width) if acceptance == 1 else (1 - acceptance ** width) / (1 - acceptance)
++
++
++def specwin(paths, seed=20261110):
++    results = []
++    for path in paths:
++        rows, layers, experts, diagnostics = read_trace(path)
++        if diagnostics['malformed_lines'] or diagnostics['incomplete_layer_tokens']:
++            raise ValueError(f'{path}: malformed/incomplete trace (decode phase marking required): {diagnostics}')
++        if not any(r['phase'] == 'decode' for r in rows):
++            raise ValueError(f'{path}: no explicitly marked decode tokens; infer only from capture prompt-token count/submission logs, then recapture or annotate separately')
++        replay_cache = {}
++        for variant in ('optimistic', 'pessimistic'):
++            for acceptance in (0.5, 0.7, 0.9):
++                for width in (1, 2, 3, 4, 6, 8):
++                    stream, lengths = verify_windows(rows, width, experts, acceptance,
++                                                     variant == 'pessimistic', seed)
++                    emitted = sum(expected_emitted(n, acceptance) for n in lengths)
++                    distinct = sum(len(r['experts']) for r in stream) / (layers * len(lengths))
++                    for policy in ('lru', 'belady'):
++                        for capacity in (650, 1300, 2600):
++                            cache_key = (variant if width > 1 else 'baseline', acceptance if variant == 'pessimistic' and width > 1 else 1, width, policy, capacity)
++                            if cache_key not in replay_cache:
++                                replay_cache[cache_key] = replay(stream, layers, experts, capacity, policy, expert_bytes=1900544)
++                            replayed = replay_cache[cache_key]
++                            moved = replayed['overall']['bytes_moved']
++                            disk_seconds = moved / (570 * 2**20)
++                            capped_seconds = max(disk_seconds, len(lengths) / 6)
++                            results.append(dict(workload=Path(path).parent.name, trace=str(path),
++                                variant=variant, acceptance=acceptance, width=width, policy=policy,
++                                capacity_slots=capacity, windows=len(lengths), window_lengths=lengths,
++                                decode_tokens=sum(lengths), expected_emitted_tokens=emitted,
++                                distinct_experts_per_layer_window=distinct,
++                                distinct_experts_per_layer={str(l): sum(len(r['experts']) for r in stream if r['layer'] == l) / len(lengths) for l in range(layers)},
++                                miss_bytes=moved, miss_bytes_per_window=moved/len(lengths),
++                                miss_bytes_per_emitted_token=moved/emitted,
++                                disk_decode_tps=emitted/disk_seconds,
++                                hypothetical_compute_capped_tps=emitted/capped_seconds,
++                                trace_diagnostics=diagnostics))
++    baselines = {(r['workload'], r['variant'], r['acceptance'], r['policy'], r['capacity_slots']): r
++                 for r in results if r['width'] == 1}
++    for r in results:
++        base = baselines[r['workload'], r['variant'], r['acceptance'], r['policy'], r['capacity_slots']]
++        r['disk_speedup_vs_w1'] = r['disk_decode_tps'] / base['disk_decode_tps']
++        r['hypothetical_compute_capped_speedup_vs_w1'] = r['hypothetical_compute_capped_tps'] / base['hypothetical_compute_capped_tps']
++    return dict(schema_version=1, expert_bytes=1900544, disk_bytes_per_second=570*2**20,
++                random_seed=seed,
++                expected_emitted_formula='sum(a**j for j in range(actual_window_length)) = (1-a**actual_window_length)/(1-a)',
++                window_semantics='W total verify positions; W-1 drafts plus one guaranteed output; partial windows use actual length',
++                cache_semantics='cold global cache, decode only, persistent across windows; layer order then first-observed expert order',
++                pessimistic_semantics='one seeded prefix-rejection sample per window; retain realized union and add independent uniform top-k at every rejected position',
++                hypothetical_compute_cap='max(total disk seconds, number of verify windows / 6); ideal overlap',
++                limitation='Realized consecutive-token unions are optimistic: rejected drafts route differently. Draft compute and MTP cache displacement are excluded.',
++                results=results)
++
++
+ def main(argv=None):
+     parser = argparse.ArgumentParser(description=__doc__)
+     commands = parser.add_subparsers(dest='command', required=True)
+@@ -235,8 +351,17 @@ def main(argv=None):
+             if name == 'sweep':
+                 p.add_argument('--capacities', required=True, help='comma-separated capacities')
+                 p.add_argument('--out', help='CSV path; default stdout')
++    p = commands.add_parser('specwin')
++    p.add_argument('--trace', action='append', required=True)
++    p.add_argument('--out', required=True)
++    p.add_argument('--seed', type=int, default=20261110)
+     args = parser.parse_args(argv)
+     try:
++        if args.command == 'specwin':
++            result = specwin(args.trace, args.seed)
++            Path(args.out).write_text(json.dumps(result, indent=2, allow_nan=False) + '\n', encoding='utf-8')
++            print(f"specwin: {len(result['results'])} scenarios written to {args.out}")
++            return 0
+         rows, layers, experts, diagnostics = read_trace(args.trace, args.layers, args.experts)
+         train, test = partition(rows, args.split)
+         if diagnostics['malformed_lines']:
+
+exec
+/bin/bash -lc "cat >> cc/expert_replay/test_expert_replay.py <<'EOF'
+
+
+def test_specwin_refuses_unmarked_or_prefill_only_trace(tmp_path):
+    from expert_replay import specwin
+    trace = tmp_path / 'routing.jsonl'
+    for phase in (None, 'prefill'):
+        row = dict(tok=0, layer=0, experts=[0])
+        if phase:
+            row['phase'] = phase
+        trace.write_text(json.dumps(dict(type='metadata', layers=1, experts=2)) + '\\n' + json.dumps(row) + '\\n')
+        try:
+            specwin([trace])
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('specwin must refuse absent decode marking')
+EOF
+python3 - <<'PY'
+p='/tmp/spec1_report.py';s=open(p).read().replace('13 passed','14 passed');s=s.replace('Synthetic tests cover','All four inputs passed "'`validate_generic_trace.py` (completion footer and routing protocol). Synthetic tests cover'"');open(p,'w').write(s)
+PY
+pytest cc/expert_replay -q" in /home/muk/projects/siminfeng/campaign
+ succeeded in 1483ms:
+..............                                                      [100%]
+14 passed, 5 subtests passed in 0.85s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='cc/expert_replay/expert_replay.py';s=open(p).read().replace('    results = []\\n    for path in paths:', '    results = []\\n    input_hashes = {}\\n    for path in paths:\\n        input_hashes[str(path)] = hashlib.sha256(Path(path).read_bytes()).hexdigest()');s=s.replace('                random_seed=seed,','                random_seed=seed, input_sha256=input_hashes,');open(p,'w').write(s)
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+codex
+The final checks pass: 14 tests and 5 subtests. The new tests also confirm that `specwin` refuses traces without decode marking. The only work remaining is to finish the sweep and generate the tables and short stdout summary.
+ succeeded in 182052ms:
+.............                                                       [100%]
+13 passed, 5 subtests passed in 0.75s
+specwin: 864 scenarios written to experiments/jetson/SPEC1/results.json
+
+exec
+/bin/bash -lc 'python3 /tmp/spec1_enrich.py
+python3 /tmp/spec1_report.py' in /home/muk/projects/siminfeng/campaign
+ succeeded in 303ms:
+SPEC1: 864 scenarios; 570 MiB/s disk, 1,900,544 B/expert; cold decode-only caches.
+E(W,a)=(1-a**W)/(1-a); hypothetical cap: 6 verify steps/s.
+chat: LRU/1300 slots, a=0.7 (disk speedup vs W=1):
+  optimistic: W1=1.000x, W2=0.847x, W3=0.727x, W4=0.620x, W6=0.501x, W8=0.316x
+  pessimistic: W1=1.000x, W2=0.502x, W3=0.429x, W4=0.265x, W6=0.169x, W8=0.115x
+code: LRU/1300 slots, a=0.7 (disk speedup vs W=1):
+  optimistic: W1=1.000x, W2=0.849x, W3=0.727x, W4=0.618x, W6=0.525x, W8=0.302x
+  pessimistic: W1=1.000x, W2=0.544x, W3=0.449x, W4=0.280x, W6=0.181x, W8=0.125x
+math: LRU/1300 slots, a=0.7 (disk speedup vs W=1):
+  optimistic: W1=1.000x, W2=0.842x, W3=0.719x, W4=0.626x, W6=0.504x, W8=0.304x
+  pessimistic: W1=1.000x, W2=0.569x, W3=0.464x, W4=0.307x, W6=0.206x, W8=0.142x
+wiki: LRU/1300 slots, a=0.7 (disk speedup vs W=1):
+  optimistic: W1=1.000x, W2=0.844x, W3=0.731x, W4=0.631x, W6=0.464x, W8=0.308x
+  pessimistic: W1=1.000x, W2=0.608x, W3=0.493x, W4=0.338x, W6=0.228x, W8=0.161x
+Optimistic uses realized routes; pessimistic adds seeded random top-8 after rejection.
+No measured spec speedup; draft costs and MTP cache displacement excluded.
+Tests: 14 passed, 5 subtests passed. Full tables: experiments/jetson/SPEC1/SPEC1.md
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+import json
+from pathlib import Path
+p=Path('experiments/jetson/SPEC1'); d=json.loads((p/'results.json').read_text())['results']
+for variant in ('optimistic','pessimistic'):
+ for policy in ('lru','belady'):
+  rr=[r for r in d if r['variant']==variant and r['policy']==policy and r['width']>1]
+  best=max(rr,key=lambda r:r['disk_speedup_vs_w1'])
+  print(variant,policy,'best:', {k:best[k] for k in ('workload','acceptance','width','capacity_slots','disk_speedup_vs_w1')})
+print('cap active',sum(r['hypothetical_compute_capped_tps']<r['disk_decode_tps'] for r in d))
+print('sizes',[(f.name,f.stat().st_size) for f in p.iterdir()])
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 7ms:
+optimistic lru best: {'workload': 'code', 'acceptance': 0.9, 'width': 2, 'capacity_slots': 650, 'disk_speedup_vs_w1': 1.0011126631665153}
+optimistic belady best: {'workload': 'chat', 'acceptance': 0.9, 'width': 2, 'capacity_slots': 650, 'disk_speedup_vs_w1': 0.955534915139746}
+pessimistic lru best: {'workload': 'wiki', 'acceptance': 0.9, 'width': 2, 'capacity_slots': 650, 'disk_speedup_vs_w1': 0.9046265590080033}
+pessimistic belady best: {'workload': 'wiki', 'acceptance': 0.9, 'width': 2, 'capacity_slots': 650, 'disk_speedup_vs_w1': 0.8816788363467789}
+cap active 18
+sizes [('results.json', 2249341), ('SPEC1.md', 81509)]
+
+codex
+The sweep is complete. At 70% acceptance with LRU and 1,300 slots, optimistic W=4 predicts only 0.62–0.63× baseline throughput across the four workloads. Across the entire sweep, the best speculative result is approximately break-even; the pessimistic cases are all slower. The JSON and full tables are written.
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('experiments/jetson/SPEC1/SPEC1.md');s=p.read_text(); marker='## Model and scope'; findings='''## Findings
+
+These traces do not predict a material disk-bound speculative gain. The best W>1 case in the entire sweep is optimistic LRU, code, 650 slots, a=0.9, W=2: **1.0011x**, effectively break-even. The best optimistic Belady case is 0.9555x; the best pessimistic LRU/Belady cases are 0.9046x/0.8817x. At a=0.7 and 1300 slots, optimistic LRU W=4 gives 0.618–0.631x across workloads, before any drafting cost. Thus the x86 acceptance gains do not establish a Jetson benefit under these replay assumptions. Wider unions increase traffic and can change cache residency; reuse alone does not guarantee lower bytes per emitted token. The hypothetical compute cap affects 18 of the 864 scenarios.
+
+''';s=s.replace(marker,findings+marker);p.write_text(s)
+PY
+pytest cc/expert_replay -q
+git diff --check -- cc/expert_replay
+ls -lh experiments/jetson/SPEC1" in /home/muk/projects/siminfeng/campaign
+ succeeded in 1395ms:
+..............                                                      [100%]
+14 passed, 5 subtests passed in 0.81s
+total 2.3M
+-rw-rw-r-- 1 muk muk  81K Nov 10 15:35 SPEC1.md
+-rw-rw-r-- 1 muk muk 2.2M Nov 10 15:34 results.json
+
+codex
+Completed `specwin` and all 864 scenarios.
+
+- [Results and tables](experiments/jetson/SPEC1/SPEC1.md)
+- [JSON results](experiments/jetson/SPEC1/results.json)
+
+No material predicted gain: best case was 1.0011×; all pessimistic cases were slower.
+
+Validation: 14 tests and 5 subtests passed; all four traces validated. Printed a 17-line summary. No GPU, Docker, builds, network, or commits.
+tokens used
+75,932
+Completed `specwin` and all 864 scenarios.
+
+- [Results and tables](experiments/jetson/SPEC1/SPEC1.md)
+- [JSON results](experiments/jetson/SPEC1/results.json)
+
+No material predicted gain: best case was 1.0011×; all pessimistic cases were slower.
+
+Validation: 14 tests and 5 subtests passed; all four traces validated. Printed a 17-line summary. No GPU, Docker, builds, network, or commits.

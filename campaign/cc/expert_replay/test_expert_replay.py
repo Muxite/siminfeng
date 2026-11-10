@@ -119,3 +119,73 @@ class ReplayTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_verify_windows():
+    from expert_replay import verify_windows, expected_emitted
+    trace = rows([0, 1, 1, 2, 3])
+    trace.insert(0, dict(seq=0, tok=0, layer=1, experts=[3], phase='prefill'))
+    stream, lengths = verify_windows(trace, 2, 8)
+    assert lengths == [2, 2, 1]
+    assert [r['experts'] for r in stream] == [[0, 1], [1, 2], [3]]
+    assert expected_emitted(1, .7) == 1
+    assert abs(expected_emitted(4, .5) - 1.875) < 1e-12
+    assert expected_emitted(4, 1) == 4
+    assert verify_windows(rows([0, 1]), 2, 8, 1, True)[0][0]['experts'] == [0, 1]
+    pessimistic = verify_windows(rows([0, 1]), 2, 8, 0, True, 0)
+    assert len(pessimistic[0][0]['experts']) == 3
+    assert pessimistic == verify_windows(rows([0, 1]), 2, 8, 0, True, 0)
+    trace = rows([0, 1, 2])
+    trace[1]['tok'] = 3
+    trace[2]['seq'] = 1
+    assert verify_windows(trace, 8, 8)[1] == [1, 1, 1]
+
+
+def test_verify_multilayer_and_w1():
+    from expert_replay import verify_windows
+    trace = [dict(seq=0, tok=t, layer=l, experts=[t, 3], phase='decode')
+             for t in range(3) for l in range(2)]
+    stream, lengths = verify_windows(trace, 2, 8)
+    assert lengths == [2, 1]
+    assert [r['experts'] for r in stream] == [[0, 3, 1], [0, 3, 1], [2, 3], [2, 3]]
+    single, _ = verify_windows(trace, 1, 8)
+    for policy in ('lru', 'belady'):
+        assert replay(single, 2, 8, 3, policy)['overall'] == replay(trace, 2, 8, 3, policy)['overall']
+
+
+def test_belady_heap_matches_exhaustive_cache_choices():
+    # Independent optimum including bypass, to guard oracle heap invalidation.
+    from functools import lru_cache
+    for events in itertools.product(range(3), repeat=5):
+        for capacity in (1, 2):
+            @lru_cache(None)
+            def optimum(i, cached):
+                if i == len(events):
+                    return 0
+                cache = set(cached)
+                pair = events[i]
+                if pair in cache:
+                    return optimum(i + 1, cached)
+                choices = [cache]  # bypass
+                if len(cache) < capacity:
+                    choices.append(cache | {pair})
+                else:
+                    choices.extend((cache - {victim}) | {pair} for victim in cache)
+                return 1 + min(optimum(i + 1, tuple(sorted(c))) for c in choices)
+            assert replay(rows(events), 1, 3, capacity, 'belady')['overall']['misses'] == optimum(0, ())
+
+
+def test_specwin_refuses_unmarked_or_prefill_only_trace(tmp_path):
+    from expert_replay import specwin
+    trace = tmp_path / 'routing.jsonl'
+    for phase in (None, 'prefill'):
+        row = dict(tok=0, layer=0, experts=[0])
+        if phase:
+            row['phase'] = phase
+        trace.write_text(json.dumps(dict(type='metadata', layers=1, experts=2)) + '\n' + json.dumps(row) + '\n')
+        try:
+            specwin([trace])
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('specwin must refuse absent decode marking')

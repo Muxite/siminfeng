@@ -3,10 +3,11 @@
 import argparse
 import csv
 import hashlib
+import heapq
 import json
 import math
 import sys
-from collections import Counter, defaultdict, deque
+from collections import Counter, OrderedDict, defaultdict, deque
 from pathlib import Path
 
 
@@ -145,7 +146,9 @@ def replay(rows, layers, experts, capacity, policy='lru', per_layer=False, warmu
     future = defaultdict(deque)
     for i, (_, pair) in enumerate(events):
         future[pair].append(i)
-    caches = defaultdict(dict)
+    caches = defaultdict(OrderedDict)
+    oracle_heaps = defaultdict(list)
+    admission = {}
     selected = set()
     if policy == 'static-profile':
         if profile is None or (profile.get('layers'), profile.get('experts')) != (layers, experts):
@@ -166,7 +169,8 @@ def replay(rows, layers, experts, capacity, policy='lru', per_layer=False, warmu
     stats = defaultdict(lambda: dict(hits=0, requests=0, bytes_moved=0, tokens=set()))
     for i, (r, pair) in enumerate(events):
         future[pair].popleft()
-        cache = caches[r['layer'] if per_layer else 0]
+        scope = r['layer'] if per_layer else 0
+        cache = caches[scope]
         hit = pair in cache
         if (r['seq'], r['tok']) not in unscored:
             for name in ('overall', 'decode' if r['phase'] == 'decode' else 'prefill', f"layer:{r['layer']}"):
@@ -179,19 +183,30 @@ def replay(rows, layers, experts, capacity, policy='lru', per_layer=False, warmu
             if half is not None:
                 freq *= 2 ** (-(i - last) / half)
             cache[pair] = (freq + 1, i)
+            if policy == 'lru':
+                cache.move_to_end(pair)
+            if policy == 'belady':
+                heapq.heappush(oracle_heaps[scope], (-(future[pair][0] if future[pair] else math.inf), admission[pair], i, pair))
         elif capacity and (policy != 'static-profile' or pair in selected):
             if len(cache) >= capacity:
                 if policy == 'belady':
                     # Include incoming pair: bypass permits the oracle to dominate pinned policies.
-                    victim = max([*cache, pair], key=lambda p: future[p][0] if future[p] else math.inf)
+                    heap = oracle_heaps[scope]
+                    while heap and (heap[0][3] not in cache or cache[heap[0][3]][1] != heap[0][2]):
+                        heapq.heappop(heap)
+                    incoming_next = future[pair][0] if future[pair] else math.inf
+                    victim = pair if incoming_next > -heap[0][0] else heap[0][3]
                     if victim == pair:
                         continue
                 elif policy == 'lru':
-                    victim = min(cache, key=lambda p: cache[p][1])
+                    victim = next(iter(cache))
                 else:
                     victim = min(cache, key=lambda p: (cache[p][0] * (2 ** (-(i-cache[p][1])/half) if half else 1), cache[p][1]))
                 del cache[victim]
             cache[pair] = (1.0, i)
+            if policy == 'belady':
+                admission[pair] = i
+                heapq.heappush(oracle_heaps[scope], (-(future[pair][0] if future[pair] else math.inf), i, i, pair))
     def finish(s):
         n, h, t = s['requests'], s['hits'], len(s['tokens'])
         misses = n - h
@@ -209,6 +224,109 @@ def replay(rows, layers, experts, capacity, policy='lru', per_layer=False, warmu
                 prediction=dict(decode_seconds_per_token=prediction, bw_bytes_s=bw_gbs*1e9,
                                 compute_s=compute_ms/1000),
                 semantics='sequential expert lookups in recorded rank order; cold demand admission; persistent across phases/requests')
+
+
+def verify_windows(rows, width, experts, acceptance=1.0, pessimistic=False, seed=0):
+    """Union consecutive decode positions; never cross requests or token gaps.
+
+    Pessimistic replay retains the realized union and adds independent random
+    top-k routes at all positions after the first sampled prefix rejection.
+    """
+    import random
+    integer(width, 1)
+    if not 0 <= acceptance <= 1:
+        raise ValueError('acceptance must be in [0,1]')
+    rng = random.Random(seed)
+    tokens = defaultdict(list)
+    for row in rows:
+        if row['phase'] == 'decode':
+            tokens[row['seq'], row['tok']].append(row)
+    groups, current = [], []
+    for key in sorted(tokens):
+        if current and (len(current) == width or key != (current[-1][0], current[-1][1] + 1)):
+            groups.append(current)
+            current = []
+        current.append(key)
+    if current:
+        groups.append(current)
+    union_rows, lengths = [], []
+    for window, keys in enumerate(groups):
+        unions = defaultdict(dict)
+        rejected = False
+        for position, key in enumerate(keys):
+            if position and not rejected:
+                rejected = rng.random() >= acceptance
+            for row in tokens[key]:
+                ids = list(row['experts'])
+                if pessimistic and rejected:
+                    ids += rng.sample(range(experts), len(row['experts']))
+                for expert in ids:
+                    unions[row['layer']][expert] = None
+        lengths.append(len(keys))
+        for layer, ids in sorted(unions.items()):
+            union_rows.append(dict(seq=0, tok=window, layer=layer,
+                                   experts=list(ids), phase='decode'))
+    return union_rows, lengths
+
+
+def expected_emitted(width, acceptance):
+    # Geometric sum, including the mandatory target/bonus token.
+    return float(width) if acceptance == 1 else (1 - acceptance ** width) / (1 - acceptance)
+
+
+def specwin(paths, seed=20261110):
+    results = []
+    input_hashes = {}
+    for path in paths:
+        input_hashes[str(path)] = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        rows, layers, experts, diagnostics = read_trace(path)
+        if diagnostics['malformed_lines'] or diagnostics['incomplete_layer_tokens']:
+            raise ValueError(f'{path}: malformed/incomplete trace (decode phase marking required): {diagnostics}')
+        if not any(r['phase'] == 'decode' for r in rows):
+            raise ValueError(f'{path}: no explicitly marked decode tokens; infer only from capture prompt-token count/submission logs, then recapture or annotate separately')
+        replay_cache = {}
+        for variant in ('optimistic', 'pessimistic'):
+            for acceptance in (0.5, 0.7, 0.9):
+                for width in (1, 2, 3, 4, 6, 8):
+                    stream, lengths = verify_windows(rows, width, experts, acceptance,
+                                                     variant == 'pessimistic', seed)
+                    emitted = sum(expected_emitted(n, acceptance) for n in lengths)
+                    distinct = sum(len(r['experts']) for r in stream) / (layers * len(lengths))
+                    for policy in ('lru', 'belady'):
+                        for capacity in (650, 1300, 2600):
+                            cache_key = (variant if width > 1 else 'baseline', acceptance if variant == 'pessimistic' and width > 1 else 1, width, policy, capacity)
+                            if cache_key not in replay_cache:
+                                replay_cache[cache_key] = replay(stream, layers, experts, capacity, policy, expert_bytes=1900544)
+                            replayed = replay_cache[cache_key]
+                            moved = replayed['overall']['bytes_moved']
+                            disk_seconds = moved / (570 * 2**20)
+                            capped_seconds = max(disk_seconds, len(lengths) / 6)
+                            results.append(dict(workload=Path(path).parent.name, trace=str(path),
+                                variant=variant, acceptance=acceptance, width=width, policy=policy,
+                                capacity_slots=capacity, windows=len(lengths), window_lengths=lengths,
+                                decode_tokens=sum(lengths), expected_emitted_tokens=emitted,
+                                distinct_experts_per_layer_window=distinct,
+                                distinct_experts_per_layer={str(l): sum(len(r['experts']) for r in stream if r['layer'] == l) / len(lengths) for l in range(layers)},
+                                miss_bytes=moved, miss_bytes_per_window=moved/len(lengths),
+                                miss_bytes_per_emitted_token=moved/emitted,
+                                disk_decode_tps=emitted/disk_seconds,
+                                hypothetical_compute_capped_tps=emitted/capped_seconds,
+                                trace_diagnostics=diagnostics))
+    baselines = {(r['workload'], r['variant'], r['acceptance'], r['policy'], r['capacity_slots']): r
+                 for r in results if r['width'] == 1}
+    for r in results:
+        base = baselines[r['workload'], r['variant'], r['acceptance'], r['policy'], r['capacity_slots']]
+        r['disk_speedup_vs_w1'] = r['disk_decode_tps'] / base['disk_decode_tps']
+        r['hypothetical_compute_capped_speedup_vs_w1'] = r['hypothetical_compute_capped_tps'] / base['hypothetical_compute_capped_tps']
+    return dict(schema_version=1, expert_bytes=1900544, disk_bytes_per_second=570*2**20,
+                random_seed=seed, input_sha256=input_hashes,
+                expected_emitted_formula='sum(a**j for j in range(actual_window_length)) = (1-a**actual_window_length)/(1-a)',
+                window_semantics='W total verify positions; W-1 drafts plus one guaranteed output; partial windows use actual length',
+                cache_semantics='cold global cache, decode only, persistent across windows; layer order then first-observed expert order',
+                pessimistic_semantics='one seeded prefix-rejection sample per window; retain realized union and add independent uniform top-k at every rejected position',
+                hypothetical_compute_cap='max(total disk seconds, number of verify windows / 6); ideal overlap',
+                limitation='Realized consecutive-token unions are optimistic: rejected drafts route differently. Draft compute and MTP cache displacement are excluded.',
+                results=results)
 
 
 def main(argv=None):
@@ -235,8 +353,17 @@ def main(argv=None):
             if name == 'sweep':
                 p.add_argument('--capacities', required=True, help='comma-separated capacities')
                 p.add_argument('--out', help='CSV path; default stdout')
+    p = commands.add_parser('specwin')
+    p.add_argument('--trace', action='append', required=True)
+    p.add_argument('--out', required=True)
+    p.add_argument('--seed', type=int, default=20261110)
     args = parser.parse_args(argv)
     try:
+        if args.command == 'specwin':
+            result = specwin(args.trace, args.seed)
+            Path(args.out).write_text(json.dumps(result, indent=2, allow_nan=False) + '\n', encoding='utf-8')
+            print(f"specwin: {len(result['results'])} scenarios written to {args.out}")
+            return 0
         rows, layers, experts, diagnostics = read_trace(args.trace, args.layers, args.experts)
         train, test = partition(rows, args.split)
         if diagnostics['malformed_lines']:

@@ -1,0 +1,6 @@
+Created [02-router-prefetch.patch](cc/mmap_advice/patches/02-router-prefetch.patch) and [README](cc/mmap_advice/README.md).
+Combined 01+02 `git apply --check` passed; isolated application matched all reviewed sources. Reference checkout unchanged.
+Hook: patched `src/llama-context.cpp:705`, via CPU scheduler observer at `ggml/src/ggml-backend.cpp:2239`.
+Under `-cmoe`, GPU-computed IDs use the existing host copy; observation precedes CPU expert execution without added GPU synchronization.
+Includes bounded LRU, optional next-layer prefetch, and exit counters.
+Risks: best-effort hints, cache pressure, speculative IO, and CPU graph-splitting overhead. No builds/GPU runs performed.
