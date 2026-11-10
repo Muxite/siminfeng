@@ -1,0 +1,206 @@
+{
+ "job": "job-d2e342e743",
+ "submitted": "2026-11-10T00:41:21.027112+00:00",
+ "spec": {
+  "image": "llamacpp-b0",
+  "image_id": "sha256:cf383f82e33130ce1be424b4c88a78ed12d8a693406b0c3b7ddb61afed0612d1",
+  "model": "/home/muk/projects/siminfeng/campaign/artifacts/codexPAP/models/pap12_q3.gguf",
+  "model_sha256": "777a38c8c2246843772c32f87f8d0e78226e09b8e4f42474aab800285e26514f",
+  "data": null,
+  "data_sha256": null,
+  "tests": [
+   "pap_decode_mixE4K_n12",
+   "pap_decode_mix4_imat_n12",
+   "pap_decode_pap12_q3_n12",
+   "pap_decode_mixE4K_n24",
+   "pap_decode_pap24_q3_n24",
+   "pap_decode_pap24_q3_n24",
+   "pap_decode_mixE4K_n24",
+   "pap_decode_pap12_q3_n12",
+   "pap_decode_mix4_imat_n12",
+   "pap_decode_mixE4K_n12",
+   "pap_decode_mixE4K_n12",
+   "pap_decode_mix4_imat_n12",
+   "pap_decode_pap12_q3_n12",
+   "pap_decode_mixE4K_n24",
+   "pap_decode_pap24_q3_n24",
+   "pap_decode_pap24_q3_n24",
+   "pap_decode_mixE4K_n24",
+   "pap_decode_pap12_q3_n12",
+   "pap_decode_mix4_imat_n12",
+   "pap_decode_mixE4K_n12",
+   "pap_decode_mixE4K_n12",
+   "pap_decode_mix4_imat_n12",
+   "pap_decode_pap12_q3_n12",
+   "pap_decode_mixE4K_n24",
+   "pap_decode_pap24_q3_n24"
+  ],
+  "resources": {
+   "cpus": "8",
+   "memory": "16g",
+   "pids": "512",
+   "timeout_s": "600",
+   "gpu_wait_s": "600"
+  },
+  "key": "PAP2-quiet-5r",
+  "inputs": {
+   "model_files": {
+    "granite-3.1-1b-a400m-instruct-mixE4K.gguf": "2e520c4a7b15ce292cc88e92fef00fb99da276dc5d6fc8e8f832b8525f8565a6",
+    "mix4_imat.gguf": "bd20848b1ea30bb73e8e6e1db7131bce641b4713dce0affcb8faff48622027ac",
+    "pap12_q3.gguf": "777a38c8c2246843772c32f87f8d0e78226e09b8e4f42474aab800285e26514f",
+    "pap24_q3.gguf": "105852e9119a9071cb7da2b7f77633d02c7e33ec38bfb679e855b00ddf127f67"
+   },
+   "mounts": {
+    "/home/muk/projects/siminfeng/campaign/artifacts/traces/in": {
+     "chat.txt": "65d188967378a61add25e0f98c35cd2bce2b02235451b09f6735d5512b3486b0"
+    }
+   },
+   "data_files": {},
+   "tests": {
+    "pap_decode_mixE4K_n12": "5da1f5982fdf24a2d18197226b4fa65961f4598f11330992ae21b0bb365d5b5b",
+    "pap_decode_mix4_imat_n12": "be5b2b441a87a2964f873ab43e87ca898501f23d2ad63a1010a7d208e65b8b75",
+    "pap_decode_pap12_q3_n12": "51b9e3f77ee3941b71c2e61a933f4500f03983baa8128ebedd364fc5b27a9ad3",
+    "pap_decode_mixE4K_n24": "6b90a51c19ed8b6c4a8a2ba3c044611670b136eb6abde1a919ba361f619d2357",
+    "pap_decode_pap24_q3_n24": "f7ef52b3ee864e2b06809366b37b1c83ec453d6326c05978fa7bd794f552c993"
+   }
+  },
+  "test_definitions": {
+   "pap_decode_mixE4K_n12": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "12"
+    ]
+   },
+   "pap_decode_mix4_imat_n12": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "mix4_imat.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "12"
+    ]
+   },
+   "pap_decode_pap12_q3_n12": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "pap12_q3.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "12"
+    ]
+   },
+   "pap_decode_mixE4K_n24": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "24"
+    ]
+   },
+   "pap_decode_pap24_q3_n24": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "pap24_q3.gguf",
+    "docker_args": [
+     "-v",
+     "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+     "-f",
+     "/tin/chat.txt",
+     "-n",
+     "160",
+     "-c",
+     "4096",
+     "--temp",
+     "0",
+     "-s",
+     "1",
+     "-ngl",
+     "99",
+     "-no-cnv",
+     "--no-warmup",
+     "--n-cpu-moe",
+     "24"
+    ]
+   }
+  }
+ },
+ "spec_sha256": "e0c14db4bbf5b23acab0ae99ea3a88dbd12e29e71af7d9af597459dd687734dd"
+}
