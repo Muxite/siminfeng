@@ -1,0 +1,23 @@
+usage: build-cc-j4.py [-h] --source SOURCE --commit COMMIT [--patch PATCH]
+                      [--extra-target EXTRA_TARGET] [--cmake-define KEY=VALUE]
+                      [--linkage] [--linkage-optional] --tag TAG --out OUT
+
+Build a local CUDA engine and record evidence; uses only the Python stdlib.
+
+options:
+  -h, --help            show this help message and exit
+  --source SOURCE
+  --commit COMMIT
+  --patch PATCH
+  --extra-target EXTRA_TARGET
+                        extra CMake executable target to build and ship in
+                        /app (e.g. llama-routing-trace added by a patch)
+  --cmake-define KEY=VALUE
+                        additional CMake definition (repeatable; built-in
+                        flags cannot be overridden)
+  --linkage             check dynamic cudart linkage and CUDA imports after
+                        building; failures are fatal
+  --linkage-optional    enable linkage check but allow failed/unavailable
+                        checks
+  --tag TAG
+  --out OUT

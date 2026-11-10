@@ -7,6 +7,10 @@ import json
 import math
 from pathlib import Path
 import statistics
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import decode_model
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -411,6 +415,8 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
     hb = min(hb, finite(host['ram_bytes'], 'host RAM', positive=True)/MIB)
     gb, hb, warnings = resource_limits(sample, gb, hb)
     report = residual_report(cal)
+    physical = cal['physical_decode']
+    constants = physical['constants']
     fits = {f: report[f]['coefficients'] for f in ('static', 'lru')}
     same_host = (host.get('host_id') == cal['host_id'] and
                  host.get('memory_model') == cal['conditions']['memory_model'] and
@@ -485,20 +491,19 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                     kv_mib = ctx*kv_bpt/MIB
                     compute_mib = 108*ubatch/512
                     if family == 'static':
-                        resident = exp*(v['n_layer']-coord)/v['n_layer']
+                        resident = decode_model.traffic(v, family, coord)['resident_expert_bytes']/MIB
                         # Preserve D022 intercept and slope, plus analytical byte deltas.
                         gpu = base['gpu_mib'] + (resident-base_exp*(24-coord)/24) + non-cal['representations']['mixE4K']['nonexpert_bytes']/MIB
-                        decode_us = base['decode_us']
-                        if rep != 'mixE4K' or not matched:
-                            screen = cal['representation_screen'].get(rep, {}).get('decode_tps', 684)
-                            decode_us = 1e6/screen + coord*(base['decode_us']-predict_fit(fits['static'], 0)['decode_us'])/max(coord, 1)*exp/base_exp
+                        decode = decode_model.predict(v, family, coord, constants)
+                        decode_us = decode['decode_us']
                         flags = ['--n-cpu-moe', str(coord)] if coord else []
                     elif family == 'lru':
                         resident = min(exp, coord)
                         gpu = base['gpu_mib'] + non-cal['representations']['mixE4K']['nonexpert_bytes']/MIB
-                        decode_us = base['decode_us'] * exp/base_exp
+                        decode = decode_model.predict(v, family, coord, constants)
+                        decode_us = decode['decode_us']
                         flags = ['--n-cpu-moe', str(v['n_layer']), '--moe-cache-mib', str(coord)]
-                        notes.append('LRU log-time fit is weak; prefer static at matched memory (D022)')
+                        notes.append('LRU transfer model uses uniform miss coverage and effective H2D bandwidth including dispatch; prefer static at matched memory (D022)')
                     else:
                         # Null bank per layer is mandatory in hybrid_split; includes its bytes.
                         slot = exp/(v['n_expert']*v['n_layer'])
@@ -506,11 +511,13 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                         gpu = predict_fit(fits['static'], 24)['gpu_mib'] + resident
                         spec = next(z for z in cal['hybrid_specs'] if sum(z['hot_counts']) == coord)
                         hit, trace_note = hybrid_hit_rate(v, spec)
-                        hybrid_cost = crossover_model(v, cal)
-                        decode_us = predict_fit(fits['static'], 0)['decode_us'] + hybrid_cost['cpu_us_per_byte']*slot*MIB*v['n_layer']*v['n_expert_used']*(1-hit) + hybrid_cost['per_layer_fixed_us']*v['n_layer']
+                        decode = decode_model.predict(v, family, coord, constants, coverage=hit)
+                        decode_us = decode['decode_us']
                         flags = ['-ot', r'\.cold$=CPU', '--no-op-offload', '--no-repack']
-                        notes += [trace_note, 'D030/D031 effective per-layer dispatch/handoff cost included; larger-expert transfer remains unmeasured.',
+                        notes += [trace_note, 'Physical CPU-touching-layer handoff included; extra split GPU dispatch work (D031) and larger-expert transfer remain unmodeled.',
                                   'D027 amendment: focused CUDA correctness test failed; exploratory until repaired and requalified.']
+                    notes += decode['fallbacks']
+                    notes.append('Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic')
                     gpu += kv_mib-192 + compute_mib-108
                     attention_delta = 0.0
                     d028 = cal['planner_v2']['flash_attention']
@@ -553,7 +560,7 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                     confidence = 'extrapolated' if reasons else 'calibrated'
                     p = dict(id=ident, representation=rep, placement=family, gpu_mib=round(gpu,3),
                              gpu_guard_mib=round(guard,3), host_mib=round(host_mib,3),
-                             decode_tps=round(1e6/decode_us,3), ttft_ms=round(ttft_ms,3),
+                             decode_tps=round(1e6/decode_us,3), decode_model=decode, ttft_ms=round(ttft_ms,3),
                              ttft_definition='warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling',
                              quality_class=quality['status'], quality=quality,
                              kld=kld, representation_kld=quality_kld,
@@ -603,6 +610,9 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                 hybrid_crossover=crossover, enabled_components=sorted(enabled),
                 technique_catalog=cal['planner_v2']['techniques'],
                 feasible_count=len(candidates), rejected=rejected, calibration_residuals=report,
+                physical_decode_calibration=dict(constants=constants, residuals=physical['evaluation']['summary'],
+                    leave_one_model_out={k:v['evaluation']['summary'] for k,v in physical['leave_one_model_out'].items()},
+                    report=physical['report']),
                 warnings=warnings+['No hard VRAM guarantee; predictions require measurement.',
                                    'Calibrated confidence describes GPU/decode regime; host is analytical and TTFT is a warm proxy.',
                                    'Inherited KLD is an evidence-scoped screening prior; PPL acceptance is not a measured combined KLD bound.',
@@ -666,8 +676,8 @@ def main(argv=None):
         if args.emit_lab_tests:
             dest = Path(args.emit_lab_tests).resolve()
             # Assignment scope also constrains paths requested through this CLI.
-            if not any(dest.is_relative_to(base) for base in (HERE, ROOT/'artifacts/codexPL3')):
-                raise ValueError('--emit-lab-tests must stay under cc/moe_planner or artifacts/codexPL3')
+            if not any(dest.is_relative_to(base) for base in (HERE, ROOT/'artifacts/codexPL4')):
+                raise ValueError('--emit-lab-tests must stay under cc/moe_planner or artifacts/codexPL4')
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(json.dumps(emit_lab_tests(result), indent=2)+'\n')
         print(json.dumps(result, indent=2, allow_nan=False))

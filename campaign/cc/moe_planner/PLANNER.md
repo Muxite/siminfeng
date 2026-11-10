@@ -5,7 +5,135 @@ campaign patches. It does not compile, launch inference, reserve resources,
 submit jobs, or contact services. Its recommendation is a discriminating lab
 experiment, not a demonstrated engine improvement or a hard memory guarantee.
 All implementation and scratch writes are confined to `cc/moe_planner/` and
-`artifacts/codexPL3/`. Prior T-PL artifacts are read-only inputs. There are no changes to `bin/lab` or `lab/tests`.
+`artifacts/codexPL4/`. Prior T-PL artifacts are read-only inputs. There are no changes to `bin/lab` or `lab/tests`.
+
+## Physical decode calibration (T-PL4)
+
+The current decode predictor is `decode_model.py`. `plan.py` retains the old
+D022 fits for memory, prefill, and historical diagnostics only. Decode uses:
+
+```text
+t_decode = A_gpu / BW_gpu + sum_q(A_cpu,q / BW_cpu,q) + L_cpu * t_handoff
+A_cpu,q = sum(first K layers, expert tensors of type q) bytes * n_expert_used/n_expert
+A_gpu   = nonexpert_bytes + active expert bytes remaining on GPU
+hybrid: A_cpu,q *= (1 - decode hot coverage), L_cpu = number of layers with cold work
+LRU:    A_cpu = 0, A_gpu = all active weights, t_decode += miss_bytes/BW_h2d_effective
+```
+
+Bandwidth units are decimal GB/s. Code uses bytes / (1000 * GB/s) to obtain
+microseconds. `decode_model` in each plan includes the unmodified component
+times and traffic; plan-level D028/D029 factors apply afterward. Static placement
+uses actual first-K layer tensors, including Qwen's mixed Q4_K/Q6_K projections,
+for both active-byte timing and resident expert memory. Missing tensor headers
+use equal-size layers and representation-derived expert type. Stale headers
+from sibling representation enumeration are discarded when byte totals differ.
+All nonexpert weights are treated as active each token; this is a logical
+estimate, without an attention/KV traffic model.
+
+The fitted constants for x86-main are:
+
+| Constant | Value |
+| --- | ---: |
+| Effective GPU bandwidth | 285.227 GB/s |
+| CPU Q4_K | 35.887 GB/s |
+| CPU Q3_K | 34.591 GB/s |
+| CPU Q2_K | 25.902 GB/s |
+| CPU Q6_K | Q4_K fallback, 35.887 GB/s |
+| CPU-touching-layer handoff | 136.641 us |
+| LRU effective H2D, including dispatch | 9.326 GB/s |
+
+Equivalently `BW_cpu(q) = BW_cpu(Q4_K) * efficiency(q)`, with Q3_K efficiency
+0.964 and Q2_K efficiency 0.722. These are end-to-end effective coefficients,
+not raw DRAM, PCIe, or GPU hardware bandwidth. An independent Q6_K CPU screen
+is missing; Qwen's Q6_K projections explicitly share Q4_K efficiency.
+
+Reproduce with `bash artifacts/codexPL4/reproduce.sh`. `fit_decode.py` needs
+NumPy/SciPy; ordinary planner inference remains stdlib-only. It reads every
+successful decode measurement from D022, D029, D034, D035, D039, and the D040
+quiet PAP rerun: 165 rows, 138 Granite and 27 Qwen. D029 includes completion and
+bench endpoints; D039 includes all eight static coordinates plus the FA/KV
+control. Result SHA256/job/attempt/test provenance and traffic are recorded in
+`artifacts/codexPL4/measured-points.json`; complete fitted and held-out residuals
+are in `artifacts/codexPL4/fit-report.json`.
+
+GPU inverse bandwidth is least squares against training all-GPU endpoints from
+D022/D029. Remaining constants use bounded least squares in microseconds with
+equal weight per job/configuration (all repeated rows retained). D029 ON and
+D039 release-1 times are normalized by the existing 1.02 reuse factor. Noisy
+D035 observations remain included and explicitly labeled. Residual summaries
+report every raw row, while scenario tables use measured coordinate medians.
+
+| Joint-fit residual group | Mean absolute error |
+| --- | ---: |
+| Granite static, including GPU endpoints | 11.13% |
+| Granite LRU | 35.01% |
+| Qwen static, including FA/KV control | 5.50% |
+
+Leave-one-**model**-out training excludes every job belonging to the held-out
+model, including its all-GPU anchors; it does not borrow the CPU screen.
+
+| Training model -> held-out model | MAPE | Maximum absolute error |
+| --- | ---: | ---: |
+| Granite -> Qwen | 7.85% | 14.30% |
+| Qwen -> Granite, all configurations | 52.82% | 156.48% |
+| Qwen -> Granite, static only | 52.23% | 116.58% |
+
+The Granite-only CPU bandwidth and handoff columns are collinear. That fold
+pins handoff to the separately recorded D031 extra split cost / 12 = 169.167
+us/layer; the report labels this as an assumption, since D031 also includes GPU
+dispatch work. Its fitted Q4_K bandwidth is about 43 GB/s. Qwen-only training
+has no GPU endpoint or Q2_K/Q3_K/LRU calibration: its GPU estimate extrapolates,
+handoff reaches the zero bound, and unsupported types use declared Q4_K/12 GB/s
+fallbacks. The reverse fold fails transfer. The joint fit should not be called
+independent cross-model validation.
+
+The pre-registered requests were replayed offline with their original budgets,
+component sets and statistics. Full plan outputs and exact flags are in
+`artifacts/codexPL4/plan-qwen-{12000,8000,4000}.json` and
+`plan-granite-900.json`; `scenario-comparison.json` records all comparisons.
+
+| Request | Selected CPU layers | New t/s | Measured t/s | Error |
+| --- | ---: | ---: | ---: | ---: |
+| Qwen 12000 MiB | 18 | 51.247 | 54.62 | -6.17% |
+| Qwen 8000 MiB | 30 | 36.342 | 36.58 | -0.65% |
+| Qwen 4000 MiB | 42 | 28.154 | 27.73 | +1.53% |
+| Granite 900 MiB | 19 | 143.925 | 139.64 | +3.07% |
+
+The previous Qwen predictions were 8.069, 4.863 and 3.565 t/s. Actual first-K
+bytes move the 4000 MiB winner from K41 to K42. K41 has no measurement; its
+new physical prediction is retained separately without claiming an exact match.
+Qwen's selected q4_0-KV/FA/ubatch128 configurations were not measured exactly by
+D039: comparisons use same-K f16/default-batch measurements. D039 measured
+GPU deltas can exceed the nominal budgets; the transferred Granite memory guard
+is not a Qwen memory guarantee. Granite D034 K19..23 errors are +3.07%, -1.69%,
++1.11%, -2.45%, -1.26%; these points participate in fitting.
+
+`cpu_type_screen.py` runs `llama-bench -ngl 0 -p 0 -n 32 -r 3 -t 8 -o json`
+with niceness 10, on mixE4K/E3K/E2K, Q8_0, and all three pap24 variants. The
+benchmark is built CPU-only at `artifacts/codexPL4/tree` from the pinned archive
+with `-j4`. `build-manifest.json` binds the full source commit/archive SHA256
+and binary/library hashes. Archive builds explicitly set the commit label so
+it does not inherit the parent campaign repository's commit.
+
+The screen records per-second load average, CPU pressure, affinity and CPU
+counters, raw stdout/stderr and all three sample rates in
+`artifacts/codexPL4/cpu-screen/report.json`. Median effective full-model rates
+are approximately Q4_K 26.07, Q3_K 26.58, Q2_K 26.57 and Q8_0 28.28 GB/s.
+These include CPU nonexpert work and are **indicative shared-host** results,
+not isolated expert throughput. `calibration.json` stores them separately as
+`screen_bw_cpu_gbs`; clean mixed GPU/CPU fits take precedence, and an unsupported
+Q8_0 CPU path can use its measured screen with a visible caveat. File-specific
+throughput and load are preserved rather than presented as clean host constants.
+
+Remaining gaps: one GPU bandwidth cannot explain Q8_0 being faster than mixed
+Q4_K despite more active bytes (up to 37.6% endpoint residual); uniform LRU
+coverage misses real routing/admission effects (up to 69.2% residual); strict
+reverse model transfer fails; Q6_K CPU efficiency is unmeasured; screen timing
+is host-contended; PAP's noisy and quiet runs disagree; hybrid extra GPU dispatch
+work, context/KV traffic, TTFT, and host working set need separate calibration.
+Hybrid eligibility and quality gates remain in force; fitting PAP timing does
+not activate the rejected PAP representation as a recommendation. No Docker or
+GPU work was performed.
 
 ## Run
 
@@ -16,12 +144,12 @@ python3 -B cc/moe_planner/plan.py \
   --stats artifacts/codexPL/granite-fixture.json \
   --host cc/engine_handoff/hosts/x86-main.json \
   --budget-gpu-mib 900 --ctx 4096 --top 5 \
-  --components artifacts/codexPL3/components-baseline.json \
-  --emit-lab-tests artifacts/codexPL3/lab-tests.json \
-  > artifacts/codexPL3/plan-900.json
+  --components artifacts/codexPL4/components-baseline.json \
+  --emit-lab-tests artifacts/codexPL4/lab-tests.json \
+  > artifacts/codexPL4/plan-900.json
 
 PYTHONDONTWRITEBYTECODE=1 python3 -B -m pytest -q -p no:cacheprovider \
-  cc/moe_planner --basetemp=artifacts/codexPL3/pytest-temp
+  cc/moe_planner --basetemp=artifacts/codexPL4/pytest-temp
 ```
 
 The real T-MI inspection of mixE4K is also saved read-only as
@@ -133,8 +261,8 @@ extrapolation flag and does not establish unified-memory accounting correctness.
 * **Do not scale throughput inversely with bytes.**
   [D011](../../decisions/D011-bandwidth-and-q8-profile.md) and D009 show Q8_0
   improving clean decode by ~32.5% over BF16, but Q4_K_M is slower than Q8_0.
-  Kernel/dequantization and launch costs matter. Representation transfers use
-  measured screen endpoints when available and are explicitly extrapolated.
+  Kernel/dequantization and launch costs matter. CPU representation transfers use per-type effective bandwidths;
+  unsupported types fall back to an indicative CPU screen or Q4_K, with a visible note.
 
 ## Fits and calibration boundaries
 
@@ -149,7 +277,7 @@ conflicting repetition caveat, exact header-derived weight bytes for all six
 representations, and the three existing hybrid transform manifests. A null job ID
 is explicitly explained where the source uses an operation or probe instead.
 
-The static model is ordinary least squares:
+The retained historical D022 diagnostic (not the current decode predictor) is ordinary least squares:
 
 ```text
 GPU MiB(K)       = 1387.600000 - 26.933333 K
@@ -242,7 +370,7 @@ not proof of a universal threshold or sufficient evidence to enable a new model.
 
 The hybrid accounting path retains existing n18/n12/n6 transform manifests,
 fixed TRAIN hot IDs, per-layer null expert bytes and decode trace evaluation.
-Its CPU cost scales with expert bytes and its fixed cost now comes from D031;
+Its current CPU cost uses the physical per-type bandwidth fit and CPU-touching-layer cost; D031 still gates crossover eligibility;
 CUDA correctness/quality qualification remains required. Larger models do not
 inherit Granite split files. Tests isolate the accounting under a hypothetical
 crossover calibration without promoting those files into valid recommendations.
@@ -416,7 +544,7 @@ No tests were submitted or executed on the GPU by this worker.
 With components disabled explicitly, the real mixE4K inspection at 900 MiB,
 ctx4096 recommends static n19 with f16 KV:
 875.867 MiB predicted GPU plus 2.000 MiB guard, 1178.695 MiB host working-set
-allowance, 149.633 decode t/s, and 236.666 ms warm TTFT proxy. The hand-derived
+allowance, 143.925 decode t/s, and 236.931 ms warm TTFT proxy. The hand-derived
 fixture differs by 0.0055 MiB from exact nonexpert header bytes. Exact flags:
 
 ```text
@@ -427,7 +555,7 @@ fixture differs by 0.0055 MiB from exact nonexpert header bytes. Exact flags:
 
 With accepted factory runtime components (`q8_reuse`, `kv_quant_fix`),
 900 MiB / ctx4096 / max-KLD 0.08 returns mixE4K static19, f16 KV,
-875.867 MiB GPU + 2 MiB guard, 152.625 predicted decode t/s, KLD 0.040017
+875.867 MiB GPU + 2 MiB guard, 146.804 predicted decode t/s, KLD 0.040017
 inherited through rules a/c (D029/D033), with direct placement evidence D034.
 No extrapolation flag is needed for its baseline GPU/decode regime.
 
@@ -445,7 +573,7 @@ unmeasured placement is invented to satisfy this scenario.
 At **1317 MiB** the same ctx32768 / max-KLD 0.08 request has a feasible q8_0
 candidate with inherited quality (rules a/b/c/d; D029/D034/D033). Memory,
 decode and prefill remain extrapolated; quality is a screening prior.
-`artifacts/codexPL3/` contains exact commands, both requested reruns,
+The historical `artifacts/codexPL3/` contains exact commands, both prior reruns,
 a 1317 MiB diagnostic rerun, ledger counts, emitted lab definitions, and CPU-only
 pytest output. No Docker/GPU operation was performed. Long-context quality,
 actual TTFT/host working set and post-fix combined performance need measurement.

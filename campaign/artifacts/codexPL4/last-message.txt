@@ -1,0 +1,20 @@
+Implemented within the allowed write locations. **64 tests pass; no Docker/GPU used.**
+
+The model is:
+`t = GPU active bytes/BW_gpu + Σ CPU active bytes(type)/BW_cpu(type) + CPU-touching layers × handoff`.
+Hybrid CPU bytes scale by `(1 − coverage)`; LRU adds miss-transfer time.
+
+Fitted constants: GPU **285.23 GB/s**; CPU Q4_K **35.89**, Q3_K **34.59**, Q2_K **25.90 GB/s**; handoff **136.64 µs/layer**.
+
+Leave-one-model-out MAPE: **Granite → Qwen 7.85%**; **Qwen → Granite 52.82%**, so reverse transfer remains poor.
+
+| Scenario | Predicted t/s | Measured | Error |
+|---|---:|---:|---:|
+| Qwen 12000 MiB, K18 | 51.25 | 54.62 | −6.18% |
+| Qwen 8000 MiB, K30 | 36.34 | 36.58 | −0.65% |
+| Qwen 4000 MiB, K42 | 28.15 | 27.73 | +1.53% |
+| Granite 900 MiB, K19 | 143.93 | 139.64 | +3.07% |
+
+CPU screening completed for seven files. Remaining gaps include Q6_K efficiency, GPU quantization effects, LRU accuracy, and exact Qwen configuration validation. Scenario measurements participated in fitting.
+
+Details and reproduction instructions: [PLANNER.md](/home/muk/projects/siminfeng/campaign/cc/moe_planner/PLANNER.md:10).

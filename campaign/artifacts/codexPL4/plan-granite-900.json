@@ -1,0 +1,3027 @@
+{
+  "schema": "moe-plan/0",
+  "prediction_only": true,
+  "prompt_tokens": 62,
+  "budget": {
+    "gpu_mib": 900,
+    "host_mib": 47104.0,
+    "ctx": 4096,
+    "max_quality_loss": null,
+    "objective": "decode"
+  },
+  "plans": [
+    {
+      "id": "mixE4K-static19-f16-c4096-b2048-u512",
+      "representation": "mixE4K",
+      "placement": "static",
+      "gpu_mib": 875.867,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 1178.695,
+      "decode_tps": 143.925,
+      "decode_model": {
+        "decode_us": 6948.0582861283,
+        "decode_tps": 143.92510235506887,
+        "gpu_us": 604.5442370231656,
+        "cpu_us": 3747.337272905676,
+        "handoff_us": 2596.1767761994593,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 172432576.0,
+          "cpu_active_bytes": {
+            "Q4_K": 134479872.0
+          },
+          "cpu_touching_layers": 19,
+          "resident_expert_bytes": 141557760.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 236.931,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "measured",
+      "quality": {
+        "kld": 0.040017,
+        "status": "measured",
+        "rules": [],
+        "evidence": [
+          "D034 job-56115e2bf1 pl_617a7871cc83_quality512#15"
+        ],
+        "caveats": [
+          "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+        ],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown",
+        "description": "measured"
+      },
+      "kld": 0.040017,
+      "representation_kld": 0.040017,
+      "quality_risk": 0.040017,
+      "quality_risk_unknown": false,
+      "kv_type": "f16",
+      "kv_mib": 192.0,
+      "flash_attention": false,
+      "attention_delta_mib": 0.0,
+      "components": [],
+      "runtime_env": {},
+      "technique_family": "mixE4K|static|f16|fa-off|base",
+      "prefill_tps": 269.585,
+      "prefill_ms": 229.983,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "mixE4K",
+        "static",
+        "kv:f16",
+        "ctx:4096",
+        "batch:2048",
+        "ubatch:512"
+      ],
+      "confidence": "calibrated",
+      "metric_confidence": {
+        "gpu_mib": "calibrated",
+        "decode_tps": "calibrated",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "2048",
+        "-ub",
+        "512",
+        "-ctk",
+        "f16",
+        "-ctv",
+        "f16",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "19"
+      ],
+      "model_path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+      ],
+      "required_engine": "llama.cpp 31288c9c6",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    }
+  ],
+  "family_best": [
+    {
+      "id": "mixE4K-static19-f16-c4096-b2048-u512",
+      "representation": "mixE4K",
+      "placement": "static",
+      "gpu_mib": 875.867,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 1178.695,
+      "decode_tps": 143.925,
+      "decode_model": {
+        "decode_us": 6948.0582861283,
+        "decode_tps": 143.92510235506887,
+        "gpu_us": 604.5442370231656,
+        "cpu_us": 3747.337272905676,
+        "handoff_us": 2596.1767761994593,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 172432576.0,
+          "cpu_active_bytes": {
+            "Q4_K": 134479872.0
+          },
+          "cpu_touching_layers": 19,
+          "resident_expert_bytes": 141557760.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 236.931,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "measured",
+      "quality": {
+        "kld": 0.040017,
+        "status": "measured",
+        "rules": [],
+        "evidence": [
+          "D034 job-56115e2bf1 pl_617a7871cc83_quality512#15"
+        ],
+        "caveats": [
+          "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+        ],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown",
+        "description": "measured"
+      },
+      "kld": 0.040017,
+      "representation_kld": 0.040017,
+      "quality_risk": 0.040017,
+      "quality_risk_unknown": false,
+      "kv_type": "f16",
+      "kv_mib": 192.0,
+      "flash_attention": false,
+      "attention_delta_mib": 0.0,
+      "components": [],
+      "runtime_env": {},
+      "technique_family": "mixE4K|static|f16|fa-off|base",
+      "prefill_tps": 269.585,
+      "prefill_ms": 229.983,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "mixE4K",
+        "static",
+        "kv:f16",
+        "ctx:4096",
+        "batch:2048",
+        "ubatch:512"
+      ],
+      "confidence": "calibrated",
+      "metric_confidence": {
+        "gpu_mib": "calibrated",
+        "decode_tps": "calibrated",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "2048",
+        "-ub",
+        "512",
+        "-ctk",
+        "f16",
+        "-ctv",
+        "f16",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "19"
+      ],
+      "model_path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+      ],
+      "required_engine": "llama.cpp 31288c9c6",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    }
+  ],
+  "family_count": 1,
+  "pareto_set": [
+    {
+      "id": "mixE4K-static19-f16-c4096-b2048-u512",
+      "representation": "mixE4K",
+      "placement": "static",
+      "gpu_mib": 875.867,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 1178.695,
+      "decode_tps": 143.925,
+      "decode_model": {
+        "decode_us": 6948.0582861283,
+        "decode_tps": 143.92510235506887,
+        "gpu_us": 604.5442370231656,
+        "cpu_us": 3747.337272905676,
+        "handoff_us": 2596.1767761994593,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 172432576.0,
+          "cpu_active_bytes": {
+            "Q4_K": 134479872.0
+          },
+          "cpu_touching_layers": 19,
+          "resident_expert_bytes": 141557760.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 236.931,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "measured",
+      "quality": {
+        "kld": 0.040017,
+        "status": "measured",
+        "rules": [],
+        "evidence": [
+          "D034 job-56115e2bf1 pl_617a7871cc83_quality512#15"
+        ],
+        "caveats": [
+          "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+        ],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown",
+        "description": "measured"
+      },
+      "kld": 0.040017,
+      "representation_kld": 0.040017,
+      "quality_risk": 0.040017,
+      "quality_risk_unknown": false,
+      "kv_type": "f16",
+      "kv_mib": 192.0,
+      "flash_attention": false,
+      "attention_delta_mib": 0.0,
+      "components": [],
+      "runtime_env": {},
+      "technique_family": "mixE4K|static|f16|fa-off|base",
+      "prefill_tps": 269.585,
+      "prefill_ms": 229.983,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "mixE4K",
+        "static",
+        "kv:f16",
+        "ctx:4096",
+        "batch:2048",
+        "ubatch:512"
+      ],
+      "confidence": "calibrated",
+      "metric_confidence": {
+        "gpu_mib": "calibrated",
+        "decode_tps": "calibrated",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "2048",
+        "-ub",
+        "512",
+        "-ctk",
+        "f16",
+        "-ctv",
+        "f16",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "19"
+      ],
+      "model_path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+      ],
+      "required_engine": "llama.cpp 31288c9c6",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "mixE4K-static20-f16-c4096-b2048-u512",
+      "representation": "mixE4K",
+      "placement": "static",
+      "gpu_mib": 848.933,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 1178.695,
+      "decode_tps": 137.796,
+      "decode_model": {
+        "decode_us": 7257.112550838082,
+        "decode_tps": 137.79585103506707,
+        "gpu_us": 579.7293412537292,
+        "cpu_us": 3944.5655504270276,
+        "handoff_us": 2732.8176591573256,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 165354688.0,
+          "cpu_active_bytes": {
+            "Q4_K": 141557760.0
+          },
+          "cpu_touching_layers": 20,
+          "resident_expert_bytes": 113246208.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 240.174,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "measured",
+      "quality": {
+        "kld": 0.040017,
+        "status": "measured",
+        "rules": [],
+        "evidence": [
+          "D034 job-56115e2bf1 pl_83a44584d710_quality512#16"
+        ],
+        "caveats": [
+          "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+        ],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown",
+        "description": "measured"
+      },
+      "kld": 0.040017,
+      "representation_kld": 0.040017,
+      "quality_risk": 0.040017,
+      "quality_risk_unknown": false,
+      "kv_type": "f16",
+      "kv_mib": 192.0,
+      "flash_attention": false,
+      "attention_delta_mib": 0.0,
+      "components": [],
+      "runtime_env": {},
+      "technique_family": "mixE4K|static|f16|fa-off|base",
+      "prefill_tps": 266.189,
+      "prefill_ms": 232.917,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "mixE4K",
+        "static",
+        "kv:f16",
+        "ctx:4096",
+        "batch:2048",
+        "ubatch:512"
+      ],
+      "confidence": "calibrated",
+      "metric_confidence": {
+        "gpu_mib": "calibrated",
+        "decode_tps": "calibrated",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "2048",
+        "-ub",
+        "512",
+        "-ctk",
+        "f16",
+        "-ctv",
+        "f16",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "20"
+      ],
+      "model_path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+      ],
+      "required_engine": "llama.cpp 31288c9c6",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "mixE4K-static21-f16-c4096-b2048-u512",
+      "representation": "mixE4K",
+      "placement": "static",
+      "gpu_mib": 822.0,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 1178.695,
+      "decode_tps": 132.167,
+      "decode_model": {
+        "decode_us": 7566.166815547863,
+        "decode_tps": 132.1673212312846,
+        "gpu_us": 554.9144454842929,
+        "cpu_us": 4141.793827948379,
+        "handoff_us": 2869.4585421151914,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 158276800.0,
+          "cpu_active_bytes": {
+            "Q4_K": 148635648.0
+          },
+          "cpu_touching_layers": 21,
+          "resident_expert_bytes": 84934656.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 243.417,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "measured",
+      "quality": {
+        "kld": 0.040017,
+        "status": "measured",
+        "rules": [],
+        "evidence": [
+          "D034 job-56115e2bf1 pl_1ac7a80d3dc2_quality512#17"
+        ],
+        "caveats": [
+          "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+        ],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown",
+        "description": "measured"
+      },
+      "kld": 0.040017,
+      "representation_kld": 0.040017,
+      "quality_risk": 0.040017,
+      "quality_risk_unknown": false,
+      "kv_type": "f16",
+      "kv_mib": 192.0,
+      "flash_attention": false,
+      "attention_delta_mib": 0.0,
+      "components": [],
+      "runtime_env": {},
+      "technique_family": "mixE4K|static|f16|fa-off|base",
+      "prefill_tps": 262.878,
+      "prefill_ms": 235.851,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "mixE4K",
+        "static",
+        "kv:f16",
+        "ctx:4096",
+        "batch:2048",
+        "ubatch:512"
+      ],
+      "confidence": "calibrated",
+      "metric_confidence": {
+        "gpu_mib": "calibrated",
+        "decode_tps": "calibrated",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "2048",
+        "-ub",
+        "512",
+        "-ctk",
+        "f16",
+        "-ctv",
+        "f16",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "21"
+      ],
+      "model_path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+      ],
+      "required_engine": "llama.cpp 31288c9c6",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "mixE4K-static22-f16-c4096-b2048-u512",
+      "representation": "mixE4K",
+      "placement": "static",
+      "gpu_mib": 795.067,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 1178.695,
+      "decode_tps": 126.981,
+      "decode_model": {
+        "decode_us": 7875.221080257645,
+        "decode_tps": 126.9805621720126,
+        "gpu_us": 530.0995497148564,
+        "cpu_us": 4339.02210546973,
+        "handoff_us": 3006.099425073058,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 151198912.0,
+          "cpu_active_bytes": {
+            "Q4_K": 155713536.0
+          },
+          "cpu_touching_layers": 22,
+          "resident_expert_bytes": 56623104.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 246.66,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "measured",
+      "quality": {
+        "kld": 0.040017,
+        "status": "measured",
+        "rules": [],
+        "evidence": [
+          "D034 job-56115e2bf1 pl_471add4ed456_quality512#18"
+        ],
+        "caveats": [
+          "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+        ],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown",
+        "description": "measured"
+      },
+      "kld": 0.040017,
+      "representation_kld": 0.040017,
+      "quality_risk": 0.040017,
+      "quality_risk_unknown": false,
+      "kv_type": "f16",
+      "kv_mib": 192.0,
+      "flash_attention": false,
+      "attention_delta_mib": 0.0,
+      "components": [],
+      "runtime_env": {},
+      "technique_family": "mixE4K|static|f16|fa-off|base",
+      "prefill_tps": 259.648,
+      "prefill_ms": 238.785,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "mixE4K",
+        "static",
+        "kv:f16",
+        "ctx:4096",
+        "batch:2048",
+        "ubatch:512"
+      ],
+      "confidence": "calibrated",
+      "metric_confidence": {
+        "gpu_mib": "calibrated",
+        "decode_tps": "calibrated",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "2048",
+        "-ub",
+        "512",
+        "-ctk",
+        "f16",
+        "-ctv",
+        "f16",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "22"
+      ],
+      "model_path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+      ],
+      "required_engine": "llama.cpp 31288c9c6",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "mixE4K-static23-f16-c4096-b2048-u512",
+      "representation": "mixE4K",
+      "placement": "static",
+      "gpu_mib": 768.133,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 1178.695,
+      "decode_tps": 122.186,
+      "decode_model": {
+        "decode_us": 8184.2753449674265,
+        "decode_tps": 122.1855274718864,
+        "gpu_us": 505.28465394542,
+        "cpu_us": 4536.250382991082,
+        "handoff_us": 3142.740308030924,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 144121024.0,
+          "cpu_active_bytes": {
+            "Q4_K": 162791424.0
+          },
+          "cpu_touching_layers": 23,
+          "resident_expert_bytes": 28311552.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 249.903,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "measured",
+      "quality": {
+        "kld": 0.040017,
+        "status": "measured",
+        "rules": [],
+        "evidence": [
+          "D034 job-56115e2bf1 pl_41fc4a54d268_quality512#19"
+        ],
+        "caveats": [
+          "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+        ],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown",
+        "description": "measured"
+      },
+      "kld": 0.040017,
+      "representation_kld": 0.040017,
+      "quality_risk": 0.040017,
+      "quality_risk_unknown": false,
+      "kv_type": "f16",
+      "kv_mib": 192.0,
+      "flash_attention": false,
+      "attention_delta_mib": 0.0,
+      "components": [],
+      "runtime_env": {},
+      "technique_family": "mixE4K|static|f16|fa-off|base",
+      "prefill_tps": 256.496,
+      "prefill_ms": 241.719,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "mixE4K",
+        "static",
+        "kv:f16",
+        "ctx:4096",
+        "batch:2048",
+        "ubatch:512"
+      ],
+      "confidence": "calibrated",
+      "metric_confidence": {
+        "gpu_mib": "calibrated",
+        "decode_tps": "calibrated",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "2048",
+        "-ub",
+        "512",
+        "-ctk",
+        "f16",
+        "-ctv",
+        "f16",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "23"
+      ],
+      "model_path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+      ],
+      "required_engine": "llama.cpp 31288c9c6",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "mixE4K-static24-f16-c4096-b2048-u512",
+      "representation": "mixE4K",
+      "placement": "static",
+      "gpu_mib": 741.2,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 1178.695,
+      "decode_tps": 117.739,
+      "decode_model": {
+        "decode_us": 8493.329609677206,
+        "decode_tps": 117.73945507314481,
+        "gpu_us": 480.4697581759836,
+        "cpu_us": 4733.478660512433,
+        "handoff_us": 3279.3811909887904,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 137043136.0,
+          "cpu_active_bytes": {
+            "Q4_K": 169869312.0
+          },
+          "cpu_touching_layers": 24,
+          "resident_expert_bytes": 0.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 253.146,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "inherited",
+      "quality": {
+        "kld": 0.040017,
+        "status": "inherited",
+        "rules": [
+          "b"
+        ],
+        "evidence": [
+          "D013 job-aa57700ee5 kl_mixE4K#2",
+          "D034 job-56115e2bf1 pl_617a7871cc83_quality512#15",
+          "D034 job-56115e2bf1 pl_83a44584d710_quality512#16",
+          "D034 job-56115e2bf1 pl_1ac7a80d3dc2_quality512#17",
+          "D034 job-56115e2bf1 pl_471add4ed456_quality512#18",
+          "D034 job-56115e2bf1 pl_41fc4a54d268_quality512#19",
+          "D035 job-3d2fbbd061 pap_kl_mixE4K#47"
+        ],
+        "caveats": [
+          "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+        ],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown",
+        "description": "inherited (rule b; evidence D013 job-aa57700ee5 kl_mixE4K#2; D034 job-56115e2bf1 pl_617a7871cc83_quality512#15; D034 job-56115e2bf1 pl_83a44584d710_quality512#16; D034 job-56115e2bf1 pl_1ac7a80d3dc2_quality512#17; D034 job-56115e2bf1 pl_471add4ed456_quality512#18; D034 job-56115e2bf1 pl_41fc4a54d268_quality512#19; D035 job-3d2fbbd061 pap_kl_mixE4K#47)"
+      },
+      "kld": 0.040017,
+      "representation_kld": 0.040017,
+      "quality_risk": 0.040017,
+      "quality_risk_unknown": false,
+      "kv_type": "f16",
+      "kv_mib": 192.0,
+      "flash_attention": false,
+      "attention_delta_mib": 0.0,
+      "components": [],
+      "runtime_env": {},
+      "technique_family": "mixE4K|static|f16|fa-off|base",
+      "prefill_tps": 253.42,
+      "prefill_ms": 244.653,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "mixE4K",
+        "static",
+        "kv:f16",
+        "ctx:4096",
+        "batch:2048",
+        "ubatch:512"
+      ],
+      "confidence": "calibrated",
+      "metric_confidence": {
+        "gpu_mib": "calibrated",
+        "decode_tps": "calibrated",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "2048",
+        "-ub",
+        "512",
+        "-ctk",
+        "f16",
+        "-ctv",
+        "f16",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "24"
+      ],
+      "model_path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+      ],
+      "required_engine": "llama.cpp 31288c9c6",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    }
+  ],
+  "pareto_axes": [
+    "gpu_mib:min",
+    "decode_tps:max",
+    "quality_risk:min"
+  ],
+  "quality_risk_policy": "measured or evidence-inherited screening KLD; null is unknown/failing and treated as +infinity, never zero",
+  "hybrid_crossover": {
+    "source": "decisions/D030-hybrid-split-rejected.md; decisions/D031-split-diagnosis-proxy-scale.md",
+    "expert_bytes": 884736.0,
+    "cpu_us_per_byte": 3.4586588541666666e-05,
+    "per_layer_fixed_us": 169.16666666666666,
+    "crossover_expert_bytes": 4891105.882352941,
+    "crossover_expert_mib": 4.664522058823529,
+    "required_margin": 2.0,
+    "predicted_beneficial": false,
+    "note": "Necessary amortization condition only; routing savings and GPU qualification still required"
+  },
+  "enabled_components": [],
+  "technique_catalog": {
+    "static": {
+      "status": "calibrated",
+      "source": "D022"
+    },
+    "lru": {
+      "status": "calibrated-control",
+      "source": "D022",
+      "policy": "resident byte coverage >=60%"
+    },
+    "hybrid": {
+      "status": "rejected-small-expert-regime",
+      "source": [
+        "D030",
+        "D031"
+      ],
+      "eligibility": "expert bytes * CPU us/byte > 2 * per-layer fixed us; correctness and end-to-end calibration still required"
+    },
+    "pap": {
+      "status": "pending-calibration",
+      "source": "decisions/D032-pap-and-planner-validation-protocol.md",
+      "component": "pap",
+      "classification": "representation-tradeoff",
+      "calibration_points": [],
+      "result_source": "lab/jobs/<job-id>/att-<n>/result.json",
+      "point_fields": [
+        "job_id",
+        "attempt",
+        "test",
+        "model_path",
+        "representation",
+        "cpu_layers",
+        "expert_bytes",
+        "nonexpert_bytes",
+        "gpu_mib",
+        "decode_tps",
+        "prefill_tps",
+        "prompt_tokens",
+        "kld"
+      ],
+      "acceptance": {
+        "min_decode_ratio_vs_same_cpu_layers": 1.05,
+        "max_kld": 0.08
+      },
+      "enumeration": "No PAP throughput or quality invented while calibration_points is empty; future points must bind model bytes, placement and lab provenance"
+    }
+  },
+  "feasible_count": 6,
+  "rejected": [
+    {
+      "id": "mixE4K-static0-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static0-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static0-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static0-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static0-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static0-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static0-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static0-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static0-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static1-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static1-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static1-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static1-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static1-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static1-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static1-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static1-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static1-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static2-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static2-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static2-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static2-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static2-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static2-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static2-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static2-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static2-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static3-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static3-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static3-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static3-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static3-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static3-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static3-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static3-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static3-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static4-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static4-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static4-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static4-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static4-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static4-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static4-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static4-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static4-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static5-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static5-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static5-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static5-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static5-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static5-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static5-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static5-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static5-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static6-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static6-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static6-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static6-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static6-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static6-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static6-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static6-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static6-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static7-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static7-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static7-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static7-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static7-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static7-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static7-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static7-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static7-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static8-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static8-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static8-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static8-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static8-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static8-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static8-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static8-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static8-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static9-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static9-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static9-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static9-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static9-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static9-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static9-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static9-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static9-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static10-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static10-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static10-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static10-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static10-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static10-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static10-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static10-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static10-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static11-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static11-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static11-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static11-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static11-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static11-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static11-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static11-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static11-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static12-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static12-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static12-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static12-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static12-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static12-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static12-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static12-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static12-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static13-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static13-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static13-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static13-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static13-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static13-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static13-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static13-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static13-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static14-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static14-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static14-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static14-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static14-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static14-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static14-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static14-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static14-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static15-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static15-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static15-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static15-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static15-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static15-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static15-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static15-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static15-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static16-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static16-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static16-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static16-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static16-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static16-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static16-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static16-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static16-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static17-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static17-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static17-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static17-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static17-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static17-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static17-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static17-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static17-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static18-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-static18-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static18-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static18-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static18-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static18-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static18-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static18-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static18-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static19-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static19-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static19-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static19-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static19-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static19-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static19-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static19-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static20-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static20-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static20-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static20-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static20-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static20-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static20-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static20-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static21-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static21-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static21-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static21-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static21-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static21-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static21-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static21-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static22-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static22-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static22-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static22-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static22-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static22-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static22-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static22-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static23-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static23-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static23-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static23-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static23-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static23-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static23-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static23-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static24-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static24-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-static24-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static24-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static24-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static24-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static24-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-static24-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru128-f16-c4096-b2048-u512",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "mixE4K-lru128-f16-c4096-b512-u128",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "mixE4K-lru128-f16-c4096-b512-u512",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "mixE4K-lru128-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru128-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru128-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru128-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru128-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru128-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru256-f16-c4096-b2048-u512",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "mixE4K-lru256-f16-c4096-b512-u128",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "mixE4K-lru256-f16-c4096-b512-u512",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "mixE4K-lru256-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru256-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru256-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru256-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru256-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru256-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru384-f16-c4096-b2048-u512",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "mixE4K-lru384-f16-c4096-b512-u128",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "mixE4K-lru384-f16-c4096-b512-u512",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "mixE4K-lru384-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru384-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru384-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru384-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru384-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru384-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru640-f16-c4096-b2048-u512",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "mixE4K-lru640-f16-c4096-b512-u128",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-lru640-f16-c4096-b512-u512",
+      "reasons": [
+        "requires --allow-extrapolation",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ]
+    },
+    {
+      "id": "mixE4K-lru640-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru640-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru640-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru640-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru640-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-lru640-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid168-f16-c4096-b2048-u512",
+      "reasons": [
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid168-f16-c4096-b512-u128",
+      "reasons": [
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid168-f16-c4096-b512-u512",
+      "reasons": [
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid168-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid168-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid168-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid168-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid168-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid168-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid360-f16-c4096-b2048-u512",
+      "reasons": [
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid360-f16-c4096-b512-u128",
+      "reasons": [
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid360-f16-c4096-b512-u512",
+      "reasons": [
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid360-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid360-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid360-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid360-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid360-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid360-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid552-f16-c4096-b2048-u512",
+      "reasons": [
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid552-f16-c4096-b512-u128",
+      "reasons": [
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid552-f16-c4096-b512-u512",
+      "reasons": [
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid552-q8_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid552-q8_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid552-q8_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid552-q4_0-c4096-b2048-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid552-q4_0-c4096-b512-u128-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    },
+    {
+      "id": "mixE4K-hybrid552-q4_0-c4096-b512-u512-fa",
+      "reasons": [
+        "D028: quantized KV aborted; requires enabled component kv_quant_fix"
+      ]
+    }
+  ],
+  "calibration_residuals": {
+    "static": {
+      "coefficients": {
+        "log_time": false,
+        "gpu_mib": [
+          1387.6000000000001,
+          -26.933333333333334
+        ],
+        "decode_us": [
+          1575.2370821685272,
+          268.8311882132491
+        ],
+        "prompt_ms": [
+          174.2380698997792,
+          2.933954997213598
+        ]
+      },
+      "fitted": [
+        {
+          "x": 0,
+          "gpu_mib_error": -0.3999999999998636,
+          "decode_pct_error": -7.200170193181943,
+          "prompt_ms_error": -0.3311383443924285
+        },
+        {
+          "x": 6,
+          "gpu_mib_error": 2.2737367544323206e-13,
+          "decode_pct_error": -2.8121876400575396,
+          "prompt_ms_error": 1.213340898925992
+        },
+        {
+          "x": 12,
+          "gpu_mib_error": 0.40000000000009095,
+          "decode_pct_error": 5.742382619526865,
+          "prompt_ms_error": -1.7621008609613114
+        },
+        {
+          "x": 18,
+          "gpu_mib_error": 0.8000000000001819,
+          "decode_pct_error": 2.6698221885611773,
+          "prompt_ms_error": 1.2087324027146735
+        },
+        {
+          "x": 24,
+          "gpu_mib_error": -0.7999999999998408,
+          "decode_pct_error": -3.038088735297917,
+          "prompt_ms_error": -0.3288340962867835
+        }
+      ],
+      "leave_one_coordinate_out": [
+        {
+          "x": 0,
+          "gpu_mib_error": -1.0,
+          "decode_pct_error": -16.245833943142863,
+          "prompt_ms_error": -0.8278458609811423
+        },
+        {
+          "x": 6,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": -3.9695687479281316,
+          "prompt_ms_error": 1.7333441413227888
+        },
+        {
+          "x": 12,
+          "gpu_mib_error": 0.5,
+          "decode_pct_error": 7.282525899791614,
+          "prompt_ms_error": -2.202626076201682
+        },
+        {
+          "x": 18,
+          "gpu_mib_error": 1.1428571428571104,
+          "decode_pct_error": 3.8581773298414612,
+          "prompt_ms_error": 1.7267605753066562
+        },
+        {
+          "x": 24,
+          "gpu_mib_error": -2.0,
+          "decode_pct_error": -7.264183334834263,
+          "prompt_ms_error": -0.8220852407170014
+        }
+      ],
+      "max_fit_gpu_mib": 0.8000000000001819,
+      "max_loo_gpu_mib": 2.0,
+      "max_fit_decode_pct": 7.200170193181943,
+      "max_loo_decode_pct": 16.245833943142863
+    },
+    "lru": {
+      "coefficients": {
+        "log_time": true,
+        "gpu_mib": [
+          742.0,
+          1.0
+        ],
+        "decode_us": [
+          10.290775306438366,
+          -0.004155090912600404
+        ],
+        "prompt_ms": [
+          5.474943542779853,
+          1.9467377784451934e-05
+        ]
+      },
+      "fitted": [
+        {
+          "x": 128,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": 6.324577804353471,
+          "prompt_ms_error": -2.0784861516737863
+        },
+        {
+          "x": 256,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": -0.9061330120810895,
+          "prompt_ms_error": 2.3177526376394724
+        },
+        {
+          "x": 384,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": -10.326834337472956,
+          "prompt_ms_error": 0.6565453619303128
+        },
+        {
+          "x": 640,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": 5.84176052396348,
+          "prompt_ms_error": -0.9187314177297026
+        }
+      ],
+      "leave_one_coordinate_out": [
+        {
+          "x": 128,
+          "gpu_mib_error": 2.2737367544323206e-13,
+          "decode_pct_error": 16.569294276602253,
+          "prompt_ms_error": -5.162696144384682
+        },
+        {
+          "x": 256,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": -1.3186954198743384,
+          "prompt_ms_error": 3.387601547262392
+        },
+        {
+          "x": 384,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": -13.64719596997135,
+          "prompt_ms_error": 0.8842296722219203
+        },
+        {
+          "x": 640,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": 39.262062026525754,
+          "prompt_ms_error": -5.310444960987468
+        }
+      ],
+      "max_fit_gpu_mib": 0.0,
+      "max_loo_gpu_mib": 2.2737367544323206e-13,
+      "max_fit_decode_pct": 10.326834337472956,
+      "max_loo_decode_pct": 39.262062026525754
+    }
+  },
+  "physical_decode_calibration": {
+    "constants": {
+      "bw_gpu_gbs": 285.2273918763575,
+      "bw_cpu_gbs": {
+        "Q2_K": 25.901524915360557,
+        "Q3_K": 34.59061466026215,
+        "Q4_K": 35.88678098775044,
+        "Q6_K": 35.88678098775044
+      },
+      "handoff_us": 136.64088295786627,
+      "bw_h2d_gbs": 9.326165360590723,
+      "cache_miss_us": 0.0,
+      "screen_bw_cpu_gbs": {
+        "Q2_K": 26.572121741451262,
+        "Q3_K": 26.582575605775872,
+        "Q4_K": 26.06744733493235,
+        "Q8_0": 28.284500012743678
+      }
+    },
+    "residuals": {
+      "D022": {
+        "count": 27,
+        "mean_error_pct": 8.216259766883063,
+        "mape_pct": 22.501257732975372,
+        "max_abs_pct": 69.20201167009536
+      },
+      "D029": {
+        "count": 32,
+        "mean_error_pct": 7.546841274408996,
+        "mape_pct": 27.18558054544853,
+        "max_abs_pct": 37.56278248941103
+      },
+      "D034": {
+        "count": 15,
+        "mean_error_pct": 0.13573946621633803,
+        "mape_pct": 2.1257820145326454,
+        "max_abs_pct": 7.217750654080146
+      },
+      "D035": {
+        "count": 39,
+        "mean_error_pct": 2.8188298875446285,
+        "mape_pct": 5.082561963577178,
+        "max_abs_pct": 17.952740765372678
+      },
+      "D039": {
+        "count": 27,
+        "mean_error_pct": -3.8967561600355416,
+        "mape_pct": 5.500149962720025,
+        "max_abs_pct": 16.656842642049853
+      },
+      "D040": {
+        "count": 25,
+        "mean_error_pct": -1.992463019162039,
+        "mape_pct": 4.577422711660957,
+        "max_abs_pct": 12.989597929828822
+      },
+      "Granite": {
+        "count": 138,
+        "mean_error_pct": 3.8079479464881536,
+        "mape_pct": 13.203005440823997,
+        "max_abs_pct": 69.20201167009536
+      },
+      "Qwen": {
+        "count": 27,
+        "mean_error_pct": -3.8967561600355416,
+        "mape_pct": 5.500149962720025,
+        "max_abs_pct": 16.656842642049853
+      }
+    },
+    "leave_one_model_out": {
+      "Granite": {
+        "D022": {
+          "count": 27,
+          "mean_error_pct": 50.925712264081525,
+          "mape_pct": 54.54028593807126,
+          "max_abs_pct": 156.48074350446382
+        },
+        "D029": {
+          "count": 32,
+          "mean_error_pct": 69.32327931095993,
+          "mape_pct": 69.32327931095993,
+          "max_abs_pct": 116.58080484963432
+        },
+        "D034": {
+          "count": 15,
+          "mean_error_pct": 32.16745315543981,
+          "mape_pct": 32.16745315543981,
+          "max_abs_pct": 41.498706118629514
+        },
+        "D035": {
+          "count": 39,
+          "mean_error_pct": 55.8607664262397,
+          "mape_pct": 55.8607664262397,
+          "max_abs_pct": 116.40770102329259
+        },
+        "D040": {
+          "count": 25,
+          "mean_error_pct": 37.49010717763294,
+          "mape_pct": 37.49010717763294,
+          "max_abs_pct": 63.86690641357606
+        },
+        "Granite": {
+          "count": 138,
+          "mean_error_pct": 52.113576351280344,
+          "mape_pct": 52.8207755483653,
+          "max_abs_pct": 156.48074350446382
+        }
+      },
+      "Qwen": {
+        "D039": {
+          "count": 27,
+          "mean_error_pct": 3.630723903731581,
+          "mape_pct": 7.85097454093377,
+          "max_abs_pct": 14.3005105045096
+        },
+        "Qwen": {
+          "count": 27,
+          "mean_error_pct": 3.630723903731581,
+          "mape_pct": 7.85097454093377,
+          "max_abs_pct": 14.3005105045096
+        }
+      }
+    },
+    "report": "artifacts/codexPL4/fit-report.json"
+  },
+  "warnings": [
+    "Only 1 feasible technique families; top is a maximum, not a quota. Use --allow-extrapolation to consider unmeasured alternatives.",
+    "No hard VRAM guarantee; predictions require measurement.",
+    "Calibrated confidence describes GPU/decode regime; host is analytical and TTFT is a warm proxy.",
+    "Inherited KLD is an evidence-scoped screening prior; PPL acceptance is not a measured combined KLD bound.",
+    "Missing TTFT/host calibration cannot be resolved by --allow-extrapolation."
+  ]
+}

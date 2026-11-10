@@ -1,0 +1,4406 @@
+{
+  "schema": "moe-plan/0",
+  "prediction_only": true,
+  "prompt_tokens": 62,
+  "budget": {
+    "gpu_mib": 4000.0,
+    "host_mib": 47104.0,
+    "ctx": 4096,
+    "max_quality_loss": null,
+    "objective": "decode"
+  },
+  "plans": [
+    {
+      "id": "Q4_K_M-static42-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 3639.047,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 28.154,
+      "decode_model": {
+        "decode_us": 36229.122062844865,
+        "decode_tps": 27.602104137807963,
+        "gpu_us": 4012.308721373058,
+        "cpu_us": 26477.89625724142,
+        "handoff_us": 5738.917084230383,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1144420352.0,
+          "cpu_active_bytes": {
+            "Q6_K": 185794560.0,
+            "Q4_K": 764411904.0
+          },
+          "cpu_touching_layers": 42,
+          "resident_expert_bytes": 2349858816.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 332.983,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "q4_0",
+      "kv_mib": 108.0,
+      "flash_attention": true,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|q4_0|fa-on|kv_quant_fix,q8_reuse",
+      "prefill_tps": 208.428,
+      "prefill_ms": 297.464,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:q4_0",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "q4_0",
+        "-ctv",
+        "q4_0",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "42",
+        "-fa",
+        "on"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "quantized KV: speed extrapolated; quality resolved separately from ledger",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static42-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 3735.047,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 28.154,
+      "decode_model": {
+        "decode_us": 36229.122062844865,
+        "decode_tps": 27.602104137807963,
+        "gpu_us": 4012.308721373058,
+        "cpu_us": 26477.89625724142,
+        "handoff_us": 5738.917084230383,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1144420352.0,
+          "cpu_active_bytes": {
+            "Q6_K": 185794560.0,
+            "Q4_K": 764411904.0
+          },
+          "cpu_touching_layers": 42,
+          "resident_expert_bytes": 2349858816.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 332.983,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "q8_0",
+      "kv_mib": 204.0,
+      "flash_attention": true,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|q8_0|fa-on|kv_quant_fix,q8_reuse",
+      "prefill_tps": 208.428,
+      "prefill_ms": 297.464,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:q8_0",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "q8_0",
+        "-ctv",
+        "q8_0",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "42",
+        "-fa",
+        "on"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "quantized KV: speed extrapolated; quality resolved separately from ledger",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static42-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 3915.047,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 28.154,
+      "decode_model": {
+        "decode_us": 36229.122062844865,
+        "decode_tps": 27.602104137807963,
+        "gpu_us": 4012.308721373058,
+        "cpu_us": 26477.89625724142,
+        "handoff_us": 5738.917084230383,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1144420352.0,
+          "cpu_active_bytes": {
+            "Q6_K": 185794560.0,
+            "Q4_K": 764411904.0
+          },
+          "cpu_touching_layers": 42,
+          "resident_expert_bytes": 2349858816.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 332.983,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "f16",
+      "kv_mib": 384.0,
+      "flash_attention": false,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|f16|fa-off|kv_quant_fix,q8_reuse",
+      "prefill_tps": 208.428,
+      "prefill_ms": 297.464,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:f16",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "f16",
+        "-ctv",
+        "f16",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "42"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    }
+  ],
+  "family_best": [
+    {
+      "id": "Q4_K_M-static42-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 3639.047,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 28.154,
+      "decode_model": {
+        "decode_us": 36229.122062844865,
+        "decode_tps": 27.602104137807963,
+        "gpu_us": 4012.308721373058,
+        "cpu_us": 26477.89625724142,
+        "handoff_us": 5738.917084230383,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1144420352.0,
+          "cpu_active_bytes": {
+            "Q6_K": 185794560.0,
+            "Q4_K": 764411904.0
+          },
+          "cpu_touching_layers": 42,
+          "resident_expert_bytes": 2349858816.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 332.983,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "q4_0",
+      "kv_mib": 108.0,
+      "flash_attention": true,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|q4_0|fa-on|kv_quant_fix,q8_reuse",
+      "prefill_tps": 208.428,
+      "prefill_ms": 297.464,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:q4_0",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "q4_0",
+        "-ctv",
+        "q4_0",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "42",
+        "-fa",
+        "on"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "quantized KV: speed extrapolated; quality resolved separately from ledger",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static42-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 3735.047,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 28.154,
+      "decode_model": {
+        "decode_us": 36229.122062844865,
+        "decode_tps": 27.602104137807963,
+        "gpu_us": 4012.308721373058,
+        "cpu_us": 26477.89625724142,
+        "handoff_us": 5738.917084230383,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1144420352.0,
+          "cpu_active_bytes": {
+            "Q6_K": 185794560.0,
+            "Q4_K": 764411904.0
+          },
+          "cpu_touching_layers": 42,
+          "resident_expert_bytes": 2349858816.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 332.983,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "q8_0",
+      "kv_mib": 204.0,
+      "flash_attention": true,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|q8_0|fa-on|kv_quant_fix,q8_reuse",
+      "prefill_tps": 208.428,
+      "prefill_ms": 297.464,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:q8_0",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "q8_0",
+        "-ctv",
+        "q8_0",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "42",
+        "-fa",
+        "on"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "quantized KV: speed extrapolated; quality resolved separately from ledger",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static42-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 3915.047,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 28.154,
+      "decode_model": {
+        "decode_us": 36229.122062844865,
+        "decode_tps": 27.602104137807963,
+        "gpu_us": 4012.308721373058,
+        "cpu_us": 26477.89625724142,
+        "handoff_us": 5738.917084230383,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1144420352.0,
+          "cpu_active_bytes": {
+            "Q6_K": 185794560.0,
+            "Q4_K": 764411904.0
+          },
+          "cpu_touching_layers": 42,
+          "resident_expert_bytes": 2349858816.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 332.983,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "f16",
+      "kv_mib": 384.0,
+      "flash_attention": false,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|f16|fa-off|kv_quant_fix,q8_reuse",
+      "prefill_tps": 208.428,
+      "prefill_ms": 297.464,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:f16",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "f16",
+        "-ctv",
+        "f16",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "42"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    }
+  ],
+  "family_count": 3,
+  "pareto_set": [
+    {
+      "id": "Q4_K_M-static42-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 3639.047,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 28.154,
+      "decode_model": {
+        "decode_us": 36229.122062844865,
+        "decode_tps": 27.602104137807963,
+        "gpu_us": 4012.308721373058,
+        "cpu_us": 26477.89625724142,
+        "handoff_us": 5738.917084230383,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1144420352.0,
+          "cpu_active_bytes": {
+            "Q6_K": 185794560.0,
+            "Q4_K": 764411904.0
+          },
+          "cpu_touching_layers": 42,
+          "resident_expert_bytes": 2349858816.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 332.983,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "q4_0",
+      "kv_mib": 108.0,
+      "flash_attention": true,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|q4_0|fa-on|kv_quant_fix,q8_reuse",
+      "prefill_tps": 208.428,
+      "prefill_ms": 297.464,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:q4_0",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "q4_0",
+        "-ctv",
+        "q4_0",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "42",
+        "-fa",
+        "on"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "quantized KV: speed extrapolated; quality resolved separately from ledger",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static43-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 3265.614,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 27.596,
+      "decode_model": {
+        "decode_us": 36962.025891028105,
+        "decode_tps": 27.054794099982836,
+        "gpu_us": 3926.4905401704236,
+        "cpu_us": 27159.97738366943,
+        "handoff_us": 5875.55796718825,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1119942656.0,
+          "cpu_active_bytes": {
+            "Q6_K": 196116480.0,
+            "Q4_K": 778567680.0
+          },
+          "cpu_touching_layers": 43,
+          "resident_expert_bytes": 1958215680.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 336.635,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "q4_0",
+      "kv_mib": 108.0,
+      "flash_attention": true,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|q4_0|fa-on|kv_quant_fix,q8_reuse",
+      "prefill_tps": 206.393,
+      "prefill_ms": 300.398,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:q4_0",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "q4_0",
+        "-ctv",
+        "q4_0",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "43",
+        "-fa",
+        "on"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "quantized KV: speed extrapolated; quality resolved separately from ledger",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static44-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 2892.181,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 27.059,
+      "decode_model": {
+        "decode_us": 37694.92971921134,
+        "decode_tps": 26.52876679831948,
+        "gpu_us": 3840.6723589677895,
+        "cpu_us": 27842.058510097435,
+        "handoff_us": 6012.198850146116,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1095464960.0,
+          "cpu_active_bytes": {
+            "Q6_K": 206438400.0,
+            "Q4_K": 792723456.0
+          },
+          "cpu_touching_layers": 44,
+          "resident_expert_bytes": 1566572544.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 340.288,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "q4_0",
+      "kv_mib": 108.0,
+      "flash_attention": true,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|q4_0|fa-on|kv_quant_fix,q8_reuse",
+      "prefill_tps": 204.396,
+      "prefill_ms": 303.332,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:q4_0",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "q4_0",
+        "-ctv",
+        "q4_0",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "44",
+        "-fa",
+        "on"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "quantized KV: speed extrapolated; quality resolved separately from ledger",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static45-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 2518.747,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 26.543,
+      "decode_model": {
+        "decode_us": 38427.83354739458,
+        "decode_tps": 26.022804506183263,
+        "gpu_us": 3754.8541777651553,
+        "cpu_us": 28524.13963652544,
+        "handoff_us": 6148.839733103982,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1070987264.0,
+          "cpu_active_bytes": {
+            "Q6_K": 216760320.0,
+            "Q4_K": 806879232.0
+          },
+          "cpu_touching_layers": 45,
+          "resident_expert_bytes": 1174929408.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 343.94,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "q4_0",
+      "kv_mib": 108.0,
+      "flash_attention": true,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|q4_0|fa-on|kv_quant_fix,q8_reuse",
+      "prefill_tps": 202.438,
+      "prefill_ms": 306.266,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:q4_0",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "q4_0",
+        "-ctv",
+        "q4_0",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "45",
+        "-fa",
+        "on"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "quantized KV: speed extrapolated; quality resolved separately from ledger",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static46-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 2145.314,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 26.046,
+      "decode_model": {
+        "decode_us": 39160.73737557782,
+        "decode_tps": 25.535780657277396,
+        "gpu_us": 3669.035996562521,
+        "cpu_us": 29206.22076295345,
+        "handoff_us": 6285.480616061848,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1046509568.0,
+          "cpu_active_bytes": {
+            "Q6_K": 227082240.0,
+            "Q4_K": 821035008.0
+          },
+          "cpu_touching_layers": 46,
+          "resident_expert_bytes": 783286272.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 347.593,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "q4_0",
+      "kv_mib": 108.0,
+      "flash_attention": true,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|q4_0|fa-on|kv_quant_fix,q8_reuse",
+      "prefill_tps": 200.517,
+      "prefill_ms": 309.2,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:q4_0",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "q4_0",
+        "-ctv",
+        "q4_0",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "46",
+        "-fa",
+        "on"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "quantized KV: speed extrapolated; quality resolved separately from ledger",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static47-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 1771.881,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 25.568,
+      "decode_model": {
+        "decode_us": 39893.64120376106,
+        "decode_tps": 25.06665147190733,
+        "gpu_us": 3583.2178153598866,
+        "cpu_us": 29888.30188938146,
+        "handoff_us": 6422.121499019715,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 1022031872.0,
+          "cpu_active_bytes": {
+            "Q6_K": 237404160.0,
+            "Q4_K": 835190784.0
+          },
+          "cpu_touching_layers": 47,
+          "resident_expert_bytes": 391643136.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 351.245,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "q4_0",
+      "kv_mib": 108.0,
+      "flash_attention": true,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|q4_0|fa-on|kv_quant_fix,q8_reuse",
+      "prefill_tps": 198.633,
+      "prefill_ms": 312.134,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:q4_0",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "q4_0",
+        "-ctv",
+        "q4_0",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "47",
+        "-fa",
+        "on"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "quantized KV: speed extrapolated; quality resolved separately from ledger",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static48-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "representation": "Q4_K_M",
+      "placement": "static",
+      "gpu_mib": 1398.447,
+      "gpu_guard_mib": 2.0,
+      "host_mib": 18091.342,
+      "decode_tps": 25.107,
+      "decode_model": {
+        "decode_us": 40626.5450319443,
+        "decode_tps": 24.6144484896195,
+        "gpu_us": 3497.3996341572524,
+        "cpu_us": 30570.383015809464,
+        "handoff_us": 6558.762381977581,
+        "transfer_us": 0.0,
+        "cache_us": 0.0,
+        "traffic": {
+          "gpu_active_bytes": 997554176.0,
+          "cpu_active_bytes": {
+            "Q6_K": 247726080.0,
+            "Q4_K": 849346560.0
+          },
+          "cpu_touching_layers": 48,
+          "resident_expert_bytes": 0.0,
+          "h2d_bytes": 0.0,
+          "cache_misses": 0.0
+        },
+        "fallbacks": []
+      },
+      "ttft_ms": 354.898,
+      "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+      "quality_class": "unknown",
+      "quality": {
+        "kld": null,
+        "status": "unknown",
+        "rules": [],
+        "evidence": [],
+        "caveats": [],
+        "ppl_relative_change": null,
+        "ppl_status": "unknown"
+      },
+      "kld": null,
+      "representation_kld": null,
+      "quality_risk": null,
+      "quality_risk_unknown": true,
+      "kv_type": "q4_0",
+      "kv_mib": 108.0,
+      "flash_attention": true,
+      "attention_delta_mib": 0.0,
+      "components": [
+        "kv_quant_fix",
+        "q8_reuse"
+      ],
+      "runtime_env": {
+        "GGML_CUDA_Q8_REUSE": "1"
+      },
+      "technique_family": "Q4_K_M|static|q4_0|fa-on|kv_quant_fix,q8_reuse",
+      "prefill_tps": 196.783,
+      "prefill_ms": 315.068,
+      "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+      "techniques": [
+        "Q4_K_M",
+        "static",
+        "kv:q4_0",
+        "ctx:4096",
+        "batch:512",
+        "ubatch:128"
+      ],
+      "confidence": "extrapolated",
+      "metric_confidence": {
+        "gpu_mib": "extrapolated",
+        "decode_tps": "extrapolated-component-transfer",
+        "host_mib": "extrapolated",
+        "prefill_tps": "proxy",
+        "ttft_ms": "proxy"
+      },
+      "flags": [
+        "-m",
+        "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+        "-ngl",
+        "99",
+        "--fit",
+        "off",
+        "-c",
+        "4096",
+        "-b",
+        "512",
+        "-ub",
+        "128",
+        "-ctk",
+        "q4_0",
+        "-ctv",
+        "q4_0",
+        "-t",
+        "8",
+        "-tb",
+        "8",
+        "--n-cpu-moe",
+        "48",
+        "-fa",
+        "on"
+      ],
+      "model_path": "/home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf",
+      "notes": [
+        "Physical decode: GPU active bytes / BW_gpu + CPU active bytes / BW_cpu(type) + CPU-touching layers * handoff; LRU adds effective H2D miss traffic",
+        "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+        "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+        "model stats differ from calibrated Granite representation",
+        "representation timing/placement transferred from mixE4K",
+        "quantized KV: speed extrapolated; quality resolved separately from ledger",
+        "batch/ubatch memory scaling and prefill unmeasured"
+      ],
+      "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D033)",
+      "prerequisites": [
+        "Check mechanism engagement (D024)",
+        "Measure shim peak AND baseline-subtracted device peak (D023)",
+        "Paired quality check before accepting drift; 3 alternated timing rounds"
+      ]
+    }
+  ],
+  "pareto_axes": [
+    "gpu_mib:min",
+    "decode_tps:max",
+    "quality_risk:min"
+  ],
+  "quality_risk_policy": "measured or evidence-inherited screening KLD; null is unknown/failing and treated as +infinity, never zero",
+  "hybrid_crossover": {
+    "source": "decisions/D030-hybrid-split-rejected.md; decisions/D031-split-diagnosis-proxy-scale.md",
+    "expert_bytes": 2856960.0,
+    "cpu_us_per_byte": 3.4586588541666666e-05,
+    "per_layer_fixed_us": 169.16666666666666,
+    "crossover_expert_bytes": 4891105.882352941,
+    "crossover_expert_mib": 4.664522058823529,
+    "required_margin": 2.0,
+    "predicted_beneficial": false,
+    "note": "Necessary amortization condition only; routing savings and GPU qualification still required"
+  },
+  "enabled_components": [
+    "kv_quant_fix",
+    "q8_reuse"
+  ],
+  "technique_catalog": {
+    "static": {
+      "status": "calibrated",
+      "source": "D022"
+    },
+    "lru": {
+      "status": "calibrated-control",
+      "source": "D022",
+      "policy": "resident byte coverage >=60%"
+    },
+    "hybrid": {
+      "status": "rejected-small-expert-regime",
+      "source": [
+        "D030",
+        "D031"
+      ],
+      "eligibility": "expert bytes * CPU us/byte > 2 * per-layer fixed us; correctness and end-to-end calibration still required"
+    },
+    "pap": {
+      "status": "pending-calibration",
+      "source": "decisions/D032-pap-and-planner-validation-protocol.md",
+      "component": "pap",
+      "classification": "representation-tradeoff",
+      "calibration_points": [],
+      "result_source": "lab/jobs/<job-id>/att-<n>/result.json",
+      "point_fields": [
+        "job_id",
+        "attempt",
+        "test",
+        "model_path",
+        "representation",
+        "cpu_layers",
+        "expert_bytes",
+        "nonexpert_bytes",
+        "gpu_mib",
+        "decode_tps",
+        "prefill_tps",
+        "prompt_tokens",
+        "kld"
+      ],
+      "acceptance": {
+        "min_decode_ratio_vs_same_cpu_layers": 1.05,
+        "max_kld": 0.08
+      },
+      "enumeration": "No PAP throughput or quality invented while calibration_points is empty; future points must bind model bytes, placement and lab provenance"
+    }
+  },
+  "feasible_count": 63,
+  "rejected": [
+    {
+      "id": "Q4_K_M-static0-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static0-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static0-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static0-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static0-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static0-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static0-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static0-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static0-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static1-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static1-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static1-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static1-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static1-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static1-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static1-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static1-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static1-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static2-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static2-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static2-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static2-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static2-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static2-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static2-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static2-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static2-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static3-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static3-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static3-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static3-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static3-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static3-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static3-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static3-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static3-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static4-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static4-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static4-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static4-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static4-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static4-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static4-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static4-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static4-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static5-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static5-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static5-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static5-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static5-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static5-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static5-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static5-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static5-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static6-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static6-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static6-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static6-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static6-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static6-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static6-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static6-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static6-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static7-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static7-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static7-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static7-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static7-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static7-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static7-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static7-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static7-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static8-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static8-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static8-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static8-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static8-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static8-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static8-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static8-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static8-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static9-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static9-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static9-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static9-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static9-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static9-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static9-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static9-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static9-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static10-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static10-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static10-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static10-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static10-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static10-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static10-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static10-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static10-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static11-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static11-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static11-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static11-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static11-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static11-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static11-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static11-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static11-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static12-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static12-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static12-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static12-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static12-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static12-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static12-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static12-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static12-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static13-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static13-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static13-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static13-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static13-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static13-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static13-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static13-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static13-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static14-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static14-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static14-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static14-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static14-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static14-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static14-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static14-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static14-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static15-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static15-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static15-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static15-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static15-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static15-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static15-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static15-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static15-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static16-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static16-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static16-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static16-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static16-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static16-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static16-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static16-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static16-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static17-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static17-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static17-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static17-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static17-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static17-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static17-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static17-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static17-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static18-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static18-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static18-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static18-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static18-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static18-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static18-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static18-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static18-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static19-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static19-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static19-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static19-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static19-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static19-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static19-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static19-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static19-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static20-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static20-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static20-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static20-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static20-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static20-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static20-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static20-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static20-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static21-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static21-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static21-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static21-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static21-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static21-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static21-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static21-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static21-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static22-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static22-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static22-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static22-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static22-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static22-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static22-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static22-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static22-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static23-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static23-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static23-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static23-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static23-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static23-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static23-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static23-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static23-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static24-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static24-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static24-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static24-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static24-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static24-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static24-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static24-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static24-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static25-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static25-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static25-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static25-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static25-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static25-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static25-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static25-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static25-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static26-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static26-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static26-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static26-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static26-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static26-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static26-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static26-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static26-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static27-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static27-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static27-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static27-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static27-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static27-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static27-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static27-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static27-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static28-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static28-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static28-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static28-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static28-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static28-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static28-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static28-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static28-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static29-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static29-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static29-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static29-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static29-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static29-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static29-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static29-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static29-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static30-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static30-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static30-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static30-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static30-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static30-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static30-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static30-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static30-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static31-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static31-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static31-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static31-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static31-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static31-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static31-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static31-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static31-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static32-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static32-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static32-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static32-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static32-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static32-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static32-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static32-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static32-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static33-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static33-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static33-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static33-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static33-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static33-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static33-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static33-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static33-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static34-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static34-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static34-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static34-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static34-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static34-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static34-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static34-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static34-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static35-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static35-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static35-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static35-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static35-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static35-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static35-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static35-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static35-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static36-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static36-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static36-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static36-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static36-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static36-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static36-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static36-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static36-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static37-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static37-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static37-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static37-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static37-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static37-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static37-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static37-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static37-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static38-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static38-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static38-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static38-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static38-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static38-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static38-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static38-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static38-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static39-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static39-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static39-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static39-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static39-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static39-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static39-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static39-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static39-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static40-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static40-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static40-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static40-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static40-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static40-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static40-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static40-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static40-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static41-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static41-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static41-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static41-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static41-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static41-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static41-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static41-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-static41-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "GPU estimate + LOO guard exceeds budget"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru128-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru128-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru128-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru128-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru128-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru128-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru128-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru128-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru128-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru256-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru256-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru256-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru256-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru256-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru256-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru256-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru256-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru256-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru384-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru384-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru384-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru384-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru384-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru384-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru384-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru384-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru384-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru640-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru640-f16-c4096-b512-u128-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru640-f16-c4096-b512-u512-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru640-q8_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru640-q8_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru640-q8_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru640-q4_0-c4096-b2048-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru640-q4_0-c4096-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    },
+    {
+      "id": "Q4_K_M-lru640-q4_0-c4096-b512-u512-fa-cmp-kv_quant_fix-q8_reuse",
+      "reasons": [
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe"
+      ]
+    }
+  ],
+  "calibration_residuals": {
+    "static": {
+      "coefficients": {
+        "log_time": false,
+        "gpu_mib": [
+          1387.6000000000001,
+          -26.933333333333334
+        ],
+        "decode_us": [
+          1575.2370821685272,
+          268.8311882132491
+        ],
+        "prompt_ms": [
+          174.2380698997792,
+          2.933954997213598
+        ]
+      },
+      "fitted": [
+        {
+          "x": 0,
+          "gpu_mib_error": -0.3999999999998636,
+          "decode_pct_error": -7.200170193181943,
+          "prompt_ms_error": -0.3311383443924285
+        },
+        {
+          "x": 6,
+          "gpu_mib_error": 2.2737367544323206e-13,
+          "decode_pct_error": -2.8121876400575396,
+          "prompt_ms_error": 1.213340898925992
+        },
+        {
+          "x": 12,
+          "gpu_mib_error": 0.40000000000009095,
+          "decode_pct_error": 5.742382619526865,
+          "prompt_ms_error": -1.7621008609613114
+        },
+        {
+          "x": 18,
+          "gpu_mib_error": 0.8000000000001819,
+          "decode_pct_error": 2.6698221885611773,
+          "prompt_ms_error": 1.2087324027146735
+        },
+        {
+          "x": 24,
+          "gpu_mib_error": -0.7999999999998408,
+          "decode_pct_error": -3.038088735297917,
+          "prompt_ms_error": -0.3288340962867835
+        }
+      ],
+      "leave_one_coordinate_out": [
+        {
+          "x": 0,
+          "gpu_mib_error": -1.0,
+          "decode_pct_error": -16.245833943142863,
+          "prompt_ms_error": -0.8278458609811423
+        },
+        {
+          "x": 6,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": -3.9695687479281316,
+          "prompt_ms_error": 1.7333441413227888
+        },
+        {
+          "x": 12,
+          "gpu_mib_error": 0.5,
+          "decode_pct_error": 7.282525899791614,
+          "prompt_ms_error": -2.202626076201682
+        },
+        {
+          "x": 18,
+          "gpu_mib_error": 1.1428571428571104,
+          "decode_pct_error": 3.8581773298414612,
+          "prompt_ms_error": 1.7267605753066562
+        },
+        {
+          "x": 24,
+          "gpu_mib_error": -2.0,
+          "decode_pct_error": -7.264183334834263,
+          "prompt_ms_error": -0.8220852407170014
+        }
+      ],
+      "max_fit_gpu_mib": 0.8000000000001819,
+      "max_loo_gpu_mib": 2.0,
+      "max_fit_decode_pct": 7.200170193181943,
+      "max_loo_decode_pct": 16.245833943142863
+    },
+    "lru": {
+      "coefficients": {
+        "log_time": true,
+        "gpu_mib": [
+          742.0,
+          1.0
+        ],
+        "decode_us": [
+          10.290775306438366,
+          -0.004155090912600404
+        ],
+        "prompt_ms": [
+          5.474943542779853,
+          1.9467377784451934e-05
+        ]
+      },
+      "fitted": [
+        {
+          "x": 128,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": 6.324577804353471,
+          "prompt_ms_error": -2.0784861516737863
+        },
+        {
+          "x": 256,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": -0.9061330120810895,
+          "prompt_ms_error": 2.3177526376394724
+        },
+        {
+          "x": 384,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": -10.326834337472956,
+          "prompt_ms_error": 0.6565453619303128
+        },
+        {
+          "x": 640,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": 5.84176052396348,
+          "prompt_ms_error": -0.9187314177297026
+        }
+      ],
+      "leave_one_coordinate_out": [
+        {
+          "x": 128,
+          "gpu_mib_error": 2.2737367544323206e-13,
+          "decode_pct_error": 16.569294276602253,
+          "prompt_ms_error": -5.162696144384682
+        },
+        {
+          "x": 256,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": -1.3186954198743384,
+          "prompt_ms_error": 3.387601547262392
+        },
+        {
+          "x": 384,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": -13.64719596997135,
+          "prompt_ms_error": 0.8842296722219203
+        },
+        {
+          "x": 640,
+          "gpu_mib_error": 0.0,
+          "decode_pct_error": 39.262062026525754,
+          "prompt_ms_error": -5.310444960987468
+        }
+      ],
+      "max_fit_gpu_mib": 0.0,
+      "max_loo_gpu_mib": 2.2737367544323206e-13,
+      "max_fit_decode_pct": 10.326834337472956,
+      "max_loo_decode_pct": 39.262062026525754
+    }
+  },
+  "physical_decode_calibration": {
+    "constants": {
+      "bw_gpu_gbs": 285.2273918763575,
+      "bw_cpu_gbs": {
+        "Q2_K": 25.901524915360557,
+        "Q3_K": 34.59061466026215,
+        "Q4_K": 35.88678098775044,
+        "Q6_K": 35.88678098775044
+      },
+      "handoff_us": 136.64088295786627,
+      "bw_h2d_gbs": 9.326165360590723,
+      "cache_miss_us": 0.0,
+      "screen_bw_cpu_gbs": {
+        "Q2_K": 26.572121741451262,
+        "Q3_K": 26.582575605775872,
+        "Q4_K": 26.06744733493235,
+        "Q8_0": 28.284500012743678
+      }
+    },
+    "residuals": {
+      "D022": {
+        "count": 27,
+        "mean_error_pct": 8.216259766883063,
+        "mape_pct": 22.501257732975372,
+        "max_abs_pct": 69.20201167009536
+      },
+      "D029": {
+        "count": 32,
+        "mean_error_pct": 7.546841274408996,
+        "mape_pct": 27.18558054544853,
+        "max_abs_pct": 37.56278248941103
+      },
+      "D034": {
+        "count": 15,
+        "mean_error_pct": 0.13573946621633803,
+        "mape_pct": 2.1257820145326454,
+        "max_abs_pct": 7.217750654080146
+      },
+      "D035": {
+        "count": 39,
+        "mean_error_pct": 2.8188298875446285,
+        "mape_pct": 5.082561963577178,
+        "max_abs_pct": 17.952740765372678
+      },
+      "D039": {
+        "count": 27,
+        "mean_error_pct": -3.8967561600355416,
+        "mape_pct": 5.500149962720025,
+        "max_abs_pct": 16.656842642049853
+      },
+      "D040": {
+        "count": 25,
+        "mean_error_pct": -1.992463019162039,
+        "mape_pct": 4.577422711660957,
+        "max_abs_pct": 12.989597929828822
+      },
+      "Granite": {
+        "count": 138,
+        "mean_error_pct": 3.8079479464881536,
+        "mape_pct": 13.203005440823997,
+        "max_abs_pct": 69.20201167009536
+      },
+      "Qwen": {
+        "count": 27,
+        "mean_error_pct": -3.8967561600355416,
+        "mape_pct": 5.500149962720025,
+        "max_abs_pct": 16.656842642049853
+      }
+    },
+    "leave_one_model_out": {
+      "Granite": {
+        "D022": {
+          "count": 27,
+          "mean_error_pct": 50.925712264081525,
+          "mape_pct": 54.54028593807126,
+          "max_abs_pct": 156.48074350446382
+        },
+        "D029": {
+          "count": 32,
+          "mean_error_pct": 69.32327931095993,
+          "mape_pct": 69.32327931095993,
+          "max_abs_pct": 116.58080484963432
+        },
+        "D034": {
+          "count": 15,
+          "mean_error_pct": 32.16745315543981,
+          "mape_pct": 32.16745315543981,
+          "max_abs_pct": 41.498706118629514
+        },
+        "D035": {
+          "count": 39,
+          "mean_error_pct": 55.8607664262397,
+          "mape_pct": 55.8607664262397,
+          "max_abs_pct": 116.40770102329259
+        },
+        "D040": {
+          "count": 25,
+          "mean_error_pct": 37.49010717763294,
+          "mape_pct": 37.49010717763294,
+          "max_abs_pct": 63.86690641357606
+        },
+        "Granite": {
+          "count": 138,
+          "mean_error_pct": 52.113576351280344,
+          "mape_pct": 52.8207755483653,
+          "max_abs_pct": 156.48074350446382
+        }
+      },
+      "Qwen": {
+        "D039": {
+          "count": 27,
+          "mean_error_pct": 3.630723903731581,
+          "mape_pct": 7.85097454093377,
+          "max_abs_pct": 14.3005105045096
+        },
+        "Qwen": {
+          "count": 27,
+          "mean_error_pct": 3.630723903731581,
+          "mape_pct": 7.85097454093377,
+          "max_abs_pct": 14.3005105045096
+        }
+      }
+    },
+    "report": "artifacts/codexPL4/fit-report.json"
+  },
+  "warnings": [
+    "No hard VRAM guarantee; predictions require measurement.",
+    "Calibrated confidence describes GPU/decode regime; host is analytical and TTFT is a warm proxy.",
+    "Inherited KLD is an evidence-scoped screening prior; PPL acceptance is not a measured combined KLD bound.",
+    "Missing TTFT/host calibration cannot be resolved by --allow-extrapolation."
+  ]
+}

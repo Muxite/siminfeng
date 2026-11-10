@@ -1,0 +1,3650 @@
+{
+  "constants": {
+    "bw_gpu_gbs": 285.2273918763575,
+    "bw_cpu_gbs": {
+      "Q2_K": 25.901524915360557,
+      "Q3_K": 34.59061466026215,
+      "Q4_K": 35.88678098775044,
+      "Q6_K": 35.88678098775044
+    },
+    "handoff_us": 136.64088295786627,
+    "bw_h2d_gbs": 9.326165360590723,
+    "cache_miss_us": 0.0
+  },
+  "coefficients": {
+    "gpu": 3.505974631053274,
+    "Q2_K": 38.607765499048405,
+    "Q3_K": 28.909575901488807,
+    "Q4_K": 27.865413739430654,
+    "handoff": 136.64088295786627,
+    "h2d": 107.22520578775793
+  },
+  "rank": 5,
+  "free_columns": 5,
+  "training_models": [
+    "Granite",
+    "Qwen"
+  ],
+  "training_jobs": [
+    "job-34c09bec98",
+    "job-3d2fbbd061",
+    "job-56115e2bf1",
+    "job-9f50eae42a",
+    "job-ad883810b3",
+    "job-d2e342e743"
+  ],
+  "training_point_count": 165,
+  "boundary_coefficients": [],
+  "handoff_prior": null,
+  "gpu_anchor_count": 35,
+  "assumptions": [
+    "Q6_K shares Q4_K effective bandwidth (mixed Qwen experts)",
+    "all nonexpert weight bytes active each token (logical estimate)",
+    "uniform LRU coverage; fitted H2D bandwidth includes cache dispatch; miss latency not separately identifiable",
+    "equal weight per job/configuration; all repeats retained; D035 noisy points included",
+    "fit microseconds; D029/D039 reuse normalized by 1.02; workload/context effects not separately fitted"
+  ],
+  "evaluation": {
+    "summary": {
+      "D022": {
+        "count": 27,
+        "mean_error_pct": 8.216259766883063,
+        "mape_pct": 22.501257732975372,
+        "max_abs_pct": 69.20201167009536
+      },
+      "D029": {
+        "count": 32,
+        "mean_error_pct": 7.546841274408996,
+        "mape_pct": 27.18558054544853,
+        "max_abs_pct": 37.56278248941103
+      },
+      "D034": {
+        "count": 15,
+        "mean_error_pct": 0.13573946621633803,
+        "mape_pct": 2.1257820145326454,
+        "max_abs_pct": 7.217750654080146
+      },
+      "D035": {
+        "count": 39,
+        "mean_error_pct": 2.8188298875446285,
+        "mape_pct": 5.082561963577178,
+        "max_abs_pct": 17.952740765372678
+      },
+      "D039": {
+        "count": 27,
+        "mean_error_pct": -3.8967561600355416,
+        "mape_pct": 5.500149962720025,
+        "max_abs_pct": 16.656842642049853
+      },
+      "D040": {
+        "count": 25,
+        "mean_error_pct": -1.992463019162039,
+        "mape_pct": 4.577422711660957,
+        "max_abs_pct": 12.989597929828822
+      },
+      "Granite": {
+        "count": 138,
+        "mean_error_pct": 3.8079479464881536,
+        "mape_pct": 13.203005440823997,
+        "max_abs_pct": 69.20201167009536
+      },
+      "Qwen": {
+        "count": 27,
+        "mean_error_pct": -3.8967561600355416,
+        "mape_pct": 5.500149962720025,
+        "max_abs_pct": 16.656842642049853
+      }
+    },
+    "by_mechanism": {
+      "Granite/static": {
+        "count": 126,
+        "mape_pct": 11.125970268955207,
+        "mean_error_pct": 3.3454273807035597,
+        "max_abs_pct": 37.56278248941103
+      },
+      "Granite/lru": {
+        "count": 12,
+        "mape_pct": 35.011874745446285,
+        "mean_error_pct": 8.664413887226386,
+        "max_abs_pct": 69.20201167009536
+      },
+      "Qwen/static": {
+        "count": 27,
+        "mape_pct": 5.500149962720025,
+        "mean_error_pct": -3.8967561600355416,
+        "max_abs_pct": 16.656842642049853
+      }
+    },
+    "residuals": [
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n24#0",
+        "family": "static",
+        "measured_tps": 128.48,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": -8.359701842197364,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n18#1",
+        "family": "static",
+        "measured_tps": 141.05,
+        "predicted_tps": 150.62500290312153,
+        "error_pct": 6.788374975626743,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n12#2",
+        "family": "static",
+        "measured_tps": 185.33,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 12.772061383566502,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n6#3",
+        "family": "static",
+        "measured_tps": 323.39,
+        "predicted_tps": 341.25583263463113,
+        "error_pct": 5.524547028241789,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n0#4",
+        "family": "static",
+        "measured_tps": 685.44,
+        "predicted_tps": 929.3444880943945,
+        "error_pct": 35.58363796895343,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c128#5",
+        "family": "lru",
+        "measured_tps": 54.52,
+        "predicted_tps": 63.725040960939374,
+        "error_pct": 16.88378752923583,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c256#6",
+        "family": "lru",
+        "measured_tps": 99.24,
+        "predicted_tps": 82.68195496829716,
+        "error_pct": -16.684849890873476,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c384#7",
+        "family": "lru",
+        "measured_tps": 186.66,
+        "predicted_tps": 117.69335296400543,
+        "error_pct": -36.94773761705484,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c640#8",
+        "family": "lru",
+        "measured_tps": 454.31,
+        "predicted_tps": 768.7016592184102,
+        "error_pct": 69.20201167009536,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c640#9",
+        "family": "lru",
+        "measured_tps": 460.46,
+        "predicted_tps": 768.7016592184102,
+        "error_pct": 66.94211423759073,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c384#10",
+        "family": "lru",
+        "measured_tps": 180.42,
+        "predicted_tps": 117.69335296400543,
+        "error_pct": -34.76701420906472,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c256#11",
+        "family": "lru",
+        "measured_tps": 99.66,
+        "predicted_tps": 82.68195496829716,
+        "error_pct": -17.03596732059285,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c128#12",
+        "family": "lru",
+        "measured_tps": 54.34,
+        "predicted_tps": 63.725040960939374,
+        "error_pct": 17.270962386712128,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n0#13",
+        "family": "static",
+        "measured_tps": 681.51,
+        "predicted_tps": 929.3444880943945,
+        "error_pct": 36.36549545779144,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n6#14",
+        "family": "static",
+        "measured_tps": 322.73,
+        "predicted_tps": 341.25583263463113,
+        "error_pct": 5.740350334530753,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n12#15",
+        "family": "static",
+        "measured_tps": 196.97,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 6.107763295001178,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n18#16",
+        "family": "static",
+        "measured_tps": 162.85,
+        "predicted_tps": 150.62500290312153,
+        "error_pct": -7.506906415031301,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n24#17",
+        "family": "static",
+        "measured_tps": 126.19,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": -6.696683514426804,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n24#18",
+        "family": "static",
+        "measured_tps": 129.38,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": -8.997174931871378,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n18#19",
+        "family": "static",
+        "measured_tps": 151.85,
+        "predicted_tps": 150.62500290312153,
+        "error_pct": -0.8067152432521985,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n12#20",
+        "family": "static",
+        "measured_tps": 214.13,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": -2.3955254461477393,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n6#21",
+        "family": "static",
+        "measured_tps": 316.29,
+        "predicted_tps": 341.25583263463113,
+        "error_pct": 7.893336063306178,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_static_n0#22",
+        "family": "static",
+        "measured_tps": 684.08,
+        "predicted_tps": 929.3444880943945,
+        "error_pct": 35.85318794503485,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c128#23",
+        "family": "lru",
+        "measured_tps": 51.4,
+        "predicted_tps": 63.725040960939374,
+        "error_pct": 23.978678912333407,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c256#24",
+        "family": "lru",
+        "measured_tps": 97.36,
+        "predicted_tps": 82.68195496829716,
+        "error_pct": -15.076052826317621,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c384#25",
+        "family": "lru",
+        "measured_tps": 188.53,
+        "predicted_tps": 117.69335296400543,
+        "error_pct": -37.57314328541589,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D022",
+        "test": "m1_mc_c640#26",
+        "family": "lru",
+        "measured_tps": 458.16,
+        "predicted_tps": 768.7016592184102,
+        "error_pct": 67.78017706006858,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_tg_r0#0",
+        "family": "static",
+        "measured_tps": 790.941502,
+        "predicted_tps": 622.8931807162386,
+        "error_pct": -21.246618221300693,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_tg_r1#1",
+        "family": "static",
+        "measured_tps": 805.606457,
+        "predicted_tps": 635.3510443305634,
+        "error_pct": -21.13381927243374,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_tg_r1#2",
+        "family": "static",
+        "measured_tps": 807.676873,
+        "predicted_tps": 635.3510443305634,
+        "error_pct": -21.335986510218753,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_tg_r0#3",
+        "family": "static",
+        "measured_tps": 792.104291,
+        "predicted_tps": 622.8931807162386,
+        "error_pct": -21.362226187430334,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_gen_r0#4",
+        "family": "static",
+        "measured_tps": 758.67,
+        "predicted_tps": 622.8931807162386,
+        "error_pct": -17.896690166180473,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_gen_r1#5",
+        "family": "static",
+        "measured_tps": 776.96,
+        "predicted_tps": 635.3510443305634,
+        "error_pct": -18.22602909666349,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_gen_r1#6",
+        "family": "static",
+        "measured_tps": 773.68,
+        "predicted_tps": 635.3510443305634,
+        "error_pct": -17.879350076186096,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_gen_r0#7",
+        "family": "static",
+        "measured_tps": 758.6,
+        "predicted_tps": 622.8931807162386,
+        "error_pct": -17.889114063243007,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_tg_r0#8",
+        "family": "static",
+        "measured_tps": 702.961159,
+        "predicted_tps": 929.3444880943945,
+        "error_pct": 32.204244316490694,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_tg_r1#9",
+        "family": "static",
+        "measured_tps": 715.844484,
+        "predicted_tps": 947.9313778562824,
+        "error_pct": 32.42141261736431,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_tg_r1#10",
+        "family": "static",
+        "measured_tps": 715.103711,
+        "predicted_tps": 947.9313778562824,
+        "error_pct": 32.55858741534099,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_tg_r0#11",
+        "family": "static",
+        "measured_tps": 704.068737,
+        "predicted_tps": 929.3444880943945,
+        "error_pct": 31.996272417133966,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_gen_r0#12",
+        "family": "static",
+        "measured_tps": 677.59,
+        "predicted_tps": 929.3444880943945,
+        "error_pct": 37.1543983964336,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_gen_r1#13",
+        "family": "static",
+        "measured_tps": 692.29,
+        "predicted_tps": 947.9313778562824,
+        "error_pct": 36.92692048943109,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_gen_r1#14",
+        "family": "static",
+        "measured_tps": 692.13,
+        "predicted_tps": 947.9313778562824,
+        "error_pct": 36.958573946553756,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_gen_r0#15",
+        "family": "static",
+        "measured_tps": 679.62,
+        "predicted_tps": 929.3444880943945,
+        "error_pct": 36.74472324157536,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_tg_r0#16",
+        "family": "static",
+        "measured_tps": 789.110486,
+        "predicted_tps": 622.8931807162386,
+        "error_pct": -21.063882464205584,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_tg_r1#17",
+        "family": "static",
+        "measured_tps": 807.859131,
+        "predicted_tps": 635.3510443305634,
+        "error_pct": -21.353733596586245,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_tg_r1#18",
+        "family": "static",
+        "measured_tps": 807.582257,
+        "predicted_tps": 635.3510443305634,
+        "error_pct": -21.326770267246808,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_tg_r0#19",
+        "family": "static",
+        "measured_tps": 791.594233,
+        "predicted_tps": 622.8931807162386,
+        "error_pct": -21.311556508492323,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_gen_r0#20",
+        "family": "static",
+        "measured_tps": 757.02,
+        "predicted_tps": 622.8931807162386,
+        "error_pct": -17.717737877963778,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_gen_r1#21",
+        "family": "static",
+        "measured_tps": 778.68,
+        "predicted_tps": 635.3510443305634,
+        "error_pct": -18.40665686410805,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_gen_r1#22",
+        "family": "static",
+        "measured_tps": 776.96,
+        "predicted_tps": 635.3510443305634,
+        "error_pct": -18.22602909666349,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_q8_gen_r0#23",
+        "family": "static",
+        "measured_tps": 758.18,
+        "predicted_tps": 622.8931807162386,
+        "error_pct": -17.843628067709695,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_tg_r0#24",
+        "family": "static",
+        "measured_tps": 702.780432,
+        "predicted_tps": 929.3444880943945,
+        "error_pct": 32.23824195696936,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_tg_r1#25",
+        "family": "static",
+        "measured_tps": 715.562593,
+        "predicted_tps": 947.9313778562824,
+        "error_pct": 32.47357912912623,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_tg_r1#26",
+        "family": "static",
+        "measured_tps": 715.231653,
+        "predicted_tps": 947.9313778562824,
+        "error_pct": 32.53487508281214,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_tg_r0#27",
+        "family": "static",
+        "measured_tps": 702.75388,
+        "predicted_tps": 929.3444880943945,
+        "error_pct": 32.243238286268095,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_gen_r0#28",
+        "family": "static",
+        "measured_tps": 677.6,
+        "predicted_tps": 929.3444880943945,
+        "error_pct": 37.15237427603224,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_gen_r1#29",
+        "family": "static",
+        "measured_tps": 690.18,
+        "predicted_tps": 947.9313778562824,
+        "error_pct": 37.34552984095201,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_gen_r1#30",
+        "family": "static",
+        "measured_tps": 689.09,
+        "predicted_tps": 947.9313778562824,
+        "error_pct": 37.56278248941103,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D029",
+        "test": "c1_mix_gen_r0#31",
+        "family": "static",
+        "measured_tps": 677.35,
+        "predicted_tps": 929.3444880943945,
+        "error_pct": 37.20299521582555,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_617a7871cc83_timing#0",
+        "family": "static",
+        "measured_tps": 138.62,
+        "predicted_tps": 143.92510235506887,
+        "error_pct": 3.8270829281985774,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_83a44584d710_timing#1",
+        "family": "static",
+        "measured_tps": 140.16,
+        "predicted_tps": 137.79585103506707,
+        "error_pct": -1.6867501176747401,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_1ac7a80d3dc2_timing#2",
+        "family": "static",
+        "measured_tps": 130.72,
+        "predicted_tps": 132.1673212312846,
+        "error_pct": 1.1071918843976514,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_471add4ed456_timing#3",
+        "family": "static",
+        "measured_tps": 130.17,
+        "predicted_tps": 126.9805621720126,
+        "error_pct": -2.4502095935986734,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_41fc4a54d268_timing#4",
+        "family": "static",
+        "measured_tps": 122.52,
+        "predicted_tps": 122.1855274718864,
+        "error_pct": -0.2729942279738773,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_41fc4a54d268_timing#5",
+        "family": "static",
+        "measured_tps": 123.74,
+        "predicted_tps": 122.1855274718864,
+        "error_pct": -1.2562409310761247,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_471add4ed456_timing#6",
+        "family": "static",
+        "measured_tps": 130.8,
+        "predicted_tps": 126.9805621720126,
+        "error_pct": -2.920059501519434,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_1ac7a80d3dc2_timing#7",
+        "family": "static",
+        "measured_tps": 123.27,
+        "predicted_tps": 132.1673212312846,
+        "error_pct": 7.217750654080146,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_83a44584d710_timing#8",
+        "family": "static",
+        "measured_tps": 140.17,
+        "predicted_tps": 137.79585103506707,
+        "error_pct": -1.693763975838558,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_617a7871cc83_timing#9",
+        "family": "static",
+        "measured_tps": 141.6,
+        "predicted_tps": 143.92510235506887,
+        "error_pct": 1.64202143719554,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_617a7871cc83_timing#10",
+        "family": "static",
+        "measured_tps": 139.64,
+        "predicted_tps": 143.92510235506887,
+        "error_pct": 3.0686782834924653,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_83a44584d710_timing#11",
+        "family": "static",
+        "measured_tps": 137.66,
+        "predicted_tps": 137.79585103506707,
+        "error_pct": 0.09868591825299422,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_1ac7a80d3dc2_timing#12",
+        "family": "static",
+        "measured_tps": 132.19,
+        "predicted_tps": 132.1673212312846,
+        "error_pct": -0.017156190873279797,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_471add4ed456_timing#13",
+        "family": "static",
+        "measured_tps": 129.32,
+        "predicted_tps": 126.9805621720126,
+        "error_pct": -1.809030179390192,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D034",
+        "test": "pl_41fc4a54d268_timing#14",
+        "family": "static",
+        "measured_tps": 125.73,
+        "predicted_tps": 122.1855274718864,
+        "error_pct": -2.8191143944274244,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap12_q3_n12#0",
+        "family": "static",
+        "measured_tps": 229.08,
+        "predicted_tps": 232.90419782580972,
+        "error_pct": 1.6693721956564156,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap12_q2_n12#1",
+        "family": "static",
+        "measured_tps": 233.09,
+        "predicted_tps": 230.90586395909617,
+        "error_pct": -0.9370354974060802,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap18_q3_n18#2",
+        "family": "static",
+        "measured_tps": 166.78,
+        "predicted_tps": 169.42253008088554,
+        "error_pct": 1.5844406289036606,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap18_q2_n18#3",
+        "family": "static",
+        "measured_tps": 157.45,
+        "predicted_tps": 167.83760959903847,
+        "error_pct": 6.597402095292781,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap24_q3_n24#4",
+        "family": "static",
+        "measured_tps": 129.54,
+        "predicted_tps": 133.1346162075689,
+        "error_pct": 2.7749082967183147,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap24_q2_n24#5",
+        "family": "static",
+        "measured_tps": 138.08,
+        "predicted_tps": 131.83027291954093,
+        "error_pct": -4.526163876346379,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap24_q3_noimat_n24#6",
+        "family": "static",
+        "measured_tps": 131.08,
+        "predicted_tps": 133.1346162075689,
+        "error_pct": 1.5674520961007854,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mix4_imat_n12#7",
+        "family": "static",
+        "measured_tps": 203.9,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 2.5014523600607186,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mix4_imat_n18#8",
+        "family": "static",
+        "measured_tps": 141.47,
+        "predicted_tps": 150.62500290312153,
+        "error_pct": 6.471338731265663,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mix4_imat_n24#9",
+        "family": "static",
+        "measured_tps": 115.1,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": 2.293184251211833,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mixE4K_n12#10",
+        "family": "static",
+        "measured_tps": 204.64,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 2.1307962090323818,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mixE4K_n18#11",
+        "family": "static",
+        "measured_tps": 152.92,
+        "predicted_tps": 150.62500290312153,
+        "error_pct": -1.500782825580993,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mixE4K_n24#12",
+        "family": "static",
+        "measured_tps": 119.07,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": -1.1174476583985737,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mixE4K_n24#13",
+        "family": "static",
+        "measured_tps": 121.06,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": -2.74289189398248,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mixE4K_n18#14",
+        "family": "static",
+        "measured_tps": 153.92,
+        "predicted_tps": 150.62500290312153,
+        "error_pct": -2.140720567098797,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mixE4K_n12#15",
+        "family": "static",
+        "measured_tps": 195.69,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 6.801809679679005,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mix4_imat_n24#16",
+        "family": "static",
+        "measured_tps": 110.78,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": 6.282230613057238,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mix4_imat_n18#17",
+        "family": "static",
+        "measured_tps": 152.07,
+        "predicted_tps": 150.62500290312153,
+        "error_pct": -0.9502183842167833,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mix4_imat_n12#18",
+        "family": "static",
+        "measured_tps": 193.52,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 7.999411617488539,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap24_q3_noimat_n24#19",
+        "family": "static",
+        "measured_tps": 136.27,
+        "predicted_tps": 133.1346162075689,
+        "error_pct": -2.300861372591989,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap24_q2_n24#20",
+        "family": "static",
+        "measured_tps": 140.12,
+        "predicted_tps": 131.83027291954093,
+        "error_pct": -5.916162632357313,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap24_q3_n24#21",
+        "family": "static",
+        "measured_tps": 128.85,
+        "predicted_tps": 133.1346162075689,
+        "error_pct": 3.3252745111128634,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap18_q2_n18#22",
+        "family": "static",
+        "measured_tps": 176.01,
+        "predicted_tps": 167.83760959903847,
+        "error_pct": -4.643139822147335,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap18_q3_n18#23",
+        "family": "static",
+        "measured_tps": 152.9,
+        "predicted_tps": 169.42253008088554,
+        "error_pct": 10.806102080369872,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap12_q2_n12#24",
+        "family": "static",
+        "measured_tps": 237.48,
+        "predicted_tps": 230.90586395909617,
+        "error_pct": -2.768290399572104,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap12_q3_n12#25",
+        "family": "static",
+        "measured_tps": 207.6,
+        "predicted_tps": 232.90419782580972,
+        "error_pct": 12.188919954628963,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap12_q3_n12#26",
+        "family": "static",
+        "measured_tps": 214.95,
+        "predicted_tps": 232.90419782580972,
+        "error_pct": 8.352732182279476,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap12_q2_n12#27",
+        "family": "static",
+        "measured_tps": 217.76,
+        "predicted_tps": 230.90586395909617,
+        "error_pct": 6.036858908475473,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap18_q3_n18#28",
+        "family": "static",
+        "measured_tps": 161.35,
+        "predicted_tps": 169.42253008088554,
+        "error_pct": 5.003117496675258,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap18_q2_n18#29",
+        "family": "static",
+        "measured_tps": 175.02,
+        "predicted_tps": 167.83760959903847,
+        "error_pct": -4.103754085796785,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap24_q3_n24#30",
+        "family": "static",
+        "measured_tps": 139.79,
+        "predicted_tps": 133.1346162075689,
+        "error_pct": -4.760987046592091,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap24_q2_n24#31",
+        "family": "static",
+        "measured_tps": 118.72,
+        "predicted_tps": 131.83027291954093,
+        "error_pct": 11.043019642470453,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_pap24_q3_noimat_n24#32",
+        "family": "static",
+        "measured_tps": 136.1,
+        "predicted_tps": 133.1346162075689,
+        "error_pct": -2.178827180331433,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mix4_imat_n12#33",
+        "family": "static",
+        "measured_tps": 204.95,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 1.9763168393090336,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mix4_imat_n18#34",
+        "family": "static",
+        "measured_tps": 143.23,
+        "predicted_tps": 150.62500290312153,
+        "error_pct": 5.163026532934123,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mix4_imat_n24#35",
+        "family": "static",
+        "measured_tps": 122.08,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": -3.5554922402155853,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mixE4K_n12#36",
+        "family": "static",
+        "measured_tps": 177.19,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 17.952740765372678,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mixE4K_n18#37",
+        "family": "static",
+        "measured_tps": 135.47,
+        "predicted_tps": 150.62500290312153,
+        "error_pct": 11.18698080986309,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D035",
+        "test": "pap_decode_mixE4K_n24#38",
+        "family": "static",
+        "measured_tps": 104.78,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": 12.368252598916607,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n8#0",
+        "family": "static",
+        "measured_tps": 93.55,
+        "predicted_tps": 78.16754728602145,
+        "error_pct": -16.44302802135601,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n12#1",
+        "family": "static",
+        "measured_tps": 72.87,
+        "predicted_tps": 64.46531023822098,
+        "error_pct": -11.533813313817786,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n18#2",
+        "family": "static",
+        "measured_tps": 54.62,
+        "predicted_tps": 51.2465085537427,
+        "error_pct": -6.176293383847121,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n24#3",
+        "family": "static",
+        "measured_tps": 44.18,
+        "predicted_tps": 42.52635436998991,
+        "error_pct": -3.7429733590088055,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n30#4",
+        "family": "static",
+        "measured_tps": 36.3,
+        "predicted_tps": 36.34231226975565,
+        "error_pct": 0.11656272659961164,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n36#5",
+        "family": "static",
+        "measured_tps": 31.74,
+        "predicted_tps": 31.7284637819198,
+        "error_pct": -0.03634599269123351,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n42#6",
+        "family": "static",
+        "measured_tps": 28.01,
+        "predicted_tps": 28.154146220564122,
+        "error_pct": 0.5146241362517623,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n48#7",
+        "family": "static",
+        "measured_tps": 24.35,
+        "predicted_tps": 25.106737459411892,
+        "error_pct": 3.1077513733547946,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n18_fa_kvq8#8",
+        "family": "static",
+        "measured_tps": 53.89,
+        "predicted_tps": 51.2465085537427,
+        "error_pct": -4.90534690342791,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n18_fa_kvq8#9",
+        "family": "static",
+        "measured_tps": 54.86,
+        "predicted_tps": 51.2465085537427,
+        "error_pct": -6.5867507223064115,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n48#10",
+        "family": "static",
+        "measured_tps": 24.48,
+        "predicted_tps": 25.106737459411892,
+        "error_pct": 2.5602020400812497,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n42#11",
+        "family": "static",
+        "measured_tps": 27.73,
+        "predicted_tps": 28.154146220564122,
+        "error_pct": 1.5295572324706797,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n36#12",
+        "family": "static",
+        "measured_tps": 31.89,
+        "predicted_tps": 31.7284637819198,
+        "error_pct": -0.5065419193483911,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n30#13",
+        "family": "static",
+        "measured_tps": 37.18,
+        "predicted_tps": 36.34231226975565,
+        "error_pct": -2.253060059828804,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n24#14",
+        "family": "static",
+        "measured_tps": 43.63,
+        "predicted_tps": 42.52635436998991,
+        "error_pct": -2.529556795805854,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n18#15",
+        "family": "static",
+        "measured_tps": 53.12,
+        "predicted_tps": 51.2465085537427,
+        "error_pct": -3.5269040780446126,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n12#16",
+        "family": "static",
+        "measured_tps": 73.4,
+        "predicted_tps": 64.46531023822098,
+        "error_pct": -12.172601855284771,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n8#17",
+        "family": "static",
+        "measured_tps": 93.01,
+        "predicted_tps": 78.16754728602145,
+        "error_pct": -15.957910669797393,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n8#18",
+        "family": "static",
+        "measured_tps": 93.79,
+        "predicted_tps": 78.16754728602145,
+        "error_pct": -16.656842642049853,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n12#19",
+        "family": "static",
+        "measured_tps": 73.26,
+        "predicted_tps": 64.46531023822098,
+        "error_pct": -12.0047635295919,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n18#20",
+        "family": "static",
+        "measured_tps": 55.48,
+        "predicted_tps": 51.2465085537427,
+        "error_pct": -7.630662303996571,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n24#21",
+        "family": "static",
+        "measured_tps": 40.17,
+        "predicted_tps": 42.52635436998991,
+        "error_pct": 5.865955613616891,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n30#22",
+        "family": "static",
+        "measured_tps": 36.58,
+        "predicted_tps": 36.34231226975565,
+        "error_pct": -0.6497750963486815,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n36#23",
+        "family": "static",
+        "measured_tps": 31.21,
+        "predicted_tps": 31.7284637819198,
+        "error_pct": 1.6612104515213,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n42#24",
+        "family": "static",
+        "measured_tps": 27.56,
+        "predicted_tps": 28.154146220564122,
+        "error_pct": 2.155828086226874,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n48#25",
+        "family": "static",
+        "measured_tps": 24.11,
+        "predicted_tps": 25.106737459411892,
+        "error_pct": 4.134124676117357,
+        "fallbacks": []
+      },
+      {
+        "model": "Qwen",
+        "decision": "D039",
+        "test": "qw_static_n18_fa_kvq8#26",
+        "family": "static",
+        "measured_tps": 53.13,
+        "predicted_tps": 51.2465085537427,
+        "error_pct": -3.545062010648037,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mixE4K_n12#0",
+        "family": "static",
+        "measured_tps": 214.18,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": -2.418311064448675,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mix4_imat_n12#1",
+        "family": "static",
+        "measured_tps": 208.86,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 0.06725144219277279,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_pap12_q3_n12#2",
+        "family": "static",
+        "measured_tps": 234.89,
+        "predicted_tps": 232.90419782580972,
+        "error_pct": -0.8454179293244768,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mixE4K_n24#3",
+        "family": "static",
+        "measured_tps": 130.02,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": -9.445119925284729,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_pap24_q3_n24#4",
+        "family": "static",
+        "measured_tps": 153.01,
+        "predicted_tps": 133.1346162075689,
+        "error_pct": -12.989597929828822,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_pap24_q3_n24#5",
+        "family": "static",
+        "measured_tps": 145.3,
+        "predicted_tps": 133.1346162075689,
+        "error_pct": -8.372597241865865,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mixE4K_n24#6",
+        "family": "static",
+        "measured_tps": 124.58,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": -5.490885316146398,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_pap12_q3_n12#7",
+        "family": "static",
+        "measured_tps": 214.65,
+        "predicted_tps": 232.90419782580972,
+        "error_pct": 8.504168565483216,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mix4_imat_n12#8",
+        "family": "static",
+        "measured_tps": 215.82,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": -3.159827002982185,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mixE4K_n12#9",
+        "family": "static",
+        "measured_tps": 213.12,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": -1.9329667031888986,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mixE4K_n12#10",
+        "family": "static",
+        "measured_tps": 208.89,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 0.05288015805631208,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mix4_imat_n12#11",
+        "family": "static",
+        "measured_tps": 213.79,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": -2.2403005930287434,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_pap12_q3_n12#12",
+        "family": "static",
+        "measured_tps": 216.31,
+        "predicted_tps": 232.90419782580972,
+        "error_pct": 7.67148898608927,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mixE4K_n24#13",
+        "family": "static",
+        "measured_tps": 130.03,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": -9.452084078178258,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_pap24_q3_n24#14",
+        "family": "static",
+        "measured_tps": 147.6,
+        "predicted_tps": 133.1346162075689,
+        "error_pct": -9.800395523327287,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_pap24_q3_n24#15",
+        "family": "static",
+        "measured_tps": 131.29,
+        "predicted_tps": 133.1346162075689,
+        "error_pct": 1.404993683882183,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mixE4K_n24#16",
+        "family": "static",
+        "measured_tps": 130.21,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": -9.57725591494908,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_pap12_q3_n12#17",
+        "family": "static",
+        "measured_tps": 215.62,
+        "predicted_tps": 232.90419782580972,
+        "error_pct": 8.016045740566602,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mix4_imat_n12#18",
+        "family": "static",
+        "measured_tps": 207.61,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 0.6697468147795371,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mixE4K_n12#19",
+        "family": "static",
+        "measured_tps": 216.78,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": -3.5886791391439132,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mixE4K_n12#20",
+        "family": "static",
+        "measured_tps": 210.71,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": -0.8113229736776528,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mix4_imat_n12#21",
+        "family": "static",
+        "measured_tps": 206.27,
+        "predicted_tps": 209.00046136216383,
+        "error_pct": 1.3237316925213571,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_pap12_q3_n12#22",
+        "family": "static",
+        "measured_tps": 232.58,
+        "predicted_tps": 232.90419782580972,
+        "error_pct": 0.13939196225372097,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_mixE4K_n24#23",
+        "family": "static",
+        "measured_tps": 112.71,
+        "predicted_tps": 117.73945507314481,
+        "error_pct": 4.462297110411506,
+        "fallbacks": []
+      },
+      {
+        "model": "Granite",
+        "decision": "D040",
+        "test": "pap_decode_pap24_q3_n24#24",
+        "family": "static",
+        "measured_tps": 135.85,
+        "predicted_tps": 133.1346162075689,
+        "error_pct": -1.998810299912468,
+        "fallbacks": []
+      }
+    ]
+  },
+  "leave_one_model_out": {
+    "Granite": {
+      "constants": {
+        "bw_gpu_gbs": 449.06606990519913,
+        "bw_cpu_gbs": {
+          "Q4_K": 27.62410407348427,
+          "Q6_K": 27.62410407348427
+        },
+        "handoff_us": 2.8002971791760994e-23,
+        "bw_h2d_gbs": 12.0,
+        "cache_miss_us": 0.0
+      },
+      "coefficients": {
+        "gpu": 2.226843814343637,
+        "Q4_K": 36.200269059943075,
+        "handoff": 2.8002971791760994e-23
+      },
+      "rank": 3,
+      "free_columns": 3,
+      "training_models": [
+        "Qwen"
+      ],
+      "training_jobs": [
+        "job-9f50eae42a"
+      ],
+      "training_point_count": 27,
+      "boundary_coefficients": [
+        "handoff"
+      ],
+      "handoff_prior": null,
+      "gpu_anchor_count": 0,
+      "assumptions": [
+        "Q6_K shares Q4_K effective bandwidth (mixed Qwen experts)",
+        "all nonexpert weight bytes active each token (logical estimate)",
+        "uniform LRU coverage; fitted H2D bandwidth includes cache dispatch; miss latency not separately identifiable",
+        "equal weight per job/configuration; all repeats retained; D035 noisy points included",
+        "fit microseconds; D029/D039 reuse normalized by 1.02; workload/context effects not separately fitted"
+      ],
+      "evaluation": {
+        "summary": {
+          "D022": {
+            "count": 27,
+            "mean_error_pct": 50.925712264081525,
+            "mape_pct": 54.54028593807126,
+            "max_abs_pct": 156.48074350446382
+          },
+          "D029": {
+            "count": 32,
+            "mean_error_pct": 69.32327931095993,
+            "mape_pct": 69.32327931095993,
+            "max_abs_pct": 116.58080484963432
+          },
+          "D034": {
+            "count": 15,
+            "mean_error_pct": 32.16745315543981,
+            "mape_pct": 32.16745315543981,
+            "max_abs_pct": 41.498706118629514
+          },
+          "D035": {
+            "count": 39,
+            "mean_error_pct": 55.8607664262397,
+            "mape_pct": 55.8607664262397,
+            "max_abs_pct": 116.40770102329259
+          },
+          "D040": {
+            "count": 25,
+            "mean_error_pct": 37.49010717763294,
+            "mape_pct": 37.49010717763294,
+            "max_abs_pct": 63.86690641357606
+          },
+          "Granite": {
+            "count": 138,
+            "mean_error_pct": 52.113576351280344,
+            "mape_pct": 52.8207755483653,
+            "max_abs_pct": 156.48074350446382
+          }
+        },
+        "by_mechanism": {
+          "Granite/static": {
+            "count": 126,
+            "mape_pct": 52.23321156272889,
+            "mean_error_pct": 52.23321156272889,
+            "max_abs_pct": 116.58080484963432
+          },
+          "Granite/lru": {
+            "count": 12,
+            "mape_pct": 58.990197397547576,
+            "mean_error_pct": 50.85740663107068,
+            "max_abs_pct": 156.48074350446382
+          }
+        },
+        "residuals": [
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n24#0",
+            "family": "static",
+            "measured_tps": 128.48,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 20.587597717783048,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n18#1",
+            "family": "static",
+            "measured_tps": 141.05,
+            "predicted_tps": 199.5319831302643,
+            "error_pct": 41.46188098565353,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n12#2",
+            "family": "static",
+            "measured_tps": 185.33,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 51.186045914363376,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n6#3",
+            "family": "static",
+            "measured_tps": 323.39,
+            "predicted_tps": 470.32116379481016,
+            "error_pct": 45.43466520140085,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n0#4",
+            "family": "static",
+            "measured_tps": 685.44,
+            "predicted_tps": 1463.173204057201,
+            "error_pct": 113.46481151628166,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c128#5",
+            "family": "lru",
+            "measured_tps": 54.52,
+            "predicted_tps": 83.03565452726913,
+            "error_pct": 52.303108083765814,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c256#6",
+            "family": "lru",
+            "measured_tps": 99.24,
+            "predicted_tps": 108.14532467848257,
+            "error_pct": 8.973523456753906,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c384#7",
+            "family": "lru",
+            "measured_tps": 186.66,
+            "predicted_tps": 155.02400029051162,
+            "error_pct": -16.94846228945054,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c640#8",
+            "family": "lru",
+            "measured_tps": 454.31,
+            "predicted_tps": 1165.2176658151295,
+            "error_pct": 156.48074350446382,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c640#9",
+            "family": "lru",
+            "measured_tps": 460.46,
+            "predicted_tps": 1165.2176658151295,
+            "error_pct": 153.05513308759276,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c384#10",
+            "family": "lru",
+            "measured_tps": 180.42,
+            "predicted_tps": 155.02400029051162,
+            "error_pct": -14.07604462337233,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c256#11",
+            "family": "lru",
+            "measured_tps": 99.66,
+            "predicted_tps": 108.14532467848257,
+            "error_pct": 8.51427320738769,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c128#12",
+            "family": "lru",
+            "measured_tps": 54.34,
+            "predicted_tps": 83.03565452726913,
+            "error_pct": 52.8076086258173,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n0#13",
+            "family": "static",
+            "measured_tps": 681.51,
+            "predicted_tps": 1463.173204057201,
+            "error_pct": 114.69577908720359,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n6#14",
+            "family": "static",
+            "measured_tps": 322.73,
+            "predicted_tps": 470.32116379481016,
+            "error_pct": 45.73208682019339,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n12#15",
+            "family": "static",
+            "measured_tps": 196.97,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 42.25166212778071,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n18#16",
+            "family": "static",
+            "measured_tps": 162.85,
+            "predicted_tps": 199.5319831302643,
+            "error_pct": 22.52501266826179,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n24#17",
+            "family": "static",
+            "measured_tps": 126.19,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 22.775929588563002,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n24#18",
+            "family": "static",
+            "measured_tps": 129.38,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 19.748759891642955,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n18#19",
+            "family": "static",
+            "measured_tps": 151.85,
+            "predicted_tps": 199.5319831302643,
+            "error_pct": 31.400713289604433,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n12#20",
+            "family": "static",
+            "measured_tps": 214.13,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 30.851865172133586,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n6#21",
+            "family": "static",
+            "measured_tps": 316.29,
+            "predicted_tps": 470.32116379481016,
+            "error_pct": 48.69934673711156,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_static_n0#22",
+            "family": "static",
+            "measured_tps": 684.08,
+            "predicted_tps": 1463.173204057201,
+            "error_pct": 113.88919483937565,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c128#23",
+            "family": "lru",
+            "measured_tps": 51.4,
+            "predicted_tps": 83.03565452726913,
+            "error_pct": 61.54796600636019,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c256#24",
+            "family": "lru",
+            "measured_tps": 97.36,
+            "predicted_tps": 108.14532467848257,
+            "error_pct": 11.077778018162054,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c384#25",
+            "family": "lru",
+            "measured_tps": 188.53,
+            "predicted_tps": 155.02400029051162,
+            "error_pct": -17.772237686038494,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D022",
+            "test": "m1_mc_c640#26",
+            "family": "lru",
+            "measured_tps": 458.16,
+            "predicted_tps": 1165.2176658151295,
+            "error_pct": 154.32549018140597,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_tg_r0#0",
+            "family": "static",
+            "measured_tps": 790.941502,
+            "predicted_tps": 980.6918991716104,
+            "error_pct": 23.990446409981203,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_tg_r1#1",
+            "family": "static",
+            "measured_tps": 805.606457,
+            "predicted_tps": 1000.3057371550426,
+            "error_pct": 24.168038682321868,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_tg_r1#2",
+            "family": "static",
+            "measured_tps": 807.676873,
+            "predicted_tps": 1000.3057371550426,
+            "error_pct": 23.84974370252182,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_tg_r0#3",
+            "family": "static",
+            "measured_tps": 792.104291,
+            "predicted_tps": 980.6918991716104,
+            "error_pct": 23.808431580837187,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_gen_r0#4",
+            "family": "static",
+            "measured_tps": 758.67,
+            "predicted_tps": 980.6918991716104,
+            "error_pct": 29.26462087226469,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_gen_r1#5",
+            "family": "static",
+            "measured_tps": 776.96,
+            "predicted_tps": 1000.3057371550426,
+            "error_pct": 28.746104967442676,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_gen_r1#6",
+            "family": "static",
+            "measured_tps": 773.68,
+            "predicted_tps": 1000.3057371550426,
+            "error_pct": 29.291921357026496,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_gen_r0#7",
+            "family": "static",
+            "measured_tps": 758.6,
+            "predicted_tps": 980.6918991716104,
+            "error_pct": 29.27654879667947,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_tg_r0#8",
+            "family": "static",
+            "measured_tps": 702.961159,
+            "predicted_tps": 1463.173204057201,
+            "error_pct": 108.14424599769406,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_tg_r1#9",
+            "family": "static",
+            "measured_tps": 715.844484,
+            "predicted_tps": 1492.436668138345,
+            "error_pct": 108.48615886496727,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_tg_r1#10",
+            "family": "static",
+            "measured_tps": 715.103711,
+            "predicted_tps": 1492.436668138345,
+            "error_pct": 108.70212882147175,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_tg_r0#11",
+            "family": "static",
+            "measured_tps": 704.068737,
+            "predicted_tps": 1463.173204057201,
+            "error_pct": 107.81681207600626,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_gen_r0#12",
+            "family": "static",
+            "measured_tps": 677.59,
+            "predicted_tps": 1463.173204057201,
+            "error_pct": 115.937839114686,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_gen_r1#13",
+            "family": "static",
+            "measured_tps": 692.29,
+            "predicted_tps": 1492.436668138345,
+            "error_pct": 115.57969465662441,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_gen_r1#14",
+            "family": "static",
+            "measured_tps": 692.13,
+            "predicted_tps": 1492.436668138345,
+            "error_pct": 115.62953031054066,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_gen_r0#15",
+            "family": "static",
+            "measured_tps": 679.62,
+            "predicted_tps": 1463.173204057201,
+            "error_pct": 115.29284071351653,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_tg_r0#16",
+            "family": "static",
+            "measured_tps": 789.110486,
+            "predicted_tps": 980.6918991716104,
+            "error_pct": 24.27814818970868,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_tg_r1#17",
+            "family": "static",
+            "measured_tps": 807.859131,
+            "predicted_tps": 1000.3057371550426,
+            "error_pct": 23.821802436870954,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_tg_r1#18",
+            "family": "static",
+            "measured_tps": 807.582257,
+            "predicted_tps": 1000.3057371550426,
+            "error_pct": 23.864253886776844,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_tg_r0#19",
+            "family": "static",
+            "measured_tps": 791.594233,
+            "predicted_tps": 980.6918991716104,
+            "error_pct": 23.888206645336997,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_gen_r0#20",
+            "family": "static",
+            "measured_tps": 757.02,
+            "predicted_tps": 980.6918991716104,
+            "error_pct": 29.54636590468025,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_gen_r1#21",
+            "family": "static",
+            "measured_tps": 778.68,
+            "predicted_tps": 1000.3057371550426,
+            "error_pct": 28.461722036657243,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_gen_r1#22",
+            "family": "static",
+            "measured_tps": 776.96,
+            "predicted_tps": 1000.3057371550426,
+            "error_pct": 28.746104967442676,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_q8_gen_r0#23",
+            "family": "static",
+            "measured_tps": 758.18,
+            "predicted_tps": 980.6918991716104,
+            "error_pct": 29.348162596165885,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_tg_r0#24",
+            "family": "static",
+            "measured_tps": 702.780432,
+            "predicted_tps": 1463.173204057201,
+            "error_pct": 108.1977723672877,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_tg_r1#25",
+            "family": "static",
+            "measured_tps": 715.562593,
+            "predicted_tps": 1492.436668138345,
+            "error_pct": 108.56829056439304,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_tg_r1#26",
+            "family": "static",
+            "measured_tps": 715.231653,
+            "predicted_tps": 1492.436668138345,
+            "error_pct": 108.66479578726711,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_tg_r0#27",
+            "family": "static",
+            "measured_tps": 702.75388,
+            "predicted_tps": 1463.173204057201,
+            "error_pct": 108.2056386593271,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_gen_r0#28",
+            "family": "static",
+            "measured_tps": 677.6,
+            "predicted_tps": 1463.173204057201,
+            "error_pct": 115.93465231068491,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_gen_r1#29",
+            "family": "static",
+            "measured_tps": 690.18,
+            "predicted_tps": 1492.436668138345,
+            "error_pct": 116.2387591843208,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_gen_r1#30",
+            "family": "static",
+            "measured_tps": 689.09,
+            "predicted_tps": 1492.436668138345,
+            "error_pct": 116.58080484963432,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D029",
+            "test": "c1_mix_gen_r0#31",
+            "family": "static",
+            "measured_tps": 677.35,
+            "predicted_tps": 1463.173204057201,
+            "error_pct": 116.01435063958085,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_617a7871cc83_timing#0",
+            "family": "static",
+            "measured_tps": 138.62,
+            "predicted_tps": 190.39684160225698,
+            "error_pct": 37.351638726198956,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_83a44584d710_timing#1",
+            "family": "static",
+            "measured_tps": 140.16,
+            "predicted_tps": 182.06154634493933,
+            "error_pct": 29.89550966391219,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_1ac7a80d3dc2_timing#2",
+            "family": "static",
+            "measured_tps": 130.72,
+            "predicted_tps": 174.4254550324346,
+            "error_pct": 33.434405624567475,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_471add4ed456_timing#3",
+            "family": "static",
+            "measured_tps": 130.17,
+            "predicted_tps": 167.40413036914038,
+            "error_pct": 28.604233209756778,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_41fc4a54d268_timing#4",
+            "family": "static",
+            "measured_tps": 122.52,
+            "predicted_tps": 160.926204713644,
+            "error_pct": 31.34688598893569,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_41fc4a54d268_timing#5",
+            "family": "static",
+            "measured_tps": 123.74,
+            "predicted_tps": 160.926204713644,
+            "error_pct": 30.051886789755944,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_471add4ed456_timing#6",
+            "family": "static",
+            "measured_tps": 130.8,
+            "predicted_tps": 167.40413036914038,
+            "error_pct": 27.984809150718924,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_1ac7a80d3dc2_timing#7",
+            "family": "static",
+            "measured_tps": 123.27,
+            "predicted_tps": 174.4254550324346,
+            "error_pct": 41.498706118629514,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_83a44584d710_timing#8",
+            "family": "static",
+            "measured_tps": 140.17,
+            "predicted_tps": 182.06154634493933,
+            "error_pct": 29.886242666005103,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_617a7871cc83_timing#9",
+            "family": "static",
+            "measured_tps": 141.6,
+            "predicted_tps": 190.39684160225698,
+            "error_pct": 34.461046329277536,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_617a7871cc83_timing#10",
+            "family": "static",
+            "measured_tps": 139.64,
+            "predicted_tps": 190.39684160225698,
+            "error_pct": 36.34835405489616,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_83a44584d710_timing#11",
+            "family": "static",
+            "measured_tps": 137.66,
+            "predicted_tps": 182.06154634493933,
+            "error_pct": 32.254501194929055,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_1ac7a80d3dc2_timing#12",
+            "family": "static",
+            "measured_tps": 132.19,
+            "predicted_tps": 174.4254550324346,
+            "error_pct": 31.950567389692573,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_471add4ed456_timing#13",
+            "family": "static",
+            "measured_tps": 129.32,
+            "predicted_tps": 167.40413036914038,
+            "error_pct": 29.44952858733405,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D034",
+            "test": "pl_41fc4a54d268_timing#14",
+            "family": "static",
+            "measured_tps": 125.73,
+            "predicted_tps": 160.926204713644,
+            "error_pct": 27.9934818369872,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap12_q3_n12#0",
+            "family": "static",
+            "measured_tps": 229.08,
+            "predicted_tps": 351.74031461674105,
+            "error_pct": 53.54475057479529,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap12_q2_n12#1",
+            "family": "static",
+            "measured_tps": 233.09,
+            "predicted_tps": 437.08967769173915,
+            "error_pct": 87.51970384475487,
+            "fallbacks": [
+              "Q2_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap18_q3_n18#2",
+            "family": "static",
+            "measured_tps": 166.78,
+            "predicted_tps": 254.9208191965932,
+            "error_pct": 52.8485545008953,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap18_q2_n18#3",
+            "family": "static",
+            "measured_tps": 157.45,
+            "predicted_tps": 323.6175794487367,
+            "error_pct": 105.5367287702361,
+            "fallbacks": [
+              "Q2_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap24_q3_n24#4",
+            "family": "static",
+            "measured_tps": 129.54,
+            "predicted_tps": 199.89737631463913,
+            "error_pct": 54.313244028592834,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap24_q2_n24#5",
+            "family": "static",
+            "measured_tps": 138.08,
+            "predicted_tps": 256.91922265485294,
+            "error_pct": 86.06548570021214,
+            "fallbacks": [
+              "Q2_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap24_q3_noimat_n24#6",
+            "family": "static",
+            "measured_tps": 131.08,
+            "predicted_tps": 199.89737631463913,
+            "error_pct": 52.50028708776253,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mix4_imat_n12#7",
+            "family": "static",
+            "measured_tps": 203.9,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 37.41691951598316,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mix4_imat_n18#8",
+            "family": "static",
+            "measured_tps": 141.47,
+            "predicted_tps": 199.5319831302643,
+            "error_pct": 41.04190508960508,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mix4_imat_n24#9",
+            "family": "static",
+            "measured_tps": 115.1,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 34.60551307368171,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mixE4K_n12#10",
+            "family": "static",
+            "measured_tps": 204.64,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 36.92000532305006,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mixE4K_n18#11",
+            "family": "static",
+            "measured_tps": 152.92,
+            "predicted_tps": 199.5319831302643,
+            "error_pct": 30.481286378671424,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mixE4K_n24#12",
+            "family": "static",
+            "measured_tps": 119.07,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 30.117532164111594,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mixE4K_n24#13",
+            "family": "static",
+            "measured_tps": 121.06,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 27.9786432742505,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mixE4K_n18#14",
+            "family": "static",
+            "measured_tps": 153.92,
+            "predicted_tps": 199.5319831302643,
+            "error_pct": 29.633564923508526,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mixE4K_n12#15",
+            "family": "static",
+            "measured_tps": 195.69,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 43.1821242235626,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mix4_imat_n24#16",
+            "family": "static",
+            "measured_tps": 110.78,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 39.85461775393362,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mix4_imat_n18#17",
+            "family": "static",
+            "measured_tps": 152.07,
+            "predicted_tps": 199.5319831302643,
+            "error_pct": 31.210615591677726,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mix4_imat_n12#18",
+            "family": "static",
+            "measured_tps": 193.52,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 44.78766995302274,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap24_q3_noimat_n24#19",
+            "family": "static",
+            "measured_tps": 136.27,
+            "predicted_tps": 199.89737631463913,
+            "error_pct": 46.69213789875917,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap24_q2_n24#20",
+            "family": "static",
+            "measured_tps": 140.12,
+            "predicted_tps": 256.91922265485294,
+            "error_pct": 83.35656769544171,
+            "fallbacks": [
+              "Q2_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap24_q3_n24#21",
+            "family": "static",
+            "measured_tps": 128.85,
+            "predicted_tps": 199.89737631463913,
+            "error_pct": 55.13960133072497,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap18_q2_n18#22",
+            "family": "static",
+            "measured_tps": 176.01,
+            "predicted_tps": 323.6175794487367,
+            "error_pct": 83.86317791530978,
+            "fallbacks": [
+              "Q2_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap18_q3_n18#23",
+            "family": "static",
+            "measured_tps": 152.9,
+            "predicted_tps": 254.9208191965932,
+            "error_pct": 66.7238843666404,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap12_q2_n12#24",
+            "family": "static",
+            "measured_tps": 237.48,
+            "predicted_tps": 437.08967769173915,
+            "error_pct": 84.05325824984806,
+            "fallbacks": [
+              "Q2_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap12_q3_n12#25",
+            "family": "static",
+            "measured_tps": 207.6,
+            "predicted_tps": 351.74031461674105,
+            "error_pct": 69.43175077877699,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap12_q3_n12#26",
+            "family": "static",
+            "measured_tps": 214.95,
+            "predicted_tps": 351.74031461674105,
+            "error_pct": 63.63820172911889,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap12_q2_n12#27",
+            "family": "static",
+            "measured_tps": 217.76,
+            "predicted_tps": 437.08967769173915,
+            "error_pct": 100.7208292118567,
+            "fallbacks": [
+              "Q2_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap18_q3_n18#28",
+            "family": "static",
+            "measured_tps": 161.35,
+            "predicted_tps": 254.9208191965932,
+            "error_pct": 57.99245069513059,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap18_q2_n18#29",
+            "family": "static",
+            "measured_tps": 175.02,
+            "predicted_tps": 323.6175794487367,
+            "error_pct": 84.9031993193559,
+            "fallbacks": [
+              "Q2_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap24_q3_n24#30",
+            "family": "static",
+            "measured_tps": 139.79,
+            "predicted_tps": 199.89737631463913,
+            "error_pct": 42.998337731339255,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap24_q2_n24#31",
+            "family": "static",
+            "measured_tps": 118.72,
+            "predicted_tps": 256.91922265485294,
+            "error_pct": 116.40770102329259,
+            "fallbacks": [
+              "Q2_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_pap24_q3_noimat_n24#32",
+            "family": "static",
+            "measured_tps": 136.1,
+            "predicted_tps": 199.89737631463913,
+            "error_pct": 46.875368342864896,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mix4_imat_n12#33",
+            "family": "static",
+            "measured_tps": 204.95,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 36.712905046640486,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mix4_imat_n18#34",
+            "family": "static",
+            "measured_tps": 143.23,
+            "predicted_tps": 199.5319831302643,
+            "error_pct": 39.30879224342967,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mix4_imat_n24#35",
+            "family": "static",
+            "measured_tps": 122.08,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 26.90935906602856,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mixE4K_n12#36",
+            "family": "static",
+            "measured_tps": 177.19,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 58.13144020152925,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mixE4K_n18#37",
+            "family": "static",
+            "measured_tps": 135.47,
+            "predicted_tps": 199.5319831302643,
+            "error_pct": 47.28868615211066,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D035",
+            "test": "pap_decode_mixE4K_n24#38",
+            "family": "static",
+            "measured_tps": 104.78,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 47.863089852841824,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mixE4K_n12#0",
+            "family": "static",
+            "measured_tps": 214.18,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 30.821318000321995,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mix4_imat_n12#1",
+            "family": "static",
+            "measured_tps": 208.86,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 34.153547301105824,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_pap12_q3_n12#2",
+            "family": "static",
+            "measured_tps": 234.89,
+            "predicted_tps": 351.74031461674105,
+            "error_pct": 49.74682388213252,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mixE4K_n24#3",
+            "family": "static",
+            "measured_tps": 130.02,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 19.15931821858763,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_pap24_q3_n24#4",
+            "family": "static",
+            "measured_tps": 153.01,
+            "predicted_tps": 199.89737631463913,
+            "error_pct": 30.643341163740367,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_pap24_q3_n24#5",
+            "family": "static",
+            "measured_tps": 145.3,
+            "predicted_tps": 199.89737631463913,
+            "error_pct": 37.57562031289685,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mixE4K_n24#6",
+            "family": "static",
+            "measured_tps": 124.58,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 24.36261482405495,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_pap12_q3_n12#7",
+            "family": "static",
+            "measured_tps": 214.65,
+            "predicted_tps": 351.74031461674105,
+            "error_pct": 63.86690641357606,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mix4_imat_n12#8",
+            "family": "static",
+            "measured_tps": 215.82,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 29.827216612496365,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mixE4K_n12#9",
+            "family": "static",
+            "measured_tps": 213.12,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 31.471987093229004,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mixE4K_n12#10",
+            "family": "static",
+            "measured_tps": 208.89,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 34.13428067073085,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mix4_imat_n12#11",
+            "family": "static",
+            "measured_tps": 213.79,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 31.05996486883842,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_pap12_q3_n12#12",
+            "family": "static",
+            "measured_tps": 216.31,
+            "predicted_tps": 351.74031461674105,
+            "error_pct": 62.6093636987384,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mixE4K_n24#13",
+            "family": "static",
+            "measured_tps": 130.03,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 19.150154231952364,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_pap24_q3_n24#14",
+            "family": "static",
+            "measured_tps": 147.6,
+            "predicted_tps": 199.89737631463913,
+            "error_pct": 35.43182677143572,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_pap24_q3_n24#15",
+            "family": "static",
+            "measured_tps": 131.29,
+            "predicted_tps": 199.89737631463913,
+            "error_pct": 52.256360967811055,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mixE4K_n24#16",
+            "family": "static",
+            "measured_tps": 130.21,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 18.985443167043737,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_pap12_q3_n12#17",
+            "family": "static",
+            "measured_tps": 215.62,
+            "predicted_tps": 351.74031461674105,
+            "error_pct": 63.129725728940286,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mix4_imat_n12#18",
+            "family": "static",
+            "measured_tps": 207.61,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 34.961273008568774,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mixE4K_n12#19",
+            "family": "static",
+            "measured_tps": 216.78,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 29.25228291036519,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mixE4K_n12#20",
+            "family": "static",
+            "measured_tps": 210.71,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 32.97570067537832,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mix4_imat_n12#21",
+            "family": "static",
+            "measured_tps": 206.27,
+            "predicted_tps": 280.19309889308965,
+            "error_pct": 35.83802729097283,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_pap12_q3_n12#22",
+            "family": "static",
+            "measured_tps": 232.58,
+            "predicted_tps": 351.74031461674105,
+            "error_pct": 51.23411927798651,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_mixE4K_n24#23",
+            "family": "static",
+            "measured_tps": 112.71,
+            "predicted_tps": 154.93094554780765,
+            "error_pct": 37.4598044076015,
+            "fallbacks": []
+          },
+          {
+            "model": "Granite",
+            "decision": "D040",
+            "test": "pap_decode_pap24_q3_n24#24",
+            "family": "static",
+            "measured_tps": 135.85,
+            "predicted_tps": 199.89737631463913,
+            "error_pct": 47.14565794231811,
+            "fallbacks": [
+              "Q3_K: Q4_K bandwidth fallback"
+            ]
+          }
+        ]
+      }
+    },
+    "Qwen": {
+      "constants": {
+        "bw_gpu_gbs": 285.2273918763575,
+        "bw_cpu_gbs": {
+          "Q2_K": 32.54157185991761,
+          "Q3_K": 43.680007506159676,
+          "Q4_K": 43.07433824532367,
+          "Q6_K": 43.07433824532367
+        },
+        "handoff_us": 169.16666666666666,
+        "bw_h2d_gbs": 9.326165360590723,
+        "cache_miss_us": 0.0
+      },
+      "coefficients": {
+        "gpu": 3.505974631053274,
+        "handoff": 169.16666666666666,
+        "Q2_K": 30.729923075158172,
+        "Q3_K": 22.893768959608852,
+        "Q4_K": 23.21567877153781,
+        "h2d": 107.22520578775794
+      },
+      "rank": 4,
+      "free_columns": 4,
+      "training_models": [
+        "Granite"
+      ],
+      "training_jobs": [
+        "job-34c09bec98",
+        "job-3d2fbbd061",
+        "job-56115e2bf1",
+        "job-ad883810b3",
+        "job-d2e342e743"
+      ],
+      "training_point_count": 138,
+      "boundary_coefficients": [],
+      "handoff_prior": "D031 extra split cost / 12 = 169.167 us/layer; rank-deficient training fold; not a universal measured handoff",
+      "gpu_anchor_count": 35,
+      "assumptions": [
+        "Q6_K shares Q4_K effective bandwidth (mixed Qwen experts)",
+        "all nonexpert weight bytes active each token (logical estimate)",
+        "uniform LRU coverage; fitted H2D bandwidth includes cache dispatch; miss latency not separately identifiable",
+        "equal weight per job/configuration; all repeats retained; D035 noisy points included",
+        "fit microseconds; D029/D039 reuse normalized by 1.02; workload/context effects not separately fitted"
+      ],
+      "evaluation": {
+        "summary": {
+          "D039": {
+            "count": 27,
+            "mean_error_pct": 3.630723903731581,
+            "mape_pct": 7.85097454093377,
+            "max_abs_pct": 14.3005105045096
+          },
+          "Qwen": {
+            "count": 27,
+            "mean_error_pct": 3.630723903731581,
+            "mape_pct": 7.85097454093377,
+            "max_abs_pct": 14.3005105045096
+          }
+        },
+        "by_mechanism": {
+          "Qwen/static": {
+            "count": 27,
+            "mape_pct": 7.85097454093377,
+            "mean_error_pct": 3.630723903731581,
+            "max_abs_pct": 14.3005105045096
+          }
+        },
+        "residuals": [
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n8#0",
+            "family": "static",
+            "measured_tps": 93.55,
+            "predicted_tps": 82.06779193242073,
+            "error_pct": -12.273872867535296,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n12#1",
+            "family": "static",
+            "measured_tps": 72.87,
+            "predicted_tps": 68.42271283287826,
+            "error_pct": -6.103042633623912,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n18#2",
+            "family": "static",
+            "measured_tps": 54.62,
+            "predicted_tps": 54.95315457796798,
+            "error_pct": 0.609949794888287,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n24#3",
+            "family": "static",
+            "measured_tps": 44.18,
+            "predicted_tps": 45.914515069661505,
+            "error_pct": 3.926018718111157,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n30#4",
+            "family": "static",
+            "measured_tps": 36.3,
+            "predicted_tps": 39.429234326417124,
+            "error_pct": 8.6204802380637,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n36#5",
+            "family": "static",
+            "measured_tps": 31.74,
+            "predicted_tps": 34.54926007974262,
+            "error_pct": 8.850850912862708,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n42#6",
+            "family": "static",
+            "measured_tps": 28.01,
+            "predicted_tps": 30.744193258188247,
+            "error_pct": 9.761489675788093,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n48#7",
+            "family": "static",
+            "measured_tps": 24.35,
+            "predicted_tps": 27.503131719063347,
+            "error_pct": 12.94920623845317,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n18_fa_kvq8#8",
+            "family": "static",
+            "measured_tps": 53.89,
+            "predicted_tps": 54.95315457796798,
+            "error_pct": 1.9728234885284524,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n18_fa_kvq8#9",
+            "family": "static",
+            "measured_tps": 54.86,
+            "predicted_tps": 54.95315457796798,
+            "error_pct": 0.16980418878596026,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n48#10",
+            "family": "static",
+            "measured_tps": 24.48,
+            "predicted_tps": 27.503131719063347,
+            "error_pct": 12.349394277219549,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n42#11",
+            "family": "static",
+            "measured_tps": 27.73,
+            "predicted_tps": 30.744193258188247,
+            "error_pct": 10.869791771324365,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n36#12",
+            "family": "static",
+            "measured_tps": 31.89,
+            "predicted_tps": 34.54926007974262,
+            "error_pct": 8.338852554853005,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n30#13",
+            "family": "static",
+            "measured_tps": 37.18,
+            "predicted_tps": 39.429234326417124,
+            "error_pct": 6.049581297517825,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n24#14",
+            "family": "static",
+            "measured_tps": 43.63,
+            "predicted_tps": 45.914515069661505,
+            "error_pct": 5.236110634108426,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n18#15",
+            "family": "static",
+            "measured_tps": 53.12,
+            "predicted_tps": 54.95315457796798,
+            "error_pct": 3.4509687085240603,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n12#16",
+            "family": "static",
+            "measured_tps": 73.4,
+            "predicted_tps": 68.42271283287826,
+            "error_pct": -6.78104518681436,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n8#17",
+            "family": "static",
+            "measured_tps": 93.01,
+            "predicted_tps": 82.06779193242073,
+            "error_pct": -11.764550121039964,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n8#18",
+            "family": "static",
+            "measured_tps": 93.79,
+            "predicted_tps": 82.06779193242073,
+            "error_pct": -12.498355973535846,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n12#19",
+            "family": "static",
+            "measured_tps": 73.26,
+            "predicted_tps": 68.42271283287826,
+            "error_pct": -6.602903586024766,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n18#20",
+            "family": "static",
+            "measured_tps": 55.48,
+            "predicted_tps": 54.95315457796798,
+            "error_pct": -0.9496132336553997,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n24#21",
+            "family": "static",
+            "measured_tps": 40.17,
+            "predicted_tps": 45.914515069661505,
+            "error_pct": 14.3005105045096,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n30#22",
+            "family": "static",
+            "measured_tps": 36.58,
+            "predicted_tps": 39.429234326417124,
+            "error_pct": 7.789049552807881,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n36#23",
+            "family": "static",
+            "measured_tps": 31.21,
+            "predicted_tps": 34.54926007974262,
+            "error_pct": 10.69932739424102,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n42#24",
+            "family": "static",
+            "measured_tps": 27.56,
+            "predicted_tps": 30.744193258188247,
+            "error_pct": 11.553676553658377,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n48#25",
+            "family": "static",
+            "measured_tps": 24.11,
+            "predicted_tps": 27.503131719063347,
+            "error_pct": 14.073545081142047,
+            "fallbacks": []
+          },
+          {
+            "model": "Qwen",
+            "decision": "D039",
+            "test": "qw_static_n18_fa_kvq8#26",
+            "family": "static",
+            "measured_tps": 53.13,
+            "predicted_tps": 54.95315457796798,
+            "error_pct": 3.4314974175945423,
+            "fallbacks": []
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1975,5 +1975,314 @@
         "enumeration": "No PAP throughput or quality invented while calibration_points is empty; future points must bind model bytes, placement and lab provenance"
       }
     }
+  },
+  "physical_decode": {
+    "schema": "physical-decode/1",
+    "host_id": "x86-main",
+    "constants": {
+      "bw_gpu_gbs": 285.2273918763575,
+      "bw_cpu_gbs": {
+        "Q2_K": 25.901524915360557,
+        "Q3_K": 34.59061466026215,
+        "Q4_K": 35.88678098775044,
+        "Q6_K": 35.88678098775044
+      },
+      "handoff_us": 136.64088295786627,
+      "bw_h2d_gbs": 9.326165360590723,
+      "cache_miss_us": 0.0,
+      "screen_bw_cpu_gbs": {
+        "Q2_K": 26.572121741451262,
+        "Q3_K": 26.582575605775872,
+        "Q4_K": 26.06744733493235,
+        "Q8_0": 28.284500012743678
+      }
+    },
+    "coefficients": {
+      "gpu": 3.505974631053274,
+      "Q2_K": 38.607765499048405,
+      "Q3_K": 28.909575901488807,
+      "Q4_K": 27.865413739430654,
+      "handoff": 136.64088295786627,
+      "h2d": 107.22520578775793
+    },
+    "rank": 5,
+    "free_columns": 5,
+    "training_models": [
+      "Granite",
+      "Qwen"
+    ],
+    "training_jobs": [
+      "job-34c09bec98",
+      "job-3d2fbbd061",
+      "job-56115e2bf1",
+      "job-9f50eae42a",
+      "job-ad883810b3",
+      "job-d2e342e743"
+    ],
+    "training_point_count": 165,
+    "boundary_coefficients": [],
+    "handoff_prior": null,
+    "gpu_anchor_count": 35,
+    "assumptions": [
+      "Q6_K shares Q4_K effective bandwidth (mixed Qwen experts)",
+      "all nonexpert weight bytes active each token (logical estimate)",
+      "uniform LRU coverage; fitted H2D bandwidth includes cache dispatch; miss latency not separately identifiable",
+      "equal weight per job/configuration; all repeats retained; D035 noisy points included",
+      "fit microseconds; D029/D039 reuse normalized by 1.02; workload/context effects not separately fitted"
+    ],
+    "evaluation": {
+      "summary": {
+        "D022": {
+          "count": 27,
+          "mean_error_pct": 8.216259766883063,
+          "mape_pct": 22.501257732975372,
+          "max_abs_pct": 69.20201167009536
+        },
+        "D029": {
+          "count": 32,
+          "mean_error_pct": 7.546841274408996,
+          "mape_pct": 27.18558054544853,
+          "max_abs_pct": 37.56278248941103
+        },
+        "D034": {
+          "count": 15,
+          "mean_error_pct": 0.13573946621633803,
+          "mape_pct": 2.1257820145326454,
+          "max_abs_pct": 7.217750654080146
+        },
+        "D035": {
+          "count": 39,
+          "mean_error_pct": 2.8188298875446285,
+          "mape_pct": 5.082561963577178,
+          "max_abs_pct": 17.952740765372678
+        },
+        "D039": {
+          "count": 27,
+          "mean_error_pct": -3.8967561600355416,
+          "mape_pct": 5.500149962720025,
+          "max_abs_pct": 16.656842642049853
+        },
+        "D040": {
+          "count": 25,
+          "mean_error_pct": -1.992463019162039,
+          "mape_pct": 4.577422711660957,
+          "max_abs_pct": 12.989597929828822
+        },
+        "Granite": {
+          "count": 138,
+          "mean_error_pct": 3.8079479464881536,
+          "mape_pct": 13.203005440823997,
+          "max_abs_pct": 69.20201167009536
+        },
+        "Qwen": {
+          "count": 27,
+          "mean_error_pct": -3.8967561600355416,
+          "mape_pct": 5.500149962720025,
+          "max_abs_pct": 16.656842642049853
+        }
+      },
+      "by_mechanism": {
+        "Granite/static": {
+          "count": 126,
+          "mape_pct": 11.125970268955207,
+          "mean_error_pct": 3.3454273807035597,
+          "max_abs_pct": 37.56278248941103
+        },
+        "Granite/lru": {
+          "count": 12,
+          "mape_pct": 35.011874745446285,
+          "mean_error_pct": 8.664413887226386,
+          "max_abs_pct": 69.20201167009536
+        },
+        "Qwen/static": {
+          "count": 27,
+          "mape_pct": 5.500149962720025,
+          "mean_error_pct": -3.8967561600355416,
+          "max_abs_pct": 16.656842642049853
+        }
+      }
+    },
+    "leave_one_model_out": {
+      "Granite": {
+        "constants": {
+          "bw_gpu_gbs": 449.06606990519913,
+          "bw_cpu_gbs": {
+            "Q4_K": 27.62410407348427,
+            "Q6_K": 27.62410407348427
+          },
+          "handoff_us": 2.8002971791760994e-23,
+          "bw_h2d_gbs": 12.0,
+          "cache_miss_us": 0.0
+        },
+        "coefficients": {
+          "gpu": 2.226843814343637,
+          "Q4_K": 36.200269059943075,
+          "handoff": 2.8002971791760994e-23
+        },
+        "rank": 3,
+        "free_columns": 3,
+        "training_models": [
+          "Qwen"
+        ],
+        "training_jobs": [
+          "job-9f50eae42a"
+        ],
+        "training_point_count": 27,
+        "boundary_coefficients": [
+          "handoff"
+        ],
+        "handoff_prior": null,
+        "gpu_anchor_count": 0,
+        "assumptions": [
+          "Q6_K shares Q4_K effective bandwidth (mixed Qwen experts)",
+          "all nonexpert weight bytes active each token (logical estimate)",
+          "uniform LRU coverage; fitted H2D bandwidth includes cache dispatch; miss latency not separately identifiable",
+          "equal weight per job/configuration; all repeats retained; D035 noisy points included",
+          "fit microseconds; D029/D039 reuse normalized by 1.02; workload/context effects not separately fitted"
+        ],
+        "evaluation": {
+          "summary": {
+            "D022": {
+              "count": 27,
+              "mean_error_pct": 50.925712264081525,
+              "mape_pct": 54.54028593807126,
+              "max_abs_pct": 156.48074350446382
+            },
+            "D029": {
+              "count": 32,
+              "mean_error_pct": 69.32327931095993,
+              "mape_pct": 69.32327931095993,
+              "max_abs_pct": 116.58080484963432
+            },
+            "D034": {
+              "count": 15,
+              "mean_error_pct": 32.16745315543981,
+              "mape_pct": 32.16745315543981,
+              "max_abs_pct": 41.498706118629514
+            },
+            "D035": {
+              "count": 39,
+              "mean_error_pct": 55.8607664262397,
+              "mape_pct": 55.8607664262397,
+              "max_abs_pct": 116.40770102329259
+            },
+            "D040": {
+              "count": 25,
+              "mean_error_pct": 37.49010717763294,
+              "mape_pct": 37.49010717763294,
+              "max_abs_pct": 63.86690641357606
+            },
+            "Granite": {
+              "count": 138,
+              "mean_error_pct": 52.113576351280344,
+              "mape_pct": 52.8207755483653,
+              "max_abs_pct": 156.48074350446382
+            }
+          },
+          "by_mechanism": {
+            "Granite/static": {
+              "count": 126,
+              "mape_pct": 52.23321156272889,
+              "mean_error_pct": 52.23321156272889,
+              "max_abs_pct": 116.58080484963432
+            },
+            "Granite/lru": {
+              "count": 12,
+              "mape_pct": 58.990197397547576,
+              "mean_error_pct": 50.85740663107068,
+              "max_abs_pct": 156.48074350446382
+            }
+          }
+        }
+      },
+      "Qwen": {
+        "constants": {
+          "bw_gpu_gbs": 285.2273918763575,
+          "bw_cpu_gbs": {
+            "Q2_K": 32.54157185991761,
+            "Q3_K": 43.680007506159676,
+            "Q4_K": 43.07433824532367,
+            "Q6_K": 43.07433824532367
+          },
+          "handoff_us": 169.16666666666666,
+          "bw_h2d_gbs": 9.326165360590723,
+          "cache_miss_us": 0.0
+        },
+        "coefficients": {
+          "gpu": 3.505974631053274,
+          "handoff": 169.16666666666666,
+          "Q2_K": 30.729923075158172,
+          "Q3_K": 22.893768959608852,
+          "Q4_K": 23.21567877153781,
+          "h2d": 107.22520578775794
+        },
+        "rank": 4,
+        "free_columns": 4,
+        "training_models": [
+          "Granite"
+        ],
+        "training_jobs": [
+          "job-34c09bec98",
+          "job-3d2fbbd061",
+          "job-56115e2bf1",
+          "job-ad883810b3",
+          "job-d2e342e743"
+        ],
+        "training_point_count": 138,
+        "boundary_coefficients": [],
+        "handoff_prior": "D031 extra split cost / 12 = 169.167 us/layer; rank-deficient training fold; not a universal measured handoff",
+        "gpu_anchor_count": 35,
+        "assumptions": [
+          "Q6_K shares Q4_K effective bandwidth (mixed Qwen experts)",
+          "all nonexpert weight bytes active each token (logical estimate)",
+          "uniform LRU coverage; fitted H2D bandwidth includes cache dispatch; miss latency not separately identifiable",
+          "equal weight per job/configuration; all repeats retained; D035 noisy points included",
+          "fit microseconds; D029/D039 reuse normalized by 1.02; workload/context effects not separately fitted"
+        ],
+        "evaluation": {
+          "summary": {
+            "D039": {
+              "count": 27,
+              "mean_error_pct": 3.630723903731581,
+              "mape_pct": 7.85097454093377,
+              "max_abs_pct": 14.3005105045096
+            },
+            "Qwen": {
+              "count": 27,
+              "mean_error_pct": 3.630723903731581,
+              "mape_pct": 7.85097454093377,
+              "max_abs_pct": 14.3005105045096
+            }
+          },
+          "by_mechanism": {
+            "Qwen/static": {
+              "count": 27,
+              "mape_pct": 7.85097454093377,
+              "mean_error_pct": 3.630723903731581,
+              "max_abs_pct": 14.3005105045096
+            }
+          }
+        }
+      }
+    },
+    "report": "artifacts/codexPL4/fit-report.json",
+    "points": "artifacts/codexPL4/measured-points.json",
+    "cpu_type_screen": {
+      "report": "artifacts/codexPL4/cpu-screen/report.json",
+      "indicative": true,
+      "effective_gbs": {
+        "Q2_K": 26.572121741451262,
+        "Q3_K": 26.582575605775872,
+        "Q4_K": 26.06744733493235,
+        "Q8_0": 28.284500012743678
+      },
+      "caveat": "Whole-model CPU decode, including nonexperts; effective bytes/s is an end-to-end proxy, not isolated expert GEMV bandwidth. Shared sandbox host and load affect timings. Does not replace fitted mixed GPU/CPU constants."
+    },
+    "screen_bw_cpu_gbs": {
+      "Q2_K": 26.572121741451262,
+      "Q3_K": 26.582575605775872,
+      "Q4_K": 26.06744733493235,
+      "Q8_0": 28.284500012743678
+    }
   }
 }

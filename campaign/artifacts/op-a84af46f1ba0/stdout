@@ -1,0 +1,33 @@
+qwen3moe: 48 layers, 128 experts, top-8
+embedding=2048 FFN=6144 expert-FFN=768 heads=32/4 head_dim=128 context=40960
+| Weight role | MiB |
+| --- | ---: |
+| router | 48.00 |
+| expert_ffn | 16,740.00 |
+| norm | 0.80 |
+| attn_qkv | 276.19 |
+| attn_out | 216.00 |
+| embed | 166.92 |
+| output | 243.43 |
+| TOTAL | 17,691.34 |
+Expert share: 94.62%; active weight MiB/token: 1,997.59
+
+| Weight placement floor | GPU MiB |
+| --- | ---: |
+| all_experts_on_host (f=0) | 951.34 |
+| all_experts_on_gpu (f=1) | 17,691.34 |
+| hot_fraction (f=0.25) | 5,136.34 |
+| hot_fraction (f=0.5) | 9,321.34 |
+| hot_fraction (f=0.75) | 13,506.34 |
+
+| KV cache type | Bytes/token | MiB at model context |
+| --- | ---: | ---: |
+| f16 | 98304 | 3,840.00 |
+| bf16 | 98304 | 3,840.00 |
+| q8_0 | 52224 | 2,040.00 |
+| q5_1 | 36864 | 1,440.00 |
+| q5_0 | 33792 | 1,320.00 |
+| q4_1 | 30720 | 1,200.00 |
+| q4_0 | 27648 | 1,080.00 |
+
+Floors exclude KV, runtime, compute buffers and transfer staging.

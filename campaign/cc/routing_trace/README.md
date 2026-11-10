@@ -113,3 +113,32 @@ g++ -fsyntax-only -std=c++17 -Wall -Wextra -Wpedantic \
 Results: **29 pytest cases passed**, patch check/application passed on an archive copy, and C++17 syntax-only passed with no diagnostics (GCC 13.3.0). Source tracked status was clean before and after. See `artifacts/codexF/verification.json`, `verification.log`, and `pytest.log`. Tests cover repeated experts, deterministic uniform random routing, LRU/LFU differences and tie behavior, cold phases/sequences/layers, weighted aggregation, overlap gaps, malformed input and the CLI output channels. `synthetic-trace.jsonl` and `synthetic-replay.json` / `.md` in the same evidence directory demonstrate output format only; they are not a model capture.
 
 **Not compile-linked:** `llama-routing-trace`, `llama-common`, `llama`, and ggml backends were not built or linked. CMake configuration, CUDA compilation, real host/device callback execution, model capture, numerical equivalence, GPU performance, and Build CC runtime packaging were not verified. An actual patched build and Granite capture remain integration work for the orchestrator.
+
+## Additive Qwen3 MoE support (T-QRT)
+
+The patch at the same pinned commit now also accepts `qwen3moe` top-8 graphs.
+The original observer shared its graph names and tensor layout with Qwen3 MoE,
+but its hard-coded `[0,32)` expert-ID check rejected this model. For exactly
+`general.architecture=qwen3moe`, the driver now reads and validates
+`qwen3moe.expert_count` before tracing and uses that count for ID bounds.
+Other architectures retain the existing 32-expert bound. Top-k remains eight;
+this is additive architecture support, not a general arbitrary-MoE tracer.
+The architecture graph uses the same `build_moe_ffn` callback names and
+last-layer pruning, so the existing all-prompt-logits policy remains necessary.
+
+For Qwen captures, use the model inspector's existing count-aware JSONL adapter:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 cc/model_inspect/inspect_model.py \
+  /home/muk/models/campaign/qwen3-30b-a3b/Qwen3-30B-A3B-Q4_K_M.gguf \
+  --trace artifacts/codexQRT/prose.jsonl \
+  --out artifacts/codexQRT/prose-inspect.json
+```
+
+`trace_replay.py` remains a Granite/32-expert simulator and must not be used for
+Qwen3's 128-expert traces. No adapter change is needed in `model_inspect`.
+The CPU-only source/build and serial capture recipe are retained under
+`artifacts/codexQRT/`; `capture.py` specifies mmap, no repacking, eight threads,
+128-token chunks, a 4096-token context and 64 generated tokens per prompt.
+See `artifacts/codexQRT/ANALYSIS.md` for completeness checks, trace hashes,
+TRAIN-prefill fitting, held-out coverage and conditional performance estimates.

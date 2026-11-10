@@ -1,0 +1,224 @@
+{
+  "schema": "factory-stage/0",
+  "stage": "report",
+  "status": "completed",
+  "inputs": {
+    "files": {
+      "/home/muk/projects/siminfeng/campaign/cc/factory/factory.py": "0bdb2623eae85809bb60c838d254e3192de4fae3116570316529f7226662989b",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/plan.json": "dddca7244cea0758c60550a7f4b603301cc8e5d589ce13aa1912e6bd46c755da",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/recipe.json": "7fc94026b7a0941647ff55bdb085a232b9f7dfe60fe04f231ee6f6119d8bc8c3",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/measure.json": "925b12ac17b9e37eb855bd8361f248292e09c8ce66740f6a9fa917137fd81be8",
+      "/home/muk/projects/siminfeng/campaign/cc/engine_handoff/envelopes.py": "a1c30314fa3647a128d447c568700b46ebf64c8296b699c324afa3aa718a666c"
+    },
+    "parameters": {
+      "error_pct": 20
+    }
+  },
+  "inputs_sha256": "c47b1210ead38f3e329791cd43fb52ddd2a48ceeca713b8b47e9dcd56dfa152f",
+  "data": {
+    "schema": "factory-report/0",
+    "rows": [
+      {
+        "plan_id": "Q4_K_M-static24-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "measured": null,
+        "prediction": {
+          "id": "Q4_K_M-static24-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+          "representation": "Q4_K_M",
+          "placement": "static",
+          "gpu_mib": 884.521,
+          "gpu_guard_mib": 2.0,
+          "host_mib": 1182.116,
+          "decode_tps": 134.324,
+          "ttft_ms": 86.715,
+          "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+          "quality_class": "combined-quality-unmeasured",
+          "kld": null,
+          "representation_kld": 0.077526,
+          "quality_risk": null,
+          "quality_risk_unknown": true,
+          "kv_type": "q4_0",
+          "kv_mib": 432.0,
+          "flash_attention": true,
+          "attention_delta_mib": 30.4,
+          "components": [
+            "kv_quant_fix",
+            "q8_reuse"
+          ],
+          "runtime_env": {
+            "GGML_CUDA_Q8_REUSE": "1"
+          },
+          "technique_family": "Q4_K_M|static|q4_0|fa-on|kv_quant_fix,q8_reuse",
+          "prefill_tps": 782.129,
+          "prefill_ms": 79.271,
+          "prefill_source": "D028 1560-token prefill endpoint + D022 placement us/token penalty; extrapolated",
+          "techniques": [
+            "Q4_K_M",
+            "static",
+            "kv:q4_0",
+            "ctx:32768",
+            "batch:512",
+            "ubatch:128"
+          ],
+          "confidence": "extrapolated",
+          "metric_confidence": {
+            "gpu_mib": "extrapolated",
+            "decode_tps": "extrapolated-component-transfer",
+            "host_mib": "extrapolated",
+            "prefill_tps": "proxy",
+            "ttft_ms": "proxy"
+          },
+          "flags": [
+            "-m",
+            "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-Q4_K_M.gguf",
+            "-ngl",
+            "99",
+            "--fit",
+            "off",
+            "-c",
+            "32768",
+            "-b",
+            "512",
+            "-ub",
+            "128",
+            "-ctk",
+            "q4_0",
+            "-ctv",
+            "q4_0",
+            "-t",
+            "8",
+            "-tb",
+            "8",
+            "--n-cpu-moe",
+            "24",
+            "-fa",
+            "on"
+          ],
+          "model_path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-Q4_K_M.gguf",
+          "notes": [
+            "D028: -fa on default at ctx >=8192; f16 memory/decode transfer is extrapolated; FA quality equivalence unmeasured",
+            "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+            "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+            "Representation KLD carried as risk prior; placement/KV combined KLD must be measured",
+            "representation timing/placement transferred from mixE4K",
+            "context outside measured singleton 4096",
+            "quantized KV: speed and combined KLD unmeasured",
+            "batch/ubatch memory scaling and prefill unmeasured"
+          ],
+          "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029) + kv_quant_fix patch (D028; qualification pending)",
+          "prerequisites": [
+            "Check mechanism engagement (D024)",
+            "Measure shim peak AND baseline-subtracted device peak (D023)",
+            "Paired quality check before accepting drift; 3 alternated timing rounds"
+          ]
+        },
+        "quality_accepted": null,
+        "claim_category": "prediction",
+        "transfer_class": "prediction"
+      }
+    ],
+    "unmatched": [],
+    "result_envelopes": [],
+    "limitations": [
+      "TTFT proxy excludes load, queueing, tokenization and sampling; actual TTFT remains null unless measured.",
+      "Host working-set prediction is not comparable to cgroup peak; device delta, absolute peak and shim cap stay separate.",
+      "Quality512 is scoped to ctx512; it does not certify the requested context.",
+      "Legacy/unbound results are diagnostic joins, not qualified input identity evidence.",
+      "Component acceptance does not qualify an arbitrary patch combination or prove an engine gain."
+    ],
+    "measurement_jobs": [
+      {
+        "plan_id": "Q4_K_M-static24-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "phase": "engagement",
+        "job": "job-d8a788431b",
+        "argv": [
+          "/usr/bin/python",
+          "-B",
+          "/home/muk/projects/siminfeng/campaign/bin/lab",
+          "submit",
+          "--image",
+          "factory-unbuilt",
+          "--model",
+          "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-Q4_K_M.gguf",
+          "--tests",
+          "pl_316f320424f6_engagement",
+          "--key",
+          "factory-708424a949dfd29913be131d"
+        ],
+        "env": {
+          "LAB": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab"
+        },
+        "status": "dry-run",
+        "result_glob": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab/jobs/job-d8a788431b/att-*/result.json",
+        "prerequisites": [
+          "Backend evidence of engagement before timing",
+          "Paired quality at matching context before acceptance",
+          "Three alternating forward/reverse timing rounds; one GPU job at a time"
+        ]
+      },
+      {
+        "plan_id": "Q4_K_M-static24-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "phase": "quality512",
+        "job": "job-3e23ca4d74",
+        "argv": [
+          "/usr/bin/python",
+          "-B",
+          "/home/muk/projects/siminfeng/campaign/bin/lab",
+          "submit",
+          "--image",
+          "factory-unbuilt",
+          "--model",
+          "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-Q4_K_M.gguf",
+          "--tests",
+          "pl_316f320424f6_quality512",
+          "--key",
+          "factory-cafa38e691ef561ad577d460",
+          "--data",
+          "<WIKITEXT_TEST_PATH_REQUIRED>"
+        ],
+        "env": {
+          "LAB": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab"
+        },
+        "status": "dry-run",
+        "result_glob": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab/jobs/job-3e23ca4d74/att-*/result.json",
+        "prerequisites": [
+          "Backend evidence of engagement before timing",
+          "Paired quality at matching context before acceptance",
+          "Three alternating forward/reverse timing rounds; one GPU job at a time"
+        ]
+      },
+      {
+        "plan_id": "Q4_K_M-static24-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "phase": "timing",
+        "job": "job-b04f0667ea",
+        "argv": [
+          "/usr/bin/python",
+          "-B",
+          "/home/muk/projects/siminfeng/campaign/bin/lab",
+          "submit",
+          "--image",
+          "factory-unbuilt",
+          "--model",
+          "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-Q4_K_M.gguf",
+          "--tests",
+          "pl_316f320424f6_timing,pl_316f320424f6_timing,pl_316f320424f6_timing",
+          "--key",
+          "factory-ad4630a6cdee922d273054ab"
+        ],
+        "env": {
+          "LAB": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab"
+        },
+        "status": "dry-run",
+        "result_glob": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab/jobs/job-b04f0667ea/att-*/result.json",
+        "prerequisites": [
+          "Backend evidence of engagement before timing",
+          "Paired quality at matching context before acceptance",
+          "Three alternating forward/reverse timing rounds; one GPU job at a time"
+        ]
+      }
+    ]
+  },
+  "outputs": {
+    "data_sha256": "a9ed355b62899b51625a02873d2ced9dc2528f87a51b710ce25c962358080b3f",
+    "files": {}
+  }
+}

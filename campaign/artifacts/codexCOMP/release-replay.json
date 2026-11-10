@@ -1,0 +1,141 @@
+{
+  "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+  "base_tree_hash": "158a7ade930818efdb06c5561920a8d018d404ba",
+  "patches": [
+    {
+      "patch": "/home/muk/projects/siminfeng/campaign/cc/components/release-stack-1.patch",
+      "sha256": "2e340d159bc51d9918bfdf41327f989478daa52cd2dab3e876a8fe722d663031",
+      "files": [
+        {
+          "path": "ggml/src/ggml-backend.cpp",
+          "old_path": "a/ggml/src/ggml-backend.cpp",
+          "new_path": "b/ggml/src/ggml-backend.cpp",
+          "layer": "ggml-core",
+          "hunks": [
+            {
+              "old_start": 1972,
+              "old_count": 9,
+              "new_start": 1972,
+              "new_count": 8,
+              "context": "ggml_backend_sched_t ggml_backend_sched_new("
+            }
+          ]
+        },
+        {
+          "path": "ggml/src/ggml-cuda/common.cuh",
+          "old_path": "a/ggml/src/ggml-cuda/common.cuh",
+          "new_path": "b/ggml/src/ggml-cuda/common.cuh",
+          "layer": "backend-cuda",
+          "hunks": [
+            {
+              "old_start": 1445,
+              "old_count": 6,
+              "new_start": 1445,
+              "new_count": 33,
+              "context": "struct ggml_cuda_stream_context {"
+            },
+            {
+              "old_start": 1456,
+              "old_count": 6,
+              "new_start": 1483,
+              "new_count": 7,
+              "context": "struct ggml_backend_cuda_context {"
+            }
+          ]
+        },
+        {
+          "path": "ggml/src/ggml-cuda/ggml-cuda.cu",
+          "old_path": "a/ggml/src/ggml-cuda/ggml-cuda.cu",
+          "new_path": "b/ggml/src/ggml-cuda/ggml-cuda.cu",
+          "layer": "backend-cuda",
+          "hunks": [
+            {
+              "old_start": 744,
+              "old_count": 6,
+              "new_start": 744,
+              "new_count": 15,
+              "context": "ggml_backend_cuda_context::~ggml_backend_cuda_context() {"
+            },
+            {
+              "old_start": 4546,
+              "old_count": 6,
+              "new_start": 4555,
+              "new_count": 33,
+              "context": "static int ggml_cuda_try_fuse(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph"
+            },
+            {
+              "old_start": 4686,
+              "old_count": 9,
+              "new_start": 4722,
+              "new_count": 19,
+              "context": "static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud"
+            },
+            {
+              "old_start": 4715,
+              "old_count": 7,
+              "new_start": 4761,
+              "new_count": 10,
+              "context": "static void ggml_cuda_graph_evaluate_and_capture(ggml_backend_cuda_context * cud"
+            },
+            {
+              "old_start": 4784,
+              "old_count": 6,
+              "new_start": 4833,
+              "new_count": 8,
+              "context": "static bool ggml_cuda_graph_set_enabled(ggml_backend_cuda_context * cuda_ctx, co"
+            },
+            {
+              "old_start": 4829,
+              "old_count": 6,
+              "new_start": 4880,
+              "new_count": 26,
+              "context": "static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend,"
+            }
+          ]
+        },
+        {
+          "path": "ggml/src/ggml-cuda/mmvq.cu",
+          "old_path": "a/ggml/src/ggml-cuda/mmvq.cu",
+          "new_path": "b/ggml/src/ggml-cuda/mmvq.cu",
+          "layer": "backend-cuda",
+          "hunks": [
+            {
+              "old_start": 1549,
+              "old_count": 12,
+              "new_start": 1549,
+              "new_count": 21,
+              "context": "void ggml_cuda_mul_mat_vec_q("
+            },
+            {
+              "old_start": 1580,
+              "old_count": 7,
+              "new_start": 1589,
+              "new_count": 7,
+              "context": "void ggml_cuda_mul_mat_vec_q("
+            }
+          ]
+        }
+      ],
+      "layers": [
+        "backend-cuda",
+        "ggml-core"
+      ]
+    }
+  ],
+  "pairwise_overlap": [],
+  "permutations": [
+    {
+      "order": [
+        "/home/muk/projects/siminfeng/campaign/cc/components/release-stack-1.patch"
+      ],
+      "applies": true,
+      "tree_hash": "954f7c74045ee731531b20ae68fd0a7701b48c4c",
+      "conflict": null
+    }
+  ],
+  "tree_hashes": [
+    "954f7c74045ee731531b20ae68fd0a7701b48c4c"
+  ],
+  "order_independent": true,
+  "release": null
+}

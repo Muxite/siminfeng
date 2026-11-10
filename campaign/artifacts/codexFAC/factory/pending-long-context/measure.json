@@ -1,0 +1,126 @@
+{
+  "schema": "factory-stage/0",
+  "stage": "measure",
+  "status": "completed",
+  "inputs": {
+    "files": {
+      "/home/muk/projects/siminfeng/campaign/cc/factory/factory.py": "0bdb2623eae85809bb60c838d254e3192de4fae3116570316529f7226662989b",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/recipe.json": "7fc94026b7a0941647ff55bdb085a232b9f7dfe60fe04f231ee6f6119d8bc8c3",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/build.json": "c3f595e42ac6d45ea5b47e50d709f19b10402108f62ecf1c736866612cf1b653",
+      "/home/muk/projects/siminfeng/campaign/bin/lab": "15fef4f35247b6ae23985b09a6c8b2ece8f6848ed886fdeab26d1e89d82609b7",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/builds/d47617d4ee90dcfe/build-record.json": null,
+      "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-Q4_K_M.gguf": "8b6bf885da1bebfc7c1ba7bf9dc3c731a85ad734d5e9166afff2c3ec9b789339",
+      "/home/muk/projects/siminfeng/campaign/artifacts/traces/in/chat.txt": "65d188967378a61add25e0f98c35cd2bce2b02235451b09f6735d5512b3486b0",
+      "/home/muk/projects/siminfeng/campaign/artifacts/kl/bf16.kl": "ad8f351c215ad09971fa9db0ede3b206cf27fad652d9c1cc0abc8c2261d060cd"
+    },
+    "parameters": {
+      "dry_run": true,
+      "data": null
+    }
+  },
+  "inputs_sha256": "bc9d91edb4869de146ce316ac4d9cd907c2210ff7e3bf6e0925e45c87d872ef0",
+  "data": {
+    "jobs": [
+      {
+        "plan_id": "Q4_K_M-static24-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "phase": "engagement",
+        "job": "job-d8a788431b",
+        "argv": [
+          "/usr/bin/python",
+          "-B",
+          "/home/muk/projects/siminfeng/campaign/bin/lab",
+          "submit",
+          "--image",
+          "factory-unbuilt",
+          "--model",
+          "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-Q4_K_M.gguf",
+          "--tests",
+          "pl_316f320424f6_engagement",
+          "--key",
+          "factory-708424a949dfd29913be131d"
+        ],
+        "env": {
+          "LAB": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab"
+        },
+        "status": "dry-run",
+        "result_glob": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab/jobs/job-d8a788431b/att-*/result.json",
+        "prerequisites": [
+          "Backend evidence of engagement before timing",
+          "Paired quality at matching context before acceptance",
+          "Three alternating forward/reverse timing rounds; one GPU job at a time"
+        ]
+      },
+      {
+        "plan_id": "Q4_K_M-static24-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "phase": "quality512",
+        "job": "job-3e23ca4d74",
+        "argv": [
+          "/usr/bin/python",
+          "-B",
+          "/home/muk/projects/siminfeng/campaign/bin/lab",
+          "submit",
+          "--image",
+          "factory-unbuilt",
+          "--model",
+          "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-Q4_K_M.gguf",
+          "--tests",
+          "pl_316f320424f6_quality512",
+          "--key",
+          "factory-cafa38e691ef561ad577d460",
+          "--data",
+          "<WIKITEXT_TEST_PATH_REQUIRED>"
+        ],
+        "env": {
+          "LAB": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab"
+        },
+        "status": "dry-run",
+        "result_glob": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab/jobs/job-3e23ca4d74/att-*/result.json",
+        "prerequisites": [
+          "Backend evidence of engagement before timing",
+          "Paired quality at matching context before acceptance",
+          "Three alternating forward/reverse timing rounds; one GPU job at a time"
+        ]
+      },
+      {
+        "plan_id": "Q4_K_M-static24-q4_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+        "phase": "timing",
+        "job": "job-b04f0667ea",
+        "argv": [
+          "/usr/bin/python",
+          "-B",
+          "/home/muk/projects/siminfeng/campaign/bin/lab",
+          "submit",
+          "--image",
+          "factory-unbuilt",
+          "--model",
+          "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-Q4_K_M.gguf",
+          "--tests",
+          "pl_316f320424f6_timing,pl_316f320424f6_timing,pl_316f320424f6_timing",
+          "--key",
+          "factory-ad4630a6cdee922d273054ab"
+        ],
+        "env": {
+          "LAB": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab"
+        },
+        "status": "dry-run",
+        "result_glob": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab/jobs/job-b04f0667ea/att-*/result.json",
+        "prerequisites": [
+          "Backend evidence of engagement before timing",
+          "Paired quality at matching context before acceptance",
+          "Three alternating forward/reverse timing rounds; one GPU job at a time"
+        ]
+      }
+    ],
+    "execution": "submission only; no GPU job started",
+    "image_id": null,
+    "dry_run": true
+  },
+  "outputs": {
+    "data_sha256": "8c50a992dbf3f8f7281d5e670b70349426a019ae5b8d3c212f4147b8e96770cd",
+    "files": {
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab/tests/factory-708424a949dfd29913be131d.json": "5fd10d45173c27a09bbf197253712fc97ee8c9a1f144144ff68192b742334183",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab/tests/factory-cafa38e691ef561ad577d460.json": "cdd20f495780809f35da91ca905ed386f290819ea45a348ca7761c28d7eb4bff",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/pending-long-context/lab/tests/factory-ad4630a6cdee922d273054ab.json": "b8424dea8d15ad7a8030c6ed9235084b3dfc6c33e326e05ca4d7453072c42af5"
+    }
+  }
+}

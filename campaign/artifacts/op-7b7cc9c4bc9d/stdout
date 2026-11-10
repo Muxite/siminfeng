@@ -1,0 +1,8 @@
+Explain, step by step, how a mixture-of-experts transformer routes each token to a small subset of experts, why that saves compute, and what problems appear when the expert weights do not fit in GPU memory. Then propose three practical strategies and compare their trade-offs in a short table.
+
+A mixture-of-experts transformer is a type of transformer architecture that combines the benefits of multiple expert models. Each expert model is trained independently and then combined to form a single model. This approach allows for more efficient use of computational resources, as each expert model can be trained on a smaller subset of the data.
+
+1. How does the mixture-of-experts transformer route each token to a small subset of experts?
+
+The mixture-of-experts transformer routes each token to a small subset of experts by using a technique called "token-level attention." This means that each token is attended to by a different subset of experts. The number of experts in each subset is determined by the token's position in the input sequence.
+

@@ -1,0 +1,6 @@
+# T-VER — Frozen-criteria verdict tool
+Question: can the accept/reject check done by hand in each D0xx note be a tool that reads a frozen protocol + lab job results and emits verdict/1 JSON?
+Base: x86/c2-resume HEAD. Read decisions/D026, D029, D033, D035, D040 (criteria wording), .claude/skills/frozen-experiment/scripts/{agg.py,make_order.py}, .claude/skills/engine-candidate/scripts/text_fp.py, bin/lab (results layout), and REAL job result dirs referenced in those notes (find them under lab/ or the lab state dir that bin/lab uses).
+Write ONLY: cc/verdict/** and artifacts/codexVER/**.
+Deliver: cc/verdict/verdict.py. Input is a criteria file (YAML-free JSON: metrics like decode_tps delta >= +2% median over alternating rounds, text_sha equal per test group, ppl abs delta <= x, kld <= y, backend_ops pass count == total, host_quiet == true from loadmon summary). It reads results via agg.py logic and emits PASS/FAIL per criterion with the evidence values and job IDs, failing closed on missing data. Ship criteria JSON files reproducing D029 (q8_reuse ACCEPT) and D033 (q8_0 KV ACCEPT, q4_0 REJECT). Tests must run those against the REAL recorded jobs and reproduce the recorded verdicts. If real records are missing, say so; do not synthesize them.
+Final message: files, tests, whether D029/D033 verdicts reproduce from real records.

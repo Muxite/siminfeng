@@ -1,0 +1,160 @@
+.....F....F...............F...FF......                                   [100%]
+=================================== FAILURES ===================================
+_____________________ test_strict_kld_unknown_never_passes _____________________
+
+stats = {'arch': 'granitemoe', 'context_length': 131072, 'expert_bytes': 679477248, 'fixture_note': 'Hand-derived: hybrid_spli...MiB /4096=49152 B/token; quant block ratios 34/64 and 18/64. Rounded nonexpert bytes, not real inspector output.', ...}
+host = {'architecture': 'x86_64', 'capabilities': ['docker', 'nvidia-runtime'], 'cpu': {'model': 'AMD Ryzen 7 3700X', 'threads': 16}, 'cuda_image_version': '12.8', ...}
+
+    def test_strict_kld_unknown_never_passes(stats, host):
+>       assert not run(stats, host, budget=dict(gpu_mib=900,ctx=4096,max_quality_loss=.05))['plans']
+E       AssertionError: assert not [{'attention_delta_mib': 0.0, 'components': [], 'confidence': 'calibrated', 'decode_tps': 149.633, ...}]
+
+cc/moe_planner/test_plan.py:93: AssertionError
+______________ test_quant_kv_flash_attention_and_batch_candidates ______________
+
+stats = {'arch': 'granitemoe', 'context_length': 131072, 'expert_bytes': 679477248, 'fixture_note': 'Hand-derived: hybrid_spli...MiB /4096=49152 B/token; quant block ratios 34/64 and 18/64. Rounded nonexpert bytes, not real inspector output.', ...}
+host = {'architecture': 'x86_64', 'capabilities': ['docker', 'nvidia-runtime'], 'cpu': {'model': 'AMD Ryzen 7 3700X', 'threads': 16}, 'cuda_image_version': '12.8', ...}
+
+    def test_quant_kv_flash_attention_and_batch_candidates(stats, host):
+        r = run(stats, host, budget=dict(gpu_mib=16000,ctx=4096), allow_extrapolation=True, top=10000,
+                components={'kv_quant_fix': {'enabled':True, 'status':'pending'}})
+        quant = [p for p in r['plans'] if 'kv:q8_0' in p['techniques'] or 'kv:q4_0' in p['techniques']]
+        assert quant
+        assert all(p['flags'][p['flags'].index('-fa')+1] == 'on' for p in quant)
+>       assert all(p['confidence'] == 'extrapolated' and p['kld'] is None for p in quant)
+E       assert False
+E        +  where False = all(<generator object test_quant_kv_flash_attention_and_batch_candidates.<locals>.<genexpr> at 0x76b70b2b0110>)
+
+cc/moe_planner/test_plan.py:122: AssertionError
+______________________ test_cli_output_and_write_boundary ______________________
+
+argv = ['--stats', '/home/muk/projects/siminfeng/campaign/artifacts/codexPL/granite-fixture.json', '--host', '/home/muk/projects/siminfeng/campaign/cc/engine_handoff/hosts/x86-main.json', '--budget-gpu-mib', '900', ...]
+
+    def main(argv=None):
+        a = argparse.ArgumentParser(description=__doc__)
+        a.add_argument('--stats', required=True)
+        a.add_argument('--host', required=True)
+        a.add_argument('--budget-gpu-mib', type=float, required=True)
+        a.add_argument('--budget-host-mib', type=float)
+        a.add_argument('--ctx', type=int, required=True)
+        a.add_argument('--max-kld', type=float)
+        a.add_argument('--objective', choices=('decode', 'ttft', 'balanced'), default='decode')
+        a.add_argument('--top', type=int, default=5)
+        a.add_argument('--allow-extrapolation', action='store_true')
+        a.add_argument('--only-input-representation', action='store_true')
+        a.add_argument('--resource-sample')
+        a.add_argument('--components', nargs='?', const=str(ROOT/'cc/factory/components.json'), help='Component registry JSON (default: cc/factory/components.json if present); pending entries require enabled=true')
+        a.add_argument('--prompt-tokens', type=int, default=62)
+        a.add_argument('--emit-lab-tests')
+        args = a.parse_args(argv)
+        try:
+            budget = dict(gpu_mib=args.budget_gpu_mib, ctx=args.ctx, max_quality_loss=args.max_kld, objective=args.objective)
+            if args.budget_host_mib is not None:
+                budget['host_mib'] = args.budget_host_mib
+            result = plan(read_json(args.stats), read_json(args.host), budget,
+                          allow_extrapolation=args.allow_extrapolation, top=args.top,
+                          sample=read_json(args.resource_sample) if args.resource_sample else None,
+                          all_representations=not args.only_input_representation, prompt_tokens=args.prompt_tokens,
+                          components=args.components)
+            if args.emit_lab_tests:
+                dest = Path(args.emit_lab_tests).resolve()
+                # Assignment scope also constrains paths requested through this CLI.
+                if not any(dest.is_relative_to(base) for base in (HERE, ROOT/'artifacts/codexPL3')):
+>                   raise ValueError('--emit-lab-tests must stay under cc/moe_planner or artifacts/codexPL3')
+E                   ValueError: --emit-lab-tests must stay under cc/moe_planner or artifacts/codexPL3
+
+cc/moe_planner/plan.py:663: ValueError
+
+During handling of the above exception, another exception occurred:
+
+stats = {'arch': 'granitemoe', 'context_length': 131072, 'expert_bytes': 679477248, 'fixture_note': 'Hand-derived: hybrid_spli...MiB /4096=49152 B/token; quant block ratios 34/64 and 18/64. Rounded nonexpert bytes, not real inspector output.', ...}
+host = {'architecture': 'x86_64', 'capabilities': ['docker', 'nvidia-runtime'], 'cpu': {'model': 'AMD Ryzen 7 3700X', 'threads': 16}, 'cuda_image_version': '12.8', ...}
+capsys = <_pytest.capture.CaptureFixture object at 0x76b70b6ecf50>
+
+    def test_cli_output_and_write_boundary(stats,host,capsys):
+        dest=ROOT/'artifacts/codexPL2/cli-test-definitions.json'
+        argv=['--stats',str(ROOT/'artifacts/codexPL/granite-fixture.json'),'--host',str(ROOT/'cc/engine_handoff/hosts/x86-main.json'),
+              '--budget-gpu-mib','900','--ctx','4096','--emit-lab-tests',str(dest)]
+>       assert planner.main(argv)==0
+               ^^^^^^^^^^^^^^^^^^
+
+cc/moe_planner/test_plan.py:247: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+cc/moe_planner/plan.py:668: in main
+    a.error(str(exc))
+/usr/lib/python3.12/argparse.py:2677: in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = ArgumentParser(prog='__main__.py', usage=None, description='Offline hypotheses for pinned llama.cpp; never starts an engine or a GPU job.', formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+status = 2
+message = '__main__.py: error: --emit-lab-tests must stay under cc/moe_planner or artifacts/codexPL3\n'
+
+    def exit(self, status=0, message=None):
+        if message:
+            self._print_message(message, _sys.stderr)
+>       _sys.exit(status)
+E       SystemExit: 2
+
+/usr/lib/python3.12/argparse.py:2664: SystemExit
+----------------------------- Captured stderr call -----------------------------
+usage: __main__.py [-h] --stats STATS --host HOST --budget-gpu-mib
+                   BUDGET_GPU_MIB [--budget-host-mib BUDGET_HOST_MIB] --ctx
+                   CTX [--max-kld MAX_KLD]
+                   [--objective {decode,ttft,balanced}] [--top TOP]
+                   [--allow-extrapolation] [--only-input-representation]
+                   [--resource-sample RESOURCE_SAMPLE]
+                   [--components [COMPONENTS]] [--prompt-tokens PROMPT_TOKENS]
+                   [--emit-lab-tests EMIT_LAB_TESTS]
+__main__.py: error: --emit-lab-tests must stay under cc/moe_planner or artifacts/codexPL3
+____________ test_flash_attention_threshold_and_kv_bytes[8192-True] ____________
+
+stats = {'arch': 'granitemoe', 'context_length': 131072, 'expert_bytes': 679477248, 'fixture_note': 'Hand-derived: hybrid_spli...MiB /4096=49152 B/token; quant block ratios 34/64 and 18/64. Rounded nonexpert bytes, not real inspector output.', ...}
+host = {'architecture': 'x86_64', 'capabilities': ['docker', 'nvidia-runtime'], 'cpu': {'model': 'AMD Ryzen 7 3700X', 'threads': 16}, 'cuda_image_version': '12.8', ...}
+ctx = 8192, flash = True
+
+    @pytest.mark.parametrize('ctx,flash', [(4096,False), (8192,True), (32768,True)])
+    def test_flash_attention_threshold_and_kv_bytes(stats, host, ctx, flash):
+        r = run(stats, host, budget=dict(gpu_mib=16000, ctx=ctx), allow_extrapolation=True, top=10000)
+        assert r['plans']
+        for p in r['plans']:
+            assert p['flash_attention'] is flash
+            assert p['kv_mib'] == pytest.approx(ctx*stats['kv_bytes_per_token'][p['kv_type']]/planner.MIB)
+            if flash:
+                assert p['flags'][p['flags'].index('-fa')+1] == 'on'
+                assert any('D028' in note for note in p['notes'])
+>               assert p['confidence'] == 'extrapolated' and p['kld'] is None
+E               AssertionError: assert ('extrapolated' == 'extrapolated'
+E                 
+E                   extrapolated and 0.040017 is None)
+
+cc/moe_planner/test_plan.py:289: AssertionError
+___________ test_flash_attention_threshold_and_kv_bytes[32768-True] ____________
+
+stats = {'arch': 'granitemoe', 'context_length': 131072, 'expert_bytes': 679477248, 'fixture_note': 'Hand-derived: hybrid_spli...MiB /4096=49152 B/token; quant block ratios 34/64 and 18/64. Rounded nonexpert bytes, not real inspector output.', ...}
+host = {'architecture': 'x86_64', 'capabilities': ['docker', 'nvidia-runtime'], 'cpu': {'model': 'AMD Ryzen 7 3700X', 'threads': 16}, 'cuda_image_version': '12.8', ...}
+ctx = 32768, flash = True
+
+    @pytest.mark.parametrize('ctx,flash', [(4096,False), (8192,True), (32768,True)])
+    def test_flash_attention_threshold_and_kv_bytes(stats, host, ctx, flash):
+        r = run(stats, host, budget=dict(gpu_mib=16000, ctx=ctx), allow_extrapolation=True, top=10000)
+        assert r['plans']
+        for p in r['plans']:
+            assert p['flash_attention'] is flash
+            assert p['kv_mib'] == pytest.approx(ctx*stats['kv_bytes_per_token'][p['kv_type']]/planner.MIB)
+            if flash:
+                assert p['flags'][p['flags'].index('-fa')+1] == 'on'
+                assert any('D028' in note for note in p['notes'])
+>               assert p['confidence'] == 'extrapolated' and p['kld'] is None
+E               AssertionError: assert ('extrapolated' == 'extrapolated'
+E                 
+E                   extrapolated and 0.040017 is None)
+
+cc/moe_planner/test_plan.py:289: AssertionError
+=========================== short test summary info ============================
+FAILED cc/moe_planner/test_plan.py::test_strict_kld_unknown_never_passes - As...
+FAILED cc/moe_planner/test_plan.py::test_quant_kv_flash_attention_and_batch_candidates
+FAILED cc/moe_planner/test_plan.py::test_cli_output_and_write_boundary - Syst...
+FAILED cc/moe_planner/test_plan.py::test_flash_attention_threshold_and_kv_bytes[8192-True]
+FAILED cc/moe_planner/test_plan.py::test_flash_attention_threshold_and_kv_bytes[32768-True]
+5 failed, 33 passed in 1.21s

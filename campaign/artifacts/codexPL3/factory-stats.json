@@ -1,0 +1,4581 @@
+{
+  "schema": "model-stats/0",
+  "gguf_path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+  "arch": "granitemoe",
+  "n_layer": 24,
+  "n_expert": 32,
+  "n_expert_used": 8,
+  "n_shared_expert": null,
+  "embedding_dim": 1024,
+  "ffn_dim": 512,
+  "expert_ffn_dim": 512,
+  "shared_expert_ffn_dim": null,
+  "n_head": 16,
+  "n_head_kv": 8,
+  "head_dim": 64,
+  "value_head_dim": 64,
+  "context_length": 131072,
+  "kv_lora_rank": null,
+  "mla_head_dim": null,
+  "mla_value_head_dim": null,
+  "expert_ffn_dim_source": "tensor shape",
+  "has_shared_experts": false,
+  "shape_order": "GGML ne[0..] (reverse of numpy/PyTorch)",
+  "tensors": [
+    {
+      "name": "output_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": null
+    },
+    {
+      "name": "token_embd.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        49155
+      ],
+      "bytes": 53480640,
+      "role": "embed",
+      "layer": null
+    },
+    {
+      "name": "blk.0.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 0
+    },
+    {
+      "name": "blk.0.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 0
+    },
+    {
+      "name": "blk.0.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 0
+    },
+    {
+      "name": "blk.0.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 0
+    },
+    {
+      "name": "blk.0.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 0
+    },
+    {
+      "name": "blk.0.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 0,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.0.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 0,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.0.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 0
+    },
+    {
+      "name": "blk.0.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 0
+    },
+    {
+      "name": "blk.0.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 0,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.1.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 1
+    },
+    {
+      "name": "blk.1.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 1
+    },
+    {
+      "name": "blk.1.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 1
+    },
+    {
+      "name": "blk.1.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 1
+    },
+    {
+      "name": "blk.1.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 1
+    },
+    {
+      "name": "blk.1.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 1,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.1.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 1,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.1.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 1
+    },
+    {
+      "name": "blk.1.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 1
+    },
+    {
+      "name": "blk.1.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 1,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.2.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 2
+    },
+    {
+      "name": "blk.2.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 2
+    },
+    {
+      "name": "blk.2.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 2
+    },
+    {
+      "name": "blk.2.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 2
+    },
+    {
+      "name": "blk.2.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 2
+    },
+    {
+      "name": "blk.2.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 2,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.2.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 2,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.2.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 2
+    },
+    {
+      "name": "blk.2.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 2
+    },
+    {
+      "name": "blk.2.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 2,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.3.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 3
+    },
+    {
+      "name": "blk.3.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 3
+    },
+    {
+      "name": "blk.3.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 3
+    },
+    {
+      "name": "blk.3.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 3
+    },
+    {
+      "name": "blk.3.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 3
+    },
+    {
+      "name": "blk.3.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 3,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.3.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 3,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.3.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 3
+    },
+    {
+      "name": "blk.3.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 3
+    },
+    {
+      "name": "blk.3.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 3,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.4.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 4
+    },
+    {
+      "name": "blk.4.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 4
+    },
+    {
+      "name": "blk.4.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 4
+    },
+    {
+      "name": "blk.4.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 4
+    },
+    {
+      "name": "blk.4.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 4
+    },
+    {
+      "name": "blk.4.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 4,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.4.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 4,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.4.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 4
+    },
+    {
+      "name": "blk.4.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 4
+    },
+    {
+      "name": "blk.4.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 4,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.5.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 5
+    },
+    {
+      "name": "blk.5.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 5
+    },
+    {
+      "name": "blk.5.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 5
+    },
+    {
+      "name": "blk.5.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 5
+    },
+    {
+      "name": "blk.5.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 5
+    },
+    {
+      "name": "blk.5.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 5,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.5.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 5,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.5.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 5
+    },
+    {
+      "name": "blk.5.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 5
+    },
+    {
+      "name": "blk.5.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 5,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.6.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 6
+    },
+    {
+      "name": "blk.6.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 6
+    },
+    {
+      "name": "blk.6.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 6
+    },
+    {
+      "name": "blk.6.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 6
+    },
+    {
+      "name": "blk.6.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 6
+    },
+    {
+      "name": "blk.6.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 6,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.6.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 6,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.6.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 6
+    },
+    {
+      "name": "blk.6.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 6
+    },
+    {
+      "name": "blk.6.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 6,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.7.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 7
+    },
+    {
+      "name": "blk.7.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 7
+    },
+    {
+      "name": "blk.7.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 7
+    },
+    {
+      "name": "blk.7.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 7
+    },
+    {
+      "name": "blk.7.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 7
+    },
+    {
+      "name": "blk.7.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 7,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.7.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 7,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.7.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 7
+    },
+    {
+      "name": "blk.7.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 7
+    },
+    {
+      "name": "blk.7.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 7,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.8.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 8
+    },
+    {
+      "name": "blk.8.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 8
+    },
+    {
+      "name": "blk.8.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 8
+    },
+    {
+      "name": "blk.8.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 8
+    },
+    {
+      "name": "blk.8.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 8
+    },
+    {
+      "name": "blk.8.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 8,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.8.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 8,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.8.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 8
+    },
+    {
+      "name": "blk.8.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 8
+    },
+    {
+      "name": "blk.8.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 8,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.9.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 9
+    },
+    {
+      "name": "blk.9.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 9
+    },
+    {
+      "name": "blk.9.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 9
+    },
+    {
+      "name": "blk.9.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 9
+    },
+    {
+      "name": "blk.9.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 9
+    },
+    {
+      "name": "blk.9.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 9,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.9.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 9,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.9.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 9
+    },
+    {
+      "name": "blk.9.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 9
+    },
+    {
+      "name": "blk.9.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 9,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.10.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 10
+    },
+    {
+      "name": "blk.10.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 10
+    },
+    {
+      "name": "blk.10.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 10
+    },
+    {
+      "name": "blk.10.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 10
+    },
+    {
+      "name": "blk.10.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 10
+    },
+    {
+      "name": "blk.10.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 10,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.10.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 10,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.10.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 10
+    },
+    {
+      "name": "blk.10.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 10
+    },
+    {
+      "name": "blk.10.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 10,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.11.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 11
+    },
+    {
+      "name": "blk.11.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 11
+    },
+    {
+      "name": "blk.11.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 11
+    },
+    {
+      "name": "blk.11.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 11
+    },
+    {
+      "name": "blk.11.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 11
+    },
+    {
+      "name": "blk.11.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 11,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.11.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 11,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.11.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 11
+    },
+    {
+      "name": "blk.11.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 11
+    },
+    {
+      "name": "blk.11.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 11,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.12.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 12
+    },
+    {
+      "name": "blk.12.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 12
+    },
+    {
+      "name": "blk.12.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 12
+    },
+    {
+      "name": "blk.12.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 12
+    },
+    {
+      "name": "blk.12.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 12
+    },
+    {
+      "name": "blk.12.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 12,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.12.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 12,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.12.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 12
+    },
+    {
+      "name": "blk.12.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 12
+    },
+    {
+      "name": "blk.12.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 12,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.13.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 13
+    },
+    {
+      "name": "blk.13.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 13
+    },
+    {
+      "name": "blk.13.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 13
+    },
+    {
+      "name": "blk.13.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 13
+    },
+    {
+      "name": "blk.13.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 13
+    },
+    {
+      "name": "blk.13.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 13,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.13.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 13,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.13.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 13
+    },
+    {
+      "name": "blk.13.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 13
+    },
+    {
+      "name": "blk.13.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 13,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.14.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 14
+    },
+    {
+      "name": "blk.14.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 14
+    },
+    {
+      "name": "blk.14.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 14
+    },
+    {
+      "name": "blk.14.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 14
+    },
+    {
+      "name": "blk.14.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 14
+    },
+    {
+      "name": "blk.14.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 14,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.14.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 14,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.14.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 14
+    },
+    {
+      "name": "blk.14.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 14
+    },
+    {
+      "name": "blk.14.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 14,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.15.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 15
+    },
+    {
+      "name": "blk.15.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 15
+    },
+    {
+      "name": "blk.15.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 15
+    },
+    {
+      "name": "blk.15.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 15
+    },
+    {
+      "name": "blk.15.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 15
+    },
+    {
+      "name": "blk.15.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 15,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.15.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 15,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.15.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 15
+    },
+    {
+      "name": "blk.15.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 15
+    },
+    {
+      "name": "blk.15.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 15,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.16.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 16
+    },
+    {
+      "name": "blk.16.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 16
+    },
+    {
+      "name": "blk.16.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 16
+    },
+    {
+      "name": "blk.16.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 16
+    },
+    {
+      "name": "blk.16.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 16
+    },
+    {
+      "name": "blk.16.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 16,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.16.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 16,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.16.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 16
+    },
+    {
+      "name": "blk.16.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 16
+    },
+    {
+      "name": "blk.16.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 16,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.17.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 17
+    },
+    {
+      "name": "blk.17.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 17
+    },
+    {
+      "name": "blk.17.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 17
+    },
+    {
+      "name": "blk.17.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 17
+    },
+    {
+      "name": "blk.17.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 17
+    },
+    {
+      "name": "blk.17.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 17,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.17.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 17,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.17.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 17
+    },
+    {
+      "name": "blk.17.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 17
+    },
+    {
+      "name": "blk.17.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 17,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.18.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 18
+    },
+    {
+      "name": "blk.18.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 18
+    },
+    {
+      "name": "blk.18.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 18
+    },
+    {
+      "name": "blk.18.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 18
+    },
+    {
+      "name": "blk.18.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 18
+    },
+    {
+      "name": "blk.18.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 18,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.18.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 18,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.18.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 18
+    },
+    {
+      "name": "blk.18.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 18
+    },
+    {
+      "name": "blk.18.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 18,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.19.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 19
+    },
+    {
+      "name": "blk.19.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 19
+    },
+    {
+      "name": "blk.19.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 19
+    },
+    {
+      "name": "blk.19.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 19
+    },
+    {
+      "name": "blk.19.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 19
+    },
+    {
+      "name": "blk.19.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 19,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.19.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 19,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.19.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 19
+    },
+    {
+      "name": "blk.19.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 19
+    },
+    {
+      "name": "blk.19.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 19,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.20.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 20
+    },
+    {
+      "name": "blk.20.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 20
+    },
+    {
+      "name": "blk.20.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 20
+    },
+    {
+      "name": "blk.20.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 20
+    },
+    {
+      "name": "blk.20.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 20
+    },
+    {
+      "name": "blk.20.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 20,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.20.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 20,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.20.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 20
+    },
+    {
+      "name": "blk.20.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 20
+    },
+    {
+      "name": "blk.20.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 20,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.21.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 21
+    },
+    {
+      "name": "blk.21.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 21
+    },
+    {
+      "name": "blk.21.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 21
+    },
+    {
+      "name": "blk.21.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 21
+    },
+    {
+      "name": "blk.21.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 21
+    },
+    {
+      "name": "blk.21.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 21,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.21.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 21,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.21.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 21
+    },
+    {
+      "name": "blk.21.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 21
+    },
+    {
+      "name": "blk.21.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 21,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.22.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 22
+    },
+    {
+      "name": "blk.22.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 22
+    },
+    {
+      "name": "blk.22.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 22
+    },
+    {
+      "name": "blk.22.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 22
+    },
+    {
+      "name": "blk.22.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 22
+    },
+    {
+      "name": "blk.22.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 22,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.22.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 22,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.22.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 22
+    },
+    {
+      "name": "blk.22.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 22
+    },
+    {
+      "name": "blk.22.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 22,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.23.attn_k.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 23
+    },
+    {
+      "name": "blk.23.attn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 23
+    },
+    {
+      "name": "blk.23.attn_output.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_out",
+      "layer": 23
+    },
+    {
+      "name": "blk.23.attn_q.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        1024
+      ],
+      "bytes": 1114112,
+      "role": "attn_qkv",
+      "layer": 23
+    },
+    {
+      "name": "blk.23.attn_v.weight",
+      "ggml_type": "Q8_0",
+      "shape": [
+        1024,
+        512
+      ],
+      "bytes": 557056,
+      "role": "attn_qkv",
+      "layer": 23
+    },
+    {
+      "name": "blk.23.ffn_down_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        512,
+        1024,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 23,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.23.ffn_gate_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 23,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    },
+    {
+      "name": "blk.23.ffn_gate_inp.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024,
+        32
+      ],
+      "bytes": 131072,
+      "role": "router",
+      "layer": 23
+    },
+    {
+      "name": "blk.23.ffn_norm.weight",
+      "ggml_type": "F32",
+      "shape": [
+        1024
+      ],
+      "bytes": 4096,
+      "role": "norm",
+      "layer": 23
+    },
+    {
+      "name": "blk.23.ffn_up_exps.weight",
+      "ggml_type": "Q4_K",
+      "shape": [
+        1024,
+        512,
+        32
+      ],
+      "bytes": 9437184,
+      "role": "expert_ffn",
+      "layer": 23,
+      "bank": "unsplit",
+      "stored_expert_count": 32,
+      "null_expert_count": 0,
+      "bytes_per_expert": 294912,
+      "null_bytes": 0
+    }
+  ],
+  "totals": {
+    "weight_bytes": 816520384,
+    "by_role": {
+      "router": 3145728,
+      "shared_ffn": 0,
+      "expert_ffn": 679477248,
+      "norm": 200704,
+      "attn_qkv": 53477376,
+      "attn_out": 26738688,
+      "dense_ffn": 0,
+      "embed": 53480640,
+      "output": 0,
+      "other": 0
+    },
+    "by_type": {
+      "F32": 3346432,
+      "Q8_0": 133696704,
+      "Q4_K": 679477248
+    },
+    "expert_fraction": 0.8321620149534442,
+    "non_expert_bytes_including_shared": 137043136,
+    "real_expert_bytes": 679477248,
+    "null_expert_bytes": 0
+  },
+  "per_layer_experts": {
+    "0": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "1": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "2": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "3": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "4": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "5": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "6": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "7": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "8": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "9": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "10": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "11": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "12": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "13": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "14": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "15": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "16": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "17": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "18": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "19": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "20": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "21": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "22": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    },
+    "23": {
+      "expert_bytes": 28311552,
+      "real_expert_bytes": 28311552,
+      "null_bytes": 0,
+      "bytes_per_single_expert": 884736,
+      "per_projection": {
+        "down.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "gate.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        },
+        "up.weight": {
+          "bytes": 9437184,
+          "real_bytes": 9437184,
+          "null_bytes": 0,
+          "banks": {
+            "unsplit": {
+              "stored_experts": 32,
+              "real_experts": 32,
+              "bytes_per_expert": 294912,
+              "ggml_type": "Q4_K"
+            }
+          },
+          "bytes_per_single_expert": 294912
+        }
+      },
+      "banks": {
+        "unsplit": 28311552
+      },
+      "real_expert_count": 32
+    }
+  },
+  "active_bytes_per_token": {
+    "bytes": 306912448.0,
+    "formula": "non_expert_including_shared + n_expert_used/n_expert * stored_expert_bytes",
+    "real_experts_only_bytes": 306912448.0,
+    "note": "requested proportional storage estimate includes physical null overhead; real_experts_only_bytes excludes nulls; weights only, not measured bandwidth"
+  },
+  "strategy_floors": {
+    "basis": "physical stored weight bytes; fractional experts, no KV, compute buffers, runtime or transfer staging",
+    "scenarios": [
+      {
+        "strategy": "all_experts_on_host",
+        "hot_fraction": 0,
+        "gpu_weight_bytes": 137043136
+      },
+      {
+        "strategy": "all_experts_on_gpu",
+        "hot_fraction": 1,
+        "gpu_weight_bytes": 816520384
+      },
+      {
+        "strategy": "hot_fraction",
+        "hot_fraction": 0.25,
+        "gpu_weight_bytes": 306912448.0
+      },
+      {
+        "strategy": "hot_fraction",
+        "hot_fraction": 0.5,
+        "gpu_weight_bytes": 476781760.0
+      },
+      {
+        "strategy": "hot_fraction",
+        "hot_fraction": 0.75,
+        "gpu_weight_bytes": 646651072.0
+      }
+    ]
+  },
+  "unknown_tensors": [],
+  "warnings": [],
+  "role_patterns": [
+    {
+      "role": "router",
+      "pattern": "blk\\.\\d+\\.ffn_(?:gate_inp(?:_shexp)?|exp_probs_b|expert_ids)(?:\\..*)?",
+      "coverage": "granitemoe, llama/mixtral, qwen2moe/qwen3moe, deepseek2, gpt-oss, hybrid ID maps"
+    },
+    {
+      "role": "shared_ffn",
+      "pattern": "blk\\.\\d+\\.ffn_(?:gate|up|down|gate_up)_(?:shexp|shared_exps)(?:\\..*)?",
+      "coverage": "qwen2moe/qwen3moe and deepseek2 shared experts"
+    },
+    {
+      "role": "expert_ffn",
+      "pattern": "blk\\.\\d+\\.ffn_(?:gate|up|down|gate_up|norm)_exps(?:\\..*)?",
+      "coverage": "granitemoe, llama/mixtral, qwen2moe/qwen3moe, deepseek2, gpt-oss fused gate_up; hot/cold"
+    },
+    {
+      "role": "norm",
+      "pattern": "(?:output_norm|blk\\.\\d+\\.(?:attn|ffn|layer|post_attention|post_ffn)[\\w]*norm[\\w]*)(?:\\..*)?",
+      "coverage": "all architectures, including deepseek2 attn_q_a_norm/attn_kv_a_norm"
+    },
+    {
+      "role": "attn_qkv",
+      "pattern": "blk\\.\\d+\\.attn_(?:q|k|v|qkv|q_a|q_b|kv_a_mqa|kv_b|k_b|v_b|kv)(?:\\..*)?",
+      "coverage": "GQA/MHA and deepseek2 MLA projections"
+    },
+    {
+      "role": "attn_out",
+      "pattern": "blk\\.\\d+\\.attn_(?:output|output_a|output_b|sinks|gate)(?:\\..*)?",
+      "coverage": "attention output and gpt-oss attention sinks"
+    },
+    {
+      "role": "dense_ffn",
+      "pattern": "blk\\.\\d+\\.ffn_(?:gate|up|down|gate_up|act)(?:\\..*)?",
+      "coverage": "dense FFNs, including deepseek2 initial dense layers"
+    },
+    {
+      "role": "embed",
+      "pattern": "(?:token_embd|position_embd|token_types)(?:\\..*)?",
+      "coverage": "token/position embeddings"
+    },
+    {
+      "role": "output",
+      "pattern": "output(?:\\..*)?",
+      "coverage": "untied output head; tied embeddings counted only once"
+    }
+  ],
+  "kv_cache": {
+    "basis": "standard/legacy expanded K/V; full context, one sequence; no allocator/context padding or sliding-window cap",
+    "contexts": [
+      2048,
+      4096,
+      8192,
+      32768,
+      131072
+    ],
+    "cache_types": {
+      "f16": {
+        "block_elements": 1,
+        "block_bytes": 2,
+        "bytes_per_token": 49152,
+        "MiB_by_context": {
+          "2048": 96.0,
+          "4096": 192.0,
+          "8192": 384.0,
+          "32768": 1536.0,
+          "131072": 6144.0
+        },
+        "unavailable_reason": null
+      },
+      "bf16": {
+        "block_elements": 1,
+        "block_bytes": 2,
+        "bytes_per_token": 49152,
+        "MiB_by_context": {
+          "2048": 96.0,
+          "4096": 192.0,
+          "8192": 384.0,
+          "32768": 1536.0,
+          "131072": 6144.0
+        },
+        "unavailable_reason": null
+      },
+      "q8_0": {
+        "block_elements": 32,
+        "block_bytes": 34,
+        "bytes_per_token": 26112,
+        "MiB_by_context": {
+          "2048": 51.0,
+          "4096": 102.0,
+          "8192": 204.0,
+          "32768": 816.0,
+          "131072": 3264.0
+        },
+        "unavailable_reason": null
+      },
+      "q5_1": {
+        "block_elements": 32,
+        "block_bytes": 24,
+        "bytes_per_token": 18432,
+        "MiB_by_context": {
+          "2048": 36.0,
+          "4096": 72.0,
+          "8192": 144.0,
+          "32768": 576.0,
+          "131072": 2304.0
+        },
+        "unavailable_reason": null
+      },
+      "q5_0": {
+        "block_elements": 32,
+        "block_bytes": 22,
+        "bytes_per_token": 16896,
+        "MiB_by_context": {
+          "2048": 33.0,
+          "4096": 66.0,
+          "8192": 132.0,
+          "32768": 528.0,
+          "131072": 2112.0
+        },
+        "unavailable_reason": null
+      },
+      "q4_1": {
+        "block_elements": 32,
+        "block_bytes": 20,
+        "bytes_per_token": 15360,
+        "MiB_by_context": {
+          "2048": 30.0,
+          "4096": 60.0,
+          "8192": 120.0,
+          "32768": 480.0,
+          "131072": 1920.0
+        },
+        "unavailable_reason": null
+      },
+      "q4_0": {
+        "block_elements": 32,
+        "block_bytes": 18,
+        "bytes_per_token": 13824,
+        "MiB_by_context": {
+          "2048": 27.0,
+          "4096": 54.0,
+          "8192": 108.0,
+          "32768": 432.0,
+          "131072": 1728.0
+        },
+        "unavailable_reason": null
+      }
+    }
+  }
+}

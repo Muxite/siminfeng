@@ -1,0 +1,216 @@
+{
+  "schema": "factory-stage/0",
+  "stage": "report",
+  "status": "completed",
+  "inputs": {
+    "files": {
+      "/home/muk/projects/siminfeng/campaign/cc/factory/factory.py": "0bdb2623eae85809bb60c838d254e3192de4fae3116570316529f7226662989b",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/real-dry-run/plan.json": "05d30f05f733e5bc88ebf374ddc065946145aa00eb8b40fddc46633a125f67bc",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/real-dry-run/recipe.json": "ab2debda77a8b65117c418740bfc9be7b39a4c1480a1d97db25a1ffa08aef66a",
+      "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/real-dry-run/measure.json": "9297d9b9715e06bc28863dc9591a5099fe764eef810066d8f46ac9f072ab6f8d",
+      "/home/muk/projects/siminfeng/campaign/cc/engine_handoff/envelopes.py": "a1c30314fa3647a128d447c568700b46ebf64c8296b699c324afa3aa718a666c"
+    },
+    "parameters": {
+      "error_pct": 20
+    }
+  },
+  "inputs_sha256": "1df84ad19e3cef732431fd001ee90de5c332f362582295a08596244bb8525997",
+  "data": {
+    "schema": "factory-report/0",
+    "rows": [
+      {
+        "plan_id": "mixE4K-static19-f16-c4096-b2048-u512-cmp-q8_reuse",
+        "measured": null,
+        "prediction": {
+          "id": "mixE4K-static19-f16-c4096-b2048-u512-cmp-q8_reuse",
+          "representation": "mixE4K",
+          "placement": "static",
+          "gpu_mib": 875.867,
+          "gpu_guard_mib": 2.0,
+          "host_mib": 1178.695,
+          "decode_tps": 152.625,
+          "ttft_ms": 236.535,
+          "ttft_definition": "warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling",
+          "quality_class": "combined-quality-unmeasured",
+          "kld": null,
+          "representation_kld": 0.040017,
+          "quality_risk": null,
+          "quality_risk_unknown": true,
+          "kv_type": "f16",
+          "kv_mib": 192.0,
+          "flash_attention": false,
+          "attention_delta_mib": 0.0,
+          "components": [
+            "q8_reuse"
+          ],
+          "runtime_env": {
+            "GGML_CUDA_Q8_REUSE": "1"
+          },
+          "technique_family": "mixE4K|static|f16|fa-off|q8_reuse",
+          "prefill_tps": 269.585,
+          "prefill_ms": 229.983,
+          "prefill_source": "D022 measured prefill_tps (62-token chat); linear prompt-length hypothesis",
+          "techniques": [
+            "mixE4K",
+            "static",
+            "kv:f16",
+            "ctx:4096",
+            "batch:2048",
+            "ubatch:512"
+          ],
+          "confidence": "calibrated",
+          "metric_confidence": {
+            "gpu_mib": "calibrated",
+            "decode_tps": "extrapolated-component-transfer",
+            "host_mib": "extrapolated",
+            "prefill_tps": "proxy",
+            "ttft_ms": "proxy"
+          },
+          "flags": [
+            "-m",
+            "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+            "-ngl",
+            "99",
+            "--fit",
+            "off",
+            "-c",
+            "4096",
+            "-b",
+            "2048",
+            "-ub",
+            "512",
+            "-ctk",
+            "f16",
+            "-ctv",
+            "f16",
+            "-t",
+            "8",
+            "-tb",
+            "8",
+            "--n-cpu-moe",
+            "19"
+          ],
+          "model_path": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+          "notes": [
+            "D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured",
+            "Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS",
+            "Representation KLD carried as risk prior; placement/KV combined KLD must be measured"
+          ],
+          "required_engine": "llama.cpp 31288c9c6 + q8_reuse patch (D029)",
+          "prerequisites": [
+            "Check mechanism engagement (D024)",
+            "Measure shim peak AND baseline-subtracted device peak (D023)",
+            "Paired quality check before accepting drift; 3 alternated timing rounds"
+          ]
+        },
+        "quality_accepted": null,
+        "claim_category": "prediction",
+        "transfer_class": "prediction"
+      }
+    ],
+    "unmatched": [],
+    "result_envelopes": [],
+    "limitations": [
+      "TTFT proxy excludes load, queueing, tokenization and sampling; actual TTFT remains null unless measured.",
+      "Host working-set prediction is not comparable to cgroup peak; device delta, absolute peak and shim cap stay separate.",
+      "Quality512 is scoped to ctx512; it does not certify the requested context.",
+      "Legacy/unbound results are diagnostic joins, not qualified input identity evidence.",
+      "Component acceptance does not qualify an arbitrary patch combination or prove an engine gain."
+    ],
+    "measurement_jobs": [
+      {
+        "plan_id": "mixE4K-static19-f16-c4096-b2048-u512-cmp-q8_reuse",
+        "phase": "engagement",
+        "job": "job-ff54e0e162",
+        "argv": [
+          "/usr/bin/python",
+          "-B",
+          "/home/muk/projects/siminfeng/campaign/bin/lab",
+          "submit",
+          "--image",
+          "factory-unbuilt",
+          "--model",
+          "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+          "--tests",
+          "pl_57900d14dcbb_engagement",
+          "--key",
+          "factory-478580a86a6ef6436bdf6a1a"
+        ],
+        "env": {
+          "LAB": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/real-dry-run/lab"
+        },
+        "status": "dry-run",
+        "result_glob": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/real-dry-run/lab/jobs/job-ff54e0e162/att-*/result.json",
+        "prerequisites": [
+          "Backend evidence of engagement before timing",
+          "Paired quality at matching context before acceptance",
+          "Three alternating forward/reverse timing rounds; one GPU job at a time"
+        ]
+      },
+      {
+        "plan_id": "mixE4K-static19-f16-c4096-b2048-u512-cmp-q8_reuse",
+        "phase": "quality512",
+        "job": "job-4a3b4d1486",
+        "argv": [
+          "/usr/bin/python",
+          "-B",
+          "/home/muk/projects/siminfeng/campaign/bin/lab",
+          "submit",
+          "--image",
+          "factory-unbuilt",
+          "--model",
+          "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+          "--tests",
+          "pl_57900d14dcbb_quality512",
+          "--key",
+          "factory-cf45ae0933778eb5277c2278",
+          "--data",
+          "<WIKITEXT_TEST_PATH_REQUIRED>"
+        ],
+        "env": {
+          "LAB": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/real-dry-run/lab"
+        },
+        "status": "dry-run",
+        "result_glob": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/real-dry-run/lab/jobs/job-4a3b4d1486/att-*/result.json",
+        "prerequisites": [
+          "Backend evidence of engagement before timing",
+          "Paired quality at matching context before acceptance",
+          "Three alternating forward/reverse timing rounds; one GPU job at a time"
+        ]
+      },
+      {
+        "plan_id": "mixE4K-static19-f16-c4096-b2048-u512-cmp-q8_reuse",
+        "phase": "timing",
+        "job": "job-1cc7a172b6",
+        "argv": [
+          "/usr/bin/python",
+          "-B",
+          "/home/muk/projects/siminfeng/campaign/bin/lab",
+          "submit",
+          "--image",
+          "factory-unbuilt",
+          "--model",
+          "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+          "--tests",
+          "pl_57900d14dcbb_timing,pl_57900d14dcbb_timing,pl_57900d14dcbb_timing",
+          "--key",
+          "factory-e17c1391b98e28558a412ed8"
+        ],
+        "env": {
+          "LAB": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/real-dry-run/lab"
+        },
+        "status": "dry-run",
+        "result_glob": "/home/muk/projects/siminfeng/campaign/artifacts/codexFAC/factory/real-dry-run/lab/jobs/job-1cc7a172b6/att-*/result.json",
+        "prerequisites": [
+          "Backend evidence of engagement before timing",
+          "Paired quality at matching context before acceptance",
+          "Three alternating forward/reverse timing rounds; one GPU job at a time"
+        ]
+      }
+    ]
+  },
+  "outputs": {
+    "data_sha256": "e6d1f3322df73a9b9180e45c50919c52498905da746ad58b22526ff24994301d",
+    "files": {}
+  }
+}

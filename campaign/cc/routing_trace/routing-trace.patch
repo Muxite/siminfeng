@@ -23,7 +23,7 @@ diff --git a/examples/routing-trace/routing-trace.cpp b/examples/routing-trace/r
 new file mode 100644
 --- /dev/null
 +++ b/examples/routing-trace/routing-trace.cpp
-@@ -0,0 +1,309 @@
+@@ -0,0 +1,324 @@
 +#include "arg.h"
 +#include "common.h"
 +#include "ggml-backend.h"
@@ -55,6 +55,7 @@ new file mode 100644
 +    std::string error;
 +    llama_pos pos = 0;
 +    int32_t n_tokens = 0;
++    int32_t n_expert = 32;
 +    const char * phase = "prefill";
 +    bool active = false;
 +
@@ -191,8 +192,8 @@ new file mode 100644
 +                if (ids) {
 +                    int32_t value;
 +                    std::memcpy(&value, data + offset, sizeof(value));
-+                    if (value < 0 || value >= 32) {
-+                        throw std::runtime_error("expert ID outside [0,32)");
++                    if (value < 0 || value >= trace.n_expert) {
++                        throw std::runtime_error("expert ID outside model expert range");
 +                    }
 +                    for (int j = 0; j < k; ++j) {
 +                        if (layer.experts[size_t(token) * 8 + j] == value) {
@@ -234,6 +235,20 @@ new file mode 100644
 +    auto * model = init->model();
 +    if (!ctx || !model || llama_model_has_encoder(model) || !llama_model_has_decoder(model)) {
 +        throw std::runtime_error("require a decoder-only model and valid context");
++    }
++    char arch[64];
++    if (llama_model_meta_val_str(model, "general.architecture", arch, sizeof(arch)) == 8 &&
++        std::strcmp(arch, "qwen3moe") == 0) {
++        char count[32];
++        const int length = llama_model_meta_val_str(model, "qwen3moe.expert_count", count, sizeof(count));
++        if (length <= 0 || size_t(length) >= sizeof(count)) {
++            throw std::runtime_error("missing or invalid Qwen3 MoE expert count");
++        }
++        size_t parsed = 0;
++        trace.n_expert = std::stoi(count, &parsed);
++        if (parsed != size_t(length) || trace.n_expert < 8) {
++            throw std::runtime_error("invalid Qwen3 MoE expert count");
++        }
 +    }
 +    trace.layers.resize(llama_model_n_layer(model));
 +    if (trace.layers.empty()) {

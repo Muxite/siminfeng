@@ -1,0 +1,171 @@
+{
+  "base_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+  "base_tree_hash": "158a7ade930818efdb06c5561920a8d018d404ba",
+  "patches": [
+    {
+      "patch": "/home/muk/projects/siminfeng/campaign/cc/q8_reuse/q8-activation-reuse.patch",
+      "sha256": "9943dee44b930f4febd23dce91fcb9c50ff67625ede5fb3fcc8126ea734a0675",
+      "files": [
+        {
+          "path": "ggml/src/ggml-cuda/common.cuh",
+          "old_path": "a/ggml/src/ggml-cuda/common.cuh",
+          "new_path": "b/ggml/src/ggml-cuda/common.cuh",
+          "layer": "backend-cuda",
+          "hunks": [
+            {
+              "old_start": 1445,
+              "old_count": 6,
+              "new_start": 1445,
+              "new_count": 33,
+              "context": ""
+            },
+            {
+              "old_start": 1456,
+              "old_count": 6,
+              "new_start": 1483,
+              "new_count": 7,
+              "context": ""
+            }
+          ]
+        },
+        {
+          "path": "ggml/src/ggml-cuda/ggml-cuda.cu",
+          "old_path": "a/ggml/src/ggml-cuda/ggml-cuda.cu",
+          "new_path": "b/ggml/src/ggml-cuda/ggml-cuda.cu",
+          "layer": "backend-cuda",
+          "hunks": [
+            {
+              "old_start": 743,
+              "old_count": 6,
+              "new_start": 743,
+              "new_count": 15,
+              "context": ""
+            },
+            {
+              "old_start": 4546,
+              "old_count": 6,
+              "new_start": 4555,
+              "new_count": 33,
+              "context": ""
+            },
+            {
+              "old_start": 4686,
+              "old_count": 9,
+              "new_start": 4722,
+              "new_count": 19,
+              "context": ""
+            },
+            {
+              "old_start": 4715,
+              "old_count": 7,
+              "new_start": 4761,
+              "new_count": 10,
+              "context": ""
+            },
+            {
+              "old_start": 4784,
+              "old_count": 6,
+              "new_start": 4833,
+              "new_count": 8,
+              "context": ""
+            },
+            {
+              "old_start": 4828,
+              "old_count": 6,
+              "new_start": 4879,
+              "new_count": 26,
+              "context": ""
+            }
+          ]
+        },
+        {
+          "path": "ggml/src/ggml-cuda/mmvq.cu",
+          "old_path": "a/ggml/src/ggml-cuda/mmvq.cu",
+          "new_path": "b/ggml/src/ggml-cuda/mmvq.cu",
+          "layer": "backend-cuda",
+          "hunks": [
+            {
+              "old_start": 1549,
+              "old_count": 12,
+              "new_start": 1549,
+              "new_count": 21,
+              "context": ""
+            },
+            {
+              "old_start": 1580,
+              "old_count": 7,
+              "new_start": 1589,
+              "new_count": 7,
+              "context": ""
+            }
+          ]
+        }
+      ],
+      "layers": [
+        "backend-cuda"
+      ]
+    },
+    {
+      "patch": "/home/muk/projects/siminfeng/campaign/cc/kv_quant_fix/kv-quant-fix.patch",
+      "sha256": "dd0e4ffd3ffa1e414353f70addf67312816d167ebb1e9518cc75b543b86e8e6c",
+      "files": [
+        {
+          "path": "ggml/src/ggml-backend.cpp",
+          "old_path": "a/ggml/src/ggml-backend.cpp",
+          "new_path": "b/ggml/src/ggml-backend.cpp",
+          "layer": "ggml-core",
+          "hunks": [
+            {
+              "old_start": 1972,
+              "old_count": 9,
+              "new_start": 1972,
+              "new_count": 8,
+              "context": ""
+            }
+          ]
+        }
+      ],
+      "layers": [
+        "ggml-core"
+      ]
+    }
+  ],
+  "pairwise_overlap": [
+    {
+      "patches": [
+        "/home/muk/projects/siminfeng/campaign/cc/q8_reuse/q8-activation-reuse.patch",
+        "/home/muk/projects/siminfeng/campaign/cc/kv_quant_fix/kv-quant-fix.patch"
+      ],
+      "shared_files": [],
+      "shared_layers": []
+    }
+  ],
+  "permutations": [
+    {
+      "order": [
+        "/home/muk/projects/siminfeng/campaign/cc/q8_reuse/q8-activation-reuse.patch",
+        "/home/muk/projects/siminfeng/campaign/cc/kv_quant_fix/kv-quant-fix.patch"
+      ],
+      "applies": true,
+      "tree_hash": "954f7c74045ee731531b20ae68fd0a7701b48c4c",
+      "conflict": null
+    },
+    {
+      "order": [
+        "/home/muk/projects/siminfeng/campaign/cc/kv_quant_fix/kv-quant-fix.patch",
+        "/home/muk/projects/siminfeng/campaign/cc/q8_reuse/q8-activation-reuse.patch"
+      ],
+      "applies": true,
+      "tree_hash": "954f7c74045ee731531b20ae68fd0a7701b48c4c",
+      "conflict": null
+    }
+  ],
+  "tree_hashes": [
+    "954f7c74045ee731531b20ae68fd0a7701b48c4c"
+  ],
+  "order_independent": true,
+  "release": {
+    "path": "cc/components/release-stack-1.patch",
+    "sha256": "2e340d159bc51d9918bfdf41327f989478daa52cd2dab3e876a8fe722d663031"
+  }
+}

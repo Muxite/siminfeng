@@ -1,0 +1,230 @@
+{
+  "schema": "factory-stage/0",
+  "stage": "system",
+  "status": "completed",
+  "inputs": {
+    "files": {
+      "/home/muk/projects/siminfeng/campaign/cc/factory/factory.py": "0bdb2623eae85809bb60c838d254e3192de4fae3116570316529f7226662989b",
+      "/home/muk/projects/siminfeng/campaign/cc/engine_handoff/hosts/x86-main.json": "12b7045e71a5f6ca605d1eb0cc0e7957040aa3d6f58710de208e4914a4596736",
+      "/home/muk/projects/siminfeng/campaign/cc/resource_observe/observe.py": "91f0f5b37650fe8d960f2a863fad0c665025da83fa18e94be1b4e8fbe92a0adf"
+    },
+    "parameters": {
+      "backends": "nvidia-smi,linux"
+    }
+  },
+  "inputs_sha256": "dfe40667ec7a22c3e1461dec1dddf05236d981c67eef3e5ec93cd106c1514098",
+  "data": {
+    "host": {
+      "format": "campaign-host-profile/0",
+      "host_id": "x86-main",
+      "platform": "linux/amd64",
+      "architecture": "x86_64",
+      "cpu": {
+        "model": "AMD Ryzen 7 3700X",
+        "threads": 16
+      },
+      "ram_bytes": 49392123904,
+      "gpu": {
+        "model": "NVIDIA GeForce RTX 5070 Ti",
+        "memory_mib": 16303,
+        "cuda_arch": "sm_120"
+      },
+      "memory_model": "discrete-vram",
+      "driver_version": "595.99.02",
+      "cuda_image_version": "12.8",
+      "platform_compat": {
+        "cuda_arch": [
+          "sm_120"
+        ],
+        "jetpack_l4t": null
+      },
+      "capabilities": [
+        "docker",
+        "nvidia-runtime"
+      ],
+      "memory_guarantees": [
+        {
+          "guarantee": "cooperative-intercept",
+          "domain": "gpu-device-allocation",
+          "accounting_method": "gpu_budget-shim",
+          "notes": "D021/D023; requires compatible no-VMM engine and demonstrated interception. Not a hard VRAM cap."
+        },
+        {
+          "guarantee": "cgroup-host",
+          "domain": "host-ram",
+          "accounting_method": "cgroup-v2-memory",
+          "notes": "Host memory limit/accounting; does not constrain discrete GPU VRAM."
+        }
+      ],
+      "notes": [
+        "Assignment T-S host facts; not a live availability probe.",
+        "gpu_jobs_on_host=1 is a requested policy; bin/lab has no GPU admission lock after D007."
+      ]
+    },
+    "sample": {
+      "schema": "resource-sample/0",
+      "ts": {
+        "utc": "2026-11-09T23:35:42.170600+00:00",
+        "monotonic": 706179.390282974
+      },
+      "host_id": "jifan",
+      "backends": [
+        "nvidia-smi",
+        "linux"
+      ],
+      "gpu_id": null,
+      "fields": {
+        "gpu.memory.used": {
+          "value": null,
+          "unit": "MiB",
+          "source": "nvidia-smi:memory.used",
+          "scope": "device-total",
+          "status": "error",
+          "reason": "exit 9: NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running."
+        },
+        "gpu.memory.total": {
+          "value": null,
+          "unit": "MiB",
+          "source": "nvidia-smi:memory.total",
+          "scope": "device-total",
+          "status": "error",
+          "reason": "exit 9: NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running."
+        },
+        "gpu.util": {
+          "value": null,
+          "unit": "%",
+          "source": "nvidia-smi:utilization.gpu",
+          "scope": "device-total",
+          "status": "error",
+          "reason": "exit 9: NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running."
+        },
+        "gpu.temp": {
+          "value": null,
+          "unit": "degC",
+          "source": "nvidia-smi:temperature.gpu",
+          "scope": "device-total",
+          "status": "error",
+          "reason": "exit 9: NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running."
+        },
+        "gpu.power": {
+          "value": null,
+          "unit": "W",
+          "source": "nvidia-smi:power.draw",
+          "scope": "device-total",
+          "status": "error",
+          "reason": "exit 9: NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running."
+        },
+        "gpu.clocks.sm": {
+          "value": null,
+          "unit": "MHz",
+          "source": "nvidia-smi:clocks.current.sm",
+          "scope": "device-total",
+          "status": "error",
+          "reason": "exit 9: NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running."
+        },
+        "gpu.clocks.memory": {
+          "value": null,
+          "unit": "MHz",
+          "source": "nvidia-smi:clocks.current.memory",
+          "scope": "device-total",
+          "status": "error",
+          "reason": "exit 9: NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running."
+        },
+        "gpu.compute_apps": {
+          "value": null,
+          "unit": "records",
+          "source": "nvidia-smi:compute-apps",
+          "scope": "per-process-on-device",
+          "status": "error",
+          "reason": "exit 9: NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running."
+        },
+        "host.mem.total": {
+          "value": 50435362816,
+          "unit": "B",
+          "source": "/proc/meminfo:MemTotal",
+          "scope": "host",
+          "status": "ok",
+          "reason": null
+        },
+        "host.mem.available": {
+          "value": 39776120832,
+          "unit": "B",
+          "source": "/proc/meminfo:MemAvailable",
+          "scope": "host",
+          "status": "ok",
+          "reason": null
+        },
+        "host.mem.swap.total": {
+          "value": 8589930496,
+          "unit": "B",
+          "source": "/proc/meminfo:SwapTotal",
+          "scope": "host",
+          "status": "ok",
+          "reason": null
+        },
+        "host.mem.swap.free": {
+          "value": 3107450880,
+          "unit": "B",
+          "source": "/proc/meminfo:SwapFree",
+          "scope": "host",
+          "status": "ok",
+          "reason": null
+        },
+        "cgroup.memory.current": {
+          "value": null,
+          "unit": "B",
+          "source": "cgroup-v2:memory.current",
+          "scope": "cgroup-subtree",
+          "status": "unavailable",
+          "reason": "cgroup_path not supplied"
+        },
+        "cgroup.memory.peak": {
+          "value": null,
+          "unit": "B",
+          "source": "cgroup-v2:memory.peak",
+          "scope": "cgroup-subtree",
+          "status": "unavailable",
+          "reason": "cgroup_path not supplied"
+        },
+        "cgroup.memory.swap.current": {
+          "value": null,
+          "unit": "B",
+          "source": "cgroup-v2:memory.swap.current",
+          "scope": "cgroup-subtree",
+          "status": "unavailable",
+          "reason": "cgroup_path not supplied"
+        },
+        "cgroup.memory.swap.peak": {
+          "value": null,
+          "unit": "B",
+          "source": "cgroup-v2:memory.swap.peak",
+          "scope": "cgroup-subtree",
+          "status": "unavailable",
+          "reason": "cgroup_path not supplied"
+        },
+        "cgroup.io.rbytes": {
+          "value": null,
+          "unit": "B",
+          "source": "cgroup-v2:io.stat",
+          "scope": "cgroup-subtree",
+          "status": "unavailable",
+          "reason": "cgroup_path not supplied"
+        },
+        "process.rss": {
+          "value": null,
+          "unit": "B",
+          "source": "/proc/<pid>/status:VmRSS",
+          "scope": "process",
+          "status": "unavailable",
+          "reason": "pid not supplied"
+        }
+      },
+      "collection_seconds": 0.0246888380497694
+    },
+    "note": "Availability snapshot, not a reservation; resume reuses the sample."
+  },
+  "outputs": {
+    "data_sha256": "504662e63bffcf7589656416e837df8701e1bdba33cc99ca24def7dc5c06d421",
+    "files": {}
+  }
+}

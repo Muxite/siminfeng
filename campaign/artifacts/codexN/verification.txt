@@ -1,0 +1,37 @@
+Assignment T-N; pinned base 712fcd5e8b35b7a711f6053fd63e81a0d88d616e.
+Writes confined to cc/build_engine/** and artifacts/codexN/**.
+No network access or Docker execution. Docker calls in tests are mocked.
+
+Diff summary:
+- CLI validates repeatable --cmake-define, rejects duplicates and all built-in
+  CMake flag keys; canonical definitions become CMAKE_DEFINES build arguments,
+  schema-2 fields, recipe_sha256 inputs, and campaign.cmake.defines image label.
+- Added owned Dockerfile/Bake recipes under cc/build_engine/recipes; older
+  builds/llamacpp recipes untouched.
+- Optional linkage probe uses the Buildx image config digest and restricted
+  docker run flags; detects versioned CUDA libraries, dynamic libcudart,
+  and cudaMalloc/cudaFree/cudaMemGetInfo imports; saves raw outputs.
+- Failed/unavailable linkage exits 1 with failure_stage=linkage unless
+  --linkage-optional; unavailable measurements are null with reasons.
+- Captured CPU-only ELF fixtures and expanded tests; updated README.
+- No build-record reader exists here, so no v1 reader migration was needed.
+
+Final pytest command:
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q cc/build_engine/test_build_engine.py --basetemp=cc/build_engine/.pytest-tmp -o cache_dir=cc/build_engine/.pytest_cache
+Result: 76 passed in 0.70s (exit 0).
+git diff --check -- cc/build_engine: passed.
+
+Exact orchestrator CLI (from campaign root, fresh/empty output directory):
+python3 cc/build_engine/build_engine.py \
+  --source ref/llama.cpp --commit 31288c9c66e59377f7788d920678a565bb89dd37 \
+  --tag campaign/llamacpp:no-vmm \
+  --out artifacts/codexN/no-vmm-build \
+  --cmake-define GGML_CUDA_NO_VMM=ON \
+  --linkage
+
+Base images must be available locally or supplied through validated BASE_DEVEL
+and BASE_RUNTIME references; the runtime tag is resolved to a local RepoDigest.
+Gaps: no actual Bake build, runtime linkage, GPU run, or preload interception
+validated. A runtime missing both readelf and nm yields unavailable and a fatal
+linkage stage with this CLI; --linkage-optional permits that result explicitly.
+Captured fixtures are CPU mock ELF outputs, not CUDA correctness evidence.

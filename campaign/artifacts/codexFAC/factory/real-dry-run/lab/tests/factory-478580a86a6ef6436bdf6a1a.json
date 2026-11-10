@@ -1,0 +1,46 @@
+{
+  "pl_57900d14dcbb_engagement": {
+    "tool": "llama-completion",
+    "parser": "completion",
+    "model_file": "granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+    "docker_args": [
+      "-v",
+      "/home/muk/projects/siminfeng/campaign/artifacts/traces/in:/tin:ro"
+    ],
+    "args": [
+      "-ngl",
+      "99",
+      "--fit",
+      "off",
+      "-c",
+      "4096",
+      "-b",
+      "2048",
+      "-ub",
+      "512",
+      "-ctk",
+      "f16",
+      "-ctv",
+      "f16",
+      "-t",
+      "8",
+      "-tb",
+      "8",
+      "--n-cpu-moe",
+      "19",
+      "-f",
+      "/tin/chat.txt",
+      "-n",
+      "8",
+      "--temp",
+      "0",
+      "-s",
+      "1",
+      "-no-cnv",
+      "--no-warmup"
+    ],
+    "env": {
+      "GGML_CUDA_Q8_REUSE": "1"
+    }
+  }
+}

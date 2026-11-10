@@ -1,4 +1,4 @@
-"""CPU-only checks. All test scratch files belong under artifacts/codexPL3."""
+"""CPU-only checks. All test scratch files belong under artifacts/codexPL4."""
 import ast
 import copy
 import importlib.util
@@ -70,7 +70,8 @@ def test_900_budget_selects_n19_and_accounts_for_overhead(stats, host):
     p = result['plans'][0]
     assert p['id'].startswith('mixE4K-static19-')
     assert p['gpu_mib'] == pytest.approx(875.872, abs=.01)
-    assert p['decode_tps'] == pytest.approx(149.633, abs=.001)
+    # Independent D034 n19 median; the physical model should stay within 5%.
+    assert p['decode_tps'] == pytest.approx(139.64, rel=.05)
     assert p['host_mib'] == pytest.approx(1178.7, abs=.01)
     assert all(p['gpu_mib']+p['gpu_guard_mib'] <= 900 for p in result['plans'])
     assert all(p['confidence'] == 'calibrated' for p in result['plans'])
@@ -247,7 +248,7 @@ def test_emission_matches_real_lab_loader_and_schema(stats,host,tmp_path):
 
 
 def test_cli_output_and_write_boundary(stats,host,capsys):
-    dest=ROOT/'artifacts/codexPL3/cli-test-definitions.json'
+    dest=ROOT/'artifacts/codexPL4/cli-test-definitions.json'
     argv=['--stats',str(ROOT/'artifacts/codexPL/granite-fixture.json'),'--host',str(ROOT/'cc/engine_handoff/hosts/x86-main.json'),
           '--budget-gpu-mib','900','--ctx','4096','--emit-lab-tests',str(dest)]
     assert planner.main(argv)==0

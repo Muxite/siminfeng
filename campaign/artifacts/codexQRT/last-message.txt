@@ -1,0 +1,29 @@
+Completed within the allowed write locations. [Full analysis](/home/muk/projects/siminfeng/campaign/artifacts/codexQRT/ANALYSIS.md).
+
+The callback is shared across MoE architectures, but the original tracer enforced Granite’s 32-expert limit. Added minimal Qwen3 support using its expert-count metadata. CPU-only build succeeded; **64 tests passed**. All three traces contain complete routing for every token across 48 layers, including 64 generated tokens each.
+
+Hot sets fitted only on TRAIN prose prefill:
+
+| Static K | H range | TRAIN coverage | Held-out decode coverage | Predicted hybrid t/s | Measured static t/s |
+|---:|---:|---:|---:|---:|---:|
+| 8 | 105–122 | 100.00% | 76.97% | 59.2–69.0 | 93.5 |
+| 18 | 79–98 | 99.37% | 61.25% | 44.2–49.4 | 54.6 |
+| 30 | 48–55 | 92.70% | 44.96% | 35.0–38.2 | 36.6 |
+| 42 | 17–19 | 61.48% | 15.26% | 25.4–27.0 | 27.7 |
+
+Predictions pool chat/code decode and assume **30–80 µs handoff per layer**, with batched skip-ID dispatch. Allocations respect actual quantized expert-byte budgets.
+
+Only K=30 approaches crossover: **36.9 t/s at 50 µs**, with parity at approximately **54 µs**. Its central gain is just 0.7%. **A general CUDA hybrid build is not justified by this evidence**; prose hot sets transfer poorly to code. Broader, deployment-matched training and evaluation should come first.
+
+Trace byte sizes and SHA256:
+
+```text
+prose: 12,872,290 bytes
+e6b2049c94b9d2ea81cafcf9e63d1d88955671d39bcbb809d80b7edad08b34e3
+
+chat: 1,151,205 bytes
+7e7b84b5dd1164c49dab9f22ca93f32f7e95fc9cf681e47dd354d6ae70fc9888
+
+code: 17,233,002 bytes
+3c9e18340e6b7df997aaf00cd3b8cf50ebc88fa46ce0308d229cd6238ef1eaa0
+```

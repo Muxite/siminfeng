@@ -1,0 +1,21 @@
+0.00.248.178 I llama_completion: llama backend init
+0.00.248.185 I llama_completion: load the model and apply lora adapter, if any
+/app/ggml/src/ggml-impl.h:330: fatal error
+libggml-base.so.0(+0x17be6)[0x715774565be6]
+libggml-base.so.0(+0x1806a)[0x71577456606a]
+libggml-base.so.0(ggml_abort+0x15b)[0x71577456624b]
+libggml-base.so.0(ggml_backend_sched_split_graph+0xd91)[0x715774582761]
+libllama.so.0(_ZN13llama_context13graph_reserveEjjjPK22llama_memory_context_ibPm+0x1c0e)[0x7157748584ae]
+libllama.so.0(_ZN13llama_context17resolve_fused_opsEPK22llama_memory_context_ij+0x5b2)[0x715774859062]
+libllama.so.0(_ZN13llama_context13sched_reserveEv+0x686)[0x715774859ca6]
+libllama.so.0(_ZN13llama_contextC1ERK11llama_model20llama_context_params+0xdc8)[0x71577485b2b8]
+libllama.so.0(llama_init_from_model+0x31a)[0x71577485c39a]
+libllama-common.so.0(+0x2a8791)[0x715774d1a791]
+libllama-common.so.0(+0x2a9f33)[0x715774d1bf33]
+libllama-common.so.0(_Z17common_fit_paramsPKcP18llama_model_paramsP20llama_context_paramsPfP32llama_model_tensor_buft_overridePmjPK22common_fit_extra_model14ggml_log_level+0x59)[0x715774d20c79]
+libllama-common.so.0(_ZN18common_init_resultC2ER13common_paramsb+0x307)[0x715774cebd67]
+libllama-common.so.0(_Z23common_init_from_paramsR13common_paramsb+0x4b)[0x715774ceea7b]
+libllama-completion-impl.so(_Z16llama_completioniPPc+0x1e7)[0x7157751c5a27]
+/lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca)[0x715774fc81ca]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x8b)[0x715774fc828b]
+/app/llama-completion(+0x1095)[0x5e09fe8c3095]

@@ -1,0 +1,42 @@
+{
+  "model": "pap12_q3.gguf",
+  "started_utc": "2026-11-09T23:16:14.409772+00:00",
+  "baseline_header": {
+    "magic": "_logits_",
+    "context": 512,
+    "vocab": 49155,
+    "chunks": 20
+  },
+  "command": [
+    "nice",
+    "-n",
+    "10",
+    "/home/muk/projects/siminfeng/campaign/artifacts/codexPAP/build/bin/llama-perplexity",
+    "-m",
+    "/home/muk/projects/siminfeng/campaign/artifacts/codexPAP/models/pap12_q3.gguf",
+    "-f",
+    "/home/muk/models/campaign/data/wikitext/wikitext-2-raw/wiki.test.raw",
+    "-c",
+    "512",
+    "--chunks",
+    "20",
+    "-t",
+    "6",
+    "-tb",
+    "6",
+    "-ngl",
+    "0",
+    "--kl-divergence-base",
+    "/home/muk/projects/siminfeng/campaign/artifacts/kl/bf16.kl",
+    "--kl-divergence"
+  ],
+  "exit_code": 0,
+  "mean_kld": 0.072459,
+  "kld_uncertainty": 0.002828,
+  "status": "passed",
+  "ppl": 10.747627,
+  "ppl_base": 10.006522,
+  "ppl_ratio": 1.074062,
+  "log": "artifacts/codexPAP/logs/cpu-sanity.log",
+  "finished_utc": "2026-11-09T23:16:57.440752+00:00"
+}

@@ -1,0 +1,47 @@
+{
+  "format": "campaign-host-profile/0",
+  "host_id": "x86-main",
+  "platform": "linux/amd64",
+  "architecture": "x86_64",
+  "cpu": {
+    "model": "AMD Ryzen 7 3700X",
+    "threads": 16
+  },
+  "ram_bytes": 49392123904,
+  "gpu": {
+    "model": "NVIDIA GeForce RTX 5070 Ti",
+    "memory_mib": 16303,
+    "cuda_arch": "sm_120"
+  },
+  "memory_model": "discrete-vram",
+  "driver_version": "595.99.02",
+  "cuda_image_version": "12.8",
+  "platform_compat": {
+    "cuda_arch": [
+      "sm_120"
+    ],
+    "jetpack_l4t": null
+  },
+  "capabilities": [
+    "docker",
+    "nvidia-runtime"
+  ],
+  "memory_guarantees": [
+    {
+      "guarantee": "cooperative-intercept",
+      "domain": "gpu-device-allocation",
+      "accounting_method": "gpu_budget-shim",
+      "notes": "D021/D023; requires compatible no-VMM engine and demonstrated interception. Not a hard VRAM cap."
+    },
+    {
+      "guarantee": "cgroup-host",
+      "domain": "host-ram",
+      "accounting_method": "cgroup-v2-memory",
+      "notes": "Host memory limit/accounting; does not constrain discrete GPU VRAM."
+    }
+  ],
+  "notes": [
+    "Assignment T-S host facts; not a live availability probe.",
+    "gpu_jobs_on_host=1 is a requested policy; bin/lab has no GPU admission lock after D007."
+  ]
+}
