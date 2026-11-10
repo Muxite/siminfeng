@@ -1320,3 +1320,154 @@ ls -ld ~/models/campaign" in /home/muk/projects/siminfeng/campaign
 aarch64
 drwxrwxr-x 7 muk muk 4096 Nov 10 03:05 /home/muk/models/campaign
 
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='cc/resource_observe/fixtures/io/proc-stat'
+s=open(p).read().replace('1 0 1000 0 0','1 0 0 0 1000 0 0');open(p,'w').write(s)
+p='cc/resource_observe/io_watchdog.py';s=open(p).read().replace(\"if pids and counts.get(name) == len(pids):\", \"if pids and counts.get(name) == len(pids) and (not counter or len(identities) == len(pids)):\")
+s=s.replace(\"    watched_identity = pid_identity(a.kill_pid, procroot) if a.kill_pid else None\\n    while True:\\n        try:\",\"    watched_identity = None\\n    initialized = False\\n    while True:\\n        try:\\n            if not initialized:\\n                watched_identity = pid_identity(a.kill_pid, procroot) if a.kill_pid else None\\n                initialized = True\")
+open(p,'w').write(s)
+PY
+python3 -m pytest -q cc/resource_observe
+python3 cc/resource_observe/resource_observe.py sample --backends io --path ~/models/campaign --duration-s 5 --out cc/resource_observe/fixtures/live-io-sample.jsonl" in /home/muk/projects/siminfeng/campaign
+ succeeded in 6362ms:
+.............................                                            [100%]
+29 passed in 0.75s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+import json
+p='cc/resource_observe/fixtures/live-io-sample.jsonl'
+r=[json.loads(l) for l in open(p)]
+print('records:',len(r),'span:',r[-1]['mono_s']-r[0]['mono_s'],'host:',r[0]['host_id'])
+print('first unavailable:',r[0]['unavailable'])
+print('last metrics:',[(m['name'],m['value'],m['unit']) for m in r[-1]['metrics']])
+PY
+ git diff --stat -- cc/resource_observe" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+records: 11 span: 5.00647962000221 host: satay
+first unavailable: [{'name': 'pgmajfault_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgmajfault_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgfault_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgfault_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgpgin_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgpgin_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgpgout_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgpgout_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pswpin_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pswpin_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pswpout_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pswpout_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'workingset_refault_file_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'workingset_refault_file_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'device_read_delta', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_read_rate', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_read_ios_delta', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_read_ios_rate', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_io_ticks_delta', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_io_ticks_rate', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_util', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}]
+last metrics: [('pgmajfault', 215985, 'count'), ('pgmajfault_delta', 0, 'count'), ('pgmajfault_rate', 0.0, 'count/s'), ('pgfault', 263798079, 'count'), ('pgfault_delta', 106, 'count'), ('pgfault_rate', 211.84288290307978, 'count/s'), ('pgpgin', 81805789, 'KiB'), ('pgpgin_delta', 0, 'KiB'), ('pgpgin_rate', 0.0, 'KiB/s'), ('pgpgout', 56880362, 'KiB'), ('pgpgout_delta', 0, 'KiB'), ('pgpgout_rate', 0.0, 'KiB/s'), ('pswpin', 101460, 'pages'), ('pswpin_delta', 0, 'pages'), ('pswpin_rate', 0.0, 'pages/s'), ('pswpout', 281702, 'pages'), ('pswpout_delta', 0, 'pages'), ('pswpout_rate', 0.0, 'pages/s'), ('workingset_refault_file', 12494954, 'count'), ('workingset_refault_file_delta', 0, 'count'), ('workingset_refault_file_rate', 0.0, 'count/s'), ('device_read', 79887.2783203125, 'MiB'), ('device_read_delta', 0.0, 'MiB'), ('device_read_rate', 0.0, 'MiB/s'), ('device_read_ios', 2008116, 'count'), ('device_read_ios_delta', 0, 'count'), ('device_read_ios_rate', 0.0, 'count/s'), ('device_io_ticks', 6249636, 'ms'), ('device_io_ticks_delta', 0, 'ms'), ('device_io_ticks_rate', 0.0, 'ms/s'), ('device_util', 0.0, 'percent')]
+ campaign/cc/resource_observe/resource_observe.py | 48 ++++++++++++++++++++++--
+ 1 file changed, 45 insertions(+), 3 deletions(-)
+
+codex
+All 29 tests now pass. The live capture produced 11 records over 5.006 seconds on this ARM host, with system fault counters and NVMe read/utilization metrics available. Watchdog tests verify trips and kill actions using a fake clock and mocked signals; no live processes were killed.
+exec
+/bin/bash -lc "cat >> cc/resource_observe/README.md <<'EOF'
+
+## I/O telemetry and watchdog (J-OM1)
+
+    python3 resource_observe.py sample --backends io --path ~/models/campaign --duration-s 5 --out io.jsonl
+    python3 resource_observe.py sample --backends io --device nvme0n1 --pid 123 --cgroup /sys/fs/cgroup/example --out io.jsonl
+    python3 resource_observe.py sample --backends io --pid-from-cgroup /sys/fs/cgroup/example --out io.jsonl
+    python3 resource_observe.py watchdog --min-available-mib 900 --max-swap-used-mib 512 --max-swap-rate-mibs 20 --interval-ms 250 --kill-pid 123 --out events.jsonl
+
+"'`io` reports vmstat counters in `system`, whole-disk counters in `device`,
+PID data in `process`, and cgroup v2 data in `cgroup`. Never add these scopes.
+`--path` defaults to the current directory and resolves the filesystem device
+through `/sys/dev/block/MAJ:MIN`, walking partitions to the parent disk.
+`--device` explicitly selects a disk name (or `/dev/NAME`). Overlay/network
+filesystems without a block-device mapping report unavailable with a reason.
+Disk read sectors use the kernel'"'s fixed 512-byte sector unit.
+
+Cumulative counters have "'`_delta` and `_rate` companions. First observations,
+resets, missing samples, and nonpositive time intervals have unavailable interval
+values; counters resume from a fresh baseline. Units: faults/refaults/I/Os/events
+are `count`, pgpgin/out are `KiB`, swap-in/out are `pages`, read data and memory
+are `MiB`, disk io_ticks are `ms`; rates append `/s`. `device_util` is
+`100 * delta(io_ticks) / interval_ms` in `percent`. Device utilization is the
+kernel busy-time measure, not an estimate of parallel NVMe queue saturation.
+`pid_read_bytes` retains the kernel field name but is converted to MiB.
+PID fields include minflt/majflt, read_bytes, VmRSS, RssFile, RssAnon, VmSwap.
+`--pid` and `--pid-from-cgroup` are mutually exclusive. The latter sums only
+PIDs in that file; incomplete per-field process sums are suppressed, and PID
+membership/start-time changes invalidate interval baselines. Cgroup `io.stat`
+read bytes remain separate per major:minor device. Cgroup memory accounting
+may omit Tegra driver allocations.
+
+The watchdog samples MemAvailable and SwapTotal minus SwapFree, and calculates
+combined swap-in/out MiB/s using the host page size and monotonic elapsed time.
+A particular limit must be crossed on two consecutive samples (equal to the
+limit is safe). It flushes `watchdog_sample`, `watchdog_trip`, and
+`watchdog_action` JSONL events using the same schema envelope. Targets are
+mutually exclusive: `--kill-pid`, `--kill-cgroup`, or `--kill-cmd`.
+With no target it records the trip without sending signals. PID/cgroup targets
+receive SIGTERM, a three-second grace period, then SIGKILL for remaining
+processes. Cgroup targeting includes descendants; PID start times are checked
+before each signal to avoid targeting a reused PID. Commands are parsed with
+`shlex.split` and run once without a shell (15-second timeout); for example
+`--kill-cmd '"'docker kill NAME'"'`. The watchdog does not otherwise invoke Docker.
+
+Exit codes: 3 after a trip, including a failed kill action; 0 if the watched PID
+ends or the cgroup becomes empty; 2 for unreadable/invalid monitoring data.
+Command-only and untargeted watches run until a trip or interruption because
+there is no process lifetime to observe. Monitoring errors stop the watchdog
+without killing anything. No live destructive watchdog validation was run;
+signals and command execution are covered with mocks and a fake clock.
+The five-second live system/device capture is `fixtures/live-io-sample.jsonl`.
+EOF
+python3 - <<'"'PY'
+p='cc/resource_observe/io_watchdog.py'
+s=open(p).read().replace(\"    for base, _, _ in os.walk(path):\", \"    def walk_error(error):\\n        raise error\\n    for base, _, _ in os.walk(path, onerror=walk_error):\")
+open(p,'w').write(s)
+PY
+cat >> cc/resource_observe/test_io_watchdog.py <<'PY'
+
+
+def test_cgroup_recursive_membership(tmp_path):
+    child = tmp_path / 'child'
+    child.mkdir()
+    (tmp_path / 'cgroup.procs').write_text('42\\n')
+    (child / 'cgroup.procs').write_text('43\\n42\\n')
+    assert io.cgroup_pids(str(tmp_path)) == [42, 43]
+
+
+def test_watchdog_equal_thresholds_and_different_limits(monkeypatch):
+    samples = [(900, 512, 0), (800, 0, 0), (1000, 600, 0), (1000, 600, 0)]
+    code, events, _, _ = run_watch(monkeypatch, samples)
+    assert code == 3
+    assert events[0]['crossed'] == []
+    assert len([e for e in events if e['event'] == 'watchdog_sample']) == 4
+    assert events[-2]['limits'] == ['max_swap_used_mib']
+
+
+def test_action_failure_still_trip_exit(monkeypatch):
+    def failed(command, **kwargs):
+        raise PermissionError('execution denied')
+    monkeypatch.setattr(io.subprocess, 'run', failed)
+    result = io.kill_target(args(kill_cmd='docker kill named'))
+    assert result['action'] == 'command' and 'execution denied' in result['error']
+    code, _, actions, _ = run_watch(monkeypatch, [(800, 0, 0)] * 2, args(kill_cmd='docker kill named'))
+    assert code == 3 and len(actions) == 1
+
+
+def test_pid_monitor_permission_error_is_recorded(monkeypatch):
+    def denied(*a):
+        raise PermissionError('stat denied')
+    monkeypatch.setattr(io, 'pid_identity', denied)
+    events = []
+    assert io.watchdog(args(kill_pid=42), lambda *e: events.append(e)) == 2
+    assert events == [('watchdog_error', {'reason': 'stat denied'})]
+PY
+python3 -m pytest -q cc/resource_observe
+ git diff --check -- cc/resource_observe
+ git status --short -- cc/resource_observe" in /home/muk/projects/siminfeng/campaign
+ succeeded in 1338ms:
+.................................                                        [100%]
+33 passed in 0.85s
+ M cc/resource_observe/README.md
+ M cc/resource_observe/resource_observe.py
+?? cc/resource_observe/fixtures/io/
+?? cc/resource_observe/fixtures/live-io-sample.jsonl
+?? cc/resource_observe/io_watchdog.py
+?? cc/resource_observe/test_io_watchdog.py
+
+codex
+Implemented within `cc/resource_observe/`:
+- Added `io_watchdog.py`, CLI integration, tests, fixtures, and README documentation.
+- `python3 -m pytest -q cc/resource_observe`: **33 passed**.
+- Live capture: `fixtures/live-io-sample.jsonl` — 11 records over 5.006 seconds; system faults and NVMe telemetry available.
+- Gap: destructive watchdog actions were validated with mocks, not live kills.
+tokens used
+58,029

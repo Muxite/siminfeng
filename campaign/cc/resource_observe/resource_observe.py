@@ -2,10 +2,11 @@
 """Portable resource observation: tegrastats / proc / sysfs_tegra / nvml -> JSONL (resource-observe/0)."""
 import argparse, glob, hashlib, json, os, re, shutil, socket, subprocess, sys, threading, queue, time
 from datetime import datetime, timezone
+from io_watchdog import IOSampler, watchdog
 
 SCHEMA = "resource-observe/0"
 GPU_DEVFREQ = "/sys/devices/platform/17000000.gpu/devfreq/17000000.gpu"
-ALL_BACKENDS = ["tegrastats", "proc", "sysfs_tegra", "nvml"]
+ALL_BACKENDS = ["tegrastats", "proc", "sysfs_tegra", "nvml", "io"]
 
 
 def M(name, value, unit, scope, source):
@@ -317,6 +318,9 @@ def capabilities(devfreq=GPU_DEVFREQ, root="/proc", runner=None):
         ok = bool(nm)
         why = "ok" if ok else (nu[-1]["reason"] if nu else "no memory fields")
     caps["nvml"] = {"available": ok, "reason": why or "ok", "metrics": [n for n, _ in GPU_FIELDS] if ok else []}
+    im, iu = IOSampler(procroot=root).sample()
+    caps["io"] = {"available": bool(im), "reason": "ok" if im else "no I/O counters",
+                  "metrics": [x["name"] for x in im], "missing": iu}
     return caps
 
 
@@ -332,7 +336,9 @@ def resolve_backends(spec):
 
 
 def sample_once(backend, seq, a):
-    if backend == "proc":
+    if backend == "io":
+        m, u = a.io_sampler.sample()
+    elif backend == "proc":
         m, u = proc_sample(pid=a.pid, cgroup=a.cgroup)
     elif backend == "sysfs_tegra":
         m, u = sysfs_sample(nvpmodel_mode=a.nvpmodel_mode)
@@ -344,6 +350,8 @@ def sample_once(backend, seq, a):
 
 
 def cmd_sample(a):
+    a.io_sampler = IOSampler(path=a.path, device=a.device, pid=a.pid,
+                             pid_from_cgroup=a.pid_from_cgroup, cgroup=a.cgroup)
     backends = resolve_backends(a.backends)
     seq = 0
     end = time.monotonic() + a.duration_s if a.duration_s else None
@@ -418,13 +426,47 @@ def main(argv=None):
     s.add_argument("--backends", default="auto")
     s.add_argument("--interval-ms", type=int, default=500)
     s.add_argument("--duration-s", type=float, default=0)
-    s.add_argument("--pid", type=int)
+    pids = s.add_mutually_exclusive_group()
+    pids.add_argument("--pid", type=int)
+    pids.add_argument("--pid-from-cgroup")
+    s.add_argument("--path", default=".")
+    s.add_argument("--device")
     s.add_argument("--cgroup")
     s.add_argument("--nvpmodel-mode")
     s.add_argument("--out", required=True)
     z = sp.add_parser("summarize"); z.add_argument("file"); z.add_argument("--interval-ms", type=int)
     sp.add_parser("capabilities")
+    w = sp.add_parser("watchdog")
+    w.add_argument("--min-available-mib", type=float, default=900)
+    w.add_argument("--max-swap-used-mib", type=float, default=512)
+    w.add_argument("--max-swap-rate-mibs", type=float, default=20)
+    w.add_argument("--interval-ms", type=int, default=250)
+    target = w.add_mutually_exclusive_group()
+    target.add_argument("--kill-cgroup")
+    target.add_argument("--kill-pid", type=int)
+    target.add_argument("--kill-cmd")
+    w.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    if a.cmd in ("sample", "watchdog") and a.interval_ms <= 0:
+        ap.error("--interval-ms must be positive")
+    if a.cmd == "sample" and (a.duration_s < 0 or (a.pid is not None and a.pid <= 0)):
+        ap.error("duration must be nonnegative and pid positive")
+    if a.cmd == "watchdog":
+        if a.kill_pid is not None and a.kill_pid <= 0:
+            ap.error("--kill-pid must be positive (process groups are not allowed)")
+        if any(not __import__('math').isfinite(v) or v < 0 for v in
+               (a.min_available_mib, a.max_swap_used_mib, a.max_swap_rate_mibs)):
+            ap.error("watchdog thresholds must be finite and nonnegative")
+        with open(a.out, "w") as out:
+            seq = 0
+            def emit(event, data):
+                nonlocal seq
+                r = record("watchdog", seq, [])
+                r.update(event=event, **data)
+                out.write(json.dumps(r) + "\n")
+                out.flush()
+                seq += 1
+            return watchdog(a, emit)
     if a.cmd == "sample":
         return cmd_sample(a)
     if a.cmd == "summarize":

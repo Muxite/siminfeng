@@ -1,0 +1,1478 @@
+Implemented within `cc/resource_observe/`:
+- Added `io_watchdog.py`, CLI integration, tests, fixtures, and README documentation.
+- `python3 -m pytest -q cc/resource_observe`: **33 passed**.
+- Live capture: `fixtures/live-io-sample.jsonl` — 11 records over 5.006 seconds; system faults and NVMe telemetry available.
+- Gap: destructive watchdog actions were validated with mocks, not live kills.
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c36b-7392-78f0-84ba-e99587281c1e
+--------
+user
+Execute the assignment in assignments/J-OM1-io-telemetry-watchdog.md exactly. Read it first.
+codex
+I’ll read the assignment first, then follow its instructions and required checks.
+exec
+/bin/bash -lc 'cat assignments/J-OM1-io-telemetry-watchdog.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Assignment J-OM1 — I/O + fault telemetry backend and safety watchdog (host jetson-arm; parent over-memory track; worker Codex)
+Base: branch jetson/c1. Allowed: `cc/resource_observe/**` only. Python 3.10 stdlib. No sudo/installs/GPU/docker.
+Why: over-memory runs stream expert weights from NVMe via mmap page cache; we must measure faults and I/O and never drive the 7.4 GiB shared-DRAM host into OOM/swap thrash.
+1. New backend `io` in resource_observe.py (same `resource-observe/0` contract, units, unavailable-with-reason):
+   - /proc/vmstat: pgmajfault, pgfault, pgpgin, pgpgout, pswpin, pswpout, workingset_refault_file (as cumulative counters + per-interval deltas/rates).
+   - /sys/block/<dev>/stat for a configurable device (default: the block device holding a given path, resolve via /sys/dev/block/MAJ:MIN of `os.stat(path).st_dev`, walk to parent disk): read sectors→MiB, read ios, io_ticks → rate MiB/s and %util per interval.
+   - per-PID (`--pid`, or `--pid-from-cgroup PATH` reading cgroup.procs and summing): /proc/<pid>/stat majflt/minflt, /proc/<pid>/io read_bytes (permission → unavailable with reason), /proc/<pid>/status VmRSS/RssFile/RssAnon/VmSwap.
+   - cgroup v2 (`--cgroup PATH`): memory.current, memory.stat (anon, file, file_mapped, active_file, inactive_file, workingset_refault_file, pgmajfault), io.stat rbytes, memory.events (oom, oom_kill).
+   - Scopes: system / device / process / cgroup — never sum across scopes.
+2. `watchdog` subcommand: `resource_observe.py watchdog --min-available-mib 900 --max-swap-used-mib 512 --max-swap-rate-mibs 20 --interval-ms 250 [--kill-cgroup PATH | --kill-pid P | --kill-cmd 'docker kill NAME'] --out events.jsonl`: samples MemAvailable/swap; when a limit is crossed for 2 consecutive samples, emits a `watchdog_trip` record (which limit, values), then performs the configured kill action ONCE (SIGTERM, then SIGKILL after 3 s for pid/cgroup), records the action result, and exits 3. Exit 0 when the watched pid/cgroup ends normally. Never kills anything not explicitly configured.
+3. Tests (pytest, fixture files for vmstat/diskstats/proc/cgroup, fake clock): delta/rate math incl. counter reset, device resolution from path via fixture sysfs, permission-denied → unavailable, watchdog trips only after 2 consecutive samples, single kill action, exit codes.
+4. One real 5 s live `sample --backends io --path ~/models/campaign` on this host to fixtures/live-io-sample.jsonl.
+Time 40 min. Final ≤ 12 lines: files, pytest line, live capability, gaps.
+
+exec
+/bin/bash -lc "rg --files -g AGENTS.md -g '"'!node_modules'"' -g '"'!vendor'"'" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+ref/llama.cpp/AGENTS.md
+ref/Strata/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/reservation-workflow/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/refactor-orders/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/merge-windows/AGENTS.md
+
+exec
+/bin/bash -lc 'ls cc/resource_observe; cat cc/resource_observe/resource_observe.py' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+README.md
+__pycache__
+fixtures
+resource_observe.py
+test_resource_observe.py
+#!/usr/bin/env python3
+"""Portable resource observation: tegrastats / proc / sysfs_tegra / nvml -> JSONL (resource-observe/0)."""
+import argparse, glob, hashlib, json, os, re, shutil, socket, subprocess, sys, threading, queue, time
+from datetime import datetime, timezone
+
+SCHEMA = "resource-observe/0"
+GPU_DEVFREQ = "/sys/devices/platform/17000000.gpu/devfreq/17000000.gpu"
+ALL_BACKENDS = ["tegrastats", "proc", "sysfs_tegra", "nvml"]
+
+
+def M(name, value, unit, scope, source):
+    return {"name": name, "value": value, "unit": unit, "scope": scope, "source": source}
+
+
+def U(name, backend, reason):
+    return {"name": name, "backend": backend, "reason": reason}
+
+
+def record(backend, seq, metrics, unavailable=(), parse_errors=(), host_id=None, mono=None):
+    return {"schema": SCHEMA, "ts": datetime.now(timezone.utc).isoformat(),
+            "mono_s": time.monotonic() if mono is None else mono,
+            "host_id": host_id or socket.gethostname(), "backend": backend, "seq": seq,
+            "metrics": list(metrics), "unavailable": list(unavailable), "parse_errors": list(parse_errors)}
+
+
+def _read(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+# ---------------- tegrastats ----------------
+_RAM = re.compile(r"RAM (\d+)/(\d+)MB(?: \(lfb (\d+)x(\d+)MB\))?")
+_SWAP = re.compile(r"SWAP (\d+)/(\d+)MB(?: \(cached (\d+)MB\))?")
+_CPU = re.compile(r"CPU \[([^\]]*)\]")
+_GR3D = re.compile(r"GR3D_FREQ (\d+)%(?:@\[?(\d+)\]?)?")
+_EMC = re.compile(r"EMC_FREQ (\d+)%(?:@(\d+))?")
+_TEMP = re.compile(r"\b([A-Za-z0-9_]+)@(-?\d+(?:\.\d+)?)C\b")
+_RAIL = re.compile(r"\b([A-Z][A-Z0-9_]+) (\d+)mW/(\d+)mW")
+
+
+def line_hash(line):
+    return hashlib.sha256(line.encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def parse_tegrastats(line):
+    """Return (metrics, unavailable, parse_errors) for one tegrastats line. Never raises."""
+    line = (line or "").strip()
+    S, B = "system-shared-dram", "tegrastats"
+    if not line:
+        return [], [], [{"error": "empty line", "line_sha256_16": line_hash(line)}]
+    m, un, errs = [], [], []
+    r = _RAM.search(line)
+    if r:
+        m += [M("ram_used", int(r[1]), "MiB", S, B), M("ram_total", int(r[2]), "MiB", S, B)]
+        if r[3]:
+            m.append(M("ram_lfb", int(r[3]) * int(r[4]), "MiB", S, B))
+        else:
+            un.append(U("ram_lfb", B, "lfb not in line"))
+    else:
+        un.append(U("ram_used", B, "RAM field missing or truncated"))
+        errs.append({"error": "RAM field not parsed", "line_sha256_16": line_hash(line)})
+    s = _SWAP.search(line)
+    if s:
+        m += [M("swap_used", int(s[1]), "MiB", "system", B), M("swap_total", int(s[2]), "MiB", "system", B)]
+        if s[3] is not None:
+            m.append(M("swap_cached", int(s[3]), "MiB", "system", B))
+    else:
+        un.append(U("swap_used", B, "SWAP field missing"))
+    c = _CPU.search(line)
+    if c:
+        for i, ent in enumerate(x.strip() for x in c[1].split(",")):
+            cm = re.fullmatch(r"(\d+)%(?:@(\d+))?", ent)
+            if cm:
+                m.append(M("cpu%d_load" % i, int(cm[1]), "percent", "system", B))
+                if cm[2]:
+                    m.append(M("cpu%d_freq" % i, int(cm[2]), "MHz", "system", B))
+            elif ent == "off":
+                un.append(U("cpu%d_load" % i, B, "core offline"))
+            else:
+                errs.append({"error": "bad cpu entry %r" % ent, "line_sha256_16": line_hash(line)})
+    else:
+        un.append(U("cpu_load", B, "CPU field missing"))
+    g = _GR3D.search(line)
+    if g:
+        m.append(M("gpu_util", int(g[1]), "percent", "gpu", B))
+        if g[2]:
+            m.append(M("gpu_freq", int(g[2]), "MHz", "gpu", B))
+        else:
+            un.append(U("gpu_freq", B, "no @MHz in GR3D_FREQ"))
+    else:
+        un.append(U("gpu_util", B, "GR3D_FREQ missing"))
+    e = _EMC.search(line)
+    if e:
+        m.append(M("emc_util", int(e[1]), "percent", "system", B))
+        if e[2]:
+            m.append(M("emc_freq", int(e[2]), "MHz", "system", B))
+    else:
+        un.append(U("emc_freq", B, "EMC_FREQ not reported on this board/release"))
+    for name, val in _TEMP.findall(line):
+        m.append(M("temp_" + name, float(val), "celsius", "sensor", B))
+    for name, inst, avg in _RAIL.findall(line):
+        m += [M("power_%s_instant" % name, int(inst), "mW", "rail", B),
+              M("power_%s_avg" % name, int(avg), "mW", "rail", B)]
+    if not m:
+        errs.append({"error": "no fields parsed", "line_sha256_16": line_hash(line)})
+    return m, un, errs
+
+
+class TegrastatsReader:
+    def __init__(self, interval_ms, cmd=None):
+        self.q = queue.Queue()
+        self.p = subprocess.Popen(cmd or ["tegrastats", "--interval", str(interval_ms)], stdout=subprocess.PIPE,
+                                  stderr=subprocess.DEVNULL, text=True, errors="replace")
+        threading.Thread(target=lambda: [self.q.put(l) for l in self.p.stdout], daemon=True).start()
+
+    def drain(self):
+        out = []
+        while True:
+            try:
+                out.append(self.q.get_nowait())
+            except queue.Empty:
+                return out
+
+    def close(self):
+        self.p.terminate()
+
+
+def tegrastats_available():
+    return (True, "") if shutil.which("tegrastats") else (False, "tegrastats not on PATH")
+
+
+# ---------------- proc ----------------
+_NVMAP = re.compile(r"^(NvMap\w*|Nvmap\w*)")
+
+
+def parse_meminfo(text):
+    d = {}
+    for l in (text or "").splitlines():
+        k, _, v = l.partition(":")
+        p = v.split()
+        if p and p[0].isdigit():
+            d[k] = int(p[0]) * (1 if len(p) > 1 and p[1] == "B" else 1024) if len(p) > 1 else int(p[0])
+    return d
+
+
+def parse_status_kb(text, key):
+    mm = re.search(r"^%s:\s+(\d+) kB" % key, text or "", re.M)
+    return int(mm[1]) * 1024 if mm else None
+
+
+def proc_sample(root="/proc", pid=None, cgroup=None, cgroup_root="/sys/fs/cgroup"):
+    B = "proc"
+    m, un = [], []
+    mi = _read(os.path.join(root, "meminfo"))
+    if mi is None:
+        un.append(U("meminfo", B, "%s/meminfo unreadable" % root))
+    else:
+        d = parse_meminfo(mi)
+        for name, key, unit in [("mem_total", "MemTotal", "MiB"), ("mem_available", "MemAvailable", "MiB"),
+                                ("mem_cached", "Cached", "MiB"), ("swap_total", "SwapTotal", "MiB"),
+                                ("swap_free", "SwapFree", "MiB")]:
+            if key in d:
+                m.append(M(name, round(d[key] / 1048576, 3), unit, "system", "meminfo:" + key))
+            else:
+                un.append(U(name, B, "%s absent from meminfo" % key))
+        nv = [k for k in d if _NVMAP.match(k)]
+        for k in nv:
+            m.append(M("meminfo_" + k, round(d[k] / 1048576, 3), "MiB", "system", "meminfo:" + k))
+        if not nv:
+            un.append(U("nvmap", B, "no NvMap* fields in meminfo"))
+    la = _read(os.path.join(root, "loadavg"))
+    p = la.split() if la else []
+    if len(p) >= 3:
+        try:
+            for n, v in zip(("load1", "load5", "load15"), p[:3]):
+                m.append(M(n, float(v), "load", "system", "loadavg"))
+        except ValueError:
+            un.append(U("loadavg", B, "unparseable loadavg"))
+    else:
+        un.append(U("loadavg", B, "loadavg missing/short"))
+    if pid is not None:
+        st = _read(os.path.join(root, str(pid), "status"))
+        for name, key in (("pid_rss", "VmRSS"), ("pid_hwm", "VmHWM")):
+            v = parse_status_kb(st, key) if st else None
+            if v is None:
+                un.append(U(name, B, "pid %s status missing or no %s" % (pid, key)))
+            else:
+                m.append(M(name, round(v / 1048576, 3), "MiB", "process", "status:" + key))
+    if cgroup:
+        base = os.path.join(cgroup_root, cgroup.lstrip("/")) if not os.path.isabs(cgroup) or not os.path.isdir(cgroup) else cgroup
+        note = "cgroup memory may not include nvmap/driver GPU allocations on Tegra"
+        for name, f in (("cgroup_current", "memory.current"), ("cgroup_peak", "memory.peak"), ("cgroup_max", "memory.max")):
+            t = _read(os.path.join(base, f))
+            t = t.strip() if t else None
+            if t is None:
+                un.append(U(name, B, "%s unreadable in %s" % (f, base)))
+            elif t == "max":
+                un.append(U(name, B, "unlimited (max)"))
+            elif t.isdigit():
+                x = M(name, round(int(t) / 1048576, 3), "MiB", "cgroup", f)
+                x["accounting_note"] = note
+                m.append(x)
+            else:
+                un.append(U(name, B, "unparseable %r" % t))
+    return m, un
+
+
+# ---------------- sysfs_tegra ----------------
+def sysfs_sample(devfreq=GPU_DEVFREQ, thermal="/sys/class/thermal", nvpmodel_mode=None, query_nvpmodel=True):
+    B = "sysfs_tegra"
+    m, un = [], []
+    if not os.path.isdir(devfreq):
+        un.append(U("gpu_devfreq", B, "%s absent (not a Jetson?)" % devfreq))
+    else:
+        for n, f in (("gpu_freq_cur", "cur_freq"), ("gpu_freq_min", "min_freq"), ("gpu_freq_max", "max_freq")):
+            t = (_read(os.path.join(devfreq, f)) or "").strip()
+            if t.isdigit():
+                m.append(M(n, int(t) / 1e6, "MHz", "gpu", "devfreq:" + f))
+            else:
+                un.append(U(n, B, "%s unreadable" % f))
+    zones = sorted(glob.glob(os.path.join(thermal, "thermal_zone*")))
+    if not zones:
+        un.append(U("thermal", B, "no thermal zones"))
+    for z in zones:
+        ty = (_read(os.path.join(z, "type")) or "").strip()
+        t = (_read(os.path.join(z, "temp")) or "").strip()
+        zn = os.path.basename(z)
+        if ty and re.fullmatch(r"-?\d+", t):
+            m.append(M("thermal_%s_%s" % (zn, ty), int(t) / 1000.0, "celsius", "sensor", "thermal:" + zn))
+        else:
+            un.append(U("thermal_" + zn, B, "type/temp unreadable"))
+    mode = nvpmodel_mode
+    if mode is None and query_nvpmodel and shutil.which("nvpmodel"):
+        try:
+            out = subprocess.run(["nvpmodel", "-q"], capture_output=True, text=True, timeout=5).stdout
+            mm = re.search(r"NV Power Mode:\s*(\S+)", out)
+            mode = mm[1] if mm else None
+        except Exception:
+            mode = None
+    if mode:
+        m.append(M("nvpmodel_mode", mode, "string", "system", "nvpmodel -q"))
+    else:
+        un.append(U("nvpmodel_mode", B, "not provided and query failed/unavailable"))
+    return m, un
+
+
+# ---------------- nvml ----------------
+GPU_FIELDS = [("gpu_mem_used", "MiB"), ("gpu_mem_total", "MiB"), ("gpu_util", "percent"),
+              ("gpu_sm_clock", "MHz"), ("gpu_temp", "celsius"), ("gpu_power", "W")]
+
+
+def parse_nvml_csv(text, apps_text=""):
+    B, S = "nvml", "device-discrete"
+    m, un = [], []
+    rows = [l for l in (text or "").splitlines() if l.strip()]
+    if not rows:
+        return [], [U("gpu", B, "no nvidia-smi output")]
+    for gi, row in enumerate(rows):
+        cells = [c.strip() for c in row.split(",")]
+        sfx = "" if len(rows) == 1 else str(gi)
+        for (name, unit), c in zip(GPU_FIELDS, cells + [None] * (len(GPU_FIELDS) - len(cells))):
+            try:
+                if c is None or re.search(r"N/A|Not Supported", c, re.I) or c == "":
+                    raise ValueError
+                m.append(M(name + sfx, float(c), unit, S, "nvidia-smi"))
+            except ValueError:
+                un.append(U(name + sfx, B, "field %r N/A or missing" % c))
+    for l in (apps_text or "").splitlines():
+        c = [x.strip() for x in l.split(",")]
+        if len(c) >= 3 and c[0].isdigit() and re.fullmatch(r"\d+(\.\d+)?", c[-1]):
+            m.append(M("gpu_proc_mem_pid%s" % c[0], float(c[-1]), "MiB", "process", "nvidia-smi compute-apps"))
+    return m, un
+
+
+def nvml_available():
+    if not shutil.which("nvidia-smi"):
+        return False, "nvidia-smi not on PATH"
+    return True, ""
+
+
+def nvml_sample(runner=None):
+    runner = runner or (lambda a: subprocess.run(a, capture_output=True, text=True, timeout=10))
+    q = ["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu,clocks.sm,temperature.gpu,power.draw",
+         "--format=csv,noheader,nounits"]
+    try:
+        r = runner(q)
+        if r.returncode != 0:
+            return [], [U("gpu", "nvml", "nvidia-smi failed: %s" % (r.stderr or "").strip()[:100])]
+        a = runner(["nvidia-smi", "--query-compute-apps=pid,used_memory", "--format=csv,noheader,nounits"])
+        m, un = parse_nvml_csv(r.stdout, a.stdout if a.returncode == 0 else "")
+    except Exception as ex:
+        return [], [U("gpu", "nvml", "nvidia-smi error: %s" % ex)]
+    if not m:
+        un.append(U("gpu_mem", "nvml", "no usable memory fields (integrated GPU?)"))
+    return m, un
+
+
+# ---------------- capabilities / sampling ----------------
+def capabilities(devfreq=GPU_DEVFREQ, root="/proc", runner=None):
+    caps = {}
+    ok, why = tegrastats_available()
+    caps["tegrastats"] = {"available": ok, "reason": why or "tegrastats found",
+                          "metrics": ["ram_used", "ram_total", "ram_lfb", "swap_*", "cpuN_load/freq", "gpu_util", "gpu_freq", "emc_freq", "temp_*", "power_*"] if ok else []}
+    pm, pu = proc_sample(root)
+    caps["proc"] = {"available": bool(pm), "reason": "ok" if pm else "no /proc fields", "metrics": [x["name"] for x in pm],
+                    "missing": [x["name"] + ": " + x["reason"] for x in pu]}
+    sm, su = sysfs_sample(devfreq, query_nvpmodel=True)
+    has = os.path.isdir(devfreq)
+    caps["sysfs_tegra"] = {"available": has, "reason": "ok" if has else "no Tegra GPU devfreq node",
+                           "metrics": [x["name"] for x in sm][:6], "missing": [x["name"] + ": " + x["reason"] for x in su][:6]}
+    ok, why = nvml_available()
+    if ok:
+        nm, nu = nvml_sample(runner)
+        ok = bool(nm)
+        why = "ok" if ok else (nu[-1]["reason"] if nu else "no memory fields")
+    caps["nvml"] = {"available": ok, "reason": why or "ok", "metrics": [n for n, _ in GPU_FIELDS] if ok else []}
+    return caps
+
+
+def resolve_backends(spec):
+    if spec == "auto":
+        c = capabilities()
+        return [b for b in ALL_BACKENDS if c[b]["available"]]
+    bs = [b.strip() for b in spec.split(",") if b.strip()]
+    bad = [b for b in bs if b not in ALL_BACKENDS]
+    if bad:
+        raise SystemExit("unknown backend(s): %s" % bad)
+    return bs
+
+
+def sample_once(backend, seq, a):
+    if backend == "proc":
+        m, u = proc_sample(pid=a.pid, cgroup=a.cgroup)
+    elif backend == "sysfs_tegra":
+        m, u = sysfs_sample(nvpmodel_mode=a.nvpmodel_mode)
+    elif backend == "nvml":
+        m, u = nvml_sample()
+    else:
+        raise ValueError(backend)
+    return record(backend, seq, m, u)
+
+
+def cmd_sample(a):
+    backends = resolve_backends(a.backends)
+    seq = 0
+    end = time.monotonic() + a.duration_s if a.duration_s else None
+    tg = None
+    n = 0
+    with open(a.out, "w") as out:
+        def emit(r):
+            out.write(json.dumps(r) + "\n"); out.flush()
+        for b in backends:
+            if b == "tegrastats":
+                ok, why = tegrastats_available()
+                if ok:
+                    tg = TegrastatsReader(a.interval_ms)
+                else:
+                    emit(record(b, seq, [], [U("tegrastats", b, why)])); seq += 1
+        try:
+            while True:
+                t0 = time.monotonic()
+                if tg:
+                    for l in tg.drain():
+                        m, u, e = parse_tegrastats(l)
+                        emit(record("tegrastats", seq, m, u, e)); seq += 1
+                for b in backends:
+                    if b != "tegrastats":
+                        emit(sample_once(b, seq, a)); seq += 1
+                n += 1
+                if end and time.monotonic() >= end:
+                    break
+                time.sleep(max(0, a.interval_ms / 1000 - (time.monotonic() - t0)))
+            if tg:
+                time.sleep(a.interval_ms / 1000 + 0.1)
+                for l in tg.drain():
+                    m, u, e = parse_tegrastats(l)
+                    emit(record("tegrastats", seq, m, u, e)); seq += 1
+        finally:
+            if tg:
+                tg.close()
+    return 0
+
+
+def summarize(path, interval_ms=None):
+    stats, times, nrec, errs = {}, {}, {}, 0
+    for l in open(path):
+        if not l.strip():
+            continue
+        r = json.loads(l)
+        b = r["backend"]
+        nrec[b] = nrec.get(b, 0) + 1
+        times.setdefault(b, []).append(r["mono_s"])
+        errs += len(r.get("parse_errors", []))
+        for x in r["metrics"]:
+            if isinstance(x["value"], (int, float)):
+                stats.setdefault((b, x["name"], x["unit"], x["scope"]), []).append(x["value"])
+    metrics = {"%s/%s" % (k[0], k[1]): {"unit": k[2], "scope": k[3], "n": len(v), "min": min(v), "max": max(v),
+               "mean": sum(v) / len(v), "high_water": max(v)} for k, v in stats.items()}
+    cov = {}
+    for b, ts in times.items():
+        ts = sorted(ts)
+        d = [y - x for x, y in zip(ts, ts[1:])]
+        iv = interval_ms / 1000 if interval_ms else (sorted(d)[len(d) // 2] if d else 0)
+        span = ts[-1] - ts[0]
+        exp = int(round(span / iv)) + 1 if iv else len(ts)
+        gaps = [{"after_mono_s": x, "gap_s": round(y - x, 3)} for x, y in zip(ts, ts[1:]) if iv and y - x > 2 * iv]
+        cov[b] = {"received": len(ts), "expected": exp, "interval_s": iv, "gaps_gt_2x": gaps}
+    return {"metrics": metrics, "coverage": cov, "parse_error_count": errs}
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="resource_observe.py")
+    sp = ap.add_subparsers(dest="cmd", required=True)
+    s = sp.add_parser("sample")
+    s.add_argument("--backends", default="auto")
+    s.add_argument("--interval-ms", type=int, default=500)
+    s.add_argument("--duration-s", type=float, default=0)
+    s.add_argument("--pid", type=int)
+    s.add_argument("--cgroup")
+    s.add_argument("--nvpmodel-mode")
+    s.add_argument("--out", required=True)
+    z = sp.add_parser("summarize"); z.add_argument("file"); z.add_argument("--interval-ms", type=int)
+    sp.add_parser("capabilities")
+    a = ap.parse_args(argv)
+    if a.cmd == "sample":
+        return cmd_sample(a)
+    if a.cmd == "summarize":
+        print(json.dumps(summarize(a.file, a.interval_ms), indent=1)); return 0
+    print(json.dumps(capabilities(), indent=1)); return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+
+exec
+/bin/bash -lc 'cat cc/resource_observe/test_resource_observe.py; cat cc/resource_observe/README.md; git status --short; git branch --show-current' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+import json, os, subprocess, sys
+import pytest
+import resource_observe as ro
+
+FX = os.path.join(os.path.dirname(__file__), "fixtures")
+def fx(n): return open(os.path.join(FX, n)).read()
+def names(ms): return {m["name"]: m for m in ms}
+
+def test_real_fixture():
+    for line in fx("tegrastats-idle-orin-nano-r36.5.txt").splitlines():
+        m, u, e = ro.parse_tegrastats(line)
+        d = names(m)
+        assert not e
+        assert d["ram_used"]["value"] == 1539 and d["ram_total"]["value"] == 7607
+        assert d["ram_used"]["scope"] == "system-shared-dram" and d["ram_used"]["unit"] == "MiB"
+        assert d["ram_lfb"]["value"] == 52 and d["swap_total"]["value"] == 3804 and d["swap_cached"]["value"] == 0
+        assert len([k for k in d if k.endswith("_load") and k.startswith("cpu")]) == 6
+        assert d["cpu4_freq"]["unit"] == "MHz"
+        assert d["gpu_util"]["value"] == 0 and d["temp_tj"]["unit"] == "celsius"
+        assert d["power_VDD_IN_instant"]["value"] > 4000 and d["power_VDD_IN_avg"]["unit"] == "mW"
+        assert "power_VDD_CPU_GPU_CV_avg" in d
+        assert any(x["name"] == "gpu_freq" for x in u) and any(x["name"] == "emc_freq" for x in u)
+        assert "gpu_freq" not in d and "emc_freq" not in d  # no false values
+
+def test_gr3d_and_emc_with_freq():
+    m, u, e = ro.parse_tegrastats("RAM 1/2MB SWAP 0/1MB CPU [1%@100,off] GR3D_FREQ 50%@[612] EMC_FREQ 7%@2133")
+    d = names(m)
+    assert d["gpu_freq"]["value"] == 612 and d["emc_freq"]["value"] == 2133 and d["emc_util"]["value"] == 7
+    assert any(x["name"] == "cpu1_load" and "offline" in x["reason"] for x in u)
+
+def test_empty_and_garbage():
+    m, u, e = ro.parse_tegrastats("")
+    assert not m and e and "line_sha256_16" in e[0]
+    m, u, e = ro.parse_tegrastats("complete garbage \x00")
+    assert not m and e and len(e[0]["line_sha256_16"]) == 16
+    assert ro.parse_tegrastats(None)[2]
+
+def test_truncated_and_missing_ram():
+    full = fx("tegrastats-idle-orin-nano-r36.5.txt").splitlines()[0]
+    m, u, e = ro.parse_tegrastats(full[:60])  # cut inside SWAP
+    assert "ram_used" in names(m)
+    m, u, e = ro.parse_tegrastats(full.replace("RAM 1539/7607MB (lfb 13x4MB) ", ""))
+    assert "ram_used" not in names(m) and e and any(x["name"] == "ram_used" for x in u)
+    assert "gpu_util" in names(m)  # rest still parsed
+
+def test_unknown_rails_and_extra_fields():
+    m, u, e = ro.parse_tegrastats("RAM 1/2MB SWAP 0/1MB CPU [1%@1] GR3D_FREQ 0% NEWFIELD 5 foo@12.5C VDD_WEIRD_X9 10mW/20mW")
+    d = names(m)
+    assert not e and d["power_VDD_WEIRD_X9_avg"]["value"] == 20 and d["temp_foo"]["value"] == 12.5
+
+def test_proc_fixtures(tmp_path):
+    (tmp_path / "meminfo").write_text(fx("proc-meminfo-orin-nano.txt"))
+    (tmp_path / "loadavg").write_text(fx("proc-loadavg-orin-nano.txt"))
+    m, u = ro.proc_sample(str(tmp_path))
+    d = names(m)
+    assert d["mem_total"]["value"] == pytest.approx(7789756 / 1024, rel=1e-6) and d["mem_total"]["unit"] == "MiB"
+    assert d["load1"]["value"] == 0.56
+    assert any(x["name"] == "nvmap" for x in u)
+
+def test_proc_missing_fields(tmp_path):
+    (tmp_path / "meminfo").write_text("MemTotal: 1024 kB\nNvMapMemUsed: 2048 kB\n")
+    m, u = ro.proc_sample(str(tmp_path))
+    d = names(m)
+    assert d["mem_total"]["value"] == 1.0 and d["meminfo_NvMapMemUsed"]["value"] == 2.0
+    un = {x["name"] for x in u}
+    assert {"mem_available", "swap_total", "loadavg"} <= un and "mem_available" not in d
+    m, u = ro.proc_sample(str(tmp_path / "nope"))
+    assert not m and u
+
+def test_pid_and_cgroup(tmp_path):
+    (tmp_path / "42").mkdir()
+    (tmp_path / "42" / "status").write_text("VmHWM:\t 2048 kB\nVmRSS:\t 1024 kB\n")
+    cg = tmp_path / "cg"; cg.mkdir()
+    (cg / "memory.current").write_text("1048576\n"); (cg / "memory.max").write_text("max\n")
+    m, u = ro.proc_sample(str(tmp_path), pid=42, cgroup=str(cg))
+    d = names(m)
+    assert d["pid_rss"]["value"] == 1.0 and d["pid_rss"]["scope"] == "process" and d["pid_hwm"]["value"] == 2.0
+    assert d["cgroup_current"]["scope"] == "cgroup" and "accounting_note" in d["cgroup_current"]
+    un = {x["name"] for x in u}
+    assert "cgroup_peak" in un and "cgroup_max" in un and "cgroup_max" not in d
+    m, u = ro.proc_sample(str(tmp_path), pid=999)
+    assert any(x["name"] == "pid_rss" for x in u) and "pid_rss" not in names(m)
+
+def test_no_double_count_scopes(tmp_path):
+    (tmp_path / "meminfo").write_text(fx("proc-meminfo-orin-nano.txt"))
+    (tmp_path / "7").mkdir(); (tmp_path / "7" / "status").write_text("VmRSS: 1024 kB\n")
+    cg = tmp_path / "cg"; cg.mkdir(); (cg / "memory.current").write_text("4096")
+    tm, _, _ = ro.parse_tegrastats(fx("tegrastats-idle-orin-nano-r36.5.txt").splitlines()[0])
+    pm, _ = ro.proc_sample(str(tmp_path), pid=7, cgroup=str(cg))
+    scopes = {x["scope"] for x in tm + pm if "ram" in x["name"] or "mem" in x["name"] or "pid" in x["name"] or "cgroup" in x["name"]}
+    assert {"system-shared-dram", "process", "cgroup"} <= scopes
+    # no metric aggregates across scopes
+    assert not [x for x in tm + pm if x["name"] in ("mem_sum", "total_used", "ram_plus_rss")]
+    assert names(tm)["ram_used"]["scope"] != names(pm)["pid_rss"]["scope"]
+
+def test_nvml_csv_with_na():
+    m, u = ro.parse_nvml_csv("1024, 8192, 37, 1500, 55, [N/A]\n", "123, python, 512\n")
+    d = names(m)
+    assert d["gpu_mem_used"]["value"] == 1024 and d["gpu_mem_used"]["scope"] == "device-discrete"
+    assert "gpu_power" not in d and any(x["name"] == "gpu_power" for x in u)
+    assert d["gpu_proc_mem_pid123"]["value"] == 512
+
+def test_nvml_all_na_is_unavailable_on_orin():
+    class R: returncode = 0; stdout = "[N/A], [N/A], [N/A], [N/A], [N/A], [N/A]\n"; stderr = ""
+    m, u = ro.nvml_sample(lambda a: R())
+    assert not m and any(x["name"] == "gpu_mem" for x in u)
+
+def test_sysfs_fixture_roots(tmp_path):
+    dv = tmp_path / "dv"; dv.mkdir()
+    for f, v in (("cur_freq", "306000000"), ("min_freq", "306000000"), ("max_freq", "1020000000")): (dv / f).write_text(v)
+    tz = tmp_path / "th" / "thermal_zone0"; tz.mkdir(parents=True)
+    (tz / "type").write_text("gpu-thermal\n"); (tz / "temp").write_text("48500\n")
+    m, u = ro.sysfs_sample(str(dv), str(tmp_path / "th"), nvpmodel_mode="MAXN_SUPER")
+    d = names(m)
+    assert d["gpu_freq_max"]["value"] == 1020 and d["thermal_thermal_zone0_gpu-thermal"]["value"] == 48.5
+    assert d["nvpmodel_mode"]["value"] == "MAXN_SUPER" and not u
+    m, u = ro.sysfs_sample(str(tmp_path / "none"), str(tmp_path / "none"), query_nvpmodel=False)
+    assert not m and len(u) >= 3
+
+def _write(path, recs):
+    with open(path, "w") as f:
+        for i, t in enumerate(recs):
+            f.write(json.dumps(ro.record("proc", i, [ro.M("x", float(i), "MiB", "system", "t")], mono=t)) + "\n")
+
+def test_summarize_gap_detection(tmp_path):
+    p = tmp_path / "a.jsonl"
+    _write(p, [0, 0.5, 1.0, 2.5, 3.0])
+    s = ro.summarize(str(p), interval_ms=500)
+    c = s["coverage"]["proc"]
+    assert c["received"] == 5 and c["expected"] == 7 and len(c["gaps_gt_2x"]) == 1 and c["gaps_gt_2x"][0]["gap_s"] == 1.5
+    x = s["metrics"]["proc/x"]
+    assert (x["min"], x["max"], x["high_water"]) == (0.0, 4.0, 4.0) and x["mean"] == 2.0
+
+def test_summarize_no_gaps(tmp_path):
+    p = tmp_path / "b.jsonl"; _write(p, [0, 0.5, 1.0])
+    assert ro.summarize(str(p), 500)["coverage"]["proc"]["gaps_gt_2x"] == []
+
+def test_cli_sample_fake_and_summarize(tmp_path):
+    out = tmp_path / "o.jsonl"
+    here = os.path.dirname(__file__)
+    r = subprocess.run([sys.executable, os.path.join(here, "resource_observe.py"), "sample", "--backends", "proc",
+                        "--interval-ms", "100", "--duration-s", "0.3", "--out", str(out)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    recs = [json.loads(l) for l in open(out)]
+    assert len(recs) >= 3 and all(x["schema"] == ro.SCHEMA and x["backend"] == "proc" for x in recs)
+    assert recs[0]["seq"] == 0 and {"ts", "mono_s", "host_id", "metrics", "unavailable", "parse_errors"} <= set(recs[0])
+# resource_observe (J-T2)
+Stdlib-only Python 3.10 sampler emitting JSONL under one contract, with platform backends.
+
+## Usage
+    resource_observe.py capabilities
+    resource_observe.py sample --backends auto|tegrastats,proc,sysfs_tegra,nvml [--interval-ms 500] [--duration-s N] [--pid P] [--cgroup PATH] [--nvpmodel-mode STR] --out F.jsonl
+    resource_observe.py summarize F.jsonl [--interval-ms 500]   # per-metric min/max/mean/high_water + coverage (expected vs received, gaps > 2x interval)
+Tests: `python3 -m pytest` (no GPU/root; fixtures in `fixtures/`, paths injectable).
+
+## Record
+`{"schema":"resource-observe/0","ts","mono_s","host_id","backend","seq","metrics":[{name,value,unit,scope,source}],"unavailable":[{name,backend,reason}],"parse_errors":[...]}`
+Missing data is listed in `unavailable` with a reason, never as 0. Malformed tegrastats lines yield a record with `parse_errors` carrying `line_sha256_16` (no crash). Units: MiB, MHz, percent, mW, celsius, load.
+`tegrastats` emits one record per line it produces (the interval is set on the child); other backends emit one per tick.
+
+## Attribution scopes (do NOT sum across scopes)
+- `system-shared-dram` (tegrastats RAM): whole-system DRAM shared by CPU and GPU on Jetson.
+- `system` (/proc/meminfo): same physical pages viewed system-wide; `process` (VmRSS/VmHWM) and `cgroup` (memory.current/peak/max) are subsets of the same pages. Adding them to tegrastats RAM double counts.
+- cgroup metrics carry `accounting_note`: cgroup v2 may not include nvmap/driver GPU allocations on Tegra, so it can under-report GPU memory. Unlimited `memory.max` is reported unavailable. memory.peak may be missing on older kernels (unavailable). This host's cgroup controllers file lists memory.
+- `device-discrete` (nvml): dedicated VRAM, x86 only. On Orin nvidia-smi exists but returns [N/A]; backend reports unavailable.
+- sysfs_tegra: GPU devfreq (MHz), thermal zones (celsius, unreadable zones listed unavailable), nvpmodel mode (`nvpmodel -q`, query only, or `--nvpmodel-mode`).
+
+## Known gaps
+No NvMap fields on this kernel's meminfo (reported unavailable); no iomem/debugfs nvmap per-client attribution (needs root); tegrastats gets its own interval, summarize infers interval from median spacing if not given; nvml parsed from CSV fixtures only on this host (no discrete GPU).
+ M evidence/jetson-arm/claude-code.jsonl
+ M evidence/jetson-arm/opus-jetson.jsonl
+?? artifacts/codex/J-OM1-io-telemetry-watchdog.final.txt
+?? artifacts/codex/J-OM2-replay-simulator.final.txt
+?? artifacts/op-0fc3451eb117/
+?? artifacts/op-6585dc6d6624/
+?? artifacts/op-672d7440503c/
+?? assignments/J-OM1-io-telemetry-watchdog.md
+?? assignments/J-OM2-replay-simulator.md
+?? research/
+jetson/c1
+
+codex
+The repository is on the required `jetson/c1` branch. I’ll keep changes within `cc/resource_observe/` and add fixture-based tests for I/O counters, device resolution, and watchdog behavior. Unrelated workspace changes will remain untouched.
+exec
+/bin/bash -lc "cat > cc/resource_observe/io_watchdog.py <<'PY'
+\"\"\"Linux I/O telemetry and an explicitly targeted memory watchdog (stdlib only).\"\"\"
+import os
+import shlex
+import signal
+import subprocess
+import time
+
+MIB = 1048576
+VM_KEYS = ('pgmajfault', 'pgfault', 'pgpgin', 'pgpgout', 'pswpin', 'pswpout', 'workingset_refault_file')
+MEM_KEYS = ('anon', 'file', 'file_mapped', 'active_file', 'inactive_file', 'workingset_refault_file', 'pgmajfault')
+
+
+def read(path):
+    with open(path) as f:
+        return f.read()
+
+
+def pairs(text):
+    return {p[0].rstrip(':'): int(p[1]) for line in text.splitlines()
+            if len(p := line.split()) == 2 and p[1].isdigit()}
+
+
+def resolve_device(path, sysroot='/sys', stat=os.stat):
+    dev = stat(os.path.expanduser(path)).st_dev
+    link = os.path.join(sysroot, 'dev/block', '%s:%s' % (os.major(dev), os.minor(dev)))
+    if not os.path.exists(link):
+        raise OSError('no sysfs block device for %s (filesystem may be overlay/network)' % link)
+    node = os.path.realpath(link)
+    while os.path.exists(os.path.join(node, 'partition')):
+        node = os.path.dirname(node)
+    name = os.path.basename(node)
+    if not os.path.isfile(os.path.join(sysroot, 'block', name, 'stat')):
+        raise OSError('parent disk stat unavailable: ' + name)
+    return name
+
+
+def proc_stat(text):
+    # comm can contain spaces and closing parentheses; fields after the last ')' are fixed.
+    fields = text[text.rindex(')') + 2:].split()
+    return int(fields[7]), int(fields[9]), fields[19], fields[0]  # minflt, majflt, starttime, state
+
+
+class IOSampler:
+    def __init__(self, path='.', device=None, pid=None, pid_from_cgroup=None,
+                 cgroup=None, procroot='/proc', sysroot='/sys', clock=time.monotonic):
+        self.path, self.device = path, device
+        self.pid, self.pid_from_cgroup, self.cgroup = pid, pid_from_cgroup, cgroup
+        self.procroot, self.sysroot, self.clock = procroot, sysroot, clock
+        self.previous = {}
+
+    def sample(self):
+        metrics, unavailable = [], []
+        now = self.clock()
+        seen = set()
+
+        def missing(name, scope, reason):
+            unavailable.append(dict(name=name, backend='io', scope=scope, reason=str(reason)))
+
+        def metric(name, value, unit, scope, source, counter=False, identity=''):
+            metrics.append(dict(name=name, value=value, unit=unit, scope=scope, source=source))
+            if not counter:
+                return
+            key = (scope, name, source, identity)
+            seen.add(key)
+            old = self.previous.get(key)
+            self.previous[key] = (now, value)
+            reason = 'first observation; interval unavailable'
+            if old and now > old[0] and value >= old[1]:
+                delta = value - old[1]
+                for suffix, val, u in (('_delta', delta, unit), ('_rate', delta / (now - old[0]), unit + '/s')):
+                    metrics.append(dict(name=name + suffix, value=val, unit=u, scope=scope, source=source))
+                if name == 'device_io_ticks':
+                    metrics.append(dict(name='device_util', value=delta / (now - old[0]) / 10,
+                                        unit='percent', scope=scope, source=source))
+                return
+            if old:
+                reason = 'counter reset' if value < old[1] else 'nonpositive interval'
+            missing(name + '_delta', scope, reason)
+            missing(name + '_rate', scope, reason)
+            if name == 'device_io_ticks':
+                missing('device_util', scope, reason)
+
+        def load(path, name, scope):
+            try:
+                return read(path)
+            except OSError as ex:
+                missing(name, scope, ex)
+                return None
+
+        src = os.path.join(self.procroot, 'vmstat')
+        text = load(src, 'vmstat', 'system')
+        if text is not None:
+            d = pairs(text)
+            for key in VM_KEYS:
+                if key in d:
+                    metric(key, d[key], 'KiB' if key in ('pgpgin', 'pgpgout') else
+                           'pages' if key in ('pswpin', 'pswpout') else 'count', 'system', src, True)
+                else:
+                    missing(key, 'system', 'field absent from ' + src)
+        try:
+            dev = self.device or resolve_device(self.path, self.sysroot)
+            src = os.path.join(self.sysroot, 'block', os.path.basename(dev), 'stat')
+            data = read(src).split()
+            for name, val, unit in (('device_read', int(data[2]) * 512 / MIB, 'MiB'),
+                                    ('device_read_ios', int(data[0]), 'count'),
+                                    ('device_io_ticks', int(data[9]), 'ms')):
+                metric(name, val, unit, 'device', src, True)
+        except (OSError, ValueError, IndexError) as ex:
+            missing('device', 'device', ex)
+
+        pids = [self.pid] if self.pid is not None else []
+        if self.pid_from_cgroup:
+            text = load(os.path.join(self.pid_from_cgroup, 'cgroup.procs'), 'processes', 'process')
+            if text is not None:
+                try:
+                    pids = sorted(set(int(p) for p in text.split()))
+                except ValueError as ex:
+                    missing('processes', 'process', ex)
+        totals, counts, identities = {}, {}, []
+        specs = [('pid_minflt', 'count', True), ('pid_majflt', 'count', True),
+                 ('pid_read_bytes', 'MiB', True)] + [('pid_' + k, 'MiB', False) for k in ('VmRSS', 'RssFile', 'RssAnon', 'VmSwap')]
+        for pid in pids:
+            base = os.path.join(self.procroot, str(pid))
+            values = {}
+            try:
+                minor, major, start, _ = proc_stat(read(os.path.join(base, 'stat')))
+                identities.append((pid, start))
+                values.update(pid_minflt=minor, pid_majflt=major)
+            except (OSError, ValueError, IndexError) as ex:
+                missing('pid_stat', 'process', ex)
+            text = load(os.path.join(base, 'io'), 'pid_read_bytes', 'process')
+            if text is not None and 'read_bytes' in pairs(text):
+                values['pid_read_bytes'] = pairs(text)['read_bytes'] / MIB
+            text = load(os.path.join(base, 'status'), 'pid_status', 'process')
+            if text is not None:
+                for line in text.splitlines():
+                    p = line.split()
+                    if len(p) >= 3 and p[0].rstrip(':') in ('VmRSS', 'RssFile', 'RssAnon', 'VmSwap') and p[1].isdigit() and p[2] == 'kB':
+                        values['pid_' + p[0].rstrip(':')] = int(p[1]) / 1024
+            for key, val in values.items():
+                totals[key] = totals.get(key, 0) + val
+                counts[key] = counts.get(key, 0) + 1
+        if self.pid is not None or self.pid_from_cgroup:
+            for name, unit, counter in specs:
+                if pids and counts.get(name) == len(pids):
+                    metric(name, totals[name], unit, 'process', 'proc:' + ','.join(map(str, pids)), counter, str(identities))
+                else:
+                    missing(name, 'process', 'no processes or incomplete process data; partial sums suppressed')
+        if self.cgroup:
+            base = self.cgroup
+            text = load(os.path.join(base, 'memory.current'), 'cgroup_current', 'cgroup')
+            if text is not None:
+                if text.strip().isdigit():
+                    metric('cgroup_current', int(text) / MIB, 'MiB', 'cgroup', base + '/memory.current')
+                else:
+                    missing('cgroup_current', 'cgroup', 'invalid memory.current')
+            for filename, keys in (('memory.stat', MEM_KEYS), ('memory.events', ('oom', 'oom_kill'))):
+                src = os.path.join(base, filename)
+                text = load(src, filename, 'cgroup')
+                if text is None:
+                    continue
+                d = pairs(text)
+                for key in keys:
+                    counter = key in ('workingset_refault_file', 'pgmajfault', 'oom', 'oom_kill')
+                    if key in d:
+                        metric('cgroup_' + key, d[key] if counter else d[key] / MIB,
+                               'count' if counter else 'MiB', 'cgroup', src, counter)
+                    else:
+                        missing('cgroup_' + key, 'cgroup', 'field absent from ' + src)
+            src = os.path.join(base, 'io.stat')
+            text = load(src, 'cgroup_rbytes', 'cgroup')
+            if text is not None:
+                for line in text.splitlines():
+                    p = line.split()
+                    fields = dict(x.split('=', 1) for x in p[1:] if '=' in x)
+                    if p and fields.get('rbytes', '').isdigit():
+                        metric('cgroup_rbytes_' + p[0], int(fields['rbytes']) / MIB, 'MiB', 'cgroup', src + ':' + p[0], True)
+                    elif p:
+                        missing('cgroup_rbytes_' + p[0], 'cgroup', 'rbytes absent or invalid')
+                if not text.strip():
+                    missing('cgroup_rbytes', 'cgroup', 'no device I/O entries')
+        self.previous = {k: v for k, v in self.previous.items() if k in seen}
+        return metrics, unavailable
+
+
+def cgroup_pids(path):
+    result = set()
+    for base, _, _ in os.walk(path):
+        result.update(int(p) for p in read(os.path.join(base, 'cgroup.procs')).split())
+    if not os.path.isdir(path):
+        raise FileNotFoundError(path)
+    return sorted(result)
+
+
+def pid_identity(pid, procroot='/proc'):
+    try:
+        _, _, start, state = proc_stat(read(os.path.join(procroot, str(pid), 'stat')))
+        return None if state in ('Z', 'X') else start
+    except FileNotFoundError:
+        return None
+
+
+def kill_target(a, sleep=time.sleep):
+    \"\"\"Only explicit targets, checked for PID reuse before each signal.\"\"\"
+    if a.kill_cmd:
+        try:
+            r = subprocess.run(shlex.split(a.kill_cmd), capture_output=True, text=True, timeout=15)
+            return dict(action='command', returncode=r.returncode, stdout=r.stdout[-2000:], stderr=r.stderr[-2000:])
+        except (OSError, ValueError, subprocess.TimeoutExpired) as ex:
+            return dict(action='command', error=str(ex))
+    result = dict(action='cgroup' if a.kill_cgroup else 'pid', signals=[], errors=[])
+    targets = {}
+
+    def capture():
+        pids = cgroup_pids(a.kill_cgroup) if a.kill_cgroup else [a.kill_pid]
+        for pid in pids:
+            if pid not in targets:
+                ident = pid_identity(pid)
+                if ident is not None:
+                    targets[pid] = ident
+
+    def send(sig):
+        for pid, ident in targets.items():
+            try:
+                if pid_identity(pid) == ident:
+                    os.kill(pid, sig)
+                    result['signals'].append(dict(pid=pid, signal=sig.name))
+            except ProcessLookupError:
+                pass
+            except OSError as ex:
+                result['errors'].append(str(ex))
+    try:
+        capture()
+        send(signal.SIGTERM)
+        sleep(3)
+        # Include children created in the explicitly selected cgroup during the grace period.
+        capture()
+        send(signal.SIGKILL)
+    except (OSError, ValueError, IndexError) as ex:
+        result['errors'].append(str(ex))
+    return result
+
+
+def watchdog(a, emit, clock=time.monotonic, sleep=time.sleep, procroot='/proc', action=None):
+    previous = None
+    consecutive = {}
+    watched_identity = pid_identity(a.kill_pid, procroot) if a.kill_pid else None
+    while True:
+        try:
+            if a.kill_pid and (watched_identity is None or pid_identity(a.kill_pid, procroot) "'!= watched_identity):
+                emit('"'watchdog_end', dict(reason='watched pid ended'))
+                return 0
+            if a.kill_cgroup and not cgroup_pids(a.kill_cgroup):
+                emit('watchdog_end', dict(reason='watched cgroup empty'))
+                return 0
+            now = clock()
+            mem = {}
+            for line in read(os.path.join(procroot, 'meminfo')).splitlines():
+                p = line.split()
+                if len(p) >= 2 and p[1].isdigit():
+                    mem[p[0].rstrip(':')] = int(p[1]) / 1024
+            vm = pairs(read(os.path.join(procroot, 'vmstat')))
+            swap = vm['pswpin'] + vm['pswpout']
+            rate = None
+            if previous and now > previous[0] and swap >= previous[1]:
+                rate = (swap - previous[1]) * os.sysconf('SC_PAGE_SIZE') / MIB / (now - previous[0])
+            previous = (now, swap)
+            values = dict(available_mib=mem['MemAvailable'], swap_used_mib=mem['SwapTotal'] - mem['SwapFree'], swap_rate_mibs=rate)
+            limits = dict(min_available_mib=values['available_mib'] < a.min_available_mib,
+                          max_swap_used_mib=values['swap_used_mib'] > a.max_swap_used_mib,
+                          max_swap_rate_mibs=rate is not None and rate > a.max_swap_rate_mibs)
+            for key, crossed in limits.items():
+                consecutive[key] = consecutive.get(key, 0) + 1 if crossed else 0
+            emit('watchdog_sample', dict(values=values, crossed=[k for k, v in limits.items() if v]))
+            trips = [k for k, count in consecutive.items() if count >= 2]
+            if trips:
+                emit('watchdog_trip', dict(limits=trips, values=values))
+                if a.kill_pid or a.kill_cgroup or a.kill_cmd:
+                    emit('watchdog_action', (action or kill_target)(a))
+                else:
+                    emit('watchdog_action', dict(action='none', reason='no kill target configured'))
+                return 3
+            sleep(max(0, a.interval_ms / 1000 - (clock() - now)))
+        except (OSError, KeyError, ValueError, IndexError) as ex:
+            emit('watchdog_error', dict(reason=str(ex)))
+            return 2
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='cc/resource_observe/resource_observe.py'
+s=open(p).read().replace('from datetime import datetime, timezone','from datetime import datetime, timezone\\nfrom io_watchdog import IOSampler, watchdog')
+s=s.replace('\"sysfs_tegra\", \"nvml\"]','\"sysfs_tegra\", \"nvml\", \"io\"]',1)
+s=s.replace('    return caps\\n','    im, iu = IOSampler(procroot=root).sample()\\n    caps[\"io\"] = {\"available\": bool(im), \"reason\": \"ok\" if im else \"no I/O counters\",\\n                  \"metrics\": [x[\"name\"] for x in im], \"missing\": iu}\\n    return caps\\n',1)
+s=s.replace('    if backend == \"proc\":','    if backend == \"io\":\\n        m, u = a.io_sampler.sample()\\n    elif backend == \"proc\":',1)
+s=s.replace('    backends = resolve_backends(a.backends)','    a.io_sampler = IOSampler(path=a.path, device=a.device, pid=a.pid,\\n                             pid_from_cgroup=a.pid_from_cgroup, cgroup=a.cgroup)\\n    backends = resolve_backends(a.backends)',1)
+s=s.replace('    s.add_argument(\"--pid\", type=int)','    pids = s.add_mutually_exclusive_group()\\n    pids.add_argument(\"--pid\", type=int)\\n    pids.add_argument(\"--pid-from-cgroup\")\\n    s.add_argument(\"--path\", default=\".\")\\n    s.add_argument(\"--device\")')
+s=s.replace('    a = ap.parse_args(argv)','''    w = sp.add_parser(\"watchdog\")
+    w.add_argument(\"--min-available-mib\", type=float, default=900)
+    w.add_argument(\"--max-swap-used-mib\", type=float, default=512)
+    w.add_argument(\"--max-swap-rate-mibs\", type=float, default=20)
+    w.add_argument(\"--interval-ms\", type=int, default=250)
+    target = w.add_mutually_exclusive_group()
+    target.add_argument(\"--kill-cgroup\")
+    target.add_argument(\"--kill-pid\", type=int)
+    target.add_argument(\"--kill-cmd\")
+    w.add_argument(\"--out\", required=True)
+    a = ap.parse_args(argv)
+    if a.cmd in (\"sample\", \"watchdog\") and a.interval_ms <= 0:
+        ap.error(\"--interval-ms must be positive\")
+    if a.cmd == \"sample\" and (a.duration_s < 0 or (a.pid is not None and a.pid <= 0)):
+        ap.error(\"duration must be nonnegative and pid positive\")
+    if a.cmd == \"watchdog\":
+        if a.kill_pid is not None and a.kill_pid <= 0:
+            ap.error(\"--kill-pid must be positive (process groups are not allowed)\")
+        if any(not __import__('math').isfinite(v) or v < 0 for v in
+               (a.min_available_mib, a.max_swap_used_mib, a.max_swap_rate_mibs)):
+            ap.error(\"watchdog thresholds must be finite and nonnegative\")
+        with open(a.out, \"w\") as out:
+            seq = 0
+            def emit(event, data):
+                nonlocal seq
+                r = record(\"watchdog\", seq, [])
+                r.update(event=event, **data)
+                out.write(json.dumps(r) + \"\\\\n\")
+                out.flush()
+                seq += 1
+            return watchdog(a, emit)''')
+open(p,'w').write(s)
+PY
+python3 -m pytest -q cc/resource_observe" in /home/muk/projects/siminfeng/campaign
+ succeeded in 1298ms:
+...............                                                          [100%]
+15 passed in 0.55s
+
+codex
+The backend and watchdog are implemented, and the existing 15 tests pass. I’m adding tests for counter resets, changing cgroup membership, permission errors, and signal escalation. Interval metrics report unavailable on the first sample and after a reset.
+exec
+/bin/bash -lc "mkdir -p cc/resource_observe/fixtures/io
+cat > cc/resource_observe/fixtures/io/vmstat <<'EOF'
+pgmajfault 10
+pgfault 100
+pgpgin 2048
+pgpgout 1024
+pswpin 4
+pswpout 8
+workingset_refault_file 20
+EOF
+cat > cc/resource_observe/fixtures/io/diskstat <<'EOF'
+10 0 4096 10 0 0 0 0 0 200 200
+EOF
+cat > cc/resource_observe/fixtures/io/status <<'EOF'
+VmRSS: 4096 kB
+RssFile: 1024 kB
+RssAnon: 3072 kB
+VmSwap: 512 kB
+EOF
+cat > cc/resource_observe/fixtures/io/proc-io <<'EOF'
+rchar: 4000000
+read_bytes: 2097152
+EOF
+cat > cc/resource_observe/fixtures/io/proc-stat <<'EOF'
+42 (worker (io) thread) R 1 1 1 0 0 0 100 0 10 0 0 0 0 0 1 0 1000 0 0
+EOF
+cat > cc/resource_observe/fixtures/io/memory.stat <<'EOF'
+anon 1048576
+file 2097152
+file_mapped 1048576
+active_file 1048576
+inactive_file 1048576
+workingset_refault_file 10
+pgmajfault 5
+EOF
+cat > cc/resource_observe/fixtures/io/memory.events <<'EOF'
+oom 1
+oom_kill 0
+EOF
+cat > cc/resource_observe/fixtures/io/io.stat <<'EOF'
+259:0 rbytes=4194304 wbytes=0 rios=10 wios=0
+259:1 rbytes=1048576 wbytes=0 rios=2 wios=0
+EOF
+cat > cc/resource_observe/test_io_watchdog.py <<'PY'
+import json
+import os
+from pathlib import Path
+from types import SimpleNamespace
+import signal
+import subprocess
+import sys
+
+import pytest
+import io_watchdog as io
+import resource_observe as ro
+
+FX = Path(__file__).parent / 'fixtures/io'
+
+
+class Clock:
+    def __init__(self):
+        self.t = 0
+        self.sleeps = []
+
+    def __call__(self):
+        return self.t
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.t += seconds
+
+
+@pytest.fixture
+def tree(tmp_path):
+    proc, sysroot, cg = (tmp_path / n for n in ('proc', 'sys', 'cg'))
+    proc.mkdir(); cg.mkdir()
+    (proc / '42').mkdir()
+    for dest, src in [('vmstat', 'vmstat'), ('42/stat', 'proc-stat'),
+                      ('42/status', 'status'), ('42/io', 'proc-io')]:
+        (proc / dest).write_text((FX / src).read_text())
+    for f in ('memory.stat', 'memory.events', 'io.stat'):
+        (cg / f).write_text((FX / f).read_text())
+    (cg / 'memory.current').write_text('3145728\\n')
+    (cg / 'cgroup.procs').write_text('42\\n')
+    disk = sysroot / 'devices/pci/block/nvme0n1'
+    partition = disk / 'nvme0n1p1'
+    partition.mkdir(parents=True)
+    (partition / 'partition').write_text('1')
+    (disk / 'stat').write_text((FX / 'diskstat').read_text())
+    (sysroot / 'dev/block').mkdir(parents=True)
+    (sysroot / 'dev/block/259:1').symlink_to(partition)
+    (sysroot / 'block').mkdir()
+    (sysroot / 'block/nvme0n1').symlink_to(disk)
+    return proc, sysroot, cg, disk
+
+
+def names(metrics):
+    return {m['name']: m for m in metrics}
+
+
+def test_device_resolution(tree):
+    _, sysroot, _, _ = tree
+    assert io.resolve_device('/models', str(sysroot), lambda p: SimpleNamespace(st_dev=os.makedev(259, 1))) == 'nvme0n1'
+    with pytest.raises(OSError, match='no sysfs block device'):
+        io.resolve_device('/models', str(sysroot), lambda p: SimpleNamespace(st_dev=os.makedev(0, 12)))
+
+
+def test_scopes_units_and_rates(tree):
+    proc, sysroot, cg, disk = tree
+    clock = Clock()
+    s = io.IOSampler(device='nvme0n1', pid_from_cgroup=str(cg), cgroup=str(cg),
+                     procroot=str(proc), sysroot=str(sysroot), clock=clock)
+    m, u = s.sample()
+    d = names(m)
+    assert d['device_read']['value'] == 2
+    assert d['pid_minflt']['value'] == 100 and d['pid_majflt']['value'] == 10
+    assert d['pid_read_bytes']['value'] == 2
+    assert d['pid_VmRSS']['value'] == 4
+    assert d['cgroup_file']['value'] == 2
+    assert d['cgroup_rbytes_259:0']['value'] == 4
+    assert {x['scope'] for x in m} == {'system', 'device', 'process', 'cgroup'}
+    assert not any(x['name'].endswith('_rate') for x in m)
+    assert any('first observation' in x['reason'] for x in u)
+    clock.t = 2
+    (proc / 'vmstat').write_text((FX / 'vmstat').read_text().replace('pgmajfault 10', 'pgmajfault 16'))
+    (disk / 'stat').write_text('14 0 8192 10 0 0 0 0 0 700 700')
+    d = names(s.sample()[0])
+    assert d['pgmajfault_delta']['value'] == 6 and d['pgmajfault_rate']['value'] == 3
+    assert d['device_read_rate']['value'] == 1 and d['device_read_rate']['unit'] == 'MiB/s'
+    assert d['device_read_ios_rate']['value'] == 2
+    assert d['device_util']['value'] == 25
+    clock.t = 3
+    (disk / 'stat').write_text((FX / 'diskstat').read_text())
+    m, u = s.sample()
+    assert 'device_read_rate' not in names(m)
+    assert any(x['name'] == 'device_read_rate' and x['reason'] == 'counter reset' for x in u)
+    clock.t = 4
+    assert names(s.sample()[0])['device_read_rate']['value'] == 0
+
+
+def test_permission_and_no_partial_totals(tree, monkeypatch):
+    proc, sysroot, cg, _ = tree
+    real = io.read
+    def denied(path):
+        if str(path).endswith('/42/io'):
+            raise PermissionError('permission denied: proc io')
+        return real(path)
+    monkeypatch.setattr(io, 'read', denied)
+    s = io.IOSampler(pid=42, device='nvme0n1', procroot=str(proc), sysroot=str(sysroot))
+    m, u = s.sample()
+    assert 'pid_read_bytes' not in names(m)
+    assert any('permission denied' in x['reason'] for x in u)
+    assert 'pid_VmRSS' in names(m)
+    s.pid = None; s.pid_from_cgroup = str(cg)
+    (cg / 'cgroup.procs').write_text('42\\n43\\n')
+    assert 'pid_VmRSS' not in names(s.sample()[0])
+
+
+def test_membership_and_pid_reuse_reset_baseline(tree):
+    proc, sysroot, cg, _ = tree
+    clock = Clock()
+    s = io.IOSampler(pid_from_cgroup=str(cg), device='nvme0n1', procroot=str(proc), sysroot=str(sysroot), clock=clock)
+    s.sample(); clock.t = 1
+    assert 'pid_minflt_rate' in names(s.sample()[0])
+    (proc / '42/stat').write_text((FX / 'proc-stat').read_text().replace('1000', '2000'))
+    clock.t = 2
+    assert 'pid_minflt_rate' not in names(s.sample()[0])
+    (cg / 'cgroup.procs').write_text('')
+    clock.t = 3
+    assert 'pid_minflt' not in names(s.sample()[0])
+
+
+def args(**kwargs):
+    d = dict(min_available_mib=900, max_swap_used_mib=512, max_swap_rate_mibs=20,
+             interval_ms=250, kill_pid=None, kill_cgroup=None, kill_cmd=None)
+    d.update(kwargs)
+    return SimpleNamespace(**d)
+
+
+def run_watch(monkeypatch, samples, config=None):
+    clock, events, actions = Clock(), [], []
+    def read(path):
+        index = min(round(clock.t * 4), len(samples) - 1)
+        avail, used, pages = samples[index]
+        if path.endswith('meminfo'):
+            return 'MemAvailable: %s kB\\nSwapTotal: 1048576 kB\\nSwapFree: %s kB\\n' % (avail * 1024, (1024 - used) * 1024)
+        return 'pswpin %s\\npswpout 0\\n' % pages
+    monkeypatch.setattr(io, 'read', read)
+    code = io.watchdog(config or args(), lambda event, data: events.append(dict(event=event, **data)),
+                       clock=clock, sleep=clock.sleep, action=lambda a: actions.append(a) or {'ok': True})
+    return code, events, actions, clock
+
+
+@pytest.mark.parametrize('limit,samples', [
+    ('min_available_mib', [(800, 0, 0), (1000, 0, 0), (800, 0, 0), (800, 0, 0)]),
+    ('max_swap_used_mib', [(1000, 600, 0), (1000, 600, 0)]),
+    ('max_swap_rate_mibs', [(1000, 0, 0), (1000, 0, 100000), (1000, 0, 200000)]),
+])
+def test_watchdog_debounce_and_once(monkeypatch, limit, samples):
+    code, events, actions, clock = run_watch(monkeypatch, samples, args(kill_cmd='docker kill test'))
+    assert code == 3 and len(actions) == 1
+    trips = [e for e in events if e['event'] == 'watchdog_trip']
+    assert len(trips) == 1 and trips[0]['limits'] == [limit]
+    assert len([e for e in events if e['event'] == 'watchdog_sample']) == len(samples)
+
+
+def test_no_action_without_target(monkeypatch):
+    code, events, actions, _ = run_watch(monkeypatch, [(1, 0, 0)] * 2)
+    assert code == 3 and not actions
+    assert events[-1]['action'] == 'none'
+
+
+@pytest.mark.parametrize('target', ['pid', 'cgroup'])
+def test_normal_exit(monkeypatch, target):
+    clock = Clock(); events = []
+    monkeypatch.setattr(io, 'pid_identity', lambda *a: None)
+    monkeypatch.setattr(io, 'cgroup_pids', lambda *a: [])
+    a = args(kill_pid=42) if target == 'pid' else args(kill_cgroup='/cg')
+    assert io.watchdog(a, lambda *e: events.append(e), clock, clock.sleep) == 0
+    assert events[0][0] == 'watchdog_end' and not clock.sleeps
+
+
+def test_watchdog_read_error(monkeypatch):
+    def denied(path):
+        raise PermissionError('denied')
+    monkeypatch.setattr(io, 'read', denied)
+    events = []
+    assert io.watchdog(args(), lambda *e: events.append(e)) == 2
+    assert events[0][0] == 'watchdog_error'
+
+
+def test_signal_grace_and_reuse(monkeypatch):
+    calls = []; clock = Clock()
+    monkeypatch.setattr(io, 'pid_identity', lambda p: 'start')
+    monkeypatch.setattr(io.os, 'kill', lambda p, sig: calls.append((p, sig)))
+    result = io.kill_target(args(kill_pid=42), clock.sleep)
+    assert calls == [(42, signal.SIGTERM), (42, signal.SIGKILL)]
+    assert clock.sleeps == [3] and not result['errors']
+    calls.clear()
+    def sleep(_):
+        monkeypatch.setattr(io, 'pid_identity', lambda p: 'reused')
+    io.kill_target(args(kill_pid=42), sleep)
+    assert calls == [(42, signal.SIGTERM)]
+
+
+def test_cgroup_only_targets_and_command(monkeypatch):
+    calls = []
+    monkeypatch.setattr(io, 'cgroup_pids', lambda path: [42, 43])
+    monkeypatch.setattr(io, 'pid_identity', lambda p: 'start')
+    monkeypatch.setattr(io.os, 'kill', lambda p, sig: calls.append((p, sig)))
+    io.kill_target(args(kill_cgroup='/explicit'), lambda _: None)
+    assert calls == [(42, signal.SIGTERM), (43, signal.SIGTERM), (42, signal.SIGKILL), (43, signal.SIGKILL)]
+    runs = []
+    def run(command, **kwargs):
+        runs.append(command)
+        return SimpleNamespace(returncode=1, stdout='', stderr='failed')
+    monkeypatch.setattr(io.subprocess, 'run', run)
+    result = io.kill_target(args(kill_cmd='docker kill \"test name\"'))
+    assert runs == [['docker', 'kill', 'test name']] and result['returncode'] == 1
+
+
+def test_cli_invalid_pid_and_io_contract(tmp_path):
+    script = str(Path(ro.__file__))
+    out = tmp_path / 'out.jsonl'
+    r = subprocess.run([sys.executable, script, 'watchdog', '--kill-pid', '0', '--out', str(out)], capture_output=True)
+    assert r.returncode == 2 and not out.exists()
+    r = subprocess.run([sys.executable, script, 'sample', '--backends', 'io', '--duration-s', '.01',
+                        '--interval-ms', '10', '--out', str(out)], capture_output=True)
+    assert r.returncode == 0, r.stderr
+    records = [json.loads(line) for line in out.read_text().splitlines()]
+    assert len(records) >= 2
+    assert all(r['schema'] == 'resource-observe/0' and r['backend'] == 'io' for r in records)
+PY
+python3 -m pytest -q cc/resource_observe" in /home/muk/projects/siminfeng/campaign
+ exited 1 in 1305ms:
+...F.........................                                            [100%]
+=================================== FAILURES ===================================
+_________________ test_membership_and_pid_reuse_reset_baseline _________________
+
+tree = (PosixPath('/tmp/pytest-of-muk/pytest-13/test_membership_and_pid_reuse_0/proc'), PosixPath('/tmp/pytest-of-muk/pytest-..._reuse_0/cg'), PosixPath('/tmp/pytest-of-muk/pytest-13/test_membership_and_pid_reuse_0/sys/devices/pci/block/nvme0n1'))
+
+    def test_membership_and_pid_reuse_reset_baseline(tree):
+        proc, sysroot, cg, _ = tree
+        clock = Clock()
+        s = io.IOSampler(pid_from_cgroup=str(cg), device='nvme0n1', procroot=str(proc), sysroot=str(sysroot), clock=clock)
+        s.sample(); clock.t = 1
+        assert 'pid_minflt_rate' in names(s.sample()[0])
+        (proc / '42/stat').write_text((FX / 'proc-stat').read_text().replace('1000', '2000'))
+        clock.t = 2
+>       assert 'pid_minflt_rate' not in names(s.sample()[0])
+E       AssertionError: assert 'pid_minflt_rate' not in {'pgmajfault': {'name': 'pgmajfault', 'value': 10, 'unit': 'count', 'scope': 'system', ...}, 'pgmajfault_delta': {'nam...', 'scope': 'system', ...}, 'pgfault': {'name': 'pgfault', 'value': 100, 'unit': 'count', 'scope': 'system', ...}, ...}
+E        +  where {'pgmajfault': {'name': 'pgmajfault', 'value': 10, 'unit': 'count', 'scope': 'system', ...}, 'pgmajfault_delta': {'nam...', 'scope': 'system', ...}, 'pgfault': {'name': 'pgfault', 'value': 100, 'unit': 'count', 'scope': 'system', ...}, ...} = names([{'name': 'pgmajfault', 'value': 10, 'unit': 'count', 'scope': 'system', ...}, {'name': 'pgmajfault_delta', 'value': 0...ount', 'scope': 'system', ...}, {'name': 'pgfault_rate', 'value': 0.0, 'unit': 'count/s', 'scope': 'system', ...}, ...])
+
+cc/resource_observe/test_io_watchdog.py:123: AssertionError
+=========================== short test summary info ============================
+FAILED cc/resource_observe/test_io_watchdog.py::test_membership_and_pid_reuse_reset_baseline
+1 failed, 28 passed in 0.85s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+s=open('cc/resource_observe/fixtures/io/proc-stat').read(); print(list(enumerate(s[s.rindex(')')+2:].split(),3)))
+PY
+uname -m
+ls -ld ~/models/campaign" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+[(3, 'R'), (4, '1'), (5, '1'), (6, '1'), (7, '0'), (8, '0'), (9, '0'), (10, '100'), (11, '0'), (12, '10'), (13, '0'), (14, '0'), (15, '0'), (16, '0'), (17, '0'), (18, '1'), (19, '0'), (20, '1000'), (21, '0'), (22, '0')]
+aarch64
+drwxrwxr-x 7 muk muk 4096 Nov 10 03:05 /home/muk/models/campaign
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='cc/resource_observe/fixtures/io/proc-stat'
+s=open(p).read().replace('1 0 1000 0 0','1 0 0 0 1000 0 0');open(p,'w').write(s)
+p='cc/resource_observe/io_watchdog.py';s=open(p).read().replace(\"if pids and counts.get(name) == len(pids):\", \"if pids and counts.get(name) == len(pids) and (not counter or len(identities) == len(pids)):\")
+s=s.replace(\"    watched_identity = pid_identity(a.kill_pid, procroot) if a.kill_pid else None\\n    while True:\\n        try:\",\"    watched_identity = None\\n    initialized = False\\n    while True:\\n        try:\\n            if not initialized:\\n                watched_identity = pid_identity(a.kill_pid, procroot) if a.kill_pid else None\\n                initialized = True\")
+open(p,'w').write(s)
+PY
+python3 -m pytest -q cc/resource_observe
+python3 cc/resource_observe/resource_observe.py sample --backends io --path ~/models/campaign --duration-s 5 --out cc/resource_observe/fixtures/live-io-sample.jsonl" in /home/muk/projects/siminfeng/campaign
+ succeeded in 6362ms:
+.............................                                            [100%]
+29 passed in 0.75s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+import json
+p='cc/resource_observe/fixtures/live-io-sample.jsonl'
+r=[json.loads(l) for l in open(p)]
+print('records:',len(r),'span:',r[-1]['mono_s']-r[0]['mono_s'],'host:',r[0]['host_id'])
+print('first unavailable:',r[0]['unavailable'])
+print('last metrics:',[(m['name'],m['value'],m['unit']) for m in r[-1]['metrics']])
+PY
+ git diff --stat -- cc/resource_observe" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+records: 11 span: 5.00647962000221 host: satay
+first unavailable: [{'name': 'pgmajfault_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgmajfault_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgfault_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgfault_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgpgin_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgpgin_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgpgout_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pgpgout_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pswpin_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pswpin_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pswpout_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'pswpout_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'workingset_refault_file_delta', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'workingset_refault_file_rate', 'backend': 'io', 'scope': 'system', 'reason': 'first observation; interval unavailable'}, {'name': 'device_read_delta', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_read_rate', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_read_ios_delta', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_read_ios_rate', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_io_ticks_delta', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_io_ticks_rate', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}, {'name': 'device_util', 'backend': 'io', 'scope': 'device', 'reason': 'first observation; interval unavailable'}]
+last metrics: [('pgmajfault', 215985, 'count'), ('pgmajfault_delta', 0, 'count'), ('pgmajfault_rate', 0.0, 'count/s'), ('pgfault', 263798079, 'count'), ('pgfault_delta', 106, 'count'), ('pgfault_rate', 211.84288290307978, 'count/s'), ('pgpgin', 81805789, 'KiB'), ('pgpgin_delta', 0, 'KiB'), ('pgpgin_rate', 0.0, 'KiB/s'), ('pgpgout', 56880362, 'KiB'), ('pgpgout_delta', 0, 'KiB'), ('pgpgout_rate', 0.0, 'KiB/s'), ('pswpin', 101460, 'pages'), ('pswpin_delta', 0, 'pages'), ('pswpin_rate', 0.0, 'pages/s'), ('pswpout', 281702, 'pages'), ('pswpout_delta', 0, 'pages'), ('pswpout_rate', 0.0, 'pages/s'), ('workingset_refault_file', 12494954, 'count'), ('workingset_refault_file_delta', 0, 'count'), ('workingset_refault_file_rate', 0.0, 'count/s'), ('device_read', 79887.2783203125, 'MiB'), ('device_read_delta', 0.0, 'MiB'), ('device_read_rate', 0.0, 'MiB/s'), ('device_read_ios', 2008116, 'count'), ('device_read_ios_delta', 0, 'count'), ('device_read_ios_rate', 0.0, 'count/s'), ('device_io_ticks', 6249636, 'ms'), ('device_io_ticks_delta', 0, 'ms'), ('device_io_ticks_rate', 0.0, 'ms/s'), ('device_util', 0.0, 'percent')]
+ campaign/cc/resource_observe/resource_observe.py | 48 ++++++++++++++++++++++--
+ 1 file changed, 45 insertions(+), 3 deletions(-)
+
+codex
+All 29 tests now pass. The live capture produced 11 records over 5.006 seconds on this ARM host, with system fault counters and NVMe read/utilization metrics available. Watchdog tests verify trips and kill actions using a fake clock and mocked signals; no live processes were killed.
+exec
+/bin/bash -lc "cat >> cc/resource_observe/README.md <<'EOF'
+
+## I/O telemetry and watchdog (J-OM1)
+
+    python3 resource_observe.py sample --backends io --path ~/models/campaign --duration-s 5 --out io.jsonl
+    python3 resource_observe.py sample --backends io --device nvme0n1 --pid 123 --cgroup /sys/fs/cgroup/example --out io.jsonl
+    python3 resource_observe.py sample --backends io --pid-from-cgroup /sys/fs/cgroup/example --out io.jsonl
+    python3 resource_observe.py watchdog --min-available-mib 900 --max-swap-used-mib 512 --max-swap-rate-mibs 20 --interval-ms 250 --kill-pid 123 --out events.jsonl
+
+"'`io` reports vmstat counters in `system`, whole-disk counters in `device`,
+PID data in `process`, and cgroup v2 data in `cgroup`. Never add these scopes.
+`--path` defaults to the current directory and resolves the filesystem device
+through `/sys/dev/block/MAJ:MIN`, walking partitions to the parent disk.
+`--device` explicitly selects a disk name (or `/dev/NAME`). Overlay/network
+filesystems without a block-device mapping report unavailable with a reason.
+Disk read sectors use the kernel'"'s fixed 512-byte sector unit.
+
+Cumulative counters have "'`_delta` and `_rate` companions. First observations,
+resets, missing samples, and nonpositive time intervals have unavailable interval
+values; counters resume from a fresh baseline. Units: faults/refaults/I/Os/events
+are `count`, pgpgin/out are `KiB`, swap-in/out are `pages`, read data and memory
+are `MiB`, disk io_ticks are `ms`; rates append `/s`. `device_util` is
+`100 * delta(io_ticks) / interval_ms` in `percent`. Device utilization is the
+kernel busy-time measure, not an estimate of parallel NVMe queue saturation.
+`pid_read_bytes` retains the kernel field name but is converted to MiB.
+PID fields include minflt/majflt, read_bytes, VmRSS, RssFile, RssAnon, VmSwap.
+`--pid` and `--pid-from-cgroup` are mutually exclusive. The latter sums only
+PIDs in that file; incomplete per-field process sums are suppressed, and PID
+membership/start-time changes invalidate interval baselines. Cgroup `io.stat`
+read bytes remain separate per major:minor device. Cgroup memory accounting
+may omit Tegra driver allocations.
+
+The watchdog samples MemAvailable and SwapTotal minus SwapFree, and calculates
+combined swap-in/out MiB/s using the host page size and monotonic elapsed time.
+A particular limit must be crossed on two consecutive samples (equal to the
+limit is safe). It flushes `watchdog_sample`, `watchdog_trip`, and
+`watchdog_action` JSONL events using the same schema envelope. Targets are
+mutually exclusive: `--kill-pid`, `--kill-cgroup`, or `--kill-cmd`.
+With no target it records the trip without sending signals. PID/cgroup targets
+receive SIGTERM, a three-second grace period, then SIGKILL for remaining
+processes. Cgroup targeting includes descendants; PID start times are checked
+before each signal to avoid targeting a reused PID. Commands are parsed with
+`shlex.split` and run once without a shell (15-second timeout); for example
+`--kill-cmd '"'docker kill NAME'"'`. The watchdog does not otherwise invoke Docker.
+
+Exit codes: 3 after a trip, including a failed kill action; 0 if the watched PID
+ends or the cgroup becomes empty; 2 for unreadable/invalid monitoring data.
+Command-only and untargeted watches run until a trip or interruption because
+there is no process lifetime to observe. Monitoring errors stop the watchdog
+without killing anything. No live destructive watchdog validation was run;
+signals and command execution are covered with mocks and a fake clock.
+The five-second live system/device capture is `fixtures/live-io-sample.jsonl`.
+EOF
+python3 - <<'"'PY'
+p='cc/resource_observe/io_watchdog.py'
+s=open(p).read().replace(\"    for base, _, _ in os.walk(path):\", \"    def walk_error(error):\\n        raise error\\n    for base, _, _ in os.walk(path, onerror=walk_error):\")
+open(p,'w').write(s)
+PY
+cat >> cc/resource_observe/test_io_watchdog.py <<'PY'
+
+
+def test_cgroup_recursive_membership(tmp_path):
+    child = tmp_path / 'child'
+    child.mkdir()
+    (tmp_path / 'cgroup.procs').write_text('42\\n')
+    (child / 'cgroup.procs').write_text('43\\n42\\n')
+    assert io.cgroup_pids(str(tmp_path)) == [42, 43]
+
+
+def test_watchdog_equal_thresholds_and_different_limits(monkeypatch):
+    samples = [(900, 512, 0), (800, 0, 0), (1000, 600, 0), (1000, 600, 0)]
+    code, events, _, _ = run_watch(monkeypatch, samples)
+    assert code == 3
+    assert events[0]['crossed'] == []
+    assert len([e for e in events if e['event'] == 'watchdog_sample']) == 4
+    assert events[-2]['limits'] == ['max_swap_used_mib']
+
+
+def test_action_failure_still_trip_exit(monkeypatch):
+    def failed(command, **kwargs):
+        raise PermissionError('execution denied')
+    monkeypatch.setattr(io.subprocess, 'run', failed)
+    result = io.kill_target(args(kill_cmd='docker kill named'))
+    assert result['action'] == 'command' and 'execution denied' in result['error']
+    code, _, actions, _ = run_watch(monkeypatch, [(800, 0, 0)] * 2, args(kill_cmd='docker kill named'))
+    assert code == 3 and len(actions) == 1
+
+
+def test_pid_monitor_permission_error_is_recorded(monkeypatch):
+    def denied(*a):
+        raise PermissionError('stat denied')
+    monkeypatch.setattr(io, 'pid_identity', denied)
+    events = []
+    assert io.watchdog(args(kill_pid=42), lambda *e: events.append(e)) == 2
+    assert events == [('watchdog_error', {'reason': 'stat denied'})]
+PY
+python3 -m pytest -q cc/resource_observe
+ git diff --check -- cc/resource_observe
+ git status --short -- cc/resource_observe" in /home/muk/projects/siminfeng/campaign
+ succeeded in 1338ms:
+.................................                                        [100%]
+33 passed in 0.85s
+ M cc/resource_observe/README.md
+ M cc/resource_observe/resource_observe.py
+?? cc/resource_observe/fixtures/io/
+?? cc/resource_observe/fixtures/live-io-sample.jsonl
+?? cc/resource_observe/io_watchdog.py
+?? cc/resource_observe/test_io_watchdog.py
+
+codex
+Implemented within `cc/resource_observe/`:
+- Added `io_watchdog.py`, CLI integration, tests, fixtures, and README documentation.
+- `python3 -m pytest -q cc/resource_observe`: **33 passed**.
+- Live capture: `fixtures/live-io-sample.jsonl` — 11 records over 5.006 seconds; system faults and NVMe telemetry available.
+- Gap: destructive watchdog actions were validated with mocks, not live kills.
+tokens used
+58,029
