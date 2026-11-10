@@ -1,0 +1,9 @@
+# T-CAL2 — Make host calibration measure DRAM, not cache
+Context: T-CAL ran for real (artifacts/codexCAL/gpu, host-calibration.json). Results: GPU 1384 GB/s (> 896 GB/s 5070 Ti peak), CPU Q4_K 97 GB/s (> ~50 GB/s dual-channel DDR4 peak). Cause: test-backend-ops perf reuses one weight buffer that fits in GPU L2 (48 MB) / CPU L3 (32 MB). H2D 28.7 GB/s and handoff 199 us look plausible; keep them.
+Write ONLY cc/host_calibrate/** and artifacts/codexCAL2/**.
+Deliver:
+1. A plausibility guard in calibrate.py parse: reject (fail closed, with reason) any bandwidth above a stated ceiling from host identity (GPU: from nvidia-smi name via a small table incl. RTX 5070 Ti 896 GB/s, Jetson Orin Nano 68 GB/s; CPU: channels x DDR rate if lscpu/dmidecode-free info insufficient, fall back to a conservative 60 GB/s ceiling). Unit tests with the REAL captured outputs in artifacts/codexCAL/gpu (copy them to fixtures) must now flag GPU/CPU as implausible.
+2. Cache-defeating probes: (a) a CUDA probe (extend h2d.cu or new bw.cu built in campaign/cuda-tools:c1) that streams-reads a rotating set of buffers totalling >= 8x L2 (e.g. 512 MiB) with a GEMV-like read pattern, reporting GB/s; (b) a CPU probe that reads rotating buffers totalling >= 8x L3 (e.g. 512 MiB) with 1..N threads using AVX2 loads (C source compiled in the cuda-tools image with gcc -O3 -mavx2 -fopenmp, run in the engine image or tools image); (c) optionally, the decisive end-to-end check: derive CPU expert BW from the two-K llama-bench difference already in the plan and report it alongside, flagging if microbench and end-to-end disagree by >30%.
+3. Keep every allocation <= 1 GiB, each probe <= 30 s, no host changes.
+4. README: exact commands for Opus to run; mark unverified parsers.
+Final message: files, tests, and the command plan.

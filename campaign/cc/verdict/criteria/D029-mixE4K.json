@@ -1,0 +1,198 @@
+{
+  "schema": "criteria/1",
+  "id": "D029-mixE4K",
+  "scope": "D026 separate mixE4K track (recorded sub-threshold).",
+  "sources": [
+    "D026",
+    "D029"
+  ],
+  "criteria": [
+    {
+      "id": "mixE4K decode gain",
+      "metric": "tg_ts",
+      "candidate": {
+        "job": "job-34c09bec98",
+        "attempt": "att-1",
+        "test": "c1_mix_tg_r1",
+        "count": 4
+      },
+      "baseline": {
+        "job": "job-34c09bec98",
+        "attempt": "att-1",
+        "test": "c1_mix_tg_r0",
+        "count": 4
+      },
+      "mode": "delta_pct",
+      "op": ">=",
+      "threshold": 2,
+      "alternating": {
+        "group": [
+          "c1_mix_tg_r0",
+          "c1_mix_tg_r1"
+        ],
+        "rounds": 2,
+        "repeat": 2
+      }
+    },
+    {
+      "id": "q8 OFF/ON greedy identity",
+      "metric": "text_sha",
+      "groups": [
+        {
+          "job": "job-34c09bec98",
+          "attempt": "att-1",
+          "test": "c1_q8_gen_r0",
+          "count": 4
+        },
+        {
+          "job": "job-34c09bec98",
+          "attempt": "att-1",
+          "test": "c1_q8_gen_r1",
+          "count": 4
+        }
+      ],
+      "op": "==",
+      "threshold": true
+    },
+    {
+      "id": "q8 printed PPL identity",
+      "metric": "ppl",
+      "candidate": {
+        "job": "job-34c09bec98",
+        "attempt": "att-1",
+        "test": "c1_q8_ppl_r1",
+        "count": 1
+      },
+      "baseline": {
+        "job": "job-34c09bec98",
+        "attempt": "att-1",
+        "test": "c1_q8_ppl_r0",
+        "count": 1
+      },
+      "mode": "abs_delta",
+      "op": "<=",
+      "threshold": 0
+    },
+    {
+      "id": "q8 secondary base/OFF/ON identity",
+      "metric": "text_sha",
+      "groups": [
+        {
+          "job": "job-34c09bec98",
+          "attempt": "att-1",
+          "test": "c1_q8_gen_r0",
+          "count": 4
+        }
+      ],
+      "op": "==",
+      "threshold": true,
+      "files": [
+        {
+          "path": "artifacts/x4-c1/gen-base-Q8_0.out",
+          "sha256": "658947762b307a3a1610a8e87850484e38c9f6a147d761f3abf44f602c47d4ce"
+        },
+        {
+          "path": "artifacts/x4-c1/gen-off-Q8_0.out",
+          "sha256": "658947762b307a3a1610a8e87850484e38c9f6a147d761f3abf44f602c47d4ce"
+        },
+        {
+          "path": "artifacts/x4-c1/gen-on-Q8_0.out",
+          "sha256": "658947762b307a3a1610a8e87850484e38c9f6a147d761f3abf44f602c47d4ce"
+        }
+      ]
+    },
+    {
+      "id": "mix OFF/ON greedy identity",
+      "metric": "text_sha",
+      "groups": [
+        {
+          "job": "job-34c09bec98",
+          "attempt": "att-1",
+          "test": "c1_mix_gen_r0",
+          "count": 4
+        },
+        {
+          "job": "job-34c09bec98",
+          "attempt": "att-1",
+          "test": "c1_mix_gen_r1",
+          "count": 4
+        }
+      ],
+      "op": "==",
+      "threshold": true
+    },
+    {
+      "id": "mix printed PPL identity",
+      "metric": "ppl",
+      "candidate": {
+        "job": "job-34c09bec98",
+        "attempt": "att-1",
+        "test": "c1_mix_ppl_r1",
+        "count": 1
+      },
+      "baseline": {
+        "job": "job-34c09bec98",
+        "attempt": "att-1",
+        "test": "c1_mix_ppl_r0",
+        "count": 1
+      },
+      "mode": "abs_delta",
+      "op": "<=",
+      "threshold": 0
+    },
+    {
+      "id": "mix secondary base/OFF/ON identity",
+      "metric": "text_sha",
+      "groups": [
+        {
+          "job": "job-34c09bec98",
+          "attempt": "att-1",
+          "test": "c1_mix_gen_r0",
+          "count": 4
+        }
+      ],
+      "op": "==",
+      "threshold": true,
+      "files": [
+        {
+          "path": "artifacts/x4-c1/gen-base-mixE4K.out",
+          "sha256": "950b46b192be7504d7954ebc82e61980a1617c6cac19f5cd6f95c7a9ee0fa3be"
+        },
+        {
+          "path": "artifacts/x4-c1/gen-off-mixE4K.out",
+          "sha256": "950b46b192be7504d7954ebc82e61980a1617c6cac19f5cd6f95c7a9ee0fa3be"
+        },
+        {
+          "path": "artifacts/x4-c1/gen-on-mixE4K.out",
+          "sha256": "950b46b192be7504d7954ebc82e61980a1617c6cac19f5cd6f95c7a9ee0fa3be"
+        }
+      ]
+    },
+    {
+      "id": "CUDA MUL_MAT correctness",
+      "metric": "backend_ops",
+      "job": "job-34c09bec98",
+      "attempt": "att-1",
+      "backend": "CUDA0",
+      "operation": "MUL_MAT",
+      "op": "==",
+      "threshold": true,
+      "path": "artifacts/x4-c1/tbo-mulmat.out",
+      "sha256": "5ed2c2cdffd94ff82285dd35e25ddf92fbb1f66c1166c92b2c074b9e7e4c20a7"
+    },
+    {
+      "id": "No compiler during timing",
+      "metric": "host_quiet",
+      "job": "job-34c09bec98",
+      "attempt": "att-1",
+      "counters": {
+        "cc": 0
+      },
+      "max_gap_s": 15,
+      "op": "==",
+      "threshold": true,
+      "path": "artifacts/x2/timed-hostload.log",
+      "sha256": "6a0a6e490bb3b4aac69488ccc81cf767aba9becf68a646b679e8286d32480da3"
+    }
+  ]
+}

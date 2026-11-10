@@ -1,0 +1,16 @@
+Implemented within `cc/host_calibrate/` and `artifacts/codexCAL/` only.
+
+- Added calibration planner/parser, CUDA probe, apply adapter, runner, fixtures and [README](/home/muk/projects/siminfeng/campaign/cc/host_calibrate/README.md).
+- **15 tests passed.**
+- Verified real formats: CPU MUL_MAT/MUL_MAT_ID, llama-bench JSON and lscpu.
+- **UNVERIFIED:** CUDA execution, H2D parser, literal GB/s branch, NVIDIA success output and paired handoff measurement.
+
+Pinned matrix benchmarks print FLOP/s, so matrix GB/s is derived from weight bytes and measured time.
+
+Opus should regenerate the [command plan](/home/muk/projects/siminfeng/campaign/artifacts/codexCAL/command-plan.json) with the actual release `RUN_REF`, then execute:
+
+```bash
+python3 -B cc/host_calibrate/run_plan.py artifacts/codexCAL/gpu
+```
+
+The README contains exact generation, parsing and apply commands. No Docker/GPU work was performed here.

@@ -1,0 +1,62 @@
+{
+  "source_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+  "source_sha256": "b6b547422ee2c8045323e2a23f21a6c01749d302c8131d652a10ba4cc8e28411",
+  "binary_path": "/home/muk/projects/siminfeng/campaign/artifacts/codexR/build/bin/test-backend-ops",
+  "binary_sha256": "03b34a4ecf6fee4ef5eb542fdf3910c5d272f3d07946df280df50fb16a5f5a39",
+  "note": "Existing codexR build; source pin output format independently inspected. CPU format captures only; no Docker/GPU execution.",
+  "captures": [
+    {
+      "argv": [
+        "timeout",
+        "-k",
+        "1s",
+        "20s",
+        "env",
+        "CUDA_VISIBLE_DEVICES=",
+        "/home/muk/projects/siminfeng/campaign/artifacts/codexR/build/bin/test-backend-ops",
+        "perf",
+        "-b",
+        "CPU",
+        "-o",
+        "MUL_MAT",
+        "-p",
+        "^type_a=q4_K,type_b=f32,m=4096,n=1,k=14336,"
+      ],
+      "returncode": 0,
+      "stdout": "artifacts/codexCAL/cpu-perf-real.txt",
+      "stderr": "artifacts/codexCAL/cpu-perf-real.stderr",
+      "sha256": "999f80d2a969187ce0987fda94ca11e5b27a4101c55331a06117e523c8ab47dc"
+    },
+    {
+      "argv": [
+        "timeout",
+        "-k",
+        "1s",
+        "20s",
+        "env",
+        "CUDA_VISIBLE_DEVICES=",
+        "/home/muk/projects/siminfeng/campaign/artifacts/codexR/build/bin/test-backend-ops",
+        "perf",
+        "-b",
+        "CPU",
+        "-o",
+        "MUL_MAT_ID",
+        "-p",
+        "^type_a=q4_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,"
+      ],
+      "returncode": 0,
+      "stdout": "artifacts/codexCAL/cpu-expert-real.txt",
+      "stderr": "artifacts/codexCAL/cpu-expert-real.stderr",
+      "sha256": "a3ad6e382815feec70be863cc4670726f53637bc00ee56ec2b6616c1daaeceb1"
+    },
+    {
+      "argv": [
+        "lscpu"
+      ],
+      "returncode": 0,
+      "stdout": "artifacts/codexCAL/lscpu-real.txt"
+    }
+  ],
+  "bench_fixture_source": "artifacts/codexPL4/cpu-screen/00-granite-3.stdout",
+  "bench_fixture_sha256": "27fbc6ce6e9a6a0ac2cd34f0bfafd0a9effbc25f62d0cd70a34877ea45ab6f56"
+}

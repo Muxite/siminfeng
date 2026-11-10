@@ -1,0 +1,895 @@
+{
+  "schema": "host-calibration/1",
+  "source_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+  "image": "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+  "host": {
+    "id": "ca82ce6c7701dce641b06b3f98ecde55b764d60bbd257e01482431e4a0967ab5",
+    "cpu_model": "AMD Ryzen 7 3700X 8-Core Processor",
+    "nvidia_smi_text": "GPU 0: NVIDIA GeForce RTX 5070 Ti (UUID: GPU-84a69240-4f41-afe8-2b85-76fe37a7a6d7)\n",
+    "lscpu_text": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           43 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  16\nOn-line CPU(s) list:                     0-15\nVendor ID:                               AuthenticAMD\nModel name:                              AMD Ryzen 7 3700X 8-Core Processor\nCPU family:                              23\nModel:                                   113\nThread(s) per core:                      2\nCore(s) per socket:                      8\nSocket(s):                               1\nStepping:                                0\nFrequency boost:                         enabled\nCPU(s) scaling MHz:                      89%\nCPU max MHz:                             4426.1709\nCPU min MHz:                             2200.0000\nBogoMIPS:                                7200.04\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb cat_l3 cdp_l3 hw_pstate ssbd mba ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 cqm rdt_a rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local clzero irperf xsaveerptr rdpru wbnoinvd arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif v_spec_ctrl umip rdpid overflow_recov succor smca sev sev_es ibpb_exit_to_user\nVirtualization:                          AMD-V\nL1d cache:                               256 KiB (8 instances)\nL1i cache:                               256 KiB (8 instances)\nL2 cache:                                4 MiB (8 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-15\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Mitigation; untrained return thunk; SMT enabled with STIBP protection\nVulnerability Spec rstack overflow:      Mitigation; Safe RET\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; STIBP always-on; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace\n",
+    "note": "Raw identity text; unavailable GPU information remains unknown."
+  },
+  "constants": {
+    "bw_gpu_gbs": 1383.7513196480938,
+    "bw_cpu_gbs": {
+      "Q2_K": 87.3615234640671,
+      "Q3_K": 57.24122598062569,
+      "Q4_K": 97.29055670103092,
+      "Q6_K": 144.0602930914166,
+      "Q8_0": 146.91586813186814
+    },
+    "bw_h2d_gbs": 28.72464179251971,
+    "handoff_us": 198.66285593687775,
+    "cache_miss_us": 0.0
+  },
+  "raw_samples": {
+    "perf": {
+      "CUDA0-MUL_MAT_ID": [
+        {
+          "op": "MUL_MAT_ID",
+          "kind": "Q8_0",
+          "runs": 99350,
+          "time_us": 10.16,
+          "active_weight_bytes": 13369344,
+          "weight_gbs": 1315.88031496063,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q8_0,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0",
+          "raw": "  MUL_MAT_ID(type_a=q8_0,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):                99350 runs -    10.16 us/run -  25.17 MFLOP/run -   2.48 TFLOPS"
+        },
+        {
+          "op": "MUL_MAT_ID",
+          "kind": "Q4_K",
+          "runs": 103324,
+          "time_us": 9.72,
+          "active_weight_bytes": 7077888,
+          "weight_gbs": 728.1777777777778,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q4_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0",
+          "raw": "  MUL_MAT_ID(type_a=q4_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):               103324 runs -     9.72 us/run -  25.17 MFLOP/run -   2.59 TFLOPS"
+        },
+        {
+          "op": "MUL_MAT_ID",
+          "kind": "Q6_K",
+          "runs": 111272,
+          "time_us": 9.08,
+          "active_weight_bytes": 10321920,
+          "weight_gbs": 1136.7753303964757,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q6_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0",
+          "raw": "  MUL_MAT_ID(type_a=q6_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):               111272 runs -     9.08 us/run -  25.17 MFLOP/run -   2.77 TFLOPS"
+        }
+      ],
+      "CUDA0-MUL_MAT": [
+        {
+          "op": "MUL_MAT",
+          "kind": "Q8_0",
+          "runs": 13632,
+          "time_us": 76.56,
+          "active_weight_bytes": 62390272,
+          "weight_gbs": 814.9199582027168,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q8_0,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0",
+          "raw": "  MUL_MAT(type_a=q8_0,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):              13632 runs -    76.56 us/run - 117.44 MFLOP/run -   1.53 TFLOPS"
+        },
+        {
+          "op": "MUL_MAT",
+          "kind": "Q2_K",
+          "runs": 80088,
+          "time_us": 12.54,
+          "active_weight_bytes": 19267584,
+          "weight_gbs": 1536.4899521531102,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q2_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0",
+          "raw": "  MUL_MAT(type_a=q2_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):              80088 runs -    12.54 us/run - 117.44 MFLOP/run -   9.37 TFLOPS"
+        },
+        {
+          "op": "MUL_MAT",
+          "kind": "Q3_K",
+          "runs": 49416,
+          "time_us": 20.24,
+          "active_weight_bytes": 25231360,
+          "weight_gbs": 1246.608695652174,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q3_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0",
+          "raw": "  MUL_MAT(type_a=q3_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):              49416 runs -    20.24 us/run - 117.44 MFLOP/run -   5.80 TFLOPS"
+        },
+        {
+          "op": "MUL_MAT",
+          "kind": "Q4_K",
+          "runs": 42600,
+          "time_us": 23.87,
+          "active_weight_bytes": 33030144,
+          "weight_gbs": 1383.7513196480938,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q4_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0",
+          "raw": "  MUL_MAT(type_a=q4_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):              42600 runs -    23.87 us/run - 117.44 MFLOP/run -   4.92 TFLOPS"
+        },
+        {
+          "op": "MUL_MAT",
+          "kind": "Q6_K",
+          "runs": 38340,
+          "time_us": 26.66,
+          "active_weight_bytes": 48168960,
+          "weight_gbs": 1806.787696924231,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q6_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0",
+          "raw": "  MUL_MAT(type_a=q6_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):              38340 runs -    26.66 us/run - 117.44 MFLOP/run -   4.41 TFLOPS"
+        }
+      ],
+      "CPU-MUL_MAT_ID": [
+        {
+          "op": "MUL_MAT_ID",
+          "kind": "Q8_0",
+          "runs": 11130,
+          "time_us": 91.0,
+          "active_weight_bytes": 13369344,
+          "weight_gbs": 146.91586813186814,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q8_0,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0",
+          "raw": "  MUL_MAT_ID(type_a=q8_0,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):                11130 runs -    91.00 us/run -  25.17 MFLOP/run - 276.55 GFLOPS"
+        },
+        {
+          "op": "MUL_MAT_ID",
+          "kind": "Q4_K",
+          "runs": 13992,
+          "time_us": 72.75,
+          "active_weight_bytes": 7077888,
+          "weight_gbs": 97.29055670103092,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q4_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0",
+          "raw": "  MUL_MAT_ID(type_a=q4_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):                13992 runs -    72.75 us/run -  25.17 MFLOP/run - 345.94 GFLOPS"
+        },
+        {
+          "op": "MUL_MAT_ID",
+          "kind": "Q6_K",
+          "runs": 13992,
+          "time_us": 71.65,
+          "active_weight_bytes": 10321920,
+          "weight_gbs": 144.0602930914166,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q6_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0",
+          "raw": "  MUL_MAT_ID(type_a=q6_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):                13992 runs -    71.65 us/run -  25.17 MFLOP/run - 351.21 GFLOPS"
+        }
+      ],
+      "CPU-MUL_MAT": [
+        {
+          "op": "MUL_MAT",
+          "kind": "Q8_0",
+          "runs": 552,
+          "time_us": 1981.59,
+          "active_weight_bytes": 62390272,
+          "weight_gbs": 31.484955010875105,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q8_0,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0",
+          "raw": "  MUL_MAT(type_a=q8_0,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):                552 runs -  1981.59 us/run - 117.44 MFLOP/run -  59.27 GFLOPS"
+        },
+        {
+          "op": "MUL_MAT",
+          "kind": "Q2_K",
+          "runs": 4554,
+          "time_us": 220.55,
+          "active_weight_bytes": 19267584,
+          "weight_gbs": 87.3615234640671,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q2_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0",
+          "raw": "  MUL_MAT(type_a=q2_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):               4554 runs -   220.55 us/run - 117.44 MFLOP/run - 532.48 GFLOPS"
+        },
+        {
+          "op": "MUL_MAT",
+          "kind": "Q3_K",
+          "runs": 2277,
+          "time_us": 440.79,
+          "active_weight_bytes": 25231360,
+          "weight_gbs": 57.24122598062569,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q3_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0",
+          "raw": "  MUL_MAT(type_a=q3_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):               2277 runs -   440.79 us/run - 117.44 MFLOP/run - 266.43 GFLOPS"
+        },
+        {
+          "op": "MUL_MAT",
+          "kind": "Q4_K",
+          "runs": 1449,
+          "time_us": 715.02,
+          "active_weight_bytes": 33030144,
+          "weight_gbs": 46.19471343458924,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q4_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0",
+          "raw": "  MUL_MAT(type_a=q4_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):               1449 runs -   715.02 us/run - 117.44 MFLOP/run - 164.25 GFLOPS"
+        },
+        {
+          "op": "MUL_MAT",
+          "kind": "Q6_K",
+          "runs": 690,
+          "time_us": 1487.05,
+          "active_weight_bytes": 48168960,
+          "weight_gbs": 32.39229346693117,
+          "printed_gbs": null,
+          "printed_decimal_gbs": null,
+          "params": "type_a=q6_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0",
+          "raw": "  MUL_MAT(type_a=q6_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):                690 runs -  1487.05 us/run - 117.44 MFLOP/run -  78.98 GFLOPS"
+        }
+      ]
+    },
+    "h2d": [
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 1048576,
+        "repeat": 0,
+        "ms": 0.053284001,
+        "gbs": 19.679002708524084
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 1048576,
+        "repeat": 1,
+        "ms": 0.053428002,
+        "gbs": 19.625963179382975
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 1048576,
+        "repeat": 2,
+        "ms": 0.053615998,
+        "gbs": 19.55714784978916
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 2097152,
+        "repeat": 0,
+        "ms": 0.105296001,
+        "gbs": 19.916729791096245
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 2097152,
+        "repeat": 1,
+        "ms": 0.107023999,
+        "gbs": 19.595156409731988
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 2097152,
+        "repeat": 2,
+        "ms": 0.105788,
+        "gbs": 19.824101032253186
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 4194304,
+        "repeat": 0,
+        "ms": 0.210311994,
+        "gbs": 19.943246793618435
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 4194304,
+        "repeat": 1,
+        "ms": 0.211508006,
+        "gbs": 19.83047393487318
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 4194304,
+        "repeat": 2,
+        "ms": 0.209396005,
+        "gbs": 20.030487210106994
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 8388608,
+        "repeat": 0,
+        "ms": 0.417932004,
+        "gbs": 20.071705252799926
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 8388608,
+        "repeat": 1,
+        "ms": 0.413672,
+        "gbs": 20.278404146280145
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 8388608,
+        "repeat": 2,
+        "ms": 0.405088007,
+        "gbs": 20.708112447278644
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 16777216,
+        "repeat": 0,
+        "ms": 0.750352025,
+        "gbs": 22.359126704562435
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 16777216,
+        "repeat": 1,
+        "ms": 0.737248003,
+        "gbs": 22.756543160144712
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 16777216,
+        "repeat": 2,
+        "ms": 0.713240027,
+        "gbs": 23.522538507222617
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 33554432,
+        "repeat": 0,
+        "ms": 1.328343987,
+        "gbs": 25.260348470264127
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 33554432,
+        "repeat": 1,
+        "ms": 1.272372007,
+        "gbs": 26.371557858392904
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 33554432,
+        "repeat": 2,
+        "ms": 1.24616003,
+        "gbs": 26.926262431960684
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 67108864,
+        "repeat": 0,
+        "ms": 2.500008106,
+        "gbs": 26.843458562769953
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 67108864,
+        "repeat": 1,
+        "ms": 2.422996044,
+        "gbs": 27.696646127912537
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 67108864,
+        "repeat": 2,
+        "ms": 2.356951952,
+        "gbs": 28.47273315989939
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 134217728,
+        "repeat": 0,
+        "ms": 4.714344025,
+        "gbs": 28.470075006882848
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 134217728,
+        "repeat": 1,
+        "ms": 4.664291859,
+        "gbs": 28.775585245811694
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 134217728,
+        "repeat": 2,
+        "ms": 4.662251949,
+        "gbs": 28.78817564305768
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 268435456,
+        "repeat": 0,
+        "ms": 9.345128059,
+        "gbs": 28.72464179251971
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 268435456,
+        "repeat": 1,
+        "ms": 9.323092461,
+        "gbs": 28.79253392829781
+      },
+      {
+        "direction": "H2D",
+        "pinned": true,
+        "bytes": 268435456,
+        "repeat": 2,
+        "ms": 9.323227882,
+        "gbs": 28.79211571329905
+      }
+    ],
+    "bench_us": [
+      [
+        1464.6907012646138,
+        1390.2868996046025
+      ],
+      [
+        4730.413721984125,
+        4515.712421370157
+      ]
+    ],
+    "handoff_us": [
+      204.50858505995927,
+      186.61681000879528,
+      210.7089018649602,
+      192.81712681379622
+    ]
+  },
+  "uncertainty": {
+    "gpu": {
+      "median": 1383.7513196480938,
+      "min": 1383.7513196480938,
+      "max": 1383.7513196480938,
+      "count": 1,
+      "stdev": null,
+      "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+    },
+    "cpu": {
+      "Q2_K": {
+        "median": 87.3615234640671,
+        "min": 87.3615234640671,
+        "max": 87.3615234640671,
+        "count": 1,
+        "stdev": null,
+        "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+      },
+      "Q3_K": {
+        "median": 57.24122598062569,
+        "min": 57.24122598062569,
+        "max": 57.24122598062569,
+        "count": 1,
+        "stdev": null,
+        "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+      },
+      "Q4_K": {
+        "median": 97.29055670103092,
+        "min": 97.29055670103092,
+        "max": 97.29055670103092,
+        "count": 1,
+        "stdev": null,
+        "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+      },
+      "Q6_K": {
+        "median": 144.0602930914166,
+        "min": 144.0602930914166,
+        "max": 144.0602930914166,
+        "count": 1,
+        "stdev": null,
+        "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+      },
+      "Q8_0": {
+        "median": 146.91586813186814,
+        "min": 146.91586813186814,
+        "max": 146.91586813186814,
+        "count": 1,
+        "stdev": null,
+        "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+      }
+    },
+    "h2d": {
+      "median": 28.72464179251971,
+      "min": 26.843458562769953,
+      "max": 28.79253392829781,
+      "count": 9,
+      "stdev": 0.6732464308074759,
+      "note": "Observed spread, not a confidence interval; systematic model error unbounded."
+    },
+    "handoff": {
+      "min": 186.61681000879528,
+      "max": 210.7089018649602,
+      "count": 4,
+      "note": "Correlated pairwise repeat residuals; not independent samples or a CI."
+    }
+  },
+  "handoff_terms": {
+    "delta_cpu_us": 873.0000000000001,
+    "delta_gpu_us": -61.38,
+    "delta_layers": 12
+  },
+  "provenance": {
+    "manifest": {
+      "schema": "host-calibration-plan/1",
+      "image": "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+      "model": "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+      "cpu_layers": [
+        0,
+        12
+      ],
+      "jobs": [
+        {
+          "name": "nvidia",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "nvidia-smi",
+            "-L"
+          ]
+        },
+        {
+          "name": "lscpu",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "lscpu"
+          ]
+        },
+        {
+          "name": "CUDA0-MUL_MAT_ID",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/app/test-backend-ops",
+            "perf",
+            "-b",
+            "CUDA0",
+            "-o",
+            "MUL_MAT_ID",
+            "-p",
+            "^type_a=(q4_K|q6_K|q8_0),type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1\\.000000,m_v=0,ids_offset=0$"
+          ]
+        },
+        {
+          "name": "CUDA0-MUL_MAT",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/app/test-backend-ops",
+            "perf",
+            "-b",
+            "CUDA0",
+            "-o",
+            "MUL_MAT",
+            "-p",
+            "^type_a=(q2_K|q3_K|q4_K|q6_K|q8_0),type_b=f32,m=4096,n=1,k=14336,bs=\\[1,1\\],nr=\\[1,1\\],per=\\[0,1,2,3\\],k_v=0,o=1,src_overlap=0,m_v=0,pad=0$"
+          ]
+        },
+        {
+          "name": "CPU-MUL_MAT_ID",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/app/test-backend-ops",
+            "perf",
+            "-b",
+            "CPU",
+            "-o",
+            "MUL_MAT_ID",
+            "-p",
+            "^type_a=(q4_K|q6_K|q8_0),type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1\\.000000,m_v=0,ids_offset=0$"
+          ]
+        },
+        {
+          "name": "CPU-MUL_MAT",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/app/test-backend-ops",
+            "perf",
+            "-b",
+            "CPU",
+            "-o",
+            "MUL_MAT",
+            "-p",
+            "^type_a=(q2_K|q3_K|q4_K|q6_K|q8_0),type_b=f32,m=4096,n=1,k=14336,bs=\\[1,1\\],nr=\\[1,1\\],per=\\[0,1,2,3\\],k_v=0,o=1,src_overlap=0,m_v=0,pad=0$"
+          ]
+        },
+        {
+          "name": "build-h2d",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/cc/host_calibrate,dst=/src,readonly",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/artifacts/codexCAL/gpu,dst=/out",
+            "campaign/cuda-tools:c1",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "nvcc",
+            "-O2",
+            "/src/h2d.cu",
+            "-o",
+            "/out/h2d"
+          ]
+        },
+        {
+          "name": "h2d",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "--mount",
+            "type=bind,src=/home/muk/projects/siminfeng/campaign/artifacts/codexCAL/gpu,dst=/probe,readonly",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/probe/h2d"
+          ]
+        },
+        {
+          "name": "bench-0",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "--mount",
+            "type=bind,src=/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf,dst=/model/input.gguf,readonly",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/app/llama-bench",
+            "-m",
+            "/model/input.gguf",
+            "-ngl",
+            "999",
+            "--n-cpu-moe",
+            "0",
+            "-p",
+            "0",
+            "-n",
+            "64",
+            "-r",
+            "2",
+            "-t",
+            "8",
+            "-b",
+            "64",
+            "-ub",
+            "64",
+            "-o",
+            "json"
+          ]
+        },
+        {
+          "name": "bench-12",
+          "argv": [
+            "docker",
+            "run",
+            "--rm",
+            "--init",
+            "--network=none",
+            "--read-only",
+            "--memory=2g",
+            "--memory-swap=2g",
+            "--pids-limit=128",
+            "--tmpfs",
+            "/tmp:rw,size=64m",
+            "--stop-timeout=1",
+            "--gpus",
+            "device=0",
+            "--mount",
+            "type=bind,src=/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf,dst=/model/input.gguf,readonly",
+            "sha256:5b8a6a22981a798362a8a2d32b04270c8ab8de00c99a457307e18dd20b6b277e",
+            "timeout",
+            "-k",
+            "1s",
+            "25s",
+            "/app/llama-bench",
+            "-m",
+            "/model/input.gguf",
+            "-ngl",
+            "999",
+            "--n-cpu-moe",
+            "12",
+            "-p",
+            "0",
+            "-n",
+            "64",
+            "-r",
+            "2",
+            "-t",
+            "8",
+            "-b",
+            "64",
+            "-ub",
+            "64",
+            "-o",
+            "json"
+          ]
+        }
+      ]
+    },
+    "raw_outputs": {
+      "nvidia": "GPU 0: NVIDIA GeForce RTX 5070 Ti (UUID: GPU-84a69240-4f41-afe8-2b85-76fe37a7a6d7)\n",
+      "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           43 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  16\nOn-line CPU(s) list:                     0-15\nVendor ID:                               AuthenticAMD\nModel name:                              AMD Ryzen 7 3700X 8-Core Processor\nCPU family:                              23\nModel:                                   113\nThread(s) per core:                      2\nCore(s) per socket:                      8\nSocket(s):                               1\nStepping:                                0\nFrequency boost:                         enabled\nCPU(s) scaling MHz:                      89%\nCPU max MHz:                             4426.1709\nCPU min MHz:                             2200.0000\nBogoMIPS:                                7200.04\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb cat_l3 cdp_l3 hw_pstate ssbd mba ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 cqm rdt_a rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local clzero irperf xsaveerptr rdpru wbnoinvd arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif v_spec_ctrl umip rdpid overflow_recov succor smca sev sev_es ibpb_exit_to_user\nVirtualization:                          AMD-V\nL1d cache:                               256 KiB (8 instances)\nL1i cache:                               256 KiB (8 instances)\nL2 cache:                                4 MiB (8 instances)\nL3 cache:                                32 MiB (2 instances)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-15\nVulnerability Gather data sampling:      Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Mitigation; untrained return thunk; SMT enabled with STIBP protection\nVulnerability Spec rstack overflow:      Mitigation; Safe RET\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; STIBP always-on; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace\n",
+      "CUDA0-MUL_MAT_ID": "Testing 2 devices\n\nBackend 1/2: CUDA0\n  Device description: NVIDIA GeForce RTX 5070 Ti\n  Device memory: 15833 MB (15572 MB free)\n\n  MUL_MAT_ID(type_a=q8_0,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):                99350 runs -    10.16 us/run -  25.17 MFLOP/run - \u001b[1;34m  2.48 TFLOPS\u001b[0m\n  MUL_MAT_ID(type_a=q4_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):               103324 runs -     9.72 us/run -  25.17 MFLOP/run - \u001b[1;34m  2.59 TFLOPS\u001b[0m\n  MUL_MAT_ID(type_a=q6_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):               111272 runs -     9.08 us/run -  25.17 MFLOP/run - \u001b[1;34m  2.77 TFLOPS\u001b[0m\n  Backend CUDA0: \u001b[1;32mOK\u001b[0m\nBackend 2/2: CPU\n  Skipping\n2/2 backends passed\n\u001b[1;32mOK\u001b[0m\n",
+      "CUDA0-MUL_MAT": "Testing 2 devices\n\nBackend 1/2: CUDA0\n  Device description: NVIDIA GeForce RTX 5070 Ti\n  Device memory: 15833 MB (15572 MB free)\n\n  MUL_MAT(type_a=q8_0,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):              13632 runs -    76.56 us/run - 117.44 MFLOP/run - \u001b[1;34m  1.53 TFLOPS\u001b[0m\n  MUL_MAT(type_a=q2_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):              80088 runs -    12.54 us/run - 117.44 MFLOP/run - \u001b[1;34m  9.37 TFLOPS\u001b[0m\n  MUL_MAT(type_a=q3_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):              49416 runs -    20.24 us/run - 117.44 MFLOP/run - \u001b[1;34m  5.80 TFLOPS\u001b[0m\n  MUL_MAT(type_a=q4_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):              42600 runs -    23.87 us/run - 117.44 MFLOP/run - \u001b[1;34m  4.92 TFLOPS\u001b[0m\n  MUL_MAT(type_a=q6_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):              38340 runs -    26.66 us/run - 117.44 MFLOP/run - \u001b[1;34m  4.41 TFLOPS\u001b[0m\n  Backend CUDA0: \u001b[1;32mOK\u001b[0m\nBackend 2/2: CPU\n  Skipping\n2/2 backends passed\n\u001b[1;32mOK\u001b[0m\n",
+      "CPU-MUL_MAT_ID": "Testing 2 devices\n\nBackend 1/2: CUDA0\n  Skipping\nBackend 2/2: CPU\n  Device description: AMD Ryzen 7 3700X 8-Core Processor\n  Device memory: 48098 MB (48098 MB free)\n\n  MUL_MAT_ID(type_a=q8_0,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):                11130 runs -    91.00 us/run -  25.17 MFLOP/run - \u001b[1;34m276.55 GFLOPS\u001b[0m\n  MUL_MAT_ID(type_a=q4_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):                13992 runs -    72.75 us/run -  25.17 MFLOP/run - \u001b[1;34m345.94 GFLOPS\u001b[0m\n  MUL_MAT_ID(type_a=q6_K,type_b=f32,n_mats=128,n_used=8,b=0,m=768,n=1,k=2048,amax=1.000000,m_v=0,ids_offset=0):                13992 runs -    71.65 us/run -  25.17 MFLOP/run - \u001b[1;34m351.21 GFLOPS\u001b[0m\n  Backend CPU: \u001b[1;32mOK\u001b[0m\n2/2 backends passed\n\u001b[1;32mOK\u001b[0m\n",
+      "CPU-MUL_MAT": "Testing 2 devices\n\nBackend 1/2: CUDA0\n  Skipping\nBackend 2/2: CPU\n  Device description: AMD Ryzen 7 3700X 8-Core Processor\n  Device memory: 48098 MB (48098 MB free)\n\n  MUL_MAT(type_a=q8_0,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):                552 runs -  1981.59 us/run - 117.44 MFLOP/run - \u001b[1;34m 59.27 GFLOPS\u001b[0m\n  MUL_MAT(type_a=q2_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):               4554 runs -   220.55 us/run - 117.44 MFLOP/run - \u001b[1;34m532.48 GFLOPS\u001b[0m\n  MUL_MAT(type_a=q3_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):               2277 runs -   440.79 us/run - 117.44 MFLOP/run - \u001b[1;34m266.43 GFLOPS\u001b[0m\n  MUL_MAT(type_a=q4_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):               1449 runs -   715.02 us/run - 117.44 MFLOP/run - \u001b[1;34m164.25 GFLOPS\u001b[0m\n  MUL_MAT(type_a=q6_K,type_b=f32,m=4096,n=1,k=14336,bs=[1,1],nr=[1,1],per=[0,1,2,3],k_v=0,o=1,src_overlap=0,m_v=0,pad=0):                690 runs -  1487.05 us/run - 117.44 MFLOP/run - \u001b[1;34m 78.98 GFLOPS\u001b[0m\n  Backend CPU: \u001b[1;32mOK\u001b[0m\n2/2 backends passed\n\u001b[1;32mOK\u001b[0m\n",
+      "build-h2d": "\n==========\n== CUDA ==\n==========\n\nCUDA Version 12.8.1\n\nContainer image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n\nThis container image and its contents are governed by the NVIDIA Deep Learning Container License.\nBy pulling and using the container, you accept the terms and conditions of this license:\nhttps://developer.nvidia.com/ngc/nvidia-deep-learning-container-license\n\nA copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.\n\nWARNING: The NVIDIA Driver was not detected.  GPU functionality will not be available.\n   Use the NVIDIA Container Toolkit to start this container with GPU support; see\n   https://docs.nvidia.com/datacenter/cloud-native/ .\n\n",
+      "h2d": "{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":1048576,\"repeat\":0,\"ms\":0.053284001}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":1048576,\"repeat\":1,\"ms\":0.053428002}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":1048576,\"repeat\":2,\"ms\":0.053615998}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":2097152,\"repeat\":0,\"ms\":0.105296001}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":2097152,\"repeat\":1,\"ms\":0.107023999}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":2097152,\"repeat\":2,\"ms\":0.105788000}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":4194304,\"repeat\":0,\"ms\":0.210311994}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":4194304,\"repeat\":1,\"ms\":0.211508006}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":4194304,\"repeat\":2,\"ms\":0.209396005}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":8388608,\"repeat\":0,\"ms\":0.417932004}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":8388608,\"repeat\":1,\"ms\":0.413672000}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":8388608,\"repeat\":2,\"ms\":0.405088007}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":16777216,\"repeat\":0,\"ms\":0.750352025}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":16777216,\"repeat\":1,\"ms\":0.737248003}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":16777216,\"repeat\":2,\"ms\":0.713240027}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":33554432,\"repeat\":0,\"ms\":1.328343987}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":33554432,\"repeat\":1,\"ms\":1.272372007}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":33554432,\"repeat\":2,\"ms\":1.246160030}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":67108864,\"repeat\":0,\"ms\":2.500008106}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":67108864,\"repeat\":1,\"ms\":2.422996044}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":67108864,\"repeat\":2,\"ms\":2.356951952}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":134217728,\"repeat\":0,\"ms\":4.714344025}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":134217728,\"repeat\":1,\"ms\":4.664291859}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":134217728,\"repeat\":2,\"ms\":4.662251949}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":268435456,\"repeat\":0,\"ms\":9.345128059}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":268435456,\"repeat\":1,\"ms\":9.323092461}\n{\"direction\":\"H2D\",\"pinned\":true,\"bytes\":268435456,\"repeat\":2,\"ms\":9.323227882}\n",
+      "bench-0": "[\n  {\n    \"build_commit\": \"unknown\",\n    \"build_number\": 0,\n    \"cpu_info\": \"AMD Ryzen 7 3700X 8-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5070 Ti\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"/model/input.gguf\",\n    \"model_type\": \"granitemoe 1B.A400M Q8_0\",\n    \"model_size\": 816520384,\n    \"model_n_params\": 1334628352,\n    \"n_batch\": 64,\n    \"n_ubatch\": 64,\n    \"n_threads\": 8,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 999,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"load_mode\": \"auto\",\n    \"lazy_mode\": \"auto\",\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"repack\": true,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 64,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-11-10T03:58:04Z\",\n    \"avg_ns\": 91359238,\n    \"stddev_ns\": 3367118,\n    \"avg_ts\": 701.007344,\n    \"stddev_ts\": 25.836188,\n    \"samples_ns\": [ 93740150, 88978326 ],\n    \"samples_ts\": [ 682.738, 719.276 ]\n  }\n]\n",
+      "bench-12": "[\n  {\n    \"build_commit\": \"unknown\",\n    \"build_number\": 0,\n    \"cpu_info\": \"AMD Ryzen 7 3700X 8-Core Processor\",\n    \"gpu_info\": \"NVIDIA GeForce RTX 5070 Ti\",\n    \"backends\": \"CUDA\",\n    \"model_filename\": \"/model/input.gguf\",\n    \"model_type\": \"granitemoe 1B.A400M Q8_0\",\n    \"model_size\": 816520384,\n    \"model_n_params\": 1334628352,\n    \"n_batch\": 64,\n    \"n_ubatch\": 64,\n    \"n_threads\": 8,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 999,\n    \"n_cpu_moe\": 12,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"load_mode\": \"auto\",\n    \"lazy_mode\": \"auto\",\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"repack\": true,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 64,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-11-10T03:58:06Z\",\n    \"avg_ns\": 295876584,\n    \"stddev_ns\": 9716228,\n    \"avg_ts\": 216.423097,\n    \"stddev_ts\": 7.107050,\n    \"samples_ns\": [ 302746974, 289006195 ],\n    \"samples_ts\": [ 211.398, 221.449 ]\n  }\n]\n"
+    }
+  },
+  "caveats": [
+    "Microbenchmark effective bandwidth, not validated end-to-end fit.",
+    "Q2_K/Q3_K use dense GEMV, not expert MUL_MAT_ID (absent in pinned perf cases).",
+    "Q4_K dense GPU screen represents all GPU types; raw expert and other dense screens retained.",
+    "Raw pinned H2D excludes cache dispatch; cache_miss_us remains unmeasured zero.",
+    "Single shape/reruns may be cache-resident. Sample spread excludes systematic error."
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "criteria": [
+    {
+      "evidence": [
+        {
+          "aggregate": 7.5392,
+          "attempt": "att-1",
+          "job": "job-a945fa8656",
+          "job_sha256": "0e0b00fe83bc83db195fab2153b967e8422333e73cef905f35d618568c3ee434",
+          "maximum": 7.5392,
+          "minimum": 7.5392,
+          "result": "/home/muk/projects/siminfeng/campaign/lab/jobs/job-a945fa8656/att-1/result.json",
+          "result_sha256": "392488eea1eed0761a4784d2c27ce2d6c849477c126fbbde17c8da3b2b7295c5",
+          "samples": [
+            "kv_ppl4k_q8_0#13"
+          ],
+          "test": "kv_ppl4k_q8_0",
+          "values": [
+            7.5392
+          ]
+        },
+        {
+          "aggregate": 7.5385,
+          "attempt": "att-1",
+          "job": "job-a945fa8656",
+          "job_sha256": "0e0b00fe83bc83db195fab2153b967e8422333e73cef905f35d618568c3ee434",
+          "maximum": 7.5385,
+          "minimum": 7.5385,
+          "result": "/home/muk/projects/siminfeng/campaign/lab/jobs/job-a945fa8656/att-1/result.json",
+          "result_sha256": "392488eea1eed0761a4784d2c27ce2d6c849477c126fbbde17c8da3b2b7295c5",
+          "samples": [
+            "kv_ppl4k_f16#12"
+          ],
+          "test": "kv_ppl4k_f16",
+          "values": [
+            7.5385
+          ]
+        }
+      ],
+      "id": "PPL within one percent",
+      "metric": "ppl",
+      "op": "<=",
+      "status": "PASS",
+      "threshold": 1,
+      "value": 0.00928566690987509
+    },
+    {
+      "evidence": [
+        {
+          "attempt": "att-1",
+          "job": "job-a945fa8656",
+          "job_sha256": "0e0b00fe83bc83db195fab2153b967e8422333e73cef905f35d618568c3ee434",
+          "result": "/home/muk/projects/siminfeng/campaign/lab/jobs/job-a945fa8656/att-1/result.json",
+          "result_sha256": "392488eea1eed0761a4784d2c27ce2d6c849477c126fbbde17c8da3b2b7295c5",
+          "samples": [
+            {
+              "sample": "kv_gen32k_f16#0",
+              "sha256": "96310158519bdd627581d27218dd0a39950570be0bdda5c45e307ca185f86e6b"
+            },
+            {
+              "sample": "kv_gen32k_f16#7",
+              "sha256": "96310158519bdd627581d27218dd0a39950570be0bdda5c45e307ca185f86e6b"
+            },
+            {
+              "sample": "kv_gen32k_f16#8",
+              "sha256": "96310158519bdd627581d27218dd0a39950570be0bdda5c45e307ca185f86e6b"
+            }
+          ],
+          "test": "kv_gen32k_f16"
+        },
+        {
+          "attempt": "att-1",
+          "job": "job-a945fa8656",
+          "job_sha256": "0e0b00fe83bc83db195fab2153b967e8422333e73cef905f35d618568c3ee434",
+          "result": "/home/muk/projects/siminfeng/campaign/lab/jobs/job-a945fa8656/att-1/result.json",
+          "result_sha256": "392488eea1eed0761a4784d2c27ce2d6c849477c126fbbde17c8da3b2b7295c5",
+          "samples": [
+            {
+              "sample": "kv_gen32k_q8_0#1",
+              "sha256": "4e8a7ed7f1912eaada303f4c43303de5ca3218e5dc68d37a0b6131ae5aa902c2"
+            },
+            {
+              "sample": "kv_gen32k_q8_0#6",
+              "sha256": "4e8a7ed7f1912eaada303f4c43303de5ca3218e5dc68d37a0b6131ae5aa902c2"
+            },
+            {
+              "sample": "kv_gen32k_q8_0#9",
+              "sha256": "4e8a7ed7f1912eaada303f4c43303de5ca3218e5dc68d37a0b6131ae5aa902c2"
+            }
+          ],
+          "test": "kv_gen32k_q8_0"
+        }
+      ],
+      "id": "Greedy identity or unresolved KLD",
+      "metric": "text_sha",
+      "op": "==",
+      "status": "FAIL",
+      "threshold": true,
+      "value": false
+    }
+  ],
+  "criteria_file": "cc/verdict/criteria/D033-q8_0-frozen.json",
+  "criteria_sha256": "496f83a7f0c5a651b037e3295259f1e241c7c8ea274bfb9bd9b10920817ddb5f",
+  "job_ids": [
+    "job-a945fa8656"
+  ],
+  "protocol": "D033-q8_0-frozen",
+  "schema": "verdict/1",
+  "scope": "D028 full same-accuracy gate: PPL within 1% AND greedy text identical. D028 leaves KLD pending when text differs and freezes no KLD threshold. This file fails closed on nonidentity; it does not invent a KLD waiver or threshold.",
+  "status": "FAIL"
+}

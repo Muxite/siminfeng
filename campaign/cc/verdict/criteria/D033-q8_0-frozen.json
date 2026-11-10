@@ -1,0 +1,50 @@
+{
+  "schema": "criteria/1",
+  "id": "D033-q8_0-frozen",
+  "scope": "D028 full same-accuracy gate: PPL within 1% AND greedy text identical. D028 leaves KLD pending when text differs and freezes no KLD threshold. This file fails closed on nonidentity; it does not invent a KLD waiver or threshold.",
+  "sources": [
+    "D028",
+    "D033"
+  ],
+  "criteria": [
+    {
+      "id": "PPL within one percent",
+      "metric": "ppl",
+      "candidate": {
+        "job": "job-a945fa8656",
+        "attempt": "att-1",
+        "test": "kv_ppl4k_q8_0",
+        "count": 1
+      },
+      "baseline": {
+        "job": "job-a945fa8656",
+        "attempt": "att-1",
+        "test": "kv_ppl4k_f16",
+        "count": 1
+      },
+      "mode": "abs_delta_pct",
+      "op": "<=",
+      "threshold": 1
+    },
+    {
+      "id": "Greedy identity or unresolved KLD",
+      "metric": "text_sha",
+      "groups": [
+        {
+          "job": "job-a945fa8656",
+          "attempt": "att-1",
+          "test": "kv_gen32k_f16",
+          "count": 3
+        },
+        {
+          "job": "job-a945fa8656",
+          "attempt": "att-1",
+          "test": "kv_gen32k_q8_0",
+          "count": 3
+        }
+      ],
+      "op": "==",
+      "threshold": true
+    }
+  ]
+}

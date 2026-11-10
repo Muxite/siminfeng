@@ -1,0 +1,30 @@
+{
+  "schema": "criteria/1",
+  "id": "D033-q4_0",
+  "scope": "D033 reported same-accuracy PPL gate only (\u00b11%). Does not establish all D028 requirements: nonidentical greedy text leaves KLD pending.",
+  "sources": [
+    "D028",
+    "D033"
+  ],
+  "criteria": [
+    {
+      "id": "PPL within one percent",
+      "metric": "ppl",
+      "candidate": {
+        "job": "job-a945fa8656",
+        "attempt": "att-1",
+        "test": "kv_ppl4k_q4_0",
+        "count": 1
+      },
+      "baseline": {
+        "job": "job-a945fa8656",
+        "attempt": "att-1",
+        "test": "kv_ppl4k_f16",
+        "count": 1
+      },
+      "mode": "abs_delta_pct",
+      "op": "<=",
+      "threshold": 1
+    }
+  ]
+}

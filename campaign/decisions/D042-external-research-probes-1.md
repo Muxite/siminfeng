@@ -47,3 +47,13 @@ Settings: Qwen K=48, all experts on the CPU, 5 s window. Output: `artifacts/bpf1
 6. S2-MoE (arXiv 2608.15018, llama.cpp-based code).
 7. Speculation and expert-bytes model.
 8. CUDA fusion PRs.
+
+## 5. Host calibration (T-CAL) first real run — NEGATIVE, fixed in T-CAL2
+- The CPU probe first failed with rc 127. The engine binary links `libcuda` even with `-b CPU`, so every engine-image probe needs `--gpus`. That is fixed in calibrate.py.
+- Constants after the rerun:
+  - GPU: 1384 GB/s. **Impossible**; the peak is about 896 GB/s.
+  - CPU: Q4_K 97, Q8_0 147 GB/s. **Impossible**; the DDR4 peak is about 50 GB/s.
+  - H2D: 28.7 GB/s. Plausible for PCIe 4.0.
+  - Handoff: 199 µs. Plausible; PL4's fitted value was 137 µs.
+- Cause: test-backend-ops perf reuses one weight buffer, about 33 MB on the GPU and about 7 MB on the CPU. Those fit the 48 MB GPU L2 and 32 MB CPU L3.
+- **Methodology rule:** every bandwidth probe must (a) use a working set of at least 8× the last-level cache and (b) pass a physical-ceiling plausibility guard. T-CAL2 adds both.
