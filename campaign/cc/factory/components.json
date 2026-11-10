@@ -30,14 +30,16 @@
   },
   {
    "id": "pap",
-   "status": "pending",
+   "status": "rejected",
    "kind": "model-transform",
    "decisions": [
-    "T-PAP",
-    "D032"
+    "D032",
+    "D035",
+    "D040"
    ],
    "recipe": "cc/pap/make_pap.sh",
-   "scope": "Placement-matched BF16 -> Q8_0 with first-K expert Q2_K/Q3_K and remaining expert Q4_K; GPU measurement pending; D035: pap12_q3 provisional (+9.8% decode, KLD 0.073) pending quiet-host rerun"
+   "scope": "Placement-matched BF16 -> Q8_0 with first-K expert Q2_K/Q3_K and remaining expert Q4_K; GPU measurement pending; D035: pap12_q3 provisional (+9.8% decode, KLD 0.073) pending quiet-host rerun",
+   "reason": "D040: pap12_q3 +1.5% decode on quiet host (< +5% rule); Q3_K CPU kernels not proportionally faster than Q4_K on AVX2; lower-bit layers fail KLD"
   },
   {
    "id": "hybrid_split",
