@@ -1,0 +1,8 @@
+Implemented the ledger builder/loader, evidence-scoped inheritance rules, fail-closed quality gates, documentation, and regression tests.
+
+- **64 entries:** D013 15, D034 15, D035 27, D033 3, D029 4. D036 recorded as supplemental hash evidence.
+- **Validation:** 53 pytest tests pass; diff check clean.
+- **900 MiB / 4096:** feasible mixE4K static19, f16 KV; inherited KLD **0.040017**.
+- **1200 MiB / 32768:** remains infeasible. q4_0 fails quality; the smallest admissible q8_0 plan needs **1316.600 MiB including guard**. It becomes feasible at 1317 MiB.
+
+The assignment’s second feasibility requirement could not be met with the existing memory model. [Reports and exact results](artifacts/codexPL3/summary.json). All writes stayed within the allowed locations; no Docker/GPU work ran.

@@ -271,8 +271,118 @@ def pareto_front(candidates):
     return frontier
 
 
+def load_quality_ledger(source=None):
+    """Load explicit evidence; an empty ledger gives no quality permissions."""
+    if isinstance(source, dict):
+        ledger = source
+    else:
+        ledger = read_json(HERE/'quality_ledger.json' if source is None else source)
+    if ledger.get('schema') != 'quality-ledger/1':
+        raise ValueError('expected quality-ledger/1')
+    for row in ledger['entries']:
+        if row['metric'] not in ('kld', 'top1', 'ppl'):
+            raise ValueError('unknown quality metric')
+        finite(row['value'], 'ledger metric')
+        if not row['source'].get('result_sha256') or not row['source'].get('job_id'):
+            raise ValueError('quality entry needs result hash and job')
+    return ledger
+
+
+def resolve_quality(ledger, rep, family, coord, kv, flash, components, *, matched=True,
+                    ctx=4096, max_ppl_change=.01):
+    """Evidence-scoped screening inheritance, never an additive KLD estimate."""
+    finite(max_ppl_change, 'max_ppl_change')
+    out = dict(kld=None, status='unknown', rules=[], evidence=[], caveats=[],
+               ppl_relative_change=None, ppl_status='unknown')
+    def evidence(row):
+        src = row['source']
+        tag = f"{src['decision']} {src['job_id']} {src['test']}"
+        if tag not in out['evidence']:
+            out['evidence'].append(tag)
+    def rule(name):
+        if name not in out['rules']:
+            out['rules'].append(name)
+    if not matched or family != 'static' or type(coord) is not int or not 0 <= coord <= 24:
+        return out
+    rows = [r for r in ledger['entries'] if r['representation'] == rep]
+    bases = [r for r in rows if r['metric'] == 'kld' and r['kv_type'] == 'f16'
+             and not r['components'] and r['placement']['family'] == 'static']
+    exact = [r for r in bases if r['placement']['params']['n_cpu_moe'] == coord]
+    if exact:
+        base = max(exact, key=lambda r: r['value'])
+        evidence(base)
+    else:
+        # Require agreement across every measured placement, not just a pair
+        # cherry-picked from conflicting evidence for this representation.
+        placements = {r['placement']['params']['n_cpu_moe'] for r in bases}
+        values = {r['value'] for r in bases}
+        if len(placements) < 2 or len(values) != 1:
+            return out
+        base = bases[0]
+        rule('b')
+        for row in bases:
+            evidence(row)
+    out['caveats'].append(f"KLD is a wikitext screening measurement at ctx{base['ctx']}, {base['n_chunks']} chunks; task/context transfer is unvalidated")
+    for component in components:
+        if component == 'kv_quant_fix':
+            # D033 measures both the f16 control and quantized variants with this
+            # scheduler capacity correction. It does not certify arbitrary fixes.
+            controls = [r for r in rows if r['metric'] == 'ppl' and r['kv_type'] == 'f16'
+                        and r['components'] == ['kv_quant_fix'] and r['source']['decision'] == 'D033']
+            if not controls:
+                return out
+            evidence(controls[0])
+            rule('c')
+        else:
+            proofs = [p for p in ledger.get('computation_preserving', [])
+                      if p['component'] == component and p['representation'] == rep
+                      and p.get('text_identity') and p.get('ppl_identity')]
+            if not proofs:
+                return out
+            proof = proofs[0]
+            rule('a')
+            src = proof['source']
+            out['evidence'].append(f"{src['decision']} {src['job_id']} paired text SHA256 + PPL identity")
+    if kv != 'f16':
+        controls = [r for r in rows if r['metric'] == 'ppl' and r['kv_type'] == 'f16'
+                    and r['source']['decision'] == 'D033']
+        variants = [r for r in rows if r['metric'] == 'ppl' and r['kv_type'] == kv
+                    and r['source']['decision'] == 'D033']
+        if not controls or not variants or 'kv_quant_fix' not in components:
+            return out
+        control, variant = controls[0], variants[0]
+        delta = variant['value']/control['value']-1
+        out['ppl_relative_change'] = delta
+        evidence(control)
+        evidence(variant)
+        rule('c')
+        if abs(delta) > max_ppl_change:
+            out.update(status='quality-failing', ppl_status='failing')
+            return out
+        # Only q8 has the D033 inheritance permission. A loose PPL budget does
+        # not create a KLD measurement for q4 or another KV representation.
+        if kv != 'q8_0':
+            return out
+        out['ppl_status'] = 'within-budget'
+        out['caveats'].append('KV KLD inherited by PPL policy; combined KLD was not measured')
+    if flash:
+        fa_ppl = [r for r in rows if r['metric'] == 'ppl' and r['source']['decision'] == 'D033' and r['fa']]
+        if not fa_ppl:
+            return out
+        rule('d')
+        evidence(fa_ppl[0])
+        out['caveats'].append('PPL measured with FA only; no non-FA PPL comparison (D033); caveat, not a block')
+    out['kld'] = base['value']
+    out['rules'].sort()
+    out['status'] = 'inherited' if out['rules'] else 'measured'
+    out['description'] = ('inherited (rule ' + ','.join(out['rules']) + '; evidence ' +
+                          '; '.join(out['evidence']) + ')') if out['rules'] else 'measured'
+    return out
+
+
 def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
-         all_representations=True, cal=None, prompt_tokens=62, components=None):
+         all_representations=True, cal=None, prompt_tokens=62, components=None, quality_ledger=None):
+    ledger = load_quality_ledger(quality_ledger)
     cal = cal or read_json(HERE / 'calibration.json')
     s = adapt_stats(raw)
     enabled = load_components(components)
@@ -291,6 +401,7 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
     objective = budget.get('objective', 'decode')
     if objective not in ('decode', 'ttft', 'balanced'):
         raise ValueError('objective must be decode, ttft, or balanced')
+    finite(budget.get('max_ppl_change', .01), 'max_ppl_change')
     max_kld = budget.get('max_quality_loss')
     if max_kld is not None:
         finite(max_kld, 'max_quality_loss')
@@ -314,7 +425,10 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                    abs(v['expert_bytes']/ref['expert_bytes']-1) < .001 and
                    abs(v['nonexpert_bytes']/ref['nonexpert_bytes']-1) < .001 and
                    abs(v['kv_bytes_per_token']['f16']-49152) < 1)
-        quality_kld = ref['kld'] if matched else None
+        quality_kld = next((r['value'] for r in ledger['entries']
+                            if matched and r['representation'] == rep and r['metric'] == 'kld'
+                            and r['placement'] == {'family': 'static', 'params': {'n_cpu_moe': 0}}
+                            and not r['components'] and r['kv_type'] == 'f16'), None)
         # Every layer count is interpolation; LRU only measured cache sizes.
         placements = [('static', k, None) for k in range(v['n_layer']+1)]
         placements += [('lru', c, None) for c in (128, 256, 384, 640)]
@@ -351,7 +465,7 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                     if ctx != 4096:
                         reasons.append('context outside measured singleton 4096')
                     if kv != 'f16':
-                        reasons.append('quantized KV: speed and combined KLD unmeasured')
+                        reasons.append('quantized KV: speed extrapolated; quality resolved separately from ledger')
                     if (batch, ubatch) != (2048, 512):
                         reasons.append('batch/ubatch memory scaling and prefill unmeasured')
                     if prompt_tokens != 62:
@@ -406,7 +520,7 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                         attention_delta = (off_delta - (d028['gpu_mib_off']-d028['gpu_mib_on']))*scale
                         gpu += attention_delta
                         decode_us /= d028['decode_tps_on']/d028['decode_tps_off']
-                        notes.append('D028: -fa on default at ctx >=8192; f16 memory/decode transfer is extrapolated; FA quality equivalence unmeasured')
+                        notes.append('D028: -fa on default at ctx >=8192; f16 memory/decode transfer is extrapolated; FA PPL evidence/caveat resolved separately from ledger')
                     if 'q8_reuse' in enabled:
                         decode_us /= cal['planner_v2']['q8_reuse']['decode_factor']
                         notes.append('D029: enabled q8_reuse multiplies decode by 1.02; prefill unchanged; placement/context transfer unmeasured')
@@ -416,14 +530,14 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                     prefill = prefill_prediction(cal, family, coord, prompt_tokens, ctx, flash)
                     prompt_ms = prefill['prefill_ms']
                     ttft_ms = prompt_ms + decode_us/1000
-                    # Calibrated KLD belongs to the original all-GPU representation only.
-                    exact_quality = family == 'static' and coord == 0 and kv == 'f16' and matched and ctx == 4096 and not flash
-                    kld = quality_kld if exact_quality else None
+                    quality = resolve_quality(ledger, rep, family, coord, kv, flash, component_ids,
+                                              matched=bool(matched), ctx=ctx,
+                                              max_ppl_change=budget.get('max_ppl_change', .01))
+                    kld = quality['kld']
                     notes.append('Host estimate = complete mapped weights +400 MiB D015 anonymous allowance; load peak/working-set hypothesis, not measured RSS')
-                    if kld is None:
-                        notes.append('Representation KLD carried as risk prior; placement/KV combined KLD must be measured')
+                    notes += quality['caveats']
                     if max_kld is not None and (kld is None or kld > max_kld):
-                        rejected.append(dict(id=ident, reasons=['strict KLD gate: combined quality unknown or exceeds max_quality_loss']))
+                        rejected.append(dict(id=ident, quality=quality, reasons=['strict KLD gate: combined quality unknown, quality-failing, or exceeds max_quality_loss']))
                         continue
                     if gpu+guard > gb or host_mib > hb:
                         rejected.append(dict(id=ident, reasons=['GPU estimate + LOO guard exceeds budget' if gpu+guard > gb else 'host working set exceeds budget (D015 page-cache cliff)']))
@@ -441,7 +555,7 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                              gpu_guard_mib=round(guard,3), host_mib=round(host_mib,3),
                              decode_tps=round(1e6/decode_us,3), ttft_ms=round(ttft_ms,3),
                              ttft_definition='warm prompt-eval + one decode proxy; excludes load, tokenizer, queue and sampling',
-                             quality_class='bf16-reference' if kld == 0 else 'measured-representation-drift' if kld is not None else 'combined-quality-unmeasured',
+                             quality_class=quality['status'], quality=quality,
                              kld=kld, representation_kld=quality_kld,
                              quality_risk=kld, quality_risk_unknown=kld is None,
                              kv_type=kv, kv_mib=round(kv_mib,3), flash_attention=flash,
@@ -463,7 +577,7 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
                         p['metric_confidence']['decode_tps'] = 'extrapolated-component-transfer'
                         p['required_engine'] += ' + q8_reuse patch (D029)'
                     if 'kv_quant_fix' in enabled:
-                        p['required_engine'] += ' + kv_quant_fix patch (D028; qualification pending)'
+                        p['required_engine'] += ' + kv_quant_fix patch (D033)'
                     candidates.append(p)
     def rank(p):
         if objective == 'ttft':
@@ -485,13 +599,13 @@ def plan(raw, host, budget, *, allow_extrapolation=False, top=5, sample=None,
     return dict(schema='moe-plan/0', prediction_only=True, prompt_tokens=prompt_tokens, budget=dict(gpu_mib=gb, host_mib=hb, ctx=ctx, max_quality_loss=max_kld, objective=objective),
                 plans=family_best[:top], family_best=family_best, family_count=len(family_best),
                 pareto_set=pareto, pareto_axes=['gpu_mib:min', 'decode_tps:max', 'quality_risk:min'],
-                quality_risk_policy='measured combined KLD; null is unknown and treated as +infinity for dominance, never zero',
+                quality_risk_policy='measured or evidence-inherited screening KLD; null is unknown/failing and treated as +infinity, never zero',
                 hybrid_crossover=crossover, enabled_components=sorted(enabled),
                 technique_catalog=cal['planner_v2']['techniques'],
                 feasible_count=len(candidates), rejected=rejected, calibration_residuals=report,
                 warnings=warnings+['No hard VRAM guarantee; predictions require measurement.',
                                    'Calibrated confidence describes GPU/decode regime; host is analytical and TTFT is a warm proxy.',
-                                   'No finite KLD bound is inferred from identical weights or greedy output.',
+                                   'Inherited KLD is an evidence-scoped screening prior; PPL acceptance is not a measured combined KLD bound.',
                                    'Missing TTFT/host calibration cannot be resolved by --allow-extrapolation.'])
 
 
@@ -530,6 +644,7 @@ def main(argv=None):
     a.add_argument('--budget-host-mib', type=float)
     a.add_argument('--ctx', type=int, required=True)
     a.add_argument('--max-kld', type=float)
+    a.add_argument('--quality-ledger', help='Quality evidence JSON (default: bundled quality_ledger.json)')
     a.add_argument('--objective', choices=('decode', 'ttft', 'balanced'), default='decode')
     a.add_argument('--top', type=int, default=5)
     a.add_argument('--allow-extrapolation', action='store_true')
@@ -547,12 +662,12 @@ def main(argv=None):
                       allow_extrapolation=args.allow_extrapolation, top=args.top,
                       sample=read_json(args.resource_sample) if args.resource_sample else None,
                       all_representations=not args.only_input_representation, prompt_tokens=args.prompt_tokens,
-                      components=args.components)
+                      components=args.components, quality_ledger=args.quality_ledger)
         if args.emit_lab_tests:
             dest = Path(args.emit_lab_tests).resolve()
             # Assignment scope also constrains paths requested through this CLI.
-            if not any(dest.is_relative_to(base) for base in (HERE, ROOT/'artifacts/codexPL2')):
-                raise ValueError('--emit-lab-tests must stay under cc/moe_planner or artifacts/codexPL2')
+            if not any(dest.is_relative_to(base) for base in (HERE, ROOT/'artifacts/codexPL3')):
+                raise ValueError('--emit-lab-tests must stay under cc/moe_planner or artifacts/codexPL3')
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(json.dumps(emit_lab_tests(result), indent=2)+'\n')
         print(json.dumps(result, indent=2, allow_nan=False))

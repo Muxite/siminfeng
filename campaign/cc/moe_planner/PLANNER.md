@@ -5,7 +5,7 @@ campaign patches. It does not compile, launch inference, reserve resources,
 submit jobs, or contact services. Its recommendation is a discriminating lab
 experiment, not a demonstrated engine improvement or a hard memory guarantee.
 All implementation and scratch writes are confined to `cc/moe_planner/` and
-`artifacts/codexPL2/`. Prior T-PL artifacts are read-only inputs. There are no changes to `bin/lab` or `lab/tests`.
+`artifacts/codexPL3/`. Prior T-PL artifacts are read-only inputs. There are no changes to `bin/lab` or `lab/tests`.
 
 ## Run
 
@@ -16,12 +16,12 @@ python3 -B cc/moe_planner/plan.py \
   --stats artifacts/codexPL/granite-fixture.json \
   --host cc/engine_handoff/hosts/x86-main.json \
   --budget-gpu-mib 900 --ctx 4096 --top 5 \
-  --components artifacts/codexPL2/components-baseline.json \
-  --emit-lab-tests artifacts/codexPL2/lab-tests.json \
-  > artifacts/codexPL2/plan-900.json
+  --components artifacts/codexPL3/components-baseline.json \
+  --emit-lab-tests artifacts/codexPL3/lab-tests.json \
+  > artifacts/codexPL3/plan-900.json
 
 PYTHONDONTWRITEBYTECODE=1 python3 -B -m pytest -q -p no:cacheprovider \
-  cc/moe_planner/test_plan.py --basetemp=artifacts/codexPL2/pytest-temp
+  cc/moe_planner --basetemp=artifacts/codexPL3/pytest-temp
 ```
 
 The real T-MI inspection of mixE4K is also saved read-only as
@@ -33,7 +33,7 @@ in the input model's directory and the input agrees with the calibrated Granite
 architecture, dimensions, filename and weight byte counts. Missing quantizations
 are never invented. All other inputs enumerate their supplied representation.
 
-Additional controls: `--budget-host-mib`, `--max-kld`,
+Additional controls: `--budget-host-mib`, `--max-kld`, `--quality-ledger`,
 `--objective decode|ttft|balanced`, `--allow-extrapolation`, and
 `--resource-sample sample.json`, and `--components [registry.json]`. `--prompt-tokens` changes the analytical warm
 TTFT proxy and requires extrapolation for values other than 62; lab emission
@@ -56,7 +56,7 @@ write roots, including when symbolic links are involved.
 
 The API is `plan(stats, host, budget, allow_extrapolation=False, top=5, ...)`.
 Budget keys are `gpu_mib`, optional `host_mib`, `ctx`, optional
-`max_quality_loss` (mean KLD), and `objective`.
+`max_quality_loss` (mean KLD), `max_ppl_change` (API only; default 0.01), and `objective`. KLD and relative PPL change are separate metrics and are never added or numerically equated.
 
 `adapt_stats()` accepts the T-MI producer's `model-stats/0` directly:
 `arch`, `n_layer`, `n_expert`, `n_expert_used`, `context_length`, `gguf_path`,
@@ -106,13 +106,13 @@ extrapolation flag and does not establish unified-memory accounting correctness.
   KV then exceeds compressed weights. Context is a required constraint; the
   planner never silently shortens it to fit. KV q8_0 and q4_0 use the inspector's
   exact block accounting (102 and 54 MiB at ctx4096 here), require `-fa on`,
-  and remain uncalibrated for speed and combined quality. D028 observed both
+  and remain extrapolated for speed; quality uses rules c/d below. D028 observed both
   quantized types aborting before the fix: neither is enumerated unless the
   `kv_quant_fix` component is explicitly enabled (or accepted in the registry).
   Pending status alone does not enable it. At ctx >=8192, f16 also defaults to
   `-fa on`, citing [D028](../../decisions/D028-kv-precision-protocol.md). Its
   measured 32k f16 memory delta is -984 MiB, decode ratio 627.2/570.2, and
-  prefill ratio 7001/5865. FA changed text; quality equivalence is unknown.
+  prefill ratio 7001/5865. FA changed text; D033 PPL supplies rule d's caveat rather than a quality block.
 * **Auto-fit is not a baseline.** D023's virtual 900 MiB budget caused auto-fit
   to place only 155 MiB on GPU and decode at 86 t/s, below explicit static n24.
   Every emitted plan sets `-ngl 99 --fit off` and declares placement explicitly.
@@ -269,8 +269,7 @@ Enabled q8_reuse multiplies decode t/s by **1.02** (D029); memory and prefill
 stay unchanged. Runtime environment `GGML_CUDA_Q8_REUSE=1` and the patch
 requirement accompany the plan and emitted lab definitions. Transfer of that
 factor to placements/contexts beyond D029 remains explicit in metric confidence
-and notes. q8_reuse preserves computation in its measured regime; it does not
-make representation, placement or quantized-KV KLD known.
+and notes. q8_reuse inherits established base quality only through rule a below; its speed transfer remains extrapolated.
 
 `calibration.json:planner_v2.techniques.pap` is a pending representation trade-off
 entry, with empty calibration points, a lab/jobs result source, explicit future
@@ -290,21 +289,95 @@ and balanced maximizes decode t/s divided by TTFT. Ties prefer smaller GPU
 footprint and stable candidate ID. No cross-tier speed claim is implied. `family_best` contains every winner;
 `plans` takes the first `--top` of those. `pareto_set` is independent of this
 ranking and considers **all** feasible candidates, minimizing GPU MiB and
-quality risk while maximizing decode t/s. Quality risk is measured combined
-KLD; unknown risk is JSON null and treated as +infinity for dominance, never
-zero. Measured representation KLD is retained separately as a prior. Tied
-nondominated points remain available, and the full Pareto set is not truncated
-by `--top`.
+quality risk while maximizing decode t/s. Quality risk is measured or evidence-inherited screening KLD. Unknown/failing risk
+is JSON null and treated as +infinity for dominance, never zero. Tied
+nondominated points remain available; the full Pareto set is not truncated by
+`--top`.
 
-Without `--max-kld`, measured representation KLD is a risk prior; changed
-CPU/GPU placement, hybrid arithmetic and quantized KV have **unknown combined
-KLD**. They get `quality_class=combined-quality-unmeasured` and `kld=null`.
-A finite quality constraint fails closed on unknown combined KLD even with the
-extrapolation flag. Only a matched original all-GPU representation with f16 KV
-can use its measured representation drift as the gate. That measurement remains
-a wikitext screening prior, not a guarantee for other tasks or context lengths.
-The 900 MiB example consequently has no admissible plan under a strict KLD
-ceiling until placement quality is measured. Unknown quality is never zero.
+### Quality ledger and inheritance (T-PL3)
+
+Rebuild the bundled ledger with:
+
+```sh
+nice -n 10 python3 -B cc/moe_planner/build_quality_ledger.py
+```
+
+The script reads real `lab/jobs/JOB/att-1/result.json` metrics and frozen job
+test definitions, requiring completed, clean results. D013 predates frozen
+definitions, so its read-only `lab/tests/mem2.json` definitions and SHA256 are
+recorded too. No metric value is copied from decision prose. Each entry has
+representation, placement family/parameters, KV type, FA, runtime components,
+context, chunk count, metric/value, job/attempt/test, decision, result path/SHA256
+and job envelope SHA256. Counts:
+
+| Decision | Job | Metric entries |
+| --- | --- | ---: |
+| D013 | job-aa57700ee5 | 15 |
+| D034 | job-56115e2bf1 | 15 |
+| D035 | job-3d2fbbd061 | 27 |
+| D033 | job-a945fa8656 | 3 |
+| D029 | job-34c09bec98 | 4 |
+
+D035 PAP/imatrix measurements are recorded without activating nonexistent
+model variants or supplying missing timing/placement calibration. BF16 has no
+synthetic zero entry: absent ledger evidence remains unknown.
+`load_quality_ledger()` loads the bundled JSON or `--quality-ledger PATH`;
+an empty ledger cannot fall back to `calibration.json` quality priors.
+
+The rules apply to matched Granite representations and static placement.
+LRU, hybrid, mismatched models, new KV types, unproven components, and
+representation transfers without evidence remain unknown. Directly recorded
+representation/placement KLD is `measured` screening quality. Other admissible
+configurations are `inherited (rule x; evidence y)`:
+
+* **Rule a — computation-preserving components.**
+  [D029](../../decisions/D029-c1-q8reuse-accepted.md), job-34c09bec98,
+  provides paired OFF/ON complete stdout SHA256 identity and exact PPL
+  identity independently for Q8_0 and mixE4K. The builder verifies both from
+  result.json and records paired test names. Only those component/representation
+  pairs inherit base quality; either text identity or PPL identity alone is
+  insufficient. This is an explicit screening transfer across placement/context,
+  not new combined-KLD measurement.
+  [D036](../../decisions/D036-binary-component-swap.md) corroborates the Q8_0
+  binary swap using `artifacts/x7-comp/swap-gen.out` SHA256, which the builder
+  compares to D029. That manual run has no lab job/result.json or paired PPL;
+  it supplies no independent inheritance permission or fabricated job ID.
+* **Rule b — static placement-only changes.**
+  [D034](../../decisions/D034-planner-validated.md), job-56115e2bf1,
+  measures mixE4K at K=19,20,21,22,23, each KLD 0.040017, agreeing with
+  [D013](../../decisions/D013-mixed-precision-frontier.md) and D035 all-GPU
+  controls. A representation needs at least two distinct measured static
+  placements with identical KLD across the available base evidence before
+  another integer `--n-cpu-moe K` in [0,24] inherits it. Changed weights,
+  hybrid arithmetic and LRU are outside this rule. Other representations
+  do not inherit mixE4K's placement evidence.
+* **Rule c — KV quality and scheduler fix.**
+  [D033](../../decisions/D033-kv-quant-fixed-and-measured.md), job-a945fa8656,
+  measures paired FA-on PPL at ctx4096, six chunks: f16 7.5385, q8_0 7.5392,
+  q4_0 8.1368. Compute relative PPL change from those ledger values. q8_0
+  inherits mixE4K base screening KLD when within the default ±1% relative
+  PPL budget and `kv_quant_fix` is enabled. This is a policy inference, not
+  a measurement or mathematical bound on combined KLD. q4_0 is
+  `quality-failing` under that PPL budget and never acquires KLD even if
+  the PPL budget is loosened. Unknown KV/representation pairs stay unknown.
+  The scheduler capacity correction is covered by D033's f16 control and
+  quantized variants; no general permission for other fixes is inferred.
+  A 0.08 KLD ceiling does not mean an 8% PPL budget.
+* **Rule d — FA evidence caveat.**
+  D033 paired PPL has FA on only. Emit “PPL measured with FA only; no
+  non-FA PPL comparison” as a caveat, not a block, for supported FA
+  combinations. Do not claim measured FA equivalence or transfer this
+  exception to representations without D033 evidence.
+
+`quality` contains status, description, rule IDs, decision/job/test evidence,
+PPL relative change/status, and caveats. `kld` and Pareto `quality_risk` use
+the inherited base value only after all applicable rules succeed. Finite
+`--max-kld` rejects unknown, failing, or above-ceiling values, regardless of
+`--allow-extrapolation`. Without a ceiling, unknown/failing candidates remain
+exploratory hypotheses with visible labels and null risk. Caveats retain the
+measurement scope: KLD is 20x512 wikitext vs BF16 logits, D033 PPL is six
+chunks at ctx4096; neither certifies long-context or general-task quality.
+GPU/decode confidence remains independent of quality.
 
 The emitted JSON is exactly a mapping of test names to `bin/lab` definitions,
 with `tool`, `parser`, `model_file`, `docker_args`, `args`, and, for quality,
@@ -352,29 +425,27 @@ fixture differs by 0.0055 MiB from exact nonexpert header bytes. Exact flags:
 -t 8 -tb 8 --n-cpu-moe 19
 ```
 
-With extrapolation enabled, the 900 MiB top five instead contain five
-representation families: mixE4K static19 (calibrated regime), mixE2K static9,
-mixE3K static13, Q4_K_M static15, and Q8_0 static20 (the last four use the
-hypothetical ubatch128 footprint). Their combined placement KLD is unknown;
-low-bit alternatives carry substantial representation risk (see D013).
-Without extrapolation, the planner returns just the calibrated mixE4K family
-winner and keeps n19..24 in the separate memory/speed Pareto set.
+With accepted factory runtime components (`q8_reuse`, `kv_quant_fix`),
+900 MiB / ctx4096 / max-KLD 0.08 returns mixE4K static19, f16 KV,
+875.867 MiB GPU + 2 MiB guard, 152.625 predicted decode t/s, KLD 0.040017
+inherited through rules a/c (D029/D033), with direct placement evidence D034.
+No extrapolation flag is needed for its baseline GPU/decode regime.
 
-At 1200 MiB / ctx32768, f16 KV alone requires 1536 MiB. No supported plan fits
-with the baseline components. With kv_quant_fix explicitly enabled and
-extrapolation allowed, q4_0 KV takes 432 MiB. For example, mixE4K static15,
-FA on, batch512/ubatch128 predicts 1173 MiB GPU (+2 MiB guard), 196.152 decode
-t/s, and 57.963 ms warm TTFT for the 62-token prompt. These are unvalidated
-post-fix speed/memory/quality hypotheses; a strict KLD gate rejects them.
+The required **1200 MiB / ctx32768 / max-KLD 0.08** rerun returns **no feasible
+plan** under the existing memory model. This is a memory constraint after the
+quality repair: the smallest quality-admissible candidate is mixE4K static24,
+q8_0 KV, FA on, batch512/ubatch128, **1314.600 MiB GPU + 2 MiB guard =
+1316.600 MiB**. The D028 FA anchor is ~2762 MiB all-GPU/f16 at 32k;
+q8 KV saves 720 MiB, all 24 expert layers on CPU save the fitted placement
+amount, and ubatch128 saves 81 MiB. The result is still above 1200 MiB.
+Changing quality rules cannot remove those bytes. The earlier q4_0 example
+was rejected by D033 and is withdrawn. No smaller memory prediction or new
+unmeasured placement is invented to satisfy this scenario.
 
-With the factory registry now present, the default enables accepted q8_reuse
-and the same n19 plan predicts 152.625 t/s (+2%). Pending kv_quant_fix remains
-disabled. The component-free examples above use `components-baseline.json`
-so future registry changes cannot alter their interpretation.
-
-Reproducible JSON reports, component selections, emitted test definitions and
-CPU-only pytest results are in `artifacts/codexPL2/`. No Docker or GPU work was
-run. Remaining gaps include actual TTFT/load time, long-context and quantized-KV
-quality, post-fix GPU qualification, host working set, other model/host
-calibration, batch/prefill buffers, larger-expert crossover validation and PAP
-results. Measurements must decide acceptance.
+At **1317 MiB** the same ctx32768 / max-KLD 0.08 request has a feasible q8_0
+candidate with inherited quality (rules a/b/c/d; D029/D034/D033). Memory,
+decode and prefill remain extrapolated; quality is a screening prior.
+`artifacts/codexPL3/` contains exact commands, both requested reruns,
+a 1317 MiB diagnostic rerun, ledger counts, emitted lab definitions, and CPU-only
+pytest output. No Docker/GPU operation was performed. Long-context quality,
+actual TTFT/host working set and post-fix combined performance need measurement.

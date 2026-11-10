@@ -1,4 +1,4 @@
-"""CPU-only checks. All test scratch files belong under artifacts/codexPL2."""
+"""CPU-only checks. All test scratch files belong under artifacts/codexPL3."""
 import ast
 import copy
 import importlib.util
@@ -90,10 +90,14 @@ def test_budget_guard_and_inclusive_host_boundary(stats, host):
 
 
 def test_strict_kld_unknown_never_passes(stats, host):
-    assert not run(stats, host, budget=dict(gpu_mib=900,ctx=4096,max_quality_loss=.05))['plans']
+    measured = run(stats, host, budget=dict(gpu_mib=900,ctx=4096,max_quality_loss=.05))['plans']
+    assert measured and measured[0]['kld'] == .040017
+    unknown = copy.deepcopy(stats)
+    unknown['expert_bytes'] *= 2
+    assert not run(unknown, host, budget=dict(gpu_mib=20000,ctx=4096,max_quality_loss=.05), allow_extrapolation=True)['plans']
     r = run(stats, host, budget=dict(gpu_mib=1500,ctx=4096,max_quality_loss=.05), top=100)
     assert r['plans'] and all(p['kld'] is not None and p['kld'] <= .05 for p in r['plans'])
-    assert all('-static0-f16-' in p['id'] for p in r['plans'])
+    assert all(p['quality']['status'] in ('measured', 'inherited') for p in r['plans'])
     assert not run(stats, host, budget=dict(gpu_mib=1500,ctx=4096,max_quality_loss=0))['plans']
 
 
@@ -119,7 +123,9 @@ def test_quant_kv_flash_attention_and_batch_candidates(stats, host):
     quant = [p for p in r['plans'] if 'kv:q8_0' in p['techniques'] or 'kv:q4_0' in p['techniques']]
     assert quant
     assert all(p['flags'][p['flags'].index('-fa')+1] == 'on' for p in quant)
-    assert all(p['confidence'] == 'extrapolated' and p['kld'] is None for p in quant)
+    assert all(p['confidence'] == 'extrapolated' for p in quant)
+    assert all(p['kld'] is None for p in quant if p['kv_type'] == 'q4_0')
+    assert any(p['kld'] == .040017 and p['quality']['status'] == 'inherited' for p in quant)
     assert any('ubatch:128' in p['techniques'] for p in r['plans'])
     assert {p['representation'] for p in r['plans']} == {'bf16','Q8_0','Q4_K_M','mixE4K','mixE3K','mixE2K'}
 
@@ -241,7 +247,7 @@ def test_emission_matches_real_lab_loader_and_schema(stats,host,tmp_path):
 
 
 def test_cli_output_and_write_boundary(stats,host,capsys):
-    dest=ROOT/'artifacts/codexPL2/cli-test-definitions.json'
+    dest=ROOT/'artifacts/codexPL3/cli-test-definitions.json'
     argv=['--stats',str(ROOT/'artifacts/codexPL/granite-fixture.json'),'--host',str(ROOT/'cc/engine_handoff/hosts/x86-main.json'),
           '--budget-gpu-mib','900','--ctx','4096','--emit-lab-tests',str(dest)]
     assert planner.main(argv)==0
@@ -286,7 +292,10 @@ def test_flash_attention_threshold_and_kv_bytes(stats, host, ctx, flash):
         if flash:
             assert p['flags'][p['flags'].index('-fa')+1] == 'on'
             assert any('D028' in note for note in p['notes'])
-            assert p['confidence'] == 'extrapolated' and p['kld'] is None
+            assert p['confidence'] == 'extrapolated'
+            if p['kld'] is not None:
+                assert 'd' in p['quality']['rules']
+                assert any('no non-FA PPL' in note for note in p['quality']['caveats'])
     if ctx == 32768:
         allgpu = next(p for p in r['family_best'] if p['technique_family'].startswith('mixE4K|static|'))
         # The all-GPU D028 anchor includes its attention-buffer observation.

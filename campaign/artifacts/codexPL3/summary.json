@@ -1,0 +1,200 @@
+{
+  "assignment": "T-PL3",
+  "status": "quality implementation complete; 1200 MiB/32k feasibility requirement conflicts with existing memory model",
+  "ledger_entries": 64,
+  "entries_by_source": {
+    "D013 / job-aa57700ee5": 15,
+    "D034 / job-56115e2bf1": 15,
+    "D035 / job-3d2fbbd061": 27,
+    "D033 / job-a945fa8656": 3,
+    "D029 / job-34c09bec98": 4
+  },
+  "d036": {
+    "decision": "D036",
+    "job_id": null,
+    "path": "artifacts/x7-comp/swap-gen.out",
+    "sha256": "658947762b307a3a1610a8e87850484e38c9f6a147d761f3abf44f602c47d4ce",
+    "paired_ppl": false
+  },
+  "pytest": ".....................................................                    [100%]\n53 passed in 1.46s",
+  "scenarios": {
+    "900": {
+      "budget": {
+        "gpu_mib": 900.0,
+        "host_mib": 39007.5859375,
+        "ctx": 4096,
+        "max_quality_loss": 0.08,
+        "objective": "decode"
+      },
+      "feasible_count": 6,
+      "plans": [
+        {
+          "id": "mixE4K-static19-f16-c4096-b2048-u512-cmp-kv_quant_fix-q8_reuse",
+          "flags": [
+            "-m",
+            "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+            "-ngl",
+            "99",
+            "--fit",
+            "off",
+            "-c",
+            "4096",
+            "-b",
+            "2048",
+            "-ub",
+            "512",
+            "-ctk",
+            "f16",
+            "-ctv",
+            "f16",
+            "-t",
+            "8",
+            "-tb",
+            "8",
+            "--n-cpu-moe",
+            "19"
+          ],
+          "gpu_mib": 875.867,
+          "gpu_guard_mib": 2.0,
+          "host_mib": 1178.695,
+          "decode_tps": 152.625,
+          "kld": 0.040017,
+          "quality": {
+            "kld": 0.040017,
+            "status": "inherited",
+            "rules": [
+              "a",
+              "c"
+            ],
+            "evidence": [
+              "D034 job-56115e2bf1 pl_617a7871cc83_quality512#15",
+              "D033 job-a945fa8656 kv_ppl4k_f16#12",
+              "D029 job-34c09bec98 paired text SHA256 + PPL identity"
+            ],
+            "caveats": [
+              "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated"
+            ],
+            "ppl_relative_change": null,
+            "ppl_status": "unknown",
+            "description": "inherited (rule a,c; evidence D034 job-56115e2bf1 pl_617a7871cc83_quality512#15; D033 job-a945fa8656 kv_ppl4k_f16#12; D029 job-34c09bec98 paired text SHA256 + PPL identity)"
+          },
+          "confidence": "calibrated"
+        }
+      ],
+      "rejections_by_reason": {
+        "GPU estimate + LOO guard exceeds budget": 19,
+        "requires --allow-extrapolation": 1387,
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe": 153,
+        "strict KLD gate: combined quality unknown, quality-failing, or exceeds max_quality_loss": 1,
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin": 27
+      }
+    },
+    "1200": {
+      "budget": {
+        "gpu_mib": 1200.0,
+        "host_mib": 39007.5859375,
+        "ctx": 32768,
+        "max_quality_loss": 0.08,
+        "objective": "decode"
+      },
+      "feasible_count": 0,
+      "plans": [],
+      "rejections_by_reason": {
+        "GPU estimate + LOO guard exceeds budget": 150,
+        "strict KLD gate: combined quality unknown, quality-failing, or exceeds max_quality_loss": 1263,
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe": 153,
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin": 27
+      }
+    },
+    "1317": {
+      "budget": {
+        "gpu_mib": 1317.0,
+        "host_mib": 39007.5859375,
+        "ctx": 32768,
+        "max_quality_loss": 0.08,
+        "objective": "decode"
+      },
+      "feasible_count": 1,
+      "plans": [
+        {
+          "id": "mixE4K-static24-q8_0-c32768-b512-u128-fa-cmp-kv_quant_fix-q8_reuse",
+          "flags": [
+            "-m",
+            "/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-mixE4K.gguf",
+            "-ngl",
+            "99",
+            "--fit",
+            "off",
+            "-c",
+            "32768",
+            "-b",
+            "512",
+            "-ub",
+            "128",
+            "-ctk",
+            "q8_0",
+            "-ctv",
+            "q8_0",
+            "-t",
+            "8",
+            "-tb",
+            "8",
+            "--n-cpu-moe",
+            "24",
+            "-fa",
+            "on"
+          ],
+          "gpu_mib": 1314.6,
+          "gpu_guard_mib": 2.0,
+          "host_mib": 1178.695,
+          "decode_tps": 139.771,
+          "kld": 0.040017,
+          "quality": {
+            "kld": 0.040017,
+            "status": "inherited",
+            "rules": [
+              "a",
+              "b",
+              "c",
+              "d"
+            ],
+            "evidence": [
+              "D013 job-aa57700ee5 kl_mixE4K#2",
+              "D034 job-56115e2bf1 pl_617a7871cc83_quality512#15",
+              "D034 job-56115e2bf1 pl_83a44584d710_quality512#16",
+              "D034 job-56115e2bf1 pl_1ac7a80d3dc2_quality512#17",
+              "D034 job-56115e2bf1 pl_471add4ed456_quality512#18",
+              "D034 job-56115e2bf1 pl_41fc4a54d268_quality512#19",
+              "D035 job-3d2fbbd061 pap_kl_mixE4K#47",
+              "D033 job-a945fa8656 kv_ppl4k_f16#12",
+              "D029 job-34c09bec98 paired text SHA256 + PPL identity",
+              "D033 job-a945fa8656 kv_ppl4k_q8_0#13"
+            ],
+            "caveats": [
+              "KLD is a wikitext screening measurement at ctx512, 20 chunks; task/context transfer is unvalidated",
+              "KV KLD inherited by PPL policy; combined KLD was not measured",
+              "PPL measured with FA only; no non-FA PPL comparison (D033); caveat, not a block"
+            ],
+            "ppl_relative_change": 9.28566690987509e-05,
+            "ppl_status": "within-budget",
+            "description": "inherited (rule a,b,c,d; evidence D013 job-aa57700ee5 kl_mixE4K#2; D034 job-56115e2bf1 pl_617a7871cc83_quality512#15; D034 job-56115e2bf1 pl_83a44584d710_quality512#16; D034 job-56115e2bf1 pl_1ac7a80d3dc2_quality512#17; D034 job-56115e2bf1 pl_471add4ed456_quality512#18; D034 job-56115e2bf1 pl_41fc4a54d268_quality512#19; D035 job-3d2fbbd061 pap_kl_mixE4K#47; D033 job-a945fa8656 kv_ppl4k_f16#12; D029 job-34c09bec98 paired text SHA256 + PPL identity; D033 job-a945fa8656 kv_ppl4k_q8_0#13)"
+          },
+          "confidence": "extrapolated"
+        }
+      ],
+      "rejections_by_reason": {
+        "GPU estimate + LOO guard exceeds budget": 149,
+        "strict KLD gate: combined quality unknown, quality-failing, or exceeds max_quality_loss": 1263,
+        "D022/D019 policy: LRU resident-byte coverage <60% on discrete PCIe": 153,
+        "D030/D031: hybrid rejected in small-expert regime; below crossover margin": 27
+      }
+    }
+  },
+  "input_hashes": {
+    "cc/factory/components.json": "7cbd58ac46ba8427e44b11e65ffdaf5be28b83824dd3f4ccd2cc0e48f1ea24f8",
+    "cc/moe_planner/quality_ledger.json": "961567c84a6bcc7e45920f9e0cdad4be6f60c9de8994b021210c823decae0e9d",
+    "artifacts/codexPL3/factory-stats.json": "cb5232b0ca178106e6575953be3d76c2a35bae4710de014b74869b229742c862",
+    "artifacts/codexPL3/factory-host.json": "3b2ce657b6be03b1ee7a86cbec5391b743a9ee937d8addcf7ac32107e77a0e18",
+    "artifacts/codexPL3/factory-sample.json": "963abe831ec5c057bca41c7c51aa7b9cc72bf7bd9dd6586b63022c4f580faefa"
+  }
+}
