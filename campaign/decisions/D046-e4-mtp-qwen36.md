@@ -62,3 +62,6 @@ Median t/s, n=2. Pairs are within 3%. Text "=" means identical to spec-none.
 - Gate it with distributional equivalence, not text identity.
 
 **Method lesson:** prompts must be formatted for each model. A raw prompt that works on one model can end at token 1 on another, so engagement (n > 0) must be checked per arm.
+
+## Addendum (D048 X2)
+The verify-shaped batch (ub 4) gives KLD 0.005769 and same-top 97.157%, against the decode floor (ub 1) of 0.005876 and 97.108%. That is inside the D047 equivalence bound. **The chat verdict is upgraded from INCONCLUSIVE to distributionally equivalent**: the MTP chat text divergence is batch-shape numerics within the floor. X1 also confirms that MTP beats spending the same VRAM on GPU layers (+9.8% chat).
