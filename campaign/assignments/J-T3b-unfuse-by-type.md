@@ -1,0 +1,9 @@
+# Assignment J-T3b — generalize the MoE gate/up unfuse switch to a per-weight-type list (parent J-T3/D025; host jetson-arm; worker Codex)
+Pinned source ref/llama.cpp 31288c9c6 (read-only; `git -C ref/llama.cpp apply --check` allowed). Existing patch: cc/moe_dispatch_sm87/patches/01-unfuse-bf16-ids-to-mmf.patch (env GGML_CUDA_J_MMF_IDS, bf16 only, cc==870). Read cc/moe_dispatch_sm87/README.md and experiments/jetson/J-P003-nsys-quant/FINDINGS.md.
+New observation: with ALL fusion off, Q4_K-expert model decode +14% but Q8_0 −12% on Orin; fused gate/up MMVQ for Q4_K is ~18 GB/s.
+Write `cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch` (standalone, replaces 01; must apply alone to the pinned tree):
+- env `GGML_CUDA_J_UNFUSE_IDS_TYPES` = comma list of ggml type names (e.g. `bf16,q4_K`); empty/unset = upstream behaviour. Keep `GGML_CUDA_J_MMF_IDS=1` as an alias for `bf16` (backward compat with D025 runs).
+- Effect: for MUL_MAT_ID gate/up GLU fusion (and the bias variant) with dst->ne[2]==1 and src0->type in the list, decline the fusion in BOTH the MMVF predicate (ggml_cuda_should_fuse_mul_mat_vec_f) and the MMVQ fusion predicate (find the quantized counterpart, e.g. ggml_cuda_should_fuse_mul_mat_vec_q) so gate and up run as separate MUL_MAT_ID + GLU through the normal dispatcher (state which kernel the unfused quantized path uses at batch 1: MMVQ or MMQ, file:line).
+- Drop the cc==870 restriction but keep the env opt-in (consumer decides per platform); parse env once (static), log once to stderr which types are unfused.
+- Do not change any other fusion.
+README addendum: decision logic with file:line, what the unfused Q4_K path computes, correctness risks per type. No builds/GPU. Time 30 min. Final ≤ 12 lines: patch file, apply --check result, kernel path for unfused quantized, risks.

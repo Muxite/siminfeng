@@ -1,0 +1,5 @@
+Created [03-unfuse-ids-by-type.patch](cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch) and added the [README addendum](cc/moe_dispatch_sm87/README.md).
+Standalone `apply --check --whitespace=error-all` passed against pinned `31288c9c6`; source remained unchanged.
+Unfused batch-one Q4_K uses **MMVQ**, at `ggml-cuda.cu:2061`, followed by separate GLU.
+Risks documented: BF16/F16 activation rounding, quantized reduction differences, bias/GLU semantics, and platform-dependent performance.
+No builds or GPU execution performed.

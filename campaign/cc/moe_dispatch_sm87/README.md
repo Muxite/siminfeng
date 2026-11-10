@@ -101,3 +101,43 @@ A combined `apply --check` also passed. Source diff checks remained clean for th
 **State/sync:** stateless; no new buffers; CUDA graphs unaffected (flag read once per process, static).
 **Tests (must run per consumer image):** (1) tg128 A/B counterbalanced vs same image without env; (2) `llama-perplexity -c 128 --chunks 8 -b 128 -ub 1` KL vs saved base logits (gate: mean KLD < 1e-3, top-1 ≥ 99%); (3) 64-token greedy generation diff; (4) nsys kernel inventory shows 2× MMF per layer-token and no dropped kernels.
 **Known counterexample/limits:** patch 02 (MMVF block 128) is unreachable when 01 is active and MMF-eligible (review finding); it is a fallback for MMF-ineligible shapes only.
+
+## J-T3b addendum: per-weight-type ID gate/up unfusion
+
+`patches/03-unfuse-ids-by-type.patch` is standalone against pinned `31288c9c66e59377f7788d920678a565bb89dd37` and **replaces 01**; do not stack it with 01 or `combined-01-02.patch`. The earlier sm_87/MMF-eligibility restrictions describe 01, not 03. Set, for example, `GGML_CUDA_J_UNFUSE_IDS_TYPES=bf16,q4_K`. Empty/unset preserves upstream behavior unless the backward-compatible numeric `GGML_CUDA_J_MMF_IDS=1` alias adds `bf16` (as before, any nonzero numeric value enables the alias). The alias is unioned with the list. There is no architecture or MMF-eligibility restriction: consumers choose types per platform, and the ordinary dispatcher chooses the existing kernel.
+
+Names match `ggml_type_name` exactly, including case (`q4_K`, `q8_0`, `bf16`); surrounding ASCII whitespace is trimmed, duplicates collapse, empty/unknown/deprecated entries are ignored. Unknown entries do not enable any type. A thread-safe function-local static parses both variables once, at the first gate/up predicate call; one stderr line lists the canonical selected types if any. No line is emitted for an empty effective selection. Set variables before process startup; changing them after initialization/capture does not reconfigure dispatch.
+
+### Decision logic and scope
+
+Unless explicitly marked **patched**, references here are original pinned-source line numbers, relative to `ref/llama.cpp`.
+
+- **Patched** `ggml/src/ggml-cuda/ggml-cuda.cu:1848` caches the type mask. The condition is ID operation AND `dst->ne[2]==1` AND selected `src0->type`. Both MMVF (`:1893`, patched) and MMVQ (`:1925`, patched) fusion predicates return false when their explicit `gate_up_glu` argument is true and the condition holds. They otherwise retain all upstream checks.
+- Original bias gate/up predicate calls at `ggml-cuda.cu:4264` / `:4278` and no-bias calls at `:4307` / `:4319` opt in (patched `:4318` / `:4332` and `:4361` / `:4373`). The scaled gate/up variants at original `:4121` / `:4215` also opt in; so does routed+shared gate/up GLU at `:3761`, preventing that earlier match from bypassing the policy. The shared ordinary matmul can still fuse independently. Shape/type/ID/GLU semantic and memory-safety matching remain upstream.
+- All other predicate callers retain the default false argument, preserving matmul+bias, scale-only, and other fusions. Ordinary `MUL_MAT` and multi-token IDs always fail the new unfusion condition. This is narrower than 01's effect on standalone matmul+bias fusion. After gate/up GLU fusion is declined, remaining upstream fusions may still combine an individual projection with its bias/scale; the gate and up projections remain separate and GLU runs independently.
+- Standalone ID dispatch at `ggml/src/ggml-cuda/ggml-cuda.cu:2057` checks small batches, then quantized type and the architecture/type MMVQ limit (`:2059`); `:2061` calls `ggml_cuda_mul_mat_vec_q` and returns. On Orin, `mmvq.cu:286` / `:292` selects the Turing-plus limit table at `:177`; Q4_K and Q8_0 use its default maximum, so batch one takes **MMVQ, not MMQ**. MMQ is considered only later at `ggml-cuda.cu:2073`. Nonquantized NVIDIA dispatch instead considers MMF at `:2078`; other platforms/shapes retain their existing fallback decisions.
+
+### What unfused Q4_K computes and correctness risks
+
+Each projection uses its own selected expert Q4_K matrix and the existing ID/slot activation addressing, computes a matrix-vector dot product, and materializes an F32 intermediate. MMVQ converts F32 activations to Q8_1 (`ggml/src/ggml-cuda/mmvq.cu:1557`); Q4_K uses `vec_dot_q4_K_q8_1` (`:54`). Batch-one unfused launch is `mul_mat_vec_q<type, c_ncols_dst, false, ...>` (`:1072`), replacing the fused two-projection launch (`:1061`). This is Q4_K-by-Q8_1 computation with F32 reduction/output, not an F32-activation tensor-core MMQ route or a conversion of weights to BF16. The two outputs feed the original GLU (and original ADD_ID/scale nodes when present), preserving gate/up roles and the graph's activation/clamp parameters. Separate calls repeat activation quantization and add intermediate writes/kernel launches.
+
+| Selected weight type | Correctness considerations |
+| --- | --- |
+| BF16 | On eligible NVIDIA shapes, standalone MMF rounds F32 activations to BF16 before MMA, unlike fused MMVF's F32 activations; activation rounding plus reduction order can change logits/routing. The old Orin qualification does not qualify other platforms/shapes. |
+| F16 | Eligible NVIDIA MMF rounds activations to F16; precision/overflow and reduction differences require validation. AMD may select MMVF instead. |
+| F32 | Existing dispatcher chooses its normal supported path; reduction/launch order and separate GLU/bias evaluation need comparison even without weight quantization. |
+| Q4_K, Q8_0 | Both retain their own quantized dot implementation and Q8_1 activation quantization through MMVQ at batch one on Orin. Fused versus separate reductions, F32 stores, compiler contraction and GLU/bias evaluation can differ numerically. Q8_0's global-fusion-off slowdown is a performance warning, not evidence that targeted unfusion is beneficial. |
+| Other recognized types | Parsing a name does not add backend kernel support. Existing dispatch/support rules apply. Quantized formats retain format-specific dot/activation handling (do not extrapolate Q4_K precision to every format); validate each supported type/platform independently. Types not eligible for upstream gate/up fusion have no new effect. |
+
+For every enabled type, compare identical-input intermediate projections, post-bias/scale GLU, teacher-forced logits/KL and routing IDs, including non-monotonic expert slots, each supported GLU variant, first execution and graph replay. Check env-off, alias-only, list+alias, nonselected types, ordinary matmul and multi-token controls. Additional materialization and platform dispatch can alter performance; the observed all-fusion-off Q4_K +14% and Q8_0 −12% screen does not measure this targeted patch.
+
+Validation: `git -C ref/llama.cpp apply --check ../../cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch` passed alone against the pinned tree. Patch whitespace and all predicate call sites were reviewed; pinned source remained read-only. No builds or GPU execution were performed, and no new numerical/performance qualification is claimed.
+
+## Qualification update (Opus, J-E007 / D027) — use patch 03
+| platform | weight type | GGML_CUDA_J_UNFUSE_IDS_TYPES | decode change | numerics |
+|---|---|---|---|---|
+| jetson-arm sm_87 | bf16 | bf16 | +19.3% | MMF bf16 activation rounding, KLD 2.7e-4 |
+| jetson-arm sm_87 | q4_K experts (mixE4K) | q4_K | **+23.6%** | identical PPL/KLD/greedy text |
+| jetson-arm sm_87 | q8_0 | q8_0 | **−6.2% (do not use)** | — |
+| x86 sm_120 | any | — | untested | — |
+Recommended Orin setting: `GGML_CUDA_J_UNFUSE_IDS_TYPES=bf16,q4_K`.

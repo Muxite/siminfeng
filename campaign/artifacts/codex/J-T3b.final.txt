@@ -1,0 +1,1382 @@
+Created [03-unfuse-ids-by-type.patch](cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch) and added the [README addendum](cc/moe_dispatch_sm87/README.md).
+Standalone `apply --check --whitespace=error-all` passed against pinned `31288c9c6`; source remained unchanged.
+Unfused batch-one Q4_K uses **MMVQ**, at `ggml-cuda.cu:2061`, followed by separate GLU.
+Risks documented: BF16/F16 activation rounding, quantized reduction differences, bias/GLU semantics, and platform-dependent performance.
+No builds or GPU execution performed.
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c351-09f7-7ad0-9cc4-e5495312371d
+--------
+user
+Execute the assignment in assignments/J-T3b-unfuse-by-type.md exactly. Read it first.
+codex
+I’ll read the assignment first, then follow its instructions and required checks.
+exec
+/bin/bash -lc 'cat assignments/J-T3b-unfuse-by-type.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Assignment J-T3b — generalize the MoE gate/up unfuse switch to a per-weight-type list (parent J-T3/D025; host jetson-arm; worker Codex)
+Pinned source ref/llama.cpp 31288c9c6 (read-only; `git -C ref/llama.cpp apply --check` allowed). Existing patch: cc/moe_dispatch_sm87/patches/01-unfuse-bf16-ids-to-mmf.patch (env GGML_CUDA_J_MMF_IDS, bf16 only, cc==870). Read cc/moe_dispatch_sm87/README.md and experiments/jetson/J-P003-nsys-quant/FINDINGS.md.
+New observation: with ALL fusion off, Q4_K-expert model decode +14% but Q8_0 −12% on Orin; fused gate/up MMVQ for Q4_K is ~18 GB/s.
+Write `cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch` (standalone, replaces 01; must apply alone to the pinned tree):
+- env `GGML_CUDA_J_UNFUSE_IDS_TYPES` = comma list of ggml type names (e.g. `bf16,q4_K`); empty/unset = upstream behaviour. Keep `GGML_CUDA_J_MMF_IDS=1` as an alias for `bf16` (backward compat with D025 runs).
+- Effect: for MUL_MAT_ID gate/up GLU fusion (and the bias variant) with dst->ne[2]==1 and src0->type in the list, decline the fusion in BOTH the MMVF predicate (ggml_cuda_should_fuse_mul_mat_vec_f) and the MMVQ fusion predicate (find the quantized counterpart, e.g. ggml_cuda_should_fuse_mul_mat_vec_q) so gate and up run as separate MUL_MAT_ID + GLU through the normal dispatcher (state which kernel the unfused quantized path uses at batch 1: MMVQ or MMQ, file:line).
+- Drop the cc==870 restriction but keep the env opt-in (consumer decides per platform); parse env once (static), log once to stderr which types are unfused.
+- Do not change any other fusion.
+README addendum: decision logic with file:line, what the unfused Q4_K path computes, correctness risks per type. No builds/GPU. Time 30 min. Final ≤ 12 lines: patch file, apply --check result, kernel path for unfused quantized, risks.
+
+exec
+/bin/bash -lc "rg --files -g AGENTS.md -g '"'!node_modules'"' -g '"'!vendor'"' .." in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+../campaign/ref/llama.cpp/AGENTS.md
+
+exec
+/bin/bash -lc 'cat cc/moe_dispatch_sm87/README.md experiments/jetson/J-P003-nsys-quant/FINDINGS.md cc/moe_dispatch_sm87/patches/01-unfuse-bf16-ids-to-mmf.patch' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# J-T3: BF16 MoE decode dispatch on sm_87
+
+Pinned source verified: `ref/llama.cpp` HEAD is `31288c9c66e59377f7788d920678a565bb89dd37`. All source references below are relative to that directory and refer to the original, unpatched line numbers. Source was read only. No builds, GPU work, or network access were performed. These are experimental candidate patches, not measured improvements.
+
+## 1. What selects the kernels
+
+**The asymmetry comes from graph fusion, not a special slow standalone gate/up dispatcher.** The fused gate/up+GLU path asks the MMVF heuristic; the ordinary NVIDIA `MUL_MAT_ID` dispatcher instead asks the MMF heuristic. Disabling only the eligible BF16 ID fusion is sufficient to send both projections through the existing MMF implementation.
+
+### Shape and architecture interpretation
+
+For gate/up, weight dimensions are `[1024,512,32,1]`; for down, `[512,1024,32,1]`. The first dimension is the reduction length, the second the output-row count, and the third the number of experts. Eight selected experts are output channels, not eight tokens. ID kernels use `dst->ne[2]` / `src1->ne[2]` for token count: `ggml/src/ggml-cuda/mmvf.cu:695-704`, `ggml/src/ggml-cuda/mmf.cu:55-69`. Thus decode has `ncols_dst=1` for both.
+
+CC is encoded as 870 for sm_87 (Ampere threshold 800): `ggml/src/ggml-cuda/common.cuh:54-66`. `ampere_mma_available` checks NVIDIA plus highest compiled architecture >=800, not just the physical CC: `ggml/src/ggml-cuda/common.cuh:369-371`. The interpretation here assumes the Orin build includes Ampere MMA device code, consistent with the observed BF16 MMF kernel.
+
+### Fused gate/up
+
+- `ggml_cuda_should_fuse_mul_mat_vec_f` requires weights F32/F16/BF16, activations/output F32, and calls `ggml_cuda_should_use_mmvf` using `src1->ne[2]` for IDs. Fusion requires exactly one token for IDs (`dst->ne[2]==1`), or one output column for ordinary matmul: `ggml/src/ggml-cuda/ggml-cuda.cu:1847-1872`.
+- MMVF requires an even reduction length, contiguous dimension zero, and higher strides divisible by twice the weight element size: `ggml/src/ggml-cuda/mmvf.cu:791-807`.
+- For BF16 NVIDIA, `src0_small = (src0_ne[1] <= 512 || src0_ne[2]*src0_ne[3] == 1)`. If small and MMF is ineligible with `mul_mat_id=false`, MMVF accepts up to `MMVF_MAX_BATCH_SIZE=8`; otherwise Ampere MMA accepts only `src0_small && ne11==1`. The later Ada/non-Ampere branches allow <=4 / <=3 respectively; the Ampere branch takes precedence on sm_87: `ggml/src/ggml-cuda/mmvf.cu:858-875`; maximum definition: `ggml/src/ggml-cuda/mmvf.cuh:3`.
+- Gate/up have 512 rows and one token, so pass. Down has 1024 rows and 32 experts, so is not small (and does not participate in this gate/up pattern).
+- The graph matches `{MUL_MAT_ID, MUL_MAT_ID, GLU}` or the bias form with two `ADD_ID`s, verifies subgraph eligibility and memory overlap safety: `ggml/src/ggml-cuda/ggml-cuda.cu:3478-3506`, with overlap implementation at `:3255-3306`. The semantic predicate requires matching weight type/shape/strides, identical activation pointer and ID tensor pointer, correct gate/up GLU inputs, both biases/scales when present, supported non-swapped GLU (SwiGLU, GEGLU, SwiGLU-OAI, SwiGLU-clamp): `:1753-1844`. Bias IDs must match their matmul IDs. Optional scale checks exist in this predicate, while the straightforward float ID fusion here is the no-scale/bias pattern.
+- Compute calls fused MMVF and skips the intermediate nodes, passing gate weights and GLU operation/limit, plus biases where present: `ggml/src/ggml-cuda/ggml-cuda.cu:4228-4275` and `:4291-4316`. Fusion computes the two reductions then `up * activation(gate)` before writing F32: `ggml/src/ggml-cuda/mmvf.cu:348-380`.
+
+### Standalone MUL_MAT_ID (down, or unfused gate/up)
+
+`ggml/src/ggml-cuda/ggml-cuda.cu:2043-2081` requires F32 activations/output. Small batches enter MMVQ for supported quantized types, or MMVF **only on AMD**. NVIDIA BF16 bypasses that vector branch. MMQ rejects BF16 (supported-type switch): `ggml/src/ggml-cuda/mmq.cu:355-398`. Next, an eligible MMF runs directly with IDs. Only if these paths fail does the synchronized sorting/cuBLAS-style fallback run (`ggml-cuda.cu:2083` onward). Sync/graph eligibility mirrors this logic at `:2012-2040`; the proposed unfusion still uses an existing graph-safe MMF path.
+
+MMF conditions (`ggml/src/ggml-cuda/mmf.cu:133-190`):
+
+- Nonquantized supported type; contiguous dimension zero; reduction length divisible by `warp_size*(4/type_size)` (BF16: 64 on Orin); higher weight strides divisible by `2*type_size` (BF16: 4 bytes).
+- Output-row count divisible by `mmf_get_rows_per_block` (32 on NVIDIA, 64 on CDNA; `mmf.cu:5-10`, `mmf.cuh:9-10`). Both 512 and 1024 qualify.
+- For IDs, at most 512 tokens for <=1024 output rows, or at most 128 tokens for >1024 rows. For non-ID MMF generally <=16 columns, with additional AMD exceptions. CDNA3 BF16 is excluded. BF16 requires Ampere MMA or AMD WMMA/MFMA availability.
+
+Consequently both gate/up and down are MMF-eligible at one token. Ordinary `MUL_MAT` instead tries MMVF first (`ggml-cuda.cu:1973-1979`); this helps explain the large non-fused vector bucket but must not be confused with NVIDIA ID dispatch.
+
+### Environment and build controls
+
+- `GGML_CUDA_DISABLE_FUSION=1` globally suppresses compute fusion (`ggml-cuda.cu:170-172`, `:3753-3755`) and fusion-related graph optimization (`:4875-4890`). It is already a broad diagnostic, but affects many other fusions. Numeric flags use `atoi != 0` (`:141-143`). Neither MMVF nor MMF's eligibility function has an upstream env override.
+- `GGML_CUDA_DISABLE_GRAPHS` disables graphs by **presence**, including value `0` (`common.cuh:1290-1293`). Keep it unset for comparisons. `GGML_CUDA_GRAPH_OPT` controls graph scheduling/optimization (`ggml-cuda.cu:4995` onward), not a direct MMF selector.
+- `GGML_CUDA_FORCE_MMQ` / `GGML_CUDA_FORCE_CUBLAS` are compile-time defines in MMQ selection (`mmq.cu:356-358`, `:418-420`), not runtime BF16 ID path switches. `GGML_CUDA_MMQ_PREC` (`mmq.cu:95`) is quantized-matmul precision; `GGML_CUDA_CUBLAS_COMPUTE_TYPE` (`ggml-cuda.cu:1695-1709`) controls cuBLAS compute, not these custom BF16 kernels.
+- No integrated-GPU or SM-count check selects MMVF versus MMF here. In fact `ggml_cuda_info().devices[id].integrated` is explicitly forced false (`ggml-cuda.cu:352`). An experiment gated on that field would never activate on this source. Both candidates therefore target `cc==870`, rather than a misleading integrated-device predicate or all CC 8.x GPUs.
+
+## 2. CSV template arguments and observed work
+
+Evidence: `experiments/jetson/J-P001-nsys-decode/stats_cuda_gpu_kern_sum.csv:2-4` and `FINDINGS.md:3-8` (relative to campaign root).
+
+| Kernel | Arguments in declaration order | Meaning |
+| --- | --- | --- |
+| `mul_mat_vec_f<__nv_bfloat16, float, 1, 256, true, false>` | `T, type_acc, ncols_dst, block_size, has_fusion, is_multi_token_id` | BF16 scalar weights; F32 accumulation; one token/output column; 256 threads (8 NVIDIA warps); fusion compiled in; ordinary/single-token ID addressing |
+| `mul_mat_vec_f<__nv_bfloat16, float, 1, 256, false, false>` | Same order | No fusion. These booleans do **not** say whether IDs are present. This kernel can receive a null or non-null ID pointer. |
+| `mul_mat_f<__nv_bfloat162, 32, 1, 4, true>` | `T, rows_per_block, cols_per_block, nwarps, has_ids` | Packed BF16 pairs; 32 output rows per block; one token column per tile; four warps (128 threads); ID-aware routing. The final `true` is IDs, **not fusion**. |
+
+Declarations: `ggml/src/ggml-cuda/mmvf.cu:8-14`, `ggml/src/ggml-cuda/mmf.cuh:48-55`. BF16 MMVF uses F32 accumulator dispatch (`mmvf.cu:608-629`). A false `is_multi_token_id` still handles IDs via runtime `ids` (`:32-40`); batch-one ID launches select this specialization at `:535-543`.
+
+MMVF launches one block per output row, selected expert slot, and token (`mmvf.cu:455-457`): gate/up grid is 512 x 8 x 1 = 4096 blocks. It minimizes `ceil(K/(2*block_size))` by a strict-improvement scan from one warp through 256 threads (`:439-451`), choosing 256 at K=1024. BF16 pairs are converted to F32 and multiplied by F32 activations (`:236-271`), with warp/shared-memory reduction at `:310-340`.
+
+MMF packs the reduction length into pairs (`mmf.cu:120-126`), uses 32-row tiles and selects warps minimizing `ceil((K/2)/(2*warp_size*nwarps))` (`mmf.cuh:665-673`). Down's K=512 therefore selects 4 warps; gate/up's K=1024 would select 8. The ID MMF grid enumerates all 32 experts, finds selected slots, and skips unused work (`mmf.cuh:98-123`, `:137-174`, `:682` onward). Batch-one uses the normal ID kernel, not compact-ID preprocessing (only >16 tokens: `mmf.cu:71`, `mmf.cuh:601-626`).
+
+The CSV reports fused BF16 MMVF 1560 calls, mean 396.534 us, 41.1%; BF16 ID MMF 1560 calls, mean 117.680 us, 12.2%. Counts equal 24 layers x 65 evaluations. Non-fused BF16 MMVF has 6305 calls, 40.2%; the template name alone cannot prove its tensors or ID presence. The gate/up vs down attribution follows the supplied findings and the source/shape match. Gate+up touch twice down's selected expert weight bytes (16 vs 8 MiB per layer); the supplied derived bandwidths are roughly 40 vs 68 GB/s. These are profiler ratios, not an apples-to-apples proof that MMF will accelerate gate/up. MMVF already has thousands of blocks; poor bandwidth/occupancy efficiency on Orin is a hypothesis, not evidence of too few blocks or a proven cause.
+
+## 3. Minimal A/B patches
+
+Both diffs apply independently to the pinned source and may be included in ONE build. Neither edits weight/ID ordering or introduces a new kernel. Both preserve upstream dispatch when unset or `0`, and accept any nonzero numeric value like existing numeric flags. Set env before starting each process; static caching means changing env after graph capture is not an A/B mechanism.
+
+### Candidate 1: `patches/01-unfuse-bf16-ids-to-mmf.patch`
+
+`GGML_CUDA_J_MMF_IDS=1` makes the float fusion predicate decline BF16, F32-input/output, batch-one `MUL_MAT_ID` on sm_87 **only when the existing ID MMF eligibility check passes**. This also declines eligible ID matmul+bias float fusion using the same predicate, so the pre-existing matmul and bias/GLU nodes execute normally. The two gate/up projections then independently take standalone MMF, followed by existing GLU. Down is already MMF. No changes to sync prediction, MMF eligibility, node contents, memory handling, or quantized fusion are necessary. It deliberately does not attempt to send fusion arguments to MMF, whose entry point has no fusion parameter (`mmf.cuh:44`).
+
+Expected trace: the fused BF16 ID vector bucket disappears for these projections; two MMF kernels plus GLU replace each fused call. Gate/up MMF should have `<__nv_bfloat162,32,1,8,true>` (K=1024), while down retains `<...,32,1,4,true>`. Extra intermediate memory traffic and kernels could erase any bandwidth benefit.
+
+### Candidate 2: `patches/02-fused-bf16-ids-block-128.patch`
+
+`GGML_CUDA_J_MMVF_128=1` caps the existing block-size search at 128 for BF16, fused gate, single-token ID launches on sm_87 with K<=1024. The `!is_multi_token_id` guard excludes multi-token launches even though those also instantiate template `ncols_dst=1`. Gate/up K=1024 chooses 128 instead of 256; each thread processes more pairs. One row per block and all fusion operations remain intact. Existing instantiations, shared-memory allocation, and reductions handle 128 already. Unfused/non-ID calls, other types/architectures, and larger reductions retain upstream settings.
+
+Expected trace: fused gate/up name becomes `<__nv_bfloat16,float,1,128,true,false>`, with the same call count. Smaller blocks may improve residency/resource use, but may also worsen performance; only measurement can decide.
+
+### Validation performed here
+
+Both commands returned exit status 0 with no diagnostics:
+
+```sh
+git -C ref/llama.cpp apply --check ../../cc/moe_dispatch_sm87/patches/01-unfuse-bf16-ids-to-mmf.patch
+git -C ref/llama.cpp apply --check ../../cc/moe_dispatch_sm87/patches/02-fused-bf16-ids-block-128.patch
+```
+
+A combined `apply --check` also passed. Source diff checks remained clean for the inspected CUDA files. Manual review covered the local code-review skill's scope, security, general, and backend checks: narrow dtype/architecture/token guards, existing supported kernels, unchanged strides/allocations/ID pointers, no new device writes or graph mutation. No compilation or numerical/performance validation is claimed; those are reserved for Opus.
+
+## 4. Correctness risks and tests for Opus
+
+1. **MMF is not merely a different summation order.** Existing MMVF expands BF16 weights to F32 and retains F32 activations (`mmvf.cu:257-268`). Existing BF16 MMF converts F32 activation pairs to BF16 before MMA (`mmf.cuh:202-226`, `convert.cuh:54-60`), with F32 accumulator tiles (`mmf.cuh:76-78`) and BF16 x BF16 -> F32 MMA (`mma.cuh:1337`). Candidate 1 preserves the intended real-number projection/GLU math but adds activation rounding as well as changing reduction order. It is not bitwise equivalent and may measurably change logits/ppl. Candidate 2 retains the original operand precision and changes only reduction partition/order. Prefer candidate 2 if strict F32-activation semantics are required.
+2. **Fusion semantics:** Candidate 1 materializes gate/up separately and uses standalone GLU; check gate/up roles, SwiGLU/nonlinear/clamp operation and parameters, and any bias ordering. Candidate 2 preserves the fused operation. Compare intermediate gate, up, and post-GLU F32 tensors on identical inputs in addition to logits. If testing beyond this no-bias Granite workload, cover eligible ADD_ID bias fusions and each supported GLU variant. Do not expect unsupported/swapped forms to be newly fused.
+3. **IDs, slots, expert weights:** MMVF selects weights using `ids[slot]` and broadcasts activations with slot modulo activation-channel count (`mmvf.cu:36-51`). MMF finds the selected slot for each expert (`mmf.cuh:137-174`) and uses it to gather input/store output. Candidate 1 relies on this existing path, including gate/up broadcast input vs down's per-slot input (`mmf.cu:55-69`). Test non-monotonic expert IDs including 0 and 31, permute unique selected slots and their associated routing weights together, and compare per-slot outputs and weighted reduction. Include both broadcast and per-slot activations. Duplicate IDs are not the Granite top-k contract; MMF's slot-map search is not a promise of duplicate-slot equivalence. Neither patch reorders routing weights.
+4. **End-to-end gate:** On the same patched build run baseline (both switches unset/0), candidate 1 only, and candidate 2 only, in separate processes with identical model/input/context/seed/KV settings and CUDA graphs enabled. Leave `GGML_CUDA_DISABLE_FUSION` and `GGML_CUDA_DISABLE_GRAPHS` unset. Enabling both selects candidate 1, leaving candidate 2 inactive for the removed fusion; this is not a useful fourth performance experiment. Verify env-off dispatch matches baseline and the intended env-on kernel signatures appear under nsys.
+5. Run the planned **ppl2** and a teacher-forced logits/top-k comparison (same token sequence, not independently sampled continuations). Record max/mean absolute and relative logit error, nonfinite counts, top-k set/rank agreement, top-1 disagreements and margins, plus ppl2 delta versus repeat-baseline noise. Use agreed numerical tolerances; do not invent a pass threshold here. Inspect routed IDs/intermediates at the first divergence, since rounding can legitimately change near-tied routing choices and amplify later differences. Check first execution and graph replay for several decode steps; include prefill/multi-token controls to verify the batch-one guards. Only after correctness passes compare unprofiled decode throughput, with repeated warm runs, and profile to confirm dispatch. No speedup or correctness result is asserted by this assignment.
+
+---
+# Component CC: `moe-gateup-mmf` (status: qualified on jetson-arm; untested elsewhere) — added by Opus after J-E005
+**What:** env-gated change to llama.cpp CUDA dispatch: for bf16 MUL_MAT_ID single-token decode, skip the fused gate/up+GLU MMVF kernel and run gate and up through MMF (tensor cores) + separate GLU. Result on Jetson Orin Nano: decode +19%, KLD 2.7e-4 (decisions/D025).
+**Integrate:** Build CC `--patch cc/moe_dispatch_sm87/patches/01-unfuse-bf16-ids-to-mmf.patch` (or `combined-01-02.patch`) on llama.cpp 31288c9c6; run with `GGML_CUDA_J_MMF_IDS=1`. Default off = upstream behaviour.
+**Applicability (declared):** weights bf16; activations/output F32; MUL_MAT_ID with dst->ne[2]==1 (one token); MMF-eligible shape (K divisible by 64, rows divisible by 32 — Granite gate/up 1024x512 ok); compute capability exactly 870 as written. Not applicable: quantized weights (MMVQ path), AMD, prefill (ne[2]>1 never fused).
+**State/sync:** stateless; no new buffers; CUDA graphs unaffected (flag read once per process, static).
+**Tests (must run per consumer image):** (1) tg128 A/B counterbalanced vs same image without env; (2) `llama-perplexity -c 128 --chunks 8 -b 128 -ub 1` KL vs saved base logits (gate: mean KLD < 1e-3, top-1 ≥ 99%); (3) 64-token greedy generation diff; (4) nsys kernel inventory shows 2× MMF per layer-token and no dropped kernels.
+**Known counterexample/limits:** patch 02 (MMVF block 128) is unreachable when 01 is active and MMF-eligible (review finding); it is a fallback for MMF-ineligible shapes only.
+# J-P003 + J-E006 fusion screen — quantized decode on Orin (image jetson-c1-p01q)
+- Q8_0 decode kernels: fused gate/up mul_mat_vec_q<Q8_0,...,fused=1> 265 µs (8.5 MB → ~32 GB/s); down 98 µs (4.25 MB → 43 GB/s); other matvec 50 µs avg.
+- mixE4K (experts Q4_K, rest Q8_0): fused gate/up mul_mat_vec_q<Q4_K(12),...,1,1> 255 µs (≈4.7 MB → ~18 GB/s); down 100 µs (≈2.4 MB → 24 GB/s). Q4_K MMVQ time ≈ Q8_0 time for half the bytes → dequant/compute-bound on Orin; explains tg mixE4K 84.7 ≈ Q8_0 83.1.
+- Screen GGML_CUDA_DISABLE_FUSION=1 (A,F,F,A; tg128 r5 steady): Q8_0 83.3/83.2 → 73.5/73.5 (−12%); mixE4K 85.0/85.0 → 96.7/97.1 (+14%). bf16 (J-E004) +14%.
+- Applicability rule (observed): the value of the MoE gate/up fusion depends on weight type x platform; a global fusion switch is wrong in both directions. Category: runtime-configuration screen; targeted patch pending (J-T3b).
+- Tool friction: `nsys stats -f csv -o` produced 0-byte CSVs after a stale .sqlite from a failed run; text output via `--force-export=true` worked. Build CC J-T1b side effect: host build/bin RUNPATH points to deleted staging dir → need LD_LIBRARY_PATH (images unaffected).
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -1857,6 +1857,12 @@
+ 
+     const int cc        = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
+     const int warp_size = ggml_cuda_info().devices[ggml_cuda_get_device()].warp_size;
++    static const bool j_mmf_ids = ggml_cuda_env_flag("GGML_CUDA_J_MMF_IDS");
++    if (j_mmf_ids && cc == 870 && is_mul_mat_id && src0->type == GGML_TYPE_BF16 &&
++        src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32 && dst->ne[2] == 1 &&
++        ggml_cuda_should_use_mmf(src0->type, cc, warp_size, src0->ne, src0->nb, src1->ne[2], /*mul_mat_id=*/true)) {
++        return false;
++    }
+     use_mul_mat_vec_f = use_mul_mat_vec_f && ggml_cuda_should_use_mmvf(src0->type, cc, warp_size, src0->ne, src0->nb, is_mul_mat_id ? src1->ne[2] : src1->ne[1]);
+ 
+     //we only support fusion for ncols_dst = 1
+
+exec
+/bin/bash -lc "git status --short; git -C ref/llama.cpp rev-parse HEAD; rg -n 'should_fuse_mul_mat_vec|MUL_MAT_ID|MMVQ|mmvq' ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu ref/llama.cpp/ggml/src/ggml-cuda.cu" in /home/muk/projects/siminfeng/campaign
+ exited 2 in 0ms:
+ M evidence/jetson-arm/claude-code.jsonl
+ M evidence/jetson-arm/opus-jetson.jsonl
+?? artifacts/codex/J-T3b.final.txt
+?? artifacts/op-0993c8d253e9/
+?? artifacts/op-0b2378f4abe0/
+?? artifacts/op-0c736ec49231/
+?? artifacts/op-0ca89a4419f0/
+?? artifacts/op-2b3bb3280cc4/
+?? artifacts/op-3bfd7ebed41c/
+?? artifacts/op-4fcad2a8c3fc/
+?? artifacts/op-5987cc628df6/
+?? artifacts/op-5b73938f96d4/
+?? artifacts/op-618b4e2971e1/
+?? artifacts/op-65dd81f725df/
+?? artifacts/op-693232812665/
+?? artifacts/op-78b4aa978c65/
+?? artifacts/op-857af278dd72/
+?? artifacts/op-85e340b50364/
+?? artifacts/op-8ce7be3a996b/
+?? artifacts/op-92f4699bc063/
+?? artifacts/op-a7f813db2760/
+?? artifacts/op-ac9e610e753c/
+?? artifacts/op-af2090f8a594/
+?? artifacts/op-b95be874fefc/
+?? artifacts/op-e148f2b2fb4a/
+?? artifacts/op-fa52e443e2ae/
+?? artifacts/op-fdf50b52bf6f/
+?? assignments/J-T3b-unfuse-by-type.md
+?? cc/build_engine/results/jetson-c1-p01q/
+?? experiments/jetson/J-E006-quant-track/
+?? experiments/jetson/J-P003-nsys-quant/
+31288c9c66e59377f7788d920678a565bb89dd37
+rg: ref/llama.cpp/ggml/src/ggml-cuda.cu: No such file or directory (os error 2)
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:35:#include "ggml-cuda/mmvq.cuh"
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1771:    const bool is_mul_mat_id  = ffn_up->op == GGML_OP_MUL_MAT_ID  && ffn_gate->op == GGML_OP_MUL_MAT_ID  && glu->op == GGML_OP_GLU;
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1847:static bool ggml_cuda_should_fuse_mul_mat_vec_f(const ggml_tensor * tensor) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1852:    const bool is_mul_mat_id = tensor->op == GGML_OP_MUL_MAT_ID;
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1867:    if (tensor->op == GGML_OP_MUL_MAT_ID && dst->ne[2] != 1) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1875:static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1885:                             dst->type == GGML_TYPE_F32 && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE;
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1897:    if (tensor->op == GGML_OP_MUL_MAT_ID && dst->ne[2] > get_mmvq_mmid_max_batch(src0->type, cc)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1909:    const ggml_op ops[] = { GGML_OP_MUL_MAT_ID, GGML_OP_MUL_MAT_ID, GGML_OP_GLU,
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1928:    // the MMVQ batch size check is done in ggml_cuda_try_fuse
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:1982:    // A transposed vector can still use MMVQ (i.e. ne01 == 1)
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2000:    if (ggml_cuda_should_use_mmvq(src0->type, cc, ne11)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2012:// [TAG_MUL_MAT_ID_CUDA_GRAPHS]
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2021:    if (dst->ne[2] <= MMVQ_MAX_BATCH_SIZE) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2023:            if (dst->ne[2] <= get_mmvq_mmid_max_batch(src0->type, cc)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2054:    // [TAG_MUL_MAT_ID_CUDA_GRAPHS]
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2056:        static_assert(MMVQ_MAX_BATCH_SIZE == MMVF_MAX_BATCH_SIZE);
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2057:        if (ne2 <= MMVQ_MAX_BATCH_SIZE) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2059:                const int mmvq_mmid_max = get_mmvq_mmid_max_batch(src0->type, cc);
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2060:                if (ne2 <= mmvq_mmid_max) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2395:        case GGML_OP_MUL_MAT_ID:
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2711:        // [TAG_MUL_MAT_ID_CUDA_GRAPHS]
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:2712:        if (node->op == GGML_OP_MUL_MAT_ID) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3479:    std::initializer_list<enum ggml_op> mul_mat_id_bias_glu_ops = { GGML_OP_MUL_MAT_ID, GGML_OP_ADD_ID, GGML_OP_MUL_MAT_ID, GGML_OP_ADD_ID, GGML_OP_GLU };
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3481:    std::initializer_list<enum ggml_op> mul_mat_id_glu_ops = { GGML_OP_MUL_MAT_ID, GGML_OP_MUL_MAT_ID, GGML_OP_GLU };
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3759:    if (node->op == GGML_OP_MUL_MAT_ID && cuda_ctx->stream_context().concurrent_events.empty() &&
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:3761:            ggml_cuda_should_fuse_mul_mat_vec_q(cgraph->nodes[i + 2]->src[1])) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4045:    for (ggml_op op : { GGML_OP_MUL_MAT, GGML_OP_MUL_MAT_ID }) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4121:                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4215:                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4264:            if (ggml_cuda_should_fuse_mul_mat_vec_f(up_n)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4278:            if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4307:            if (ggml_cuda_should_fuse_mul_mat_vec_f(up)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4319:            if (ggml_cuda_should_fuse_mul_mat_vec_q(up)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4341:    for (ggml_op op : { GGML_OP_MUL_MAT, GGML_OP_MUL_MAT_ID }) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4412:            if (ggml_cuda_should_fuse_mul_mat_vec_q(mm_node)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4429:    for (ggml_op op : { GGML_OP_MUL_MAT, GGML_OP_MUL_MAT_ID }) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4470:        if (ggml_cuda_should_fuse_mul_mat_vec_f(mm_node)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4477:        if (ggml_cuda_should_fuse_mul_mat_vec_q(mm_node)) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4895:            if (cgraph->nodes[i]->op != GGML_OP_MUL_MAT_ID) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:4899:                if (cgraph->nodes[j]->op == GGML_OP_MUL_MAT_ID && cgraph->nodes[j + 1]->op == GGML_OP_MUL_MAT_ID) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5585:        case GGML_OP_MUL_MAT_ID:
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5595:                if (op->op == GGML_OP_MUL_MAT_ID && ggml_get_op_params_i32(op, 3) == GGML_PREC_F32) {
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:5605:                    if (GGML_CUDA_CC_IS_QY2(cc) && op->op == GGML_OP_MUL_MAT_ID &&
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:6002:        case GGML_OP_MUL_MAT_ID:
+
+exec
+/bin/bash -lc "sed -n '1,65p;1847,1907p;2043,2083p;4240,4340p' ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu; sed -n '1,130p' ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu; rg -n 'get_mmvq_mmid_max_batch|quantize|vec_dot|fusion' ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cuh; rg -n 'type_name|GGML_TYPE_COUNT' ref/llama.cpp/ggml/src/ggml.c | head -20" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+#include "ggml-cuda.h"
+#include "ggml-impl.h"
+#include "ggml-backend-impl.h"
+
+#include "ggml-cuda/allreduce.cuh"
+#include "ggml-cuda/common.cuh"
+#include "ggml-cuda/acc.cuh"
+#include "ggml-cuda/add-id.cuh"
+#include "ggml-cuda/arange.cuh"
+#include "ggml-cuda/argmax.cuh"
+#include "ggml-cuda/argsort.cuh"
+#include "ggml-cuda/binbcast.cuh"
+#include "ggml-cuda/clamp.cuh"
+#include "ggml-cuda/col2im-1d.cuh"
+#include "ggml-cuda/concat.cuh"
+#include "ggml-cuda/conv-transpose-1d.cuh"
+#include "ggml-cuda/conv2d.cuh"
+#include "ggml-cuda/conv2d-dw.cuh"
+#include "ggml-cuda/conv2d-transpose.cuh"
+#include "ggml-cuda/conv3d.cuh"
+#include "ggml-cuda/convert.cuh"
+#include "ggml-cuda/count-equal.cuh"
+#include "ggml-cuda/cpy.cuh"
+#include "ggml-cuda/cross-entropy-loss.cuh"
+#include "ggml-cuda/cumsum.cuh"
+#include "ggml-cuda/diagmask.cuh"
+#include "ggml-cuda/diag.cuh"
+#include "ggml-cuda/fattn.cuh"
+#include "ggml-cuda/fwht.cuh"
+#include "ggml-cuda/getrows.cuh"
+#include "ggml-cuda/im2col.cuh"
+#include "ggml-cuda/mmf.cuh"
+#include "ggml-cuda/mmq.cuh"
+#include "ggml-cuda/mmvf.cuh"
+#include "ggml-cuda/mmvq.cuh"
+#include "ggml-cuda/moe-weighted-reduction.cuh"
+#include "ggml-cuda/norm.cuh"
+#include "ggml-cuda/opt-step-adamw.cuh"
+#include "ggml-cuda/opt-step-sgd.cuh"
+#include "ggml-cuda/out-prod.cuh"
+#include "ggml-cuda/pad.cuh"
+#include "ggml-cuda/pool2d.cuh"
+#include "ggml-cuda/pool1d.cuh"
+#include "ggml-cuda/quantize.cuh"
+#include "ggml-cuda/rope.cuh"
+#include "ggml-cuda/roll.cuh"
+#include "ggml-cuda/scale.cuh"
+#include "ggml-cuda/snake.cuh"
+#include "ggml-cuda/softcap.cuh"
+#include "ggml-cuda/softmax.cuh"
+#include "ggml-cuda/ssm-conv.cuh"
+#include "ggml-cuda/ssm-scan.cuh"
+#include "ggml-cuda/sum.cuh"
+#include "ggml-cuda/sumrows.cuh"
+#include "ggml-cuda/top-k.cuh"
+#include "ggml-cuda/mean.cuh"
+#include "ggml-cuda/tsembd.cuh"
+#include "ggml-cuda/topk-moe.cuh"
+#include "ggml-cuda/unary.cuh"
+#include "ggml-cuda/upscale.cuh"
+#include "ggml-cuda/wkv.cuh"
+#include "ggml-cuda/gla.cuh"
+#include "ggml-cuda/gated_delta_net.cuh"
+#include "ggml-cuda/dsv4-hc.cuh"
+#include "ggml-cuda/set.cuh"
+static bool ggml_cuda_should_fuse_mul_mat_vec_f(const ggml_tensor * tensor) {
+    ggml_tensor *       src0 = tensor->src[0];
+    ggml_tensor *       src1 = tensor->src[1];
+    const ggml_tensor * dst  = tensor;
+
+    const bool is_mul_mat_id = tensor->op == GGML_OP_MUL_MAT_ID;
+
+    bool use_mul_mat_vec_f =
+        (src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16 || src0->type == GGML_TYPE_BF16) &&
+        src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32;
+
+    const int cc        = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
+    const int warp_size = ggml_cuda_info().devices[ggml_cuda_get_device()].warp_size;
+    use_mul_mat_vec_f = use_mul_mat_vec_f && ggml_cuda_should_use_mmvf(src0->type, cc, warp_size, src0->ne, src0->nb, is_mul_mat_id ? src1->ne[2] : src1->ne[1]);
+
+    //we only support fusion for ncols_dst = 1
+    if (tensor->op == GGML_OP_MUL_MAT && dst->ne[1] != 1) {
+        return false;
+    }
+
+    if (tensor->op == GGML_OP_MUL_MAT_ID && dst->ne[2] != 1) {
+        return false;
+    }
+
+
+    return use_mul_mat_vec_f;
+}
+
+static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor) {
+    ggml_tensor *       src0 = tensor->src[0];
+    ggml_tensor *       src1 = tensor->src[1];
+    const ggml_tensor * dst  = tensor;
+
+    const bool bad_padding_clear = ggml_backend_buffer_get_usage(src0->buffer) == GGML_BACKEND_BUFFER_USAGE_COMPUTE &&
+                                   ggml_nbytes(src0) != ggml_backend_buffer_get_alloc_size(src0->buffer, src0) &&
+                                   src0->view_src;
+
+    bool use_mul_mat_vec_q = ggml_is_quantized(src0->type) && !bad_padding_clear && src1->type == GGML_TYPE_F32 &&
+                             dst->type == GGML_TYPE_F32 && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE;
+
+    // fusion is not universally faster on Pascal
+    const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
+    if (cc <= GGML_CUDA_CC_PASCAL) {
+        return false;
+    }
+    //we only support fusion for ncols_dst = 1
+    if (tensor->op == GGML_OP_MUL_MAT && dst->ne[1] != 1) {
+        return false;
+    }
+
+    if (tensor->op == GGML_OP_MUL_MAT_ID && dst->ne[2] > get_mmvq_mmid_max_batch(src0->type, cc)) {
+        return false;
+    }
+
+    return use_mul_mat_vec_q;
+}
+
+static bool ggml_cuda_match_shared_expert(const ggml_cgraph * graph, int routed_idx, int shared_idx) {
+    if (routed_idx + 2 >= graph->n_nodes || shared_idx + 2 >= graph->n_nodes || shared_idx < routed_idx + 3) {
+        return false;
+    }
+    const ggml_tensor * src0 = dst->src[0];
+    const ggml_tensor * src1 = dst->src[1];
+    const ggml_tensor * ids  = dst->src[2];
+
+    GGML_ASSERT(src1->type == GGML_TYPE_F32);
+    GGML_ASSERT(dst->type  == GGML_TYPE_F32);
+
+    GGML_TENSOR_BINARY_OP_LOCALS
+
+    const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
+
+    // [TAG_MUL_MAT_ID_CUDA_GRAPHS]
+    if (src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
+        static_assert(MMVQ_MAX_BATCH_SIZE == MMVF_MAX_BATCH_SIZE);
+        if (ne2 <= MMVQ_MAX_BATCH_SIZE) {
+            if (ggml_is_quantized(src0->type)) {
+                const int mmvq_mmid_max = get_mmvq_mmid_max_batch(src0->type, cc);
+                if (ne2 <= mmvq_mmid_max) {
+                    ggml_cuda_mul_mat_vec_q(ctx, src0, src1, ids, dst);
+                    return;
+                }
+            } else {
+                if (GGML_CUDA_CC_IS_AMD(cc)) {
+                    ggml_cuda_mul_mat_vec_f(ctx, src0, src1, ids, dst);
+                    return;
+                }
+            }
+        }
+
+        if (ggml_cuda_should_use_mmq(src0->type, cc, ne12, /*n_experts=*/ne02)) {
+            ggml_cuda_mul_mat_q(ctx, src0, src1, ids, dst);
+            return;
+        }
+
+        if (ggml_cuda_should_use_mmf(src0->type, cc, WARP_SIZE, src0->ne, src0->nb, src1->ne[2], /*mul_mat_id=*/true)) {
+            ggml_cuda_mul_mat_f(ctx, src0, src1, ids, dst);
+            return;
+        }
+    }
+
+    // note: this path should not be reached when recording CUDA graphs, because it requires stream synchronization
+            } else if (gate_bias_n->src[0] == cgraph->nodes[i + 2] || gate_bias_n->src[1] == cgraph->nodes[i + 2]) {
+                gate_n = cgraph->nodes[i + 2];
+                up_n   = cgraph->nodes[i];
+            } else {
+                continue;
+            }
+
+            const ggml_tensor * up_bias_tensor   = get_bias_tensor(up_bias_n, up_n, bias_op);
+            const ggml_tensor * gate_bias_tensor = get_bias_tensor(gate_bias_n, gate_n, bias_op);
+
+            if (!up_bias_tensor || !gate_bias_tensor) {
+                continue;
+            }
+
+            // we don't support repeating adds
+            if (bias_op == GGML_OP_ADD && (!ggml_are_same_shape(gate_bias_n->src[0], gate_bias_n->src[1]) ||
+                                           !ggml_are_same_shape(up_bias_n->src[0], up_bias_n->src[1]))) {
+                continue;
+            }
+
+            const ggml_tensor * src0 = up_n->src[0];
+            const ggml_tensor * src1 = up_n->src[1];
+            const ggml_tensor * ids  = up_n->src[2];
+
+            if (ggml_cuda_should_fuse_mul_mat_vec_f(up_n)) {
+                ggml_cuda_mm_fusion_args_host fusion_data{};
+                fusion_data.gate      = gate_n->src[0];
+                fusion_data.x_bias    = up_bias_tensor;
+                fusion_data.gate_bias = gate_bias_tensor;
+                fusion_data.glu_op    = ggml_get_glu_op(glu);
+                fusion_data.glu_limit = ggml_get_op_params_f32(glu, 3);
+
+                ggml_cuda_mul_mat_vec_f(*cuda_ctx, src0, src1, ids, glu, &fusion_data);
+                fused_mul_mat_vec = true;
+                fused_node_count  = 5;
+                break;
+            }
+
+            if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
+                ggml_cuda_mm_fusion_args_host fusion_data{};
+                fusion_data.gate      = gate_n->src[0];
+                fusion_data.x_bias    = up_bias_tensor;
+                fusion_data.gate_bias = gate_bias_tensor;
+                fusion_data.glu_op    = ggml_get_glu_op(glu);
+                fusion_data.glu_limit = ggml_get_op_params_f32(glu, 3);
+
+                ggml_cuda_mul_mat_vec_q(*cuda_ctx, src0, src1, ids, glu, &fusion_data);
+                fused_mul_mat_vec = true;
+                fused_node_count  = 5;
+                break;
+            }
+        } else if (ggml_cuda_can_fuse(cgraph, i, { op, op, GGML_OP_GLU }, {})) {
+            ggml_tensor * glu  = cgraph->nodes[i + 2];
+            ggml_tensor * gate = glu->src[0];
+            ggml_tensor * up   = glu->src[1];
+
+            bool ok = (gate == cgraph->nodes[i] && up == cgraph->nodes[i + 1]) ||
+                      (gate == cgraph->nodes[i + 1] && up == cgraph->nodes[i]);
+
+            if (!ok) {
+                continue;
+            }
+
+            const ggml_tensor * src0 = up->src[0];
+            const ggml_tensor * src1 = up->src[1];
+            const ggml_tensor * ids  = up->src[2];
+
+            if (ggml_cuda_should_fuse_mul_mat_vec_f(up)) {
+                ggml_cuda_mm_fusion_args_host fusion_data{};
+                fusion_data.gate      = gate->src[0];
+                fusion_data.glu_op    = ggml_get_glu_op(glu);
+                fusion_data.glu_limit = ggml_get_op_params_f32(glu, 3);
+
+                ggml_cuda_mul_mat_vec_f(*cuda_ctx, src0, src1, ids, glu, &fusion_data);
+                fused_mul_mat_vec = true;
+                fused_node_count  = 3;
+                break;
+            }
+
+            if (ggml_cuda_should_fuse_mul_mat_vec_q(up)) {
+                ggml_cuda_mm_fusion_args_host fusion_data{};
+                fusion_data.gate      = gate->src[0];
+                fusion_data.glu_op    = ggml_get_glu_op(glu);
+                fusion_data.glu_limit = ggml_get_op_params_f32(glu, 3);
+
+                ggml_cuda_mul_mat_vec_q(*cuda_ctx, src0, src1, ids, glu, &fusion_data);
+                fused_mul_mat_vec = true;
+                fused_node_count  = 3;
+                break;
+            }
+        }
+    }
+
+    if (fused_mul_mat_vec) {
+        return fused_node_count - 1;
+    }
+
+    fused_mul_mat_vec = false;
+    fused_node_count  = 0;
+
+    // mul_mat + scale + optional bias
+#include "mmvq.cuh"
+#include "quantize.cuh"
+#include "unary.cuh"
+#include "vecdotq.cuh"
+
+#include <cstdint>
+#include <type_traits>
+
+// only enabled on DGX Spark, where it is a gain on every type below. On the higher-bandwidth parts the kernel
+// has little exposed latency left to hide and the extra requests cost more than they save.
+// For perf data, see https://github.com/ggml-org/llama.cpp/pull/26705#issuecomment-5569335031
+#if __CUDA_ARCH__ == GGML_CUDA_CC_DGX_SPARK
+// returns true only for those quants that benefit from prefetch and false otherwise
+static constexpr __host__ __device__ bool mmvq_should_prefetch(ggml_type type) {
+    switch (type) {
+        case GGML_TYPE_Q4_0:
+        case GGML_TYPE_Q5_0:
+        case GGML_TYPE_Q8_0:
+        case GGML_TYPE_MXFP4:
+        case GGML_TYPE_Q3_K:
+        case GGML_TYPE_Q4_K:
+        case GGML_TYPE_Q5_K:
+        case GGML_TYPE_Q6_K:
+        case GGML_TYPE_IQ1_M:
+        case GGML_TYPE_IQ4_NL:
+        case GGML_TYPE_IQ4_XS:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static __device__ __forceinline__ void mmvq_prefetch_l2(const void * p) {
+    asm volatile("prefetch.global.L2 [%0];" :: "l"(p));
+}
+#endif
+
+typedef float (*vec_dot_q_cuda_t)(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs);
+
+static constexpr __device__ vec_dot_q_cuda_t get_vec_dot_q_cuda(ggml_type type) {
+    switch (type) {
+        case GGML_TYPE_Q1_0:    return vec_dot_q1_0_q8_1;
+        case GGML_TYPE_Q2_0:    return vec_dot_q2_0_q8_1;
+        case GGML_TYPE_Q4_0:    return vec_dot_q4_0_q8_1;
+        case GGML_TYPE_Q4_1:    return vec_dot_q4_1_q8_1;
+        case GGML_TYPE_Q5_0:    return vec_dot_q5_0_q8_1;
+        case GGML_TYPE_Q5_1:    return vec_dot_q5_1_q8_1;
+        case GGML_TYPE_Q8_0:    return vec_dot_q8_0_q8_1;
+        case GGML_TYPE_MXFP4:   return vec_dot_mxfp4_q8_1;
+        case GGML_TYPE_NVFP4:   return vec_dot_nvfp4_q8_1;
+        case GGML_TYPE_Q2_K:    return vec_dot_q2_K_q8_1;
+        case GGML_TYPE_Q3_K:    return vec_dot_q3_K_q8_1;
+        case GGML_TYPE_Q4_K:    return vec_dot_q4_K_q8_1;
+        case GGML_TYPE_Q5_K:    return vec_dot_q5_K_q8_1;
+        case GGML_TYPE_Q6_K:    return vec_dot_q6_K_q8_1;
+        case GGML_TYPE_IQ2_XXS: return vec_dot_iq2_xxs_q8_1;
+        case GGML_TYPE_IQ2_XS:  return vec_dot_iq2_xs_q8_1;
+        case GGML_TYPE_IQ2_S:   return vec_dot_iq2_s_q8_1;
+        case GGML_TYPE_IQ3_XXS: return vec_dot_iq3_xxs_q8_1;
+        case GGML_TYPE_IQ1_S:   return vec_dot_iq1_s_q8_1;
+        case GGML_TYPE_IQ1_M:   return vec_dot_iq1_m_q8_1;
+        case GGML_TYPE_IQ4_NL:  return vec_dot_iq4_nl_q8_1;
+        case GGML_TYPE_IQ4_XS:  return vec_dot_iq4_xs_q8_1;
+        case GGML_TYPE_IQ3_S:   return vec_dot_iq3_s_q8_1;
+        default:                return nullptr;
+    }
+}
+
+static constexpr __host__ __device__ int get_vdr_mmvq(ggml_type type) {
+    switch (type) {
+        case GGML_TYPE_Q1_0:    return VDR_Q1_0_Q8_1_MMVQ;
+        case GGML_TYPE_Q2_0:    return VDR_Q2_0_Q8_1_MMVQ;
+        case GGML_TYPE_Q4_0:    return VDR_Q4_0_Q8_1_MMVQ;
+        case GGML_TYPE_Q4_1:    return VDR_Q4_1_Q8_1_MMVQ;
+        case GGML_TYPE_Q5_0:    return VDR_Q5_0_Q8_1_MMVQ;
+        case GGML_TYPE_Q5_1:    return VDR_Q5_1_Q8_1_MMVQ;
+        case GGML_TYPE_Q8_0:    return VDR_Q8_0_Q8_1_MMVQ;
+        case GGML_TYPE_MXFP4:   return VDR_MXFP4_Q8_1_MMVQ;
+        case GGML_TYPE_NVFP4:   return VDR_NVFP4_Q8_1_MMVQ;
+        case GGML_TYPE_Q2_K:    return VDR_Q2_K_Q8_1_MMVQ;
+        case GGML_TYPE_Q3_K:    return VDR_Q3_K_Q8_1_MMVQ;
+        case GGML_TYPE_Q4_K:    return VDR_Q4_K_Q8_1_MMVQ;
+        case GGML_TYPE_Q5_K:    return VDR_Q5_K_Q8_1_MMVQ;
+        case GGML_TYPE_Q6_K:    return VDR_Q6_K_Q8_1_MMVQ;
+        case GGML_TYPE_IQ2_XXS: return VDR_IQ2_XXS_Q8_1_MMVQ;
+        case GGML_TYPE_IQ2_XS:  return VDR_IQ2_XS_Q8_1_MMVQ;
+        case GGML_TYPE_IQ2_S:   return VDR_IQ2_S_Q8_1_MMVQ;
+        case GGML_TYPE_IQ3_XXS: return VDR_IQ3_XXS_Q8_1_MMVQ;
+        case GGML_TYPE_IQ3_S:   return VDR_IQ3_S_Q8_1_MMVQ;
+        case GGML_TYPE_IQ4_NL:  return VDR_IQ4_NL_Q8_1_MMVQ;
+        case GGML_TYPE_IQ4_XS:  return VDR_IQ4_XS_Q8_1_MMVQ;
+        default:                return 1;
+    }
+}
+
+enum mmvq_parameter_table_id {
+    MMVQ_PARAMETERS_GENERIC = 0,
+    MMVQ_PARAMETERS_TURING,
+    MMVQ_PARAMETERS_GCN,
+    MMVQ_PARAMETERS_RDNA2,
+    MMVQ_PARAMETERS_RDNA3_0,
+    MMVQ_PARAMETERS_RDNA4,
+    MMVQ_PARAMETERS_GB10
+};
+
+static constexpr __device__ mmvq_parameter_table_id get_device_table_id() {
+#if defined(RDNA4)
+    return MMVQ_PARAMETERS_RDNA4;
+#elif defined(RDNA3_0)
+    return MMVQ_PARAMETERS_RDNA3_0;
+#elif defined(RDNA2) || defined(RDNA3_5)
+    return MMVQ_PARAMETERS_RDNA2;
+#elif defined(GCN) || defined(CDNA)
+    return MMVQ_PARAMETERS_GCN;
+#elif __CUDA_ARCH__ >= GGML_CUDA_CC_VOLTA && __CUDA_ARCH__ < GGML_CUDA_CC_AMPERE
+    return MMVQ_PARAMETERS_TURING;
+#elif __CUDA_ARCH__ == GGML_CUDA_CC_DGX_SPARK
+    return MMVQ_PARAMETERS_GB10;
+#else
+    return MMVQ_PARAMETERS_GENERIC;
+#endif
+}
+
+static __host__ mmvq_parameter_table_id get_device_table_id(int cc) {
+    if (GGML_CUDA_CC_IS_RDNA4(cc)) {
+        return MMVQ_PARAMETERS_RDNA4;
+    }
+    if (GGML_CUDA_CC_IS_RDNA3_0(cc)) {
+        return MMVQ_PARAMETERS_RDNA3_0;
+    }
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cuh:9:int get_mmvq_mmid_max_batch(ggml_type type, int cc);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cuh:12:    const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * ids, ggml_tensor * dst, const ggml_cuda_mm_fusion_args_host * fusion = nullptr);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:2:#include "quantize.cuh"
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:38:typedef float (*vec_dot_q_cuda_t)(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:40:static constexpr __device__ vec_dot_q_cuda_t get_vec_dot_q_cuda(ggml_type type) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:42:        case GGML_TYPE_Q1_0:    return vec_dot_q1_0_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:43:        case GGML_TYPE_Q2_0:    return vec_dot_q2_0_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:44:        case GGML_TYPE_Q4_0:    return vec_dot_q4_0_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:45:        case GGML_TYPE_Q4_1:    return vec_dot_q4_1_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:46:        case GGML_TYPE_Q5_0:    return vec_dot_q5_0_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:47:        case GGML_TYPE_Q5_1:    return vec_dot_q5_1_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:48:        case GGML_TYPE_Q8_0:    return vec_dot_q8_0_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:49:        case GGML_TYPE_MXFP4:   return vec_dot_mxfp4_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:50:        case GGML_TYPE_NVFP4:   return vec_dot_nvfp4_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:51:        case GGML_TYPE_Q2_K:    return vec_dot_q2_K_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:52:        case GGML_TYPE_Q3_K:    return vec_dot_q3_K_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:53:        case GGML_TYPE_Q4_K:    return vec_dot_q4_K_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:54:        case GGML_TYPE_Q5_K:    return vec_dot_q5_K_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:55:        case GGML_TYPE_Q6_K:    return vec_dot_q6_K_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:56:        case GGML_TYPE_IQ2_XXS: return vec_dot_iq2_xxs_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:57:        case GGML_TYPE_IQ2_XS:  return vec_dot_iq2_xs_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:58:        case GGML_TYPE_IQ2_S:   return vec_dot_iq2_s_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:59:        case GGML_TYPE_IQ3_XXS: return vec_dot_iq3_xxs_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:60:        case GGML_TYPE_IQ1_S:   return vec_dot_iq1_s_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:61:        case GGML_TYPE_IQ1_M:   return vec_dot_iq1_m_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:62:        case GGML_TYPE_IQ4_NL:  return vec_dot_iq4_nl_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:63:        case GGML_TYPE_IQ4_XS:  return vec_dot_iq4_xs_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:64:        case GGML_TYPE_IQ3_S:   return vec_dot_iq3_s_q8_1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:150:static constexpr __host__ __device__ int get_mmvq_mmid_max_batch_pascal_older(ggml_type type) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:177:static constexpr __host__ __device__ int get_mmvq_mmid_max_batch_turing_plus(ggml_type type) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:190:static constexpr __host__ __device__ int get_mmvq_mmid_max_batch_gcn(ggml_type type) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:213:static constexpr __host__ __device__ int get_mmvq_mmid_max_batch_cdna(ggml_type type) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:224:static constexpr __host__ __device__ int get_mmvq_mmid_max_batch_rdna1_rdna2(ggml_type type) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:240:static constexpr __host__ __device__ int get_mmvq_mmid_max_batch_rdna3(ggml_type type) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:258:static constexpr __host__ __device__ int get_mmvq_mmid_max_batch_rdna4(ggml_type type) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:285:int get_mmvq_mmid_max_batch(ggml_type type, int cc) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:292:            return get_mmvq_mmid_max_batch_turing_plus(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:294:        return get_mmvq_mmid_max_batch_pascal_older(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:300:            return get_mmvq_mmid_max_batch_rdna4(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:303:            return get_mmvq_mmid_max_batch_rdna3(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:306:            return get_mmvq_mmid_max_batch_rdna1_rdna2(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:309:            return get_mmvq_mmid_max_batch_cdna(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:312:            return get_mmvq_mmid_max_batch_gcn(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:319:    if (!ggml_is_quantized(type)) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:432:static constexpr __device__ int get_mmvq_mmid_max_batch_for_device() {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:434:    return get_mmvq_mmid_max_batch_rdna4(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:436:    return get_mmvq_mmid_max_batch_rdna3(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:438:    return get_mmvq_mmid_max_batch_rdna1_rdna2(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:440:    return get_mmvq_mmid_max_batch_cdna(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:442:    return get_mmvq_mmid_max_batch_gcn(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:446:    return get_mmvq_mmid_max_batch_turing_plus(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:448:    return get_mmvq_mmid_max_batch_pascal_older(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:486:        // nwarps=8 benefits types with simple vec_dot on RDNA4 (ncols_dst=1).
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:487:        // Types with complex vec_dot (Q3_K, IQ2_*, IQ3_*) regress due to register
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:621:template <ggml_type type, int ncols_dst, bool has_fusion, bool small_k = false, bool halve_iters = false>
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:624:        const void * vx_ptr, const void * vy_ptr, const int32_t * ids_ptr, const ggml_cuda_mm_fusion_args_device fusion, float * dst_ptr,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:643:    constexpr vec_dot_q_cuda_t vec_dot_q_cuda = get_vec_dot_q_cuda(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:650:    const bool shared_expert = has_fusion && fusion.shared_up && blockIdx.y == gridDim.y - 1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:653:        vx = fusion.shared_up;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:654:        dst = fusion.shared_dst;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:655:        stride_col_dst = fusion.shared_stride_col_dst;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:683:    if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:684:        use_gate      = fusion.gate      != nullptr;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:685:        use_bias      = fusion.x_bias    != nullptr;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:686:        use_gate_bias = fusion.gate_bias != nullptr && use_gate;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:687:        vgate         = shared_expert ? fusion.shared_gate : fusion.gate;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:688:        x_bias        = (const float *) fusion.x_bias;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:689:        gate_bias     = (const float *) fusion.gate_bias;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:690:        active_glu    = fusion.glu_op;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:691:        glu_limit     = fusion.glu_limit;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:693:            use_scale      = fusion.x_scale    != nullptr;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:694:            use_gate_scale = fusion.gate_scale != nullptr && use_gate;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:695:            x_scale        = (const float *) fusion.x_scale;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:696:            gate_scale     = (const float *) fusion.gate_scale;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:705:    if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:760:                    if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:774:                tmp[j][i] += vec_dot_q_cuda(
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:776:                if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:778:                        tmp_gate[j][i] += vec_dot_q_cuda(
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:787:    [[maybe_unused]] __shared__ float tmp_shared_gate[(has_fusion && (nwarps-1 > 0)) ? nwarps-1 : 1][ncols_dst][rows_per_cuda_block][warp_size];
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:795:                if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:818:                if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:825:            if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:833:                if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:868:    if constexpr (!has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:880:template <ggml_type type, int c_rows_per_block, bool has_fusion = false>
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:881:__launch_bounds__(get_mmvq_mmid_max_batch_for_device<type>()*ggml_cuda_get_physical_warp_size(), 1)
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:883:        const void * vx_ptr, const void * vy_ptr, const int32_t * ids_ptr, const ggml_cuda_mm_fusion_args_device fusion,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:899:    constexpr vec_dot_q_cuda_t vec_dot_q_cuda = get_vec_dot_q_cuda(type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:901:    const bool shared_expert = has_fusion && fusion.shared_up && blockIdx.y == gridDim.y - 1;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:903:        vx = fusion.shared_up;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:904:        dst = fusion.shared_dst;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:905:        stride_col_dst = fusion.shared_stride_col_dst;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:918:    if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:919:        use_gate   = fusion.gate != nullptr;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:920:        vgate      = shared_expert ? fusion.shared_gate : fusion.gate;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:921:        x_bias     = (const float *) fusion.x_bias;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:922:        gate_bias  = (const float *) fusion.gate_bias;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:923:        active_glu = fusion.glu_op;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:924:        glu_limit  = fusion.glu_limit;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:926:            x_scale    = (const float *) fusion.x_scale;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:927:            gate_scale = (const float *) fusion.gate_scale;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:959:            tmp[i] += vec_dot_q_cuda(vx, &y[kby], kbx_offset + i*stride_row_x + kbx, kqs);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:960:            if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:962:                    tmp_gate[i] += vec_dot_q_cuda(vgate, &y[kby], kbx_offset + i*stride_row_x + kbx, kqs);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:974:        if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:984:        if constexpr (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1027:    if constexpr (!has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1047:static void mul_mat_vec_q_switch_fusion(
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1048:        const void * vx, const void * vy, const int32_t * ids, const ggml_cuda_mm_fusion_args_device fusion, float * dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1056:    const bool has_fusion = fusion.gate != nullptr || fusion.x_bias != nullptr || fusion.gate_bias != nullptr ||
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1057:                            fusion.x_scale != nullptr || fusion.gate_scale != nullptr;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1059:        if (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1062:                 vx, vy, ids, fusion, dst, ncols_x, nchannels_y, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1069:    GGML_ASSERT(!has_fusion && "fusion only supported for ncols_dst=1");
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1073:        vx, vy, ids, fusion, dst, ncols_x, nchannels_y, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1080:        const void * vx, const void * vy, const int32_t * ids, const ggml_cuda_mm_fusion_args_device fusion, float * dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1089:    const dim3 block_nums(nblocks_rows, nchannels_dst + (fusion.shared_up != nullptr));
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1093:    const bool has_fusion = fusion.gate != nullptr || fusion.x_bias != nullptr || fusion.gate_bias != nullptr ||
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1094:                            fusion.x_scale != nullptr || fusion.gate_scale != nullptr;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1096:    if (has_fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1098:            vx, vy, ids, fusion, dst, ncols_x, nchannels_y, nrows_x,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1104:            vx, vy, ids, fusion, dst, ncols_x, nchannels_y, nrows_x,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1113:        const void * vx, const void * vy, const int32_t * ids, const ggml_cuda_mm_fusion_args_device fusion, float * dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1204:            vx, vy, ids, fusion, dst, ncols_x, nchannels_y_fd, nrows_x,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1226:                const std::pair<dim3, dim3> dims = calc_launch_params<type>(c_ncols_dst, nrows_x, nchannels_dst + (fusion.shared_up != nullptr),
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1228:                mul_mat_vec_q_switch_fusion<type, c_ncols_dst, c_small_k, c_halve_iters>(
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1229:                    vx, vy, ids, fusion, dst, ncols_x, nchannels_y_fd, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1246:            mul_mat_vec_q_switch_fusion<type, c_ncols_dst>(vx, vy, ids, fusion, dst, ncols_x, nchannels_y_fd, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1254:            mul_mat_vec_q_switch_fusion<type, c_ncols_dst>(vx, vy, ids, fusion, dst, ncols_x, nchannels_y_fd, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1262:            mul_mat_vec_q_switch_fusion<type, c_ncols_dst>(vx, vy, ids, fusion, dst, ncols_x, nchannels_y_fd, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1270:            mul_mat_vec_q_switch_fusion<type, c_ncols_dst>(vx, vy, ids, fusion, dst, ncols_x, nchannels_y_fd, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1278:            mul_mat_vec_q_switch_fusion<type, c_ncols_dst>(vx, vy, ids, fusion, dst, ncols_x, nchannels_y_fd, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1286:            mul_mat_vec_q_switch_fusion<type, c_ncols_dst>(vx, vy, ids, fusion, dst, ncols_x, nchannels_y_fd, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1294:            mul_mat_vec_q_switch_fusion<type, c_ncols_dst>(vx, vy, ids, fusion, dst, ncols_x, nchannels_y_fd, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1304:        const void * vx, const ggml_type type_x, const void * vy, const int32_t * ids, const ggml_cuda_mm_fusion_args_device fusion, float * dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1314:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1320:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1326:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1332:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1338:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1344:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1350:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1356:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1362:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1368:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1374:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1380:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1386:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1392:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1398:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1404:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1410:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1416:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1422:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1428:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1434:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1440:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1446:                (vx, vy, ids, fusion, dst, ncols_x, nrows_x, ncols_dst, stride_row_x, stride_col_y, stride_col_dst,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1457:        const ggml_cuda_mm_fusion_args_host * fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1481:    ggml_cuda_mm_fusion_args_device fusion_local{};
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1483:    if (fusion) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1485:        GGML_ASSERT( !ids || dst->ne[2] <= get_mmvq_mmid_max_batch(src0->type, cc));
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1487:        // Scale fusion is only allowed for NVFP4 currently as the cost of checking this at run-time in the prologue is
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1489:        GGML_ASSERT((fusion->x_scale == nullptr && fusion->gate_scale == nullptr) || src0->type == GGML_TYPE_NVFP4);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1491:        if (fusion->shared_up) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1492:            GGML_ASSERT(ids && fusion->gate && fusion->shared_gate && fusion->shared_dst);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1493:            GGML_ASSERT(!fusion->x_bias && !fusion->gate_bias && !fusion->x_scale && !fusion->gate_scale);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1495:            GGML_ASSERT(fusion->shared_up->type == src0->type && fusion->shared_gate->type == src0->type);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1496:            GGML_ASSERT(ggml_are_same_shape(fusion->shared_up, fusion->shared_gate));
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1497:            GGML_ASSERT(ggml_is_contiguous(fusion->shared_up) && ggml_is_contiguous(fusion->shared_gate));
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1498:            GGML_ASSERT(fusion->shared_up->ne[0] == ne00 && fusion->shared_up->ne[1] == ne01);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1499:            GGML_ASSERT(fusion->shared_up->nb[1] == nb01 && ggml_is_matrix(fusion->shared_up));
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1500:            GGML_ASSERT(fusion->shared_dst->type == GGML_TYPE_F32 && ggml_is_contiguous(fusion->shared_dst));
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1501:            GGML_ASSERT(fusion->shared_dst->ne[0] == ne0 && fusion->shared_dst->ne[1] == ne2);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1502:            fusion_local.shared_up   = fusion->shared_up->data;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1503:            fusion_local.shared_gate = fusion->shared_gate->data;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1504:            fusion_local.shared_dst  = (float *) fusion->shared_dst->data;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1505:            fusion_local.shared_stride_col_dst = fusion->shared_dst->nb[1] / ts_dst;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1508:        if (fusion->x_bias) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1509:            GGML_ASSERT(fusion->x_bias->type == GGML_TYPE_F32);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1510:            GGML_ASSERT(fusion->x_bias->ne[0] == dst->ne[0]);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1511:            GGML_ASSERT(!ids || fusion->x_bias->ne[1] == src0->ne[2]);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1512:            fusion_local.x_bias = fusion->x_bias->data;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1514:        if (fusion->gate) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1515:            GGML_ASSERT(fusion->gate->type == src0->type && ggml_are_same_stride(fusion->gate, src0));
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1516:            fusion_local.gate = fusion->gate->data;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1518:        if (fusion->gate_bias) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1519:            GGML_ASSERT(fusion->gate_bias->type == GGML_TYPE_F32);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1520:            GGML_ASSERT(fusion->gate_bias->ne[0] == dst->ne[0]);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1521:            GGML_ASSERT(!ids || fusion->gate_bias->ne[1] == src0->ne[2]);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1522:            fusion_local.gate_bias = fusion->gate_bias->data;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1524:        if (fusion->x_scale) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1525:            GGML_ASSERT(fusion->x_scale->type == GGML_TYPE_F32);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1526:            GGML_ASSERT(ggml_is_contiguous(fusion->x_scale));
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1527:            GGML_ASSERT(ggml_nelements(fusion->x_scale) == (ids ? src0->ne[2] : 1));
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1528:            fusion_local.x_scale = fusion->x_scale->data;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1530:        if (fusion->gate_scale) {
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1531:            GGML_ASSERT(fusion->gate_scale->type == GGML_TYPE_F32);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1532:            GGML_ASSERT(ggml_is_contiguous(fusion->gate_scale));
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1533:            GGML_ASSERT(ggml_nelements(fusion->gate_scale) == (ids ? src0->ne[2] : 1));
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1534:            fusion_local.gate_scale = fusion->gate_scale->data;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1536:        fusion_local.glu_op = fusion->glu_op;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1537:        fusion_local.glu_limit = fusion->glu_limit;
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1557:        quantize_row_q8_1_cuda(src1_d, nullptr, src1_q8_1.get(), src0->type, ne10, s11, s12, s13, ne10_padded, ne11, ne12, ne13, stream);
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1583:        src0->data, src0->type, src1_q8_1.get(), ids_d, fusion_local, dst_d, ne00,
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1612:    ggml_cuda_mm_fusion_args_device fusion_local{};
+ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu:1614:        src0_dd_i, src0->type, src1_ddq_i, nullptr, fusion_local, dst_dd_i, ne00, row_diff, src1_ncols, stride_row_x, stride_col_y, nrows_dst,
+643:static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
+645:        .type_name                = "i8",
+651:        .type_name                = "i16",
+657:        .type_name                = "i32",
+663:        .type_name                = "i64",
+669:        .type_name                = "f64",
+675:        .type_name                = "f32",
+681:        .type_name                = "f16",
+689:        .type_name                = "q1_0",
+697:        .type_name                = "q2_0",
+705:        .type_name                = "q4_0",
+713:        .type_name                = "q4_1",
+721:        .type_name                = "DEPRECATED",
+727:        .type_name                = "DEPRECATED",
+733:        .type_name                = "q5_0",
+741:        .type_name                = "q5_1",
+749:        .type_name                = "q8_0",
+757:        .type_name                = "q8_1",
+764:        .type_name                = "mxfp4",
+772:        .type_name                = "nvfp4",
+
+codex
+The fusion predicates also serve unrelated fusions, so I’ll scope the new checks to gate/up GLU calls. At batch one, unfused Q4_K uses two standalone MMVQ calls before GLU; it does not switch to MMQ.
+exec
+/bin/bash -lc "sed -n '4095,4130p;4185,4225p;3750,3775p' ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu; sed -n '177,190p;260,288p;1047,1070p' ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu; rg -n '#include <(array|string|sstream)>|ggml_type_name\\(' ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu ref/llama.cpp/ggml/src/ggml.c" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+// try and fuse nodes and return the number of nodes to skip
+static int ggml_cuda_try_fuse(ggml_backend_cuda_context * cuda_ctx, ggml_cgraph * cgraph, int i) {
+
+    if (ggml_cuda_fusion_disabled()) {
+        return 0;
+    }
+
+    ggml_tensor * node = cgraph->nodes[i];
+
+    if (node->op == GGML_OP_MUL_MAT_ID && cuda_ctx->stream_context().concurrent_events.empty() &&
+            ggml_cuda_match_shared_expert(cgraph, i, i + 3) &&
+            ggml_cuda_should_fuse_mul_mat_vec_q(cgraph->nodes[i + 2]->src[1])) {
+        const int outputs[] = { i + 2, i + 5 };
+        if (ggml_cuda_check_fusion_memory_ranges(cgraph, i, 6, outputs, 2)) {
+            ggml_tensor * routed = cgraph->nodes[i + 2];
+            ggml_tensor * shared = cgraph->nodes[i + 5];
+            const ggml_tensor * up = routed->src[1];
+            ggml_cuda_mm_fusion_args_host fusion{};
+            fusion.gate = routed->src[0]->src[0];
+            fusion.glu_op = ggml_get_glu_op(routed);
+            fusion.glu_limit = ggml_get_op_params_f32(routed, 3);
+            fusion.shared_up = shared->src[1]->src[0];
+            fusion.shared_gate = shared->src[0]->src[0];
+            fusion.shared_dst = shared;
+            ggml_cuda_mul_mat_vec_q(*cuda_ctx, up->src[0], up->src[1], up->src[2], routed, &fusion);
+            return 5;
+                const ggml_tensor * gate_scale = get_mul_mat_scale(gate_scale_n, gate_n);
+                const ggml_tensor * up_scale   = get_mul_mat_scale(up_scale_n, up_n);
+                if (!gate_scale || !up_scale) {
+                    continue;
+                }
+
+                const ggml_tensor * up_bias   = with_bias ? get_bias_tensor(up_out_n, up_scale_n, bias_op) : nullptr;
+                const ggml_tensor * gate_bias = with_bias ? get_bias_tensor(gate_out_n, gate_scale_n, bias_op) : nullptr;
+                if (with_bias && (!ggml_are_same_shape(gate_out_n->src[0], gate_out_n->src[1]) ||
+                        !ggml_are_same_shape(up_out_n->src[0], up_out_n->src[1]))) {
+                    continue;
+                }
+
+                const ggml_tensor * src0 = up_n->src[0];
+                const ggml_tensor * src1 = up_n->src[1];
+                const ggml_tensor * ids  = up_n->src[2];
+
+                ggml_cuda_mm_fusion_args_host fusion_data{};
+                fusion_data.gate       = gate_n->src[0];
+                fusion_data.x_bias     = up_bias;
+                fusion_data.gate_bias  = gate_bias;
+                fusion_data.x_scale    = up_scale;
+                fusion_data.gate_scale = gate_scale;
+                fusion_data.glu_op     = ggml_get_glu_op(glu);
+                fusion_data.glu_limit  = ggml_get_op_params_f32(glu, 3);
+
+                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
+                    ggml_cuda_mul_mat_vec_q(*cuda_ctx, src0, src1, ids, cgraph->nodes[glu_idx], &fusion_data);
+                    fused_mul_mat_vec = true;
+                    fused_node_count  = n_ops;
+                    break;
+                }
+            }
+
+            if (fused_mul_mat_vec) {
+                break;
+
+                if (!ggml_cuda_should_fuse_mul_mat(up_n, gate_n, glu,
+                        with_bias ? up_out_n : nullptr, with_bias ? gate_out_n : nullptr, up_scale_n, gate_scale_n)) {
+                    continue;
+                }
+
+                const ggml_tensor * gate_scale = get_mul_mat_id_scale(cgraph->nodes[gate_idx + 1], cgraph->nodes[gate_idx + 2],
+                        cgraph->nodes[gate_idx + 3], gate_scale_n, gate_n);
+                const ggml_tensor * up_scale = get_mul_mat_id_scale(cgraph->nodes[up_idx + 1], cgraph->nodes[up_idx + 2],
+                        cgraph->nodes[up_idx + 3], up_scale_n, up_n);
+                if (!gate_scale || !up_scale) {
+                    continue;
+                }
+
+                const ggml_tensor * up_bias   = with_bias ? get_bias_tensor(up_out_n, up_scale_n, bias_op) : nullptr;
+                const ggml_tensor * gate_bias = with_bias ? get_bias_tensor(gate_out_n, gate_scale_n, bias_op) : nullptr;
+
+                const ggml_tensor * src0 = up_n->src[0];
+                const ggml_tensor * src1 = up_n->src[1];
+                const ggml_tensor * ids  = up_n->src[2];
+
+                ggml_cuda_mm_fusion_args_host fusion_data{};
+                fusion_data.gate       = gate_n->src[0];
+                fusion_data.x_bias     = up_bias;
+                fusion_data.gate_bias  = gate_bias;
+                fusion_data.x_scale    = up_scale;
+                fusion_data.gate_scale = gate_scale;
+                fusion_data.glu_op     = ggml_get_glu_op(glu);
+                fusion_data.glu_limit  = ggml_get_op_params_f32(glu, 3);
+
+                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
+                    ggml_cuda_mul_mat_vec_q(*cuda_ctx, src0, src1, ids, cgraph->nodes[glu_idx], &fusion_data);
+                    fused_mul_mat_vec = true;
+                    fused_node_count  = n_ops;
+                    break;
+                }
+            }
+
+            if (fused_mul_mat_vec) {
+                break;
+            }
+static constexpr __host__ __device__ int get_mmvq_mmid_max_batch_turing_plus(ggml_type type) {
+    switch (type) {
+        case GGML_TYPE_IQ2_S:   return 7;
+        case GGML_TYPE_IQ3_S:   return 6;
+        case GGML_TYPE_IQ3_XXS: return 7;
+        case GGML_TYPE_MXFP4:   return 7;
+        case GGML_TYPE_NVFP4:   return 8;
+        case GGML_TYPE_Q2_K:    return 7;
+        case GGML_TYPE_Q3_K:    return 5;
+        default:                return MMVQ_MAX_BATCH_SIZE;
+    }
+}
+
+static constexpr __host__ __device__ int get_mmvq_mmid_max_batch_gcn(ggml_type type) {
+        case GGML_TYPE_IQ1_S:   return 7;
+        case GGML_TYPE_IQ1_M:   return 7;
+        case GGML_TYPE_IQ2_S:   return 4;
+        case GGML_TYPE_IQ2_XS:  return 4;
+        case GGML_TYPE_IQ2_XXS: return 4;
+        case GGML_TYPE_IQ3_S:   return 4;
+        case GGML_TYPE_IQ3_XXS: return 4;
+        case GGML_TYPE_IQ4_NL:  return 7;
+        case GGML_TYPE_IQ4_XS:  return 5;
+        case GGML_TYPE_MXFP4:   return 5;
+        case GGML_TYPE_NVFP4:   return 5;
+        case GGML_TYPE_Q3_K:    return 4;
+        case GGML_TYPE_Q4_0:    return 7;
+        case GGML_TYPE_Q4_1:    return 7;
+        case GGML_TYPE_Q4_K:    return 4;
+        case GGML_TYPE_Q5_0:    return 7;
+        case GGML_TYPE_Q5_1:    return 7;
+        case GGML_TYPE_Q5_K:    return 5;
+        case GGML_TYPE_Q6_K:    return 5;
+        case GGML_TYPE_Q8_0:    return 7;
+        default:                return MMVQ_MAX_BATCH_SIZE;
+    }
+}
+
+// Host function: returns the max batch size for the current arch+type at runtime.
+int get_mmvq_mmid_max_batch(ggml_type type, int cc) {
+    // NVIDIA: P100, Volta, Ada Lovelace, and Blackwell always use MMVQ for MUL_MAT_ID.
+    if (GGML_CUDA_CC_IS_NVIDIA(cc)) {
+        if (cc == GGML_CUDA_CC_PASCAL || cc == GGML_CUDA_CC_VOLTA || cc >= GGML_CUDA_CC_ADA_LOVELACE) {
+static void mul_mat_vec_q_switch_fusion(
+        const void * vx, const void * vy, const int32_t * ids, const ggml_cuda_mm_fusion_args_device fusion, float * dst,
+        const uint32_t ncols_x, const uint3 nchannels_y, const uint32_t stride_row_x, const uint32_t stride_col_y,
+        const uint32_t stride_col_dst, const uint3 channel_ratio, const uint32_t stride_channel_x,
+        const uint32_t stride_channel_y, const uint32_t stride_channel_dst, const uint3 sample_ratio,
+        const uint32_t stride_sample_x, const uint32_t stride_sample_y, const uint32_t stride_sample_dst,
+        const dim3 & block_nums, const dim3 & block_dims, const int nbytes_shared,
+        const uint32_t ids_stride, cudaStream_t stream) {
+
+    const bool has_fusion = fusion.gate != nullptr || fusion.x_bias != nullptr || fusion.gate_bias != nullptr ||
+                            fusion.x_scale != nullptr || fusion.gate_scale != nullptr;
+    if constexpr (c_ncols_dst == 1) {
+        if (has_fusion) {
+            const ggml_cuda_kernel_launch_params launch_params = ggml_cuda_kernel_launch_params(block_nums, block_dims, nbytes_shared, stream);
+            ggml_cuda_kernel_launch(mul_mat_vec_q<type, c_ncols_dst, true, small_k, halve_iters>, launch_params,
+                 vx, vy, ids, fusion, dst, ncols_x, nchannels_y, stride_row_x, stride_col_y, stride_col_dst,
+                 channel_ratio, stride_channel_x, stride_channel_y, stride_channel_dst,
+                 sample_ratio, stride_sample_x, stride_sample_y, stride_sample_dst, ids_stride);
+            return;
+        }
+    }
+
+    GGML_ASSERT(!has_fusion && "fusion only supported for ncols_dst=1");
+
+ref/llama.cpp/ggml/src/ggml.c:1363:const char * ggml_type_name(enum ggml_type type) {
+ref/llama.cpp/ggml/src/ggml.c:7923:            fprintf(fp, "%s (%s)|", node->name, ggml_type_name(node->type));
+ref/llama.cpp/ggml/src/ggml.c:7925:            fprintf(fp, "(%s)|", ggml_type_name(node->type));
+ref/llama.cpp/ggml/src/ggml.c:7952:            fprintf(fp, "%s (%s)|", node->name, ggml_type_name(node->type));
+ref/llama.cpp/ggml/src/ggml.c:7954:            fprintf(fp, "(%s)|", ggml_type_name(node->type));
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:76:#include <array>
+ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:92:#include <string>
+
+exec
+/bin/bash -lc "cat > /tmp/jt3b-make.py <<'PY'
+from pathlib import Path
+import difflib
+p=Path('ref/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu')
+a=p.read_text()
+helper='''// Process-wide opt-in; only gate/up GLU callers consult this policy.
+static bool ggml_cuda_j_unfuse_ids(const ggml_tensor * tensor) {
+    static const std::array<bool, GGML_TYPE_COUNT> types = [] {
+        std::array<bool, GGML_TYPE_COUNT> selected{};
+        const char * env = getenv(\"GGML_CUDA_J_UNFUSE_IDS_TYPES\");
+        const std::string list = env ? env : \"\";
+        size_t begin = 0;
+        while (begin < list.size()) {
+            const size_t end = list.find(',', begin);
+            std::string name = list.substr(begin, end == std::string::npos ? end : end - begin);
+            const size_t first = name.find_first_not_of(\" \\\\t\\\\r\\\\n\");
+            if (first "'!= std::string::npos) {
+                name = name.substr(first, name.find_last_not_of(" '"\\\\t\\\\r\\\\n\") - first + 1);
+                for (int i = 0; i < GGML_TYPE_COUNT; ++i) {
+                    const char * type_name = ggml_type_name(static_cast<ggml_type>(i));
+                    if (type_name && name == type_name && name "'!= "DEPRECATED") {
+                        selected[i] = true;
+                    }
+                }
+            }
+            if (end == std::string::npos) {
+                break;
+            }
+            begin = end + 1;
+        }
+        // Preserve the numeric flag convention used by the original BF16 switch.
+        if (ggml_cuda_env_flag("GGML_CUDA_J_MMF_IDS")) {
+            selected[GGML_TYPE_BF16] = true;
+        }
+        std::string names;
+        for (int i = 0; i < GGML_TYPE_COUNT; ++i) {
+            if (selected[i]) {
+                if (!names.empty()) {
+                    names += ",";
+                }
+                names += ggml_type_name(static_cast<ggml_type>(i));
+            }
+        }
+        if (!names.empty()) {
+            fprintf(stderr, "GGML_CUDA_J_UNFUSE_IDS_TYPES: unfusing batch-one ID gate/up GLU for %s'"\\\\n\", names.c_str());
+        }
+        return selected;
+    }();
+    return tensor->op == GGML_OP_MUL_MAT_ID && tensor->ne[2] == 1 && types[tensor->src[0]->type];
+}
+
+'''
+b=a.replace('static bool ggml_cuda_should_fuse_mul_mat_vec_f(',helper+'static bool ggml_cuda_should_fuse_mul_mat_vec_f(',1)
+for kind in ('f','q'):
+    old=f'static bool ggml_cuda_should_fuse_mul_mat_vec_{kind}(const ggml_tensor * tensor) {{'
+    new=f'''static bool ggml_cuda_should_fuse_mul_mat_vec_{kind}(const ggml_tensor * tensor, bool gate_up_glu = false) {{
+    if (gate_up_glu && ggml_cuda_j_unfuse_ids(tensor)) {{
+        return false;
+    }}
+'''
+    assert old in b
+    b=b.replace(old,new,1)
+# All up/up_n predicate calls belong to gate/up GLU, including scaled forms.
+for kind in ('f','q'):
+    for arg in ('up','up_n'):
+        b=b.replace(f'ggml_cuda_should_fuse_mul_mat_vec_{kind}({arg})',f'ggml_cuda_should_fuse_mul_mat_vec_{kind}({arg}, /*gate_up_glu=*/true)')
+b=b.replace('ggml_cuda_should_fuse_mul_mat_vec_q(cgraph->nodes[i + 2]->src[1])','ggml_cuda_should_fuse_mul_mat_vec_q(cgraph->nodes[i + 2]->src[1], /*gate_up_glu=*/true)')
+patch=''.join(difflib.unified_diff(a.splitlines(True),b.splitlines(True),fromfile='a/ggml/src/ggml-cuda/ggml-cuda.cu',tofile='b/ggml/src/ggml-cuda/ggml-cuda.cu'))
+Path('cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch').write_text(patch)
+Path('/tmp/jt3b-patched.cu').write_text(b)
+PY
+python /tmp/jt3b-make.py
+ git -C ref/llama.cpp apply --check ../../cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch" in /home/muk/projects/siminfeng/campaign
+ succeeded in 37ms:
+exec
+/bin/bash -lc "cat cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch; sed -n '1360,1370p' ref/llama.cpp/ggml/src/ggml.c; sed -n '286,308p;1067,1078p' ref/llama.cpp/ggml/src/ggml-cuda/mmvq.cu; rg -n 'ggml_cuda_j_unfuse_ids|should_fuse_mul_mat_vec_[fq].*gate_up_glu' /tmp/jt3b-patched.cu" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -1844,7 +1844,57 @@
+     return true;
+ }
+ 
+-static bool ggml_cuda_should_fuse_mul_mat_vec_f(const ggml_tensor * tensor) {
++// Process-wide opt-in; only gate/up GLU callers consult this policy.
++static bool ggml_cuda_j_unfuse_ids(const ggml_tensor * tensor) {
++    static const std::array<bool, GGML_TYPE_COUNT> types = [] {
++        std::array<bool, GGML_TYPE_COUNT> selected{};
++        const char * env = getenv("GGML_CUDA_J_UNFUSE_IDS_TYPES");
++        const std::string list = env ? env : "";
++        size_t begin = 0;
++        while (begin < list.size()) {
++            const size_t end = list.find(',', begin);
++            std::string name = list.substr(begin, end == std::string::npos ? end : end - begin);
++            const size_t first = name.find_first_not_of(" \t\r\n");
++            if (first != std::string::npos) {
++                name = name.substr(first, name.find_last_not_of(" \t\r\n") - first + 1);
++                for (int i = 0; i < GGML_TYPE_COUNT; ++i) {
++                    const char * type_name = ggml_type_name(static_cast<ggml_type>(i));
++                    if (type_name && name == type_name && name != "DEPRECATED") {
++                        selected[i] = true;
++                    }
++                }
++            }
++            if (end == std::string::npos) {
++                break;
++            }
++            begin = end + 1;
++        }
++        // Preserve the numeric flag convention used by the original BF16 switch.
++        if (ggml_cuda_env_flag("GGML_CUDA_J_MMF_IDS")) {
++            selected[GGML_TYPE_BF16] = true;
++        }
++        std::string names;
++        for (int i = 0; i < GGML_TYPE_COUNT; ++i) {
++            if (selected[i]) {
++                if (!names.empty()) {
++                    names += ",";
++                }
++                names += ggml_type_name(static_cast<ggml_type>(i));
++            }
++        }
++        if (!names.empty()) {
++            fprintf(stderr, "GGML_CUDA_J_UNFUSE_IDS_TYPES: unfusing batch-one ID gate/up GLU for %s\n", names.c_str());
++        }
++        return selected;
++    }();
++    return tensor->op == GGML_OP_MUL_MAT_ID && tensor->ne[2] == 1 && types[tensor->src[0]->type];
++}
++
++static bool ggml_cuda_should_fuse_mul_mat_vec_f(const ggml_tensor * tensor, bool gate_up_glu = false) {
++    if (gate_up_glu && ggml_cuda_j_unfuse_ids(tensor)) {
++        return false;
++    }
++
+     ggml_tensor *       src0 = tensor->src[0];
+     ggml_tensor *       src1 = tensor->src[1];
+     const ggml_tensor * dst  = tensor;
+@@ -1872,7 +1922,11 @@
+     return use_mul_mat_vec_f;
+ }
+ 
+-static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor) {
++static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor, bool gate_up_glu = false) {
++    if (gate_up_glu && ggml_cuda_j_unfuse_ids(tensor)) {
++        return false;
++    }
++
+     ggml_tensor *       src0 = tensor->src[0];
+     ggml_tensor *       src1 = tensor->src[1];
+     const ggml_tensor * dst  = tensor;
+@@ -3758,7 +3812,7 @@
+ 
+     if (node->op == GGML_OP_MUL_MAT_ID && cuda_ctx->stream_context().concurrent_events.empty() &&
+             ggml_cuda_match_shared_expert(cgraph, i, i + 3) &&
+-            ggml_cuda_should_fuse_mul_mat_vec_q(cgraph->nodes[i + 2]->src[1])) {
++            ggml_cuda_should_fuse_mul_mat_vec_q(cgraph->nodes[i + 2]->src[1], /*gate_up_glu=*/true)) {
+         const int outputs[] = { i + 2, i + 5 };
+         if (ggml_cuda_check_fusion_memory_ranges(cgraph, i, 6, outputs, 2)) {
+             ggml_tensor * routed = cgraph->nodes[i + 2];
+@@ -4118,7 +4172,7 @@
+                 fusion_data.glu_op     = ggml_get_glu_op(glu);
+                 fusion_data.glu_limit  = ggml_get_op_params_f32(glu, 3);
+ 
+-                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
++                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n, /*gate_up_glu=*/true)) {
+                     ggml_cuda_mul_mat_vec_q(*cuda_ctx, src0, src1, ids, cgraph->nodes[glu_idx], &fusion_data);
+                     fused_mul_mat_vec = true;
+                     fused_node_count  = n_ops;
+@@ -4212,7 +4266,7 @@
+                 fusion_data.glu_op     = ggml_get_glu_op(glu);
+                 fusion_data.glu_limit  = ggml_get_op_params_f32(glu, 3);
+ 
+-                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
++                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n, /*gate_up_glu=*/true)) {
+                     ggml_cuda_mul_mat_vec_q(*cuda_ctx, src0, src1, ids, cgraph->nodes[glu_idx], &fusion_data);
+                     fused_mul_mat_vec = true;
+                     fused_node_count  = n_ops;
+@@ -4261,7 +4315,7 @@
+             const ggml_tensor * src1 = up_n->src[1];
+             const ggml_tensor * ids  = up_n->src[2];
+ 
+-            if (ggml_cuda_should_fuse_mul_mat_vec_f(up_n)) {
++            if (ggml_cuda_should_fuse_mul_mat_vec_f(up_n, /*gate_up_glu=*/true)) {
+                 ggml_cuda_mm_fusion_args_host fusion_data{};
+                 fusion_data.gate      = gate_n->src[0];
+                 fusion_data.x_bias    = up_bias_tensor;
+@@ -4275,7 +4329,7 @@
+                 break;
+             }
+ 
+-            if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n)) {
++            if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n, /*gate_up_glu=*/true)) {
+                 ggml_cuda_mm_fusion_args_host fusion_data{};
+                 fusion_data.gate      = gate_n->src[0];
+                 fusion_data.x_bias    = up_bias_tensor;
+@@ -4304,7 +4358,7 @@
+             const ggml_tensor * src1 = up->src[1];
+             const ggml_tensor * ids  = up->src[2];
+ 
+-            if (ggml_cuda_should_fuse_mul_mat_vec_f(up)) {
++            if (ggml_cuda_should_fuse_mul_mat_vec_f(up, /*gate_up_glu=*/true)) {
+                 ggml_cuda_mm_fusion_args_host fusion_data{};
+                 fusion_data.gate      = gate->src[0];
+                 fusion_data.glu_op    = ggml_get_glu_op(glu);
+@@ -4316,7 +4370,7 @@
+                 break;
+             }
+ 
+-            if (ggml_cuda_should_fuse_mul_mat_vec_q(up)) {
++            if (ggml_cuda_should_fuse_mul_mat_vec_q(up, /*gate_up_glu=*/true)) {
+                 ggml_cuda_mm_fusion_args_host fusion_data{};
+                 fusion_data.gate      = gate->src[0];
+                 fusion_data.glu_op    = ggml_get_glu_op(glu);
+    return ((double)(type_traits[type].type_size))/type_traits[type].blck_size;
+}
+
+const char * ggml_type_name(enum ggml_type type) {
+    assert(type >= 0);
+    assert(type < GGML_TYPE_COUNT);
+    return type_traits[type].type_name;
+}
+
+bool ggml_is_quantized(enum ggml_type type) {
+    assert(type >= 0);
+    // NVIDIA: P100, Volta, Ada Lovelace, and Blackwell always use MMVQ for MUL_MAT_ID.
+    if (GGML_CUDA_CC_IS_NVIDIA(cc)) {
+        if (cc == GGML_CUDA_CC_PASCAL || cc == GGML_CUDA_CC_VOLTA || cc >= GGML_CUDA_CC_ADA_LOVELACE) {
+            return MMVQ_MAX_BATCH_SIZE;
+        }
+        if (cc >= GGML_CUDA_CC_TURING) {
+            return get_mmvq_mmid_max_batch_turing_plus(type);
+        }
+        return get_mmvq_mmid_max_batch_pascal_older(type);
+    }
+
+    // AMD
+    if (GGML_CUDA_CC_IS_AMD(cc)) {
+        if (GGML_CUDA_CC_IS_RDNA4(cc)) {
+            return get_mmvq_mmid_max_batch_rdna4(type);
+        }
+        if (GGML_CUDA_CC_IS_RDNA3(cc)) {
+            return get_mmvq_mmid_max_batch_rdna3(type);
+        }
+        if (GGML_CUDA_CC_IS_RDNA1(cc) || GGML_CUDA_CC_IS_RDNA2(cc)) {
+            return get_mmvq_mmid_max_batch_rdna1_rdna2(type);
+        }
+        if (GGML_CUDA_CC_IS_CDNA(cc)) {
+    }
+
+    GGML_ASSERT(!has_fusion && "fusion only supported for ncols_dst=1");
+
+    const ggml_cuda_kernel_launch_params launch_params = ggml_cuda_kernel_launch_params(block_nums, block_dims, nbytes_shared, stream);
+    ggml_cuda_kernel_launch(mul_mat_vec_q<type, c_ncols_dst, false, small_k, halve_iters>, launch_params,
+        vx, vy, ids, fusion, dst, ncols_x, nchannels_y, stride_row_x, stride_col_y, stride_col_dst,
+        channel_ratio, stride_channel_x, stride_channel_y, stride_channel_dst,
+        sample_ratio, stride_sample_x, stride_sample_y, stride_sample_dst, ids_stride);
+}
+
+template <ggml_type type>
+1848:static bool ggml_cuda_j_unfuse_ids(const ggml_tensor * tensor) {
+1893:static bool ggml_cuda_should_fuse_mul_mat_vec_f(const ggml_tensor * tensor, bool gate_up_glu = false) {
+1894:    if (gate_up_glu && ggml_cuda_j_unfuse_ids(tensor)) {
+1925:static bool ggml_cuda_should_fuse_mul_mat_vec_q(const ggml_tensor * tensor, bool gate_up_glu = false) {
+1926:    if (gate_up_glu && ggml_cuda_j_unfuse_ids(tensor)) {
+3815:            ggml_cuda_should_fuse_mul_mat_vec_q(cgraph->nodes[i + 2]->src[1], /*gate_up_glu=*/true)) {
+4175:                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n, /*gate_up_glu=*/true)) {
+4269:                if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n, /*gate_up_glu=*/true)) {
+4318:            if (ggml_cuda_should_fuse_mul_mat_vec_f(up_n, /*gate_up_glu=*/true)) {
+4332:            if (ggml_cuda_should_fuse_mul_mat_vec_q(up_n, /*gate_up_glu=*/true)) {
+4361:            if (ggml_cuda_should_fuse_mul_mat_vec_f(up, /*gate_up_glu=*/true)) {
+4373:            if (ggml_cuda_should_fuse_mul_mat_vec_q(up, /*gate_up_glu=*/true)) {
+
+exec
+/bin/bash -lc "cat >> cc/moe_dispatch_sm87/README.md <<'EOF'
+
+## J-T3b addendum: per-weight-type ID gate/up unfusion
+
+"'`patches/03-unfuse-ids-by-type.patch` is standalone against pinned `31288c9c66e59377f7788d920678a565bb89dd37` and **replaces 01**; do not stack it with 01 or `combined-01-02.patch`. The earlier sm_87/MMF-eligibility restrictions describe 01, not 03. Set, for example, `GGML_CUDA_J_UNFUSE_IDS_TYPES=bf16,q4_K`. Empty/unset preserves upstream behavior unless the backward-compatible numeric `GGML_CUDA_J_MMF_IDS=1` alias adds `bf16` (as before, any nonzero numeric value enables the alias). The alias is unioned with the list. There is no architecture or MMF-eligibility restriction: consumers choose types per platform, and the ordinary dispatcher chooses the existing kernel.
+
+Names match `ggml_type_name` exactly, including case (`q4_K`, `q8_0`, `bf16`); surrounding ASCII whitespace is trimmed, duplicates collapse, empty/unknown/deprecated entries are ignored. Unknown entries do not enable any type. A thread-safe function-local static parses both variables once, at the first gate/up predicate call; one stderr line lists the canonical selected types if any. No line is emitted for an empty effective selection. Set variables before process startup; changing them after initialization/capture does not reconfigure dispatch.
+
+### Decision logic and scope
+
+Unless explicitly marked **patched**, references here are original pinned-source line numbers, relative to `ref/llama.cpp`.
+
+- **Patched** `ggml/src/ggml-cuda/ggml-cuda.cu:1848` caches the type mask. The condition is ID operation AND `dst->ne[2]==1` AND selected `src0->type`. Both MMVF (`:1893`, patched) and MMVQ (`:1925`, patched) fusion predicates return false when their explicit `gate_up_glu` argument is true and the condition holds. They otherwise retain all upstream checks.
+- Original bias gate/up predicate calls at `ggml-cuda.cu:4264` / `:4278` and no-bias calls at `:4307` / `:4319` opt in (patched `:4318` / `:4332` and `:4361` / `:4373`). The scaled gate/up variants at original `:4121` / `:4215` also opt in; so does routed+shared gate/up GLU at `:3761`, preventing that earlier match from bypassing the policy. The shared ordinary matmul can still fuse independently. Shape/type/ID/GLU semantic and memory-safety matching remain upstream.
+- All other predicate callers retain the default false argument, preserving matmul+bias, scale-only, and other fusions. Ordinary `MUL_MAT` and multi-token IDs always fail the new unfusion condition. This is narrower than 01'"'s effect on standalone matmul+bias fusion. After gate/up GLU fusion is declined, remaining upstream fusions may still combine an individual projection with its bias/scale; the gate and up projections remain separate and GLU runs independently.
+- Standalone ID dispatch at "'`ggml/src/ggml-cuda/ggml-cuda.cu:2057` checks small batches, then quantized type and the architecture/type MMVQ limit (`:2059`); `:2061` calls `ggml_cuda_mul_mat_vec_q` and returns. On Orin, `mmvq.cu:286` / `:292` selects the Turing-plus limit table at `:177`; Q4_K and Q8_0 use its default maximum, so batch one takes **MMVQ, not MMQ**. MMQ is considered only later at `ggml-cuda.cu:2073`. Nonquantized NVIDIA dispatch instead considers MMF at `:2078`; other platforms/shapes retain their existing fallback decisions.
+
+### What unfused Q4_K computes and correctness risks
+
+Each projection uses its own selected expert Q4_K matrix and the existing ID/slot activation addressing, computes a matrix-vector dot product, and materializes an F32 intermediate. MMVQ converts F32 activations to Q8_1 (`ggml/src/ggml-cuda/mmvq.cu:1557`); Q4_K uses `vec_dot_q4_K_q8_1` (`:54`). Batch-one unfused launch is `mul_mat_vec_q<type, c_ncols_dst, false, ...>` (`:1072`), replacing the fused two-projection launch (`:1061`). This is Q4_K-by-Q8_1 computation with F32 reduction/output, not an F32-activation tensor-core MMQ route or a conversion of weights to BF16. The two outputs feed the original GLU (and original ADD_ID/scale nodes when present), preserving gate/up roles and the graph'"'s activation/clamp parameters. Separate calls repeat activation quantization and add intermediate writes/kernel launches.
+
+| Selected weight type | Correctness considerations |
+| --- | --- |
+| BF16 | On eligible NVIDIA shapes, standalone MMF rounds F32 activations to BF16 before MMA, unlike fused MMVF's F32 activations; activation rounding plus reduction order can change logits/routing. The old Orin qualification does not qualify other platforms/shapes. |
+| F16 | Eligible NVIDIA MMF rounds activations to F16; precision/overflow and reduction differences require validation. AMD may select MMVF instead. |
+| F32 | Existing dispatcher chooses its normal supported path; reduction/launch order and separate GLU/bias evaluation need comparison even without weight quantization. |
+| Q4_K, Q8_0 | Both retain their own quantized dot implementation and Q8_1 activation quantization through MMVQ at batch one on Orin. Fused versus separate reductions, F32 stores, compiler contraction and GLU/bias evaluation can differ numerically. Q8_0's global-fusion-off slowdown is a performance warning, not evidence that targeted unfusion is beneficial. |
+| Other recognized types | Parsing a name does not add backend kernel support. Existing dispatch/support rules apply. Quantized formats retain format-specific dot/activation handling (do not extrapolate Q4_K precision to every format); validate each supported type/platform independently. Types not eligible for upstream gate/up fusion have no new effect. |
+
+For every enabled type, compare identical-input intermediate projections, post-bias/scale GLU, teacher-forced logits/KL and routing IDs, including non-monotonic expert slots, each supported GLU variant, first execution and graph replay. Check env-off, alias-only, list+alias, nonselected types, ordinary matmul and multi-token controls. Additional materialization and platform dispatch can alter performance; the observed all-fusion-off Q4_K +14% and Q8_0 −12% screen does not measure this targeted patch.
+
+Validation: "'`git -C ref/llama.cpp apply --check ../../cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch` passed alone against the pinned tree. Patch whitespace and all predicate call sites were reviewed; pinned source remained read-only. No builds or GPU execution were performed, and no new numerical/performance qualification is claimed.
+EOF
+ git -C ref/llama.cpp apply --check --whitespace=error-all ../../cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch
+ git diff --check -- cc/moe_dispatch_sm87/README.md
+ git -C ref/llama.cpp diff --exit-code -- ggml/src/ggml-cuda/ggml-cuda.cu' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+codex
+Created [03-unfuse-ids-by-type.patch](cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch) and added the [README addendum](cc/moe_dispatch_sm87/README.md).
+Standalone `apply --check --whitespace=error-all` passed against pinned `31288c9c6`; source remained unchanged.
+Unfused batch-one Q4_K uses **MMVQ**, at `ggml-cuda.cu:2061`, followed by separate GLU.
+Risks documented: BF16/F16 activation rounding, quantized reduction differences, bias/GLU semantics, and platform-dependent performance.
+No builds or GPU execution performed.
+tokens used
+37,166
