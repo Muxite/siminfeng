@@ -1,0 +1,630 @@
+<title>Inference Factory Ledger</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab ledger — one reading column with wide evidence tables; status encoded as chips, predictions as a hit/miss register */
+:root{
+  --paper:#f6f7f4; --ink:#1d2421; --muted:#5b6660; --rule:#d5dbd6; --panel:#ffffff;
+  --accent:#2f6f5e; --accent-soft:#e3efe9;
+  --have:#2f6f5e; --now:#b5531c; --next:#5a5f9a; --no:#8a8f8c;
+  --hit:#2f6f5e; --miss:#b5531c;
+  --f-display:"Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-body:"Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --paper:#121614; --ink:#e4e9e5; --muted:#9aa59f; --rule:#2c3430; --panel:#181d1a;
+    --accent:#7cc4ad; --accent-soft:#1f2c27; --have:#7cc4ad; --now:#f0955e; --next:#a3a8e6; --no:#7d8481; --hit:#7cc4ad; --miss:#f0955e; color-scheme:dark; }
+}
+:root[data-theme="dark"]{ --paper:#121614; --ink:#e4e9e5; --muted:#9aa59f; --rule:#2c3430; --panel:#181d1a;
+  --accent:#7cc4ad; --accent-soft:#1f2c27; --have:#7cc4ad; --now:#f0955e; --next:#a3a8e6; --no:#7d8481; --hit:#7cc4ad; --miss:#f0955e; color-scheme:dark; }
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:15px/1.6 var(--f-body);margin:0;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+.wrap{max-width:1040px;margin:0 auto;padding-block:40px 80px}
+.col{max-width:68ch}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.2;margin:0}
+h1{font-size:clamp(28px,4vw,40px);font-weight:700;letter-spacing:-.01em}
+h2{font-size:22px;font-weight:650;margin-top:56px;padding-top:18px;border-top:1px solid var(--rule)}
+h3{font-size:16px;font-weight:650;margin-top:22px}
+p{margin:10px 0}
+.eyebrow{font:600 12px/1.4 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.meta{color:var(--muted);font-size:13px;margin-top:8px}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+.lede{font-size:17px;margin-top:14px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:18px}
+.stat{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.stat .n{font:600 26px/1.1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--accent)}
+.stat .l{font-size:13.5px}
+.stat .s{font-size:12px;color:var(--muted)}
+.tbl{overflow-x:auto;margin-top:12px;border:1px solid var(--rule);border-radius:6px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font:600 11.5px/1.3 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--accent-soft)}
+tr:last-child td{border-bottom:0}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip{display:inline-block;font:600 11px/1 var(--f-mono);letter-spacing:.05em;text-transform:uppercase;padding:4px 7px;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.have{color:var(--have)} .now{color:var(--now)} .next{color:var(--next)} .no{color:var(--no)}
+.hit{color:var(--hit)} .miss{color:var(--miss)}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:13px;color:var(--muted);align-items:center}
+.two{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));margin-top:12px}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:14px 18px}
+.card ul{margin:8px 0 0;padding-left:18px} .card li{margin:4px 0}
+.bar{display:flex;height:12px;border-radius:2px;overflow:hidden;margin:8px 0 4px;border:1px solid var(--rule)}
+.bar span{display:block}
+small,.small{font-size:12.5px;color:var(--muted)}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Campaign c1 · jetson-arm lane · branch jetson/c1</div>
+  <h1>Inference Factory Ledger</h1>
+  <p class="meta">State at 2026-11-10 05:40 UTC · Orin Nano 8 GB (sm_87, L4T R36.5.2) · llama.cpp pin 31288c9c6, upstream cf34d311 · evidence in <code>campaign/decisions/D021–D030</code>, <code>experiments/jetson/</code></p>
+  <p class="lede col">What real inference-improvement work on a small unified-memory board taught us to build, reuse, change or avoid. Every number below comes from a recorded run; anything pending or contaminated is marked.</p>
+
+  <div class="grid">
+    <div class="stat"><span class="n">+19.3%</span><span class="l">bf16 decode, MoE gate/up routed to tensor-core kernel</span><span class="s">D025 · 50.3 → 60.1 t/s · KLD 2.7e-4</span></div>
+    <div class="stat"><span class="n">+23.6%</span><span class="l">Q4_K-expert decode, outputs byte-identical</span><span class="s">D027 · 85.0 → 105.2 t/s · same ppl, KLD, text</span></div>
+    <div class="stat"><span class="n">20.8 GiB</span><span class="l">model running on 7.4 GiB shared DRAM</span><span class="s">D029/D030 · 1.26–1.37 t/s decode, NVMe-bound</span></div>
+    <div class="stat"><span class="n">0 runs</span><span class="l">the llama.cpp default completes on that model</span><span class="s">auto load mode drops mmap on iGPUs; watchdog stopped it at 7 s</span></div>
+  </div>
+
+  <h2>Major findings</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Finding</th><th>Evidence</th><th>Class</th></tr></thead>
+    <tbody>
+      <tr><td>Decode on Orin is GPU-kernel bound, not launch bound. CUDA graphs are already on; bf16 matvec is 81% of GPU time.</td><td class="num">J-P001</td><td>profile</td></tr>
+      <tr><td>The fused MoE gate/up kernel is the slow one: ≈40 GB/s against ≈68 GB/s for the unfused down projection on the same weights.</td><td class="num">J-P001</td><td>profile</td></tr>
+      <tr><td>Whether to fuse depends on weight type × platform: unfusing helps bf16 (+19%) and Q4_K (+24%) but hurts Q8_0 (−6%) on Orin. A global switch is wrong both ways.</td><td class="num">D027</td><td>code gain</td></tr>
+      <tr><td>Q4_K experts were no faster than Q8_0 despite half the bytes: the fused Q4_K kernel ran at ≈18 GB/s (dequant/compute bound). After the fix the smaller model is also the faster one.</td><td class="num">J-P003, D027</td><td>profile + gain</td></tr>
+      <tr><td>Over memory, decode is bound by NVMe access pattern and hit rate: 52 GiB read for 96 tokens, ≈20 KB per read, refault storms, zram swapping.</td><td class="num">D029</td><td>observation</td></tr>
+      <tr><td>Upstream's expert cache reaches a 64% hit rate at 2 GiB yet makes decode 17–23% slower on unified memory: misses still fault from NVMe, then get copied, and the cache's DRAM is taken from the page cache.</td><td class="num">D030</td><td>placement</td></tr>
+      <tr><td>Routing has strong temporal locality: at ~12.7% capacity LRU serves 62% of decode requests (mean of 4 workloads), the offline oracle 80%.</td><td class="num">replay sweep</td><td>simulation</td></tr>
+      <tr><td>A static hot-expert set built from other workloads barely beats random: 16.6% decode hits at 12.7% capacity (uniform ≈ 12.7%). Within one workload the top 10% of experts serve ≈55% of requests, so hot sets exist but are workload-specific. Recency and online adaptation win over one-time placement.</td><td class="num">replay sweep, routing stats</td><td>simulation</td></tr>
+      <tr><td>Upstream (Nov 8) decodes ≈9% faster than the pin on the over-memory model with the same tool and flags. <em>Preliminary: half of the counterbalanced runs, simulator running at low priority.</em></td><td class="num">cmp sweep</td><td>engine version</td></tr>
+      <tr><td>A container memory cap does not bound CUDA allocations on Tegra: 1.5 GiB allocated under a 1 GiB cap in 5/5 runs, cgroup counted ≈0.6 GiB.</td><td class="num">D028</td><td>isolation</td></tr>
+      <tr><td>llama.cpp sizes context from free device memory; on Tegra that is free system DRAM, so a 24-token test took a 45k context and ~5 GB.</td><td class="num">D023</td><td>memory fit</td></tr>
+      <tr><td>Build CC binaries are not bit-reproducible across attempts (embedded paths); identical behaviour (ppl 7.5479 both). ccache fix made rebuilds 22× faster.</td><td class="num">D026</td><td>build</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>What has to be built</h2>
+  <div class="legend">
+    <span class="chip have">have</span> exercised, evidence
+    <span class="chip now">now</span> blocks the over-memory goal
+    <span class="chip next">next</span> valuable, not blocking
+    <span class="chip no">rejected</span> with a reason
+  </div>
+
+  <h3>Builders and build tooling</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Item</th><th>Status</th><th>Why / note</th></tr></thead>
+    <tbody>
+      <tr><td>Build CC: identified source + patch → native image + build record, amd64 and Jetson targets</td><td><span class="chip have">have</span></td><td>Jetson builds natively with JetPack, packages on l4t-cuda runtime; failures recorded</td></tr>
+      <tr><td>ccache with stable base dir</td><td><span class="chip have">have</span></td><td>53 min → 2.4 min rebuilds (D026)</td></tr>
+      <tr><td>Reproducible builds (<code>-ffile-prefix-map</code>, <code>SOURCE_DATE_EPOCH</code>, BuildKit timestamp rewrite)</td><td><span class="chip next">next</span></td><td>until then identity = record + functional check, never binary hash</td></tr>
+      <tr><td>Upstream tracking: pinned worktrees per candidate base, weekly PR scan</td><td><span class="chip have">have</span></td><td>pin is 519 commits behind; upstream merged the moe-cache series we needed</td></tr>
+      <tr><td>Converter venv, stdlib-first Python tools</td><td><span class="chip have">have</span></td><td>system numpy is broken on the Jetson</td></tr>
+      <tr><td>Nix flake (Strata style)</td><td><span class="chip no">rejected</span></td><td>x86_64-only; JetPack is apt/L4T-bound</td></tr>
+      <tr><td>Building open PR #31469 on Jetson</td><td><span class="chip no">rejected</span></td><td>discrete-GPU design, custom architecture, needs liburing; only its ideas transfer</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Tools agents invoke</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Item</th><th>Status</th><th>Why / note</th></tr></thead>
+    <tbody>
+      <tr><td><code>run_op</code> recorded commands, per-host evidence streams</td><td><span class="chip have">have</span></td><td>found and fixed a non-UTF-8 crash (D021)</td></tr>
+      <tr><td><code>gguf_manifest</code> (tensor-content identity) and <code>gguf_layout</code> (per-expert bytes and offsets)</td><td><span class="chip have">have</span></td><td>exposed file-hash ≠ tensor-hash across hosts; gave 1.92 MB/expert, 615 MB routed per token</td></tr>
+      <tr><td>Generic routing-trace capture with completion footer</td><td><span class="chip have">have</span></td><td>4 workloads, 1,197 tokens on the 20.8 GiB model</td></tr>
+      <tr><td>Expert-cache replay simulator (LRU, LFU, decay, static profile, offline oracle)</td><td><span class="chip have">have</span></td><td>pure Python; slow on Belady → port hot loop or sample</td></tr>
+      <tr><td>Guarded over-memory runner (<code>om_run</code>) + sequential build queue</td><td><span class="chip have">have</span></td><td>keeps compiles out of timing windows</td></tr>
+      <tr><td>Kernel micro-benchmark screen (<code>test-backend-ops perf</code>) per type, shape, fusion</td><td><span class="chip now">now</span></td><td>would have found the per-type fusion rule in minutes; required before porting rules to new hardware</td></tr>
+      <tr><td>Acceptance gate: median per-round ratio &gt; max(3%, 2× A/A gap), byte-identical auto-accept, else KL gate</td><td><span class="chip next">next</span></td><td>pattern from Strata's autotune</td></tr>
+      <tr><td>Launch identity (effective config/env per attempt) and CUDA register-spill check in the build gate</td><td><span class="chip next">next</span></td><td>Strata patterns</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Profiling, tracing, observability</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Item</th><th>Status</th><th>Why / note</th></tr></thead>
+    <tbody>
+      <tr><td>nsys timelines and kernel inventory (sm_87)</td><td><span class="chip have">have</span></td><td>stale .sqlite gives empty CSV; force export</td></tr>
+      <tr><td>Resource telemetry with explicit scopes: tegrastats, /proc, cgroup, sysfs, nvml</td><td><span class="chip have">have</span></td><td>unavailable-with-reason, never false zeros, never summed across scopes</td></tr>
+      <tr><td>I/O and fault telemetry: NVMe MiB/s, IOs, major faults, refaults, zram swap</td><td><span class="chip have">have</span></td><td>made the D029 diagnosis possible</td></tr>
+      <tr><td>Safety watchdog that kills only the owned run</td><td><span class="chip have">have</span></td><td>its kill path was broken under <code>sg</code>; fixed and tested live</td></tr>
+      <tr><td>Quality: smoke ppl, paired KL, decode-path (<code>-ub 1</code>) KL</td><td><span class="chip have">have</span></td><td>standard ppl cannot see decode-kernel changes</td></tr>
+      <tr><td>Engine-internal counters (cache hits, uploads, stall time) exposed per run</td><td><span class="chip now">now</span></td><td>upstream prints them only at <code>-lv 4</code>; our patches add JSON stats</td></tr>
+      <tr><td>NVMe ceiling (fio on the model file, fault-size to expert-size reads)</td><td><span class="chip now">now</span></td><td>queued; tells how much access-pattern headroom exists</td></tr>
+      <tr><td>Quality reference for a model that never fits</td><td><span class="chip now">now</span></td><td>placement-invariant reference run + resident smaller quant</td></tr>
+      <tr><td>Hardware counters on Jetson (ncu)</td><td><span class="chip no">rejected</span></td><td>admin-only profiling; derived bytes/time works instead</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Components (engine code with declared applicability)</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Item</th><th>Status</th><th>Why / note</th></tr></thead>
+    <tbody>
+      <tr><td>MoE gate/up unfuse by weight type (patch 03)</td><td><span class="chip have">have</span></td><td>Orin: use bf16,q4_K; never q8_0. x86 untested (request R1)</td></tr>
+      <tr><td>Static hot-expert pinning from a routing profile (<code>--moe-cache-profile</code>)</td><td><span class="chip next">next</span></td><td>patch written; de-prioritised: replay shows cross-workload profiles barely beat random</td></tr>
+      <tr><td>UMA de-duplication: release page-cache copy of cached experts</td><td><span class="chip now">now</span></td><td>patch written, not yet built</td></tr>
+      <tr><td>Direct-I/O cache fill (large aligned reads, no page-cache copy)</td><td><span class="chip now">now</span></td><td>Codex writing it</td></tr>
+      <tr><td>Zero-copy hot set (GPU reads pinned host pages in place)</td><td><span class="chip next">next</span></td><td>the full UMA answer to D030</td></tr>
+      <tr><td>Router-aware prefetch of next-layer experts</td><td><span class="chip next">next</span></td><td>needs trace-driven predictor first</td></tr>
+      <tr><td>GPU memory budget shim (x86)</td><td><span class="chip next">next</span></td><td>on Tegra llama.cpp reads /proc/meminfo, so faking cudaMemGetInfo misses auto-fit</td></tr>
+      <tr><td>Hybrid hit/miss dispatch (x86 harness)</td><td><span class="chip no">rejected</span></td><td>for Jetson: no PCIe to avoid, weak CPU</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Labs, isolation, Manager</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Item</th><th>Status</th><th>Why / note</th></tr></thead>
+    <tbody>
+      <tr><td>Admission by declared host capabilities: accepted / rejected / needs information, hashed records</td><td><span class="chip have">have</span></td><td>live on Jetson; amd64 image rejected for platform and arch</td></tr>
+      <tr><td>Sandbox kill, runner death, reconcile, new attempt</td><td><span class="chip have">have</span></td><td>interrupted attempts never pass; evidence stays hash-valid</td></tr>
+      <tr><td>Platform-specific GPU request (Jetson needs <code>NVIDIA_VISIBLE_DEVICES</code>)</td><td><span class="chip have">have</span></td><td>without it CUDA reports a misleading driver error (D022)</td></tr>
+      <tr><td>Memory budgets declared with their real guarantee</td><td><span class="chip now">now</span></td><td>on Tegra a container cap is not a GPU budget (D028)</td></tr>
+      <tr><td>Off-host evidence endpoint</td><td><span class="chip next">next</span></td><td>today git only: survives sandbox loss, not host loss</td></tr>
+      <tr><td>Clock pinning for timing windows</td><td><span class="chip next">next</span></td><td>needs owner sudo; until then discard the first sample and interleave arms</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Methodologies that held up</h2>
+  <div class="two">
+    <div class="card"><h3 style="margin-top:0">Measurement</h3><ul>
+      <li>Same image, environment switch per arm: isolates the code path from build noise.</li>
+      <li>Counterbalanced ABBA, two or more runs per arm, drop the first sample (GPU clock ramp), report steady mean.</li>
+      <li>A/A before trusting a delta: spread was ≤0.3 t/s at 50–100 t/s, so +10 t/s effects are unambiguous.</li>
+      <li>Keep compiles, simulators and downloads out of timing windows; mark contaminated runs instead of dropping them.</li>
+    </ul></div>
+    <div class="card"><h3 style="margin-top:0">Quality</h3><ul>
+      <li>Decode-only kernel changes need <code>-ub 1</code> perplexity and KL against saved base logits.</li>
+      <li>Scale every KL against a known reference (Q8_0 vs bf16: 3.4e-3).</li>
+      <li>Distinguish byte-identical (quantized unfuse) from small rounding change (bf16 MMF).</li>
+    </ul></div>
+    <div class="card"><h3 style="margin-top:0">Platform hygiene</h3><ul>
+      <li>On shared memory, pin every free-memory-derived default (<code>-c</code>, load mode).</li>
+      <li>A fair over-memory baseline is what a competent user runs (<code>-lm mmap</code>, <code>-ncmoe</code>), with the default's failure reported separately.</li>
+      <li>Per-component applicability tables: weight type × compute capability × batch.</li>
+    </ul></div>
+    <div class="card"><h3 style="margin-top:0">Process</h3><ul>
+      <li>Profile → cheap screen with an existing switch → targeted patch → counterbalanced A/B → KL → independent review → kernel inventory.</li>
+      <li>Search upstream before building: the moe-cache series landed days before we needed it.</li>
+      <li>Never stage a directory a running job writes to (a 1.4 GB archive nearly reached GitHub, D024).</li>
+    </ul></div>
+  </div>
+
+  <h2>Expected or unexpected</h2>
+  <p class="col">Predictions written down before a run, and how they came out. Seven of eleven were wrong or only partly right, which is the main argument for cheap screens over long design work.</p>
+  <div class="bar" role="img" aria-label="4 of 11 predictions held, 7 did not"><span style="width:36.4%;background:var(--hit)"></span><span style="width:63.6%;background:var(--miss)"></span></div>
+  <p class="small">4 held · 7 missed or partial</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Prediction</th><th>Outcome</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>Jetson decode is launch-overhead bound</td><td>Kernel bound; CUDA graphs already on</td><td><span class="chip miss">miss</span></td></tr>
+      <tr><td>mmap doubles DRAM residency for a resident model</td><td>Page cache stayed reclaimable; no loss of available memory</td><td><span class="chip miss">miss</span></td></tr>
+      <tr><td>Kernel fusion is a win in general</td><td>Depends on weight type and platform</td><td><span class="chip miss">partial</span></td></tr>
+      <tr><td>Half the expert bytes (Q4_K) gives faster decode than Q8_0</td><td>No, until the dispatch fix: dequant bound</td><td><span class="chip miss">miss</span></td></tr>
+      <tr><td>Unfusing quantized gate/up keeps numerics identical</td><td>Byte-identical ppl, KL and text</td><td><span class="chip hit">held</span></td></tr>
+      <tr><td>A container memory limit caps GPU memory on Jetson</td><td>Not charged to the cgroup</td><td><span class="chip miss">miss</span></td></tr>
+      <tr><td>An expert cache with a high hit rate speeds up decode</td><td>64% hits, 17–23% slower on UMA</td><td><span class="chip miss">miss</span></td></tr>
+      <tr><td>Routing has exploitable locality</td><td>≈54% decode hits at ~12% capacity in replay; 64% measured</td><td><span class="chip hit">held</span></td></tr>
+      <tr><td>A routing-frequency profile gives a good static hot set ("position the model once")</td><td>Leave-one-out: 16.6% hits vs 62% for LRU at the same capacity</td><td><span class="chip miss">miss</span></td></tr>
+      <tr><td>The llama.cpp default cannot load a model bigger than RAM on Orin</td><td>Confirmed from source and by the watchdog</td><td><span class="chip hit">held</span></td></tr>
+      <tr><td>Over-memory decode ≈ NVMe bytes per token ÷ fault-read bandwidth</td><td>≈1.3 t/s ceiling predicted, 1.26–1.37 measured</td><td><span class="chip hit">held</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>What predicts, what correlates</h2>
+  <div class="two">
+    <div class="card"><h3 style="margin-top:0">Good predictors</h3><ul>
+      <li><strong>Effective GB/s per kernel</strong> (weight bytes ÷ nsys time) pointed at every gain we found.</li>
+      <li><strong>Bytes moved per token ÷ achieved read bandwidth</strong> predicts over-memory decode within ~10%.</li>
+      <li><strong>Replay-simulated LRU hit rate</strong> landed close to the engine's own counter.</li>
+      <li><strong>A/A spread</strong> sets the smallest effect worth chasing.</li>
+      <li><strong>Byte-identical outputs</strong> predict a safe, computation-preserving change.</li>
+    </ul></div>
+    <div class="card"><h3 style="margin-top:0">Poor or misleading predictors</h3><ul>
+      <li><strong>Cache hit rate</strong> does not predict speed on unified memory.</li>
+      <li><strong>Bytes per weight</strong> fails once kernels are dequant or compute bound.</li>
+      <li><strong>Batch-512 perplexity</strong> is blind to decode-only kernel changes.</li>
+      <li><strong>Single-layer or microbenchmark speedups</strong> are hypotheses until end-to-end.</li>
+      <li><strong>Free-memory readings, container limits and binary hashes</strong>: each looked like a measure of budget or identity and wasn't.</li>
+      <li><strong>Raw t/s across hosts</strong>: never comparable; only local A/B ratios are.</li>
+      <li><strong>Routing frequency from other workloads</strong> does not predict which experts the next workload needs; recent use does.</li>
+      <li><strong>Pure frequency (LFU)</strong> is a poor cache policy here (35% vs 62% LRU at 12.7%).</li>
+    </ul></div>
+  </div>
+
+  <h2>Structure and flexibility</h2>
+  <div class="two">
+    <div class="card"><h3 style="margin-top:0">Where structure paid off</h3><ul>
+      <li>Recorded commands and attempt IDs caught false successes: an exit code masked by a pipe, a watchdog that couldn't kill, a run that crashed after logging success.</li>
+      <li>Fixed identities (model hash, commit, patch hash, image digest) made cross-run comparisons trustworthy.</li>
+      <li>Per-host evidence folders, admission records and claim classes kept findings from being promoted without evidence.</li>
+    </ul></div>
+    <div class="card"><h3 style="margin-top:0">Where flexibility paid off</h3><ul>
+      <li>Most progress came from fast throwaway screens: an existing env switch found the +14% before any patch.</li>
+      <li>Designs turned out model × hardware specific, so fixed recipes would have been wrong; env-gated components with applicability tables worked.</li>
+      <li>Swapping in upstream code beat building our own cache.</li>
+    </ul></div>
+  </div>
+  <p class="col">The working balance: rigid at the boundaries (identity, recording, admission, safety, quality gates), loose in the middle (which experiment to run next, which tool to try). About half the defects found tonight were in our own tooling, all caught because the boundaries were strict.</p>
+
+  <h2>Asked of the 5070 Ti host</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Request</th><th>Decides</th></tr></thead>
+    <tbody>
+      <tr><td>R1 · A/B the per-type unfuse patch on sm_120 for bf16, Q4_K, Q8_0</td><td>portable component or Orin-only</td></tr>
+      <tr><td>R2 · tensor manifest of the bf16 GGUF</td><td>are the 0.2% cross-host ppl differences weights or kernels</td></tr>
+      <tr><td>R3 · finish the static-offload rerun and the GPU budget shim</td><td>trusted discrete baselines; whether the shim covers Tegra's path</td></tr>
+      <tr><td>R4 · run the same 20.8 GiB model over-memory on the discrete GPU</td><td>which placement policies transfer between unified and discrete memory</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Next on the Jetson</h2>
+  <div class="col"><ul>
+    <li>Finish the engine comparison and the NVMe ceiling (queued).</li>
+    <li>Build upstream + profile pinning + de-dup + direct fill; A/B each against the best baseline on the 20.8 GiB model with leave-one-out routing profiles.</li>
+    <li>Add the kernel micro-benchmark screen and the acceptance gate to the toolset.</li>
+  </ul></div>
+  <h2 id="data">Data appendix</h2>
+  <p class="col">Generated from the campaign files on branch jetson/c1: every recorded attempt, including failures and contaminated runs. Tables scroll sideways on narrow screens.</p>
+<h3>Build CC attempts (all, incl. failures)</h3>
+<div class="tbl"><table><thead><tr><th>out dir</th><th>target</th><th>status</th><th>fail stage</th><th>commit</th><th>patch sha</th><th>wall s</th><th>ccache hits</th><th>ccache misses</th><th>archive bytes</th></tr></thead><tbody>
+<tr><td>jetson-c1-j3</td><td>jetson-orin</td><td>success</td><td></td><td>31288c9c66</td><td>9cd5745bc8</td><td class="num">2283</td><td></td><td></td><td class="num">1386953728</td></tr>
+<tr><td>jetson-c1-p01</td><td>jetson-orin</td><td>success</td><td></td><td>31288c9c66</td><td>623340ccfd</td><td class="num">2262</td><td class="num">0</td><td class="num">360</td><td class="num">1386925568</td></tr>
+<tr><td>jetson-c1-p01q</td><td>jetson-orin</td><td>success</td><td></td><td>31288c9c66</td><td>623340ccfd</td><td class="num">138</td><td class="num">347</td><td class="num">15</td><td class="num">1386951168</td></tr>
+<tr><td>jetson-c1-p03</td><td>jetson-orin</td><td>success</td><td></td><td>31288c9c66</td><td>1369518f3b</td><td class="num">145</td><td class="num">350</td><td class="num">12</td><td class="num">1386952704</td></tr>
+<tr><td>jetson-c1-rebuild</td><td>jetson-orin</td><td>success</td><td></td><td>31288c9c66</td><td></td><td class="num">141</td><td class="num">348</td><td class="num">12</td><td class="num">1386924544</td></tr>
+<tr><td>jetson-c1-tr03</td><td>jetson-orin</td><td>success</td><td></td><td>31288c9c66</td><td>c5e909e8dd</td><td class="num">136</td><td class="num">347</td><td class="num">14</td><td class="num">1386952192</td></tr>
+<tr><td>jetson-c1</td><td>jetson-orin</td><td>success</td><td></td><td>31288c9c66</td><td></td><td class="num">3154</td><td></td><td></td><td class="num">1386947584</td></tr>
+<tr><td>jetson-up1108-a2</td><td>jetson-orin</td><td>success</td><td></td><td>cf34d31133</td><td></td><td class="num">2515</td><td class="num">19</td><td class="num">305</td><td class="num">1392854016</td></tr>
+<tr><td>jetson-up1108</td><td>jetson-orin</td><td>failed</td><td>verify_source</td><td>cf34d3113e</td><td></td><td class="num">0</td><td></td><td></td><td></td></tr>
+</tbody></table></div>
+<h3>Granite-1B llama-bench runs (every run file)</h3>
+<p class="small">steady = mean of samples 2..n (first sample is GPU clock ramp)</p>
+<div class="tbl"><table><thead><tr><th>experiment</th><th>run</th><th>model</th><th>pp</th><th>tg</th><th>depth</th><th>avg t/s</th><th>steady t/s</th><th>samples</th></tr></thead><tbody>
+<tr><td>fusion screen (jetson-c1)</td><td>r1-A</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">49.69</td><td class="num">50.29</td><td class="num">47.3 50.1 50.3 50.4 50.4</td></tr>
+<tr><td>fusion screen (jetson-c1)</td><td>r2-B</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">56.69</td><td class="num">57.48</td><td class="num">53.5 57.4 57.5 57.5 57.5</td></tr>
+<tr><td>fusion screen (jetson-c1)</td><td>r3-A</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">49.96</td><td class="num">50.38</td><td class="num">48.3 50.4 50.4 50.4 50.4</td></tr>
+<tr><td>fusion screen (jetson-c1)</td><td>r4-B</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">56.51</td><td class="num">57.41</td><td class="num">52.9 57.4 57.4 57.4 57.4</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r1-base</td><td>granitemoe 1B.A400M BF16</td><td class="num">512</td><td class="num">0</td><td class="num">0</td><td class="num">1125.28</td><td class="num">1181.43</td><td class="num">1013.0 1180.5 1182.3</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r1-base</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">50.25</td><td class="num">50.31</td><td class="num">50.1 50.3 50.3</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r1-base</td><td>granitemoe 1B.A400M BF16</td><td class="num">512</td><td class="num">0</td><td class="num">1024</td><td class="num">1147.62</td><td class="num">1147.43</td><td class="num">1148.0 1135.2 1159.7</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r1-base</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">1024</td><td class="num">48.69</td><td class="num">48.78</td><td class="num">48.5 48.8 48.8</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r2-P1</td><td>granitemoe 1B.A400M BF16</td><td class="num">512</td><td class="num">0</td><td class="num">0</td><td class="num">1104.73</td><td class="num">1181.32</td><td class="num">951.5 1180.4 1182.3</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r2-P1</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">60.06</td><td class="num">60.14</td><td class="num">59.9 60.2 60.1</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r2-P1</td><td>granitemoe 1B.A400M BF16</td><td class="num">512</td><td class="num">0</td><td class="num">1024</td><td class="num">1148.6</td><td class="num">1148.26</td><td class="num">1149.3 1136.0 1160.5</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r2-P1</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">1024</td><td class="num">57.77</td><td class="num">57.88</td><td class="num">57.6 58.0 57.8</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r3-P1</td><td>granitemoe 1B.A400M BF16</td><td class="num">512</td><td class="num">0</td><td class="num">0</td><td class="num">1139.28</td><td class="num">1181.5</td><td class="num">1054.8 1180.1 1182.9</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r3-P1</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">59.84</td><td class="num">59.92</td><td class="num">59.7 59.9 60.0</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r3-P1</td><td>granitemoe 1B.A400M BF16</td><td class="num">512</td><td class="num">0</td><td class="num">1024</td><td class="num">1141.86</td><td class="num">1148.04</td><td class="num">1129.5 1134.4 1161.7</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r3-P1</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">1024</td><td class="num">57.82</td><td class="num">57.91</td><td class="num">57.6 57.9 57.9</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r4-base</td><td>granitemoe 1B.A400M BF16</td><td class="num">512</td><td class="num">0</td><td class="num">0</td><td class="num">1129.36</td><td class="num">1180.57</td><td class="num">1027.0 1180.0 1181.2</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r4-base</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">50.24</td><td class="num">50.31</td><td class="num">50.1 50.3 50.3</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r4-base</td><td>granitemoe 1B.A400M BF16</td><td class="num">512</td><td class="num">0</td><td class="num">1024</td><td class="num">1149.22</td><td class="num">1149.03</td><td class="num">1149.6 1136.4 1161.7</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>depth-r4-base</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">1024</td><td class="num">48.58</td><td class="num">48.67</td><td class="num">48.4 48.7 48.7</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>r1-base</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">49.87</td><td class="num">50.48</td><td class="num">47.4 50.5 50.4 50.5 50.5</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>r2-P1</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">59.08</td><td class="num">60.07</td><td class="num">55.1 60.0 60.1 60.0 60.1</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>r3-P2</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">58.25</td><td class="num">59.56</td><td class="num">53.0 59.6 59.6 59.5 59.6</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>r4-F</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">56.67</td><td class="num">57.34</td><td class="num">54.0 57.3 57.4 57.3 57.4</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>r5-F</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">56.38</td><td class="num">57.33</td><td class="num">52.6 57.1 57.4 57.4 57.5</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>r6-P2</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">58.45</td><td class="num">59.3</td><td class="num">55.1 59.3 59.3 59.3 59.4</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>r7-P1</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">59.43</td><td class="num">60.05</td><td class="num">57.0 60.0 60.1 60.0 60.1</td></tr>
+<tr><td>patch A/B (jetson-c1-j3)</td><td>r8-base</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">49.83</td><td class="num">50.2</td><td class="num">48.3 50.2 50.1 50.2 50.3</td></tr>
+<tr><td>quant track (p01q)</td><td>bench-r1-Q8_0</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">512</td><td class="num">0</td><td class="num">0</td><td class="num">3002.98</td><td class="num">3192.43</td><td class="num">2245.2 2934.1 2983.5 3373.4 3478.8</td></tr>
+<tr><td>quant track (p01q)</td><td>bench-r1-Q8_0</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">82.88</td><td class="num">83.07</td><td class="num">82.1 83.1 83.1 83.0 83.1</td></tr>
+<tr><td>quant track (p01q)</td><td>bench-r2-mixE4K</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">512</td><td class="num">0</td><td class="num">0</td><td class="num">3032.05</td><td class="num">3225.29</td><td class="num">2259.1 3046.6 3209.2 3314.5 3330.8</td></tr>
+<tr><td>quant track (p01q)</td><td>bench-r2-mixE4K</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">84.93</td><td class="num">85.03</td><td class="num">84.5 85.1 85.1 85.1 84.8</td></tr>
+<tr><td>quant track (p01q)</td><td>bench-r3-Q8_0</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">512</td><td class="num">0</td><td class="num">0</td><td class="num">3089.06</td><td class="num">3216.16</td><td class="num">2580.7 3004.8 3031.2 3335.4 3493.2</td></tr>
+<tr><td>quant track (p01q)</td><td>bench-r3-Q8_0</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">82.93</td><td class="num">83.1</td><td class="num">82.2 83.0 83.0 83.2 83.2</td></tr>
+<tr><td>quant track (p01q)</td><td>bench-r4-mixE4K</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">512</td><td class="num">0</td><td class="num">0</td><td class="num">3127.08</td><td class="num">3283.14</td><td class="num">2502.8 3153.1 3320.1 3322.6 3336.7</td></tr>
+<tr><td>quant track (p01q)</td><td>bench-r4-mixE4K</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">84.33</td><td class="num">84.41</td><td class="num">84.0 85.0 84.6 84.0 84.1</td></tr>
+<tr><td>quant track (p01q)</td><td>fscreen-r1-Q8_0-A</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">82.1</td><td class="num">83.28</td><td class="num">77.4 83.2 83.3 83.3 83.2</td></tr>
+<tr><td>quant track (p01q)</td><td>fscreen-r2-Q8_0-F</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">72.83</td><td class="num">73.51</td><td class="num">70.1 73.3 73.5 73.6 73.6</td></tr>
+<tr><td>quant track (p01q)</td><td>fscreen-r3-Q8_0-F</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">72.83</td><td class="num">73.47</td><td class="num">70.3 73.5 73.3 73.5 73.6</td></tr>
+<tr><td>quant track (p01q)</td><td>fscreen-r4-Q8_0-A</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">82.43</td><td class="num">83.15</td><td class="num">79.5 83.2 83.2 83.1 83.2</td></tr>
+<tr><td>quant track (p01q)</td><td>fscreen-r5-mixE4K-A</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">84.56</td><td class="num">85.01</td><td class="num">82.8 85.1 85.0 84.9 85.0</td></tr>
+<tr><td>quant track (p01q)</td><td>fscreen-r6-mixE4K-F</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">95.61</td><td class="num">96.7</td><td class="num">91.3 96.3 96.8 96.9 96.8</td></tr>
+<tr><td>quant track (p01q)</td><td>fscreen-r7-mixE4K-F</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">96.1</td><td class="num">97.08</td><td class="num">92.2 97.1 97.0 97.1 97.1</td></tr>
+<tr><td>quant track (p01q)</td><td>fscreen-r8-mixE4K-A</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">84.13</td><td class="num">84.99</td><td class="num">80.7 84.6 85.2 85.1 85.0</td></tr>
+<tr><td>unfuse by type (p03)</td><td>Q8_0-base-a</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">80.99</td><td class="num">83.39</td><td class="num">71.4 83.3 83.4 83.4 83.4</td></tr>
+<tr><td>unfuse by type (p03)</td><td>Q8_0-base-d</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">82.29</td><td class="num">83.25</td><td class="num">78.5 83.3 83.4 83.1 83.2</td></tr>
+<tr><td>unfuse by type (p03)</td><td>Q8_0-q8_0-b</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">76.58</td><td class="num">78.23</td><td class="num">70.0 78.2 78.2 78.3 78.2</td></tr>
+<tr><td>unfuse by type (p03)</td><td>Q8_0-q8_0-c</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">77.0</td><td class="num">78.05</td><td class="num">72.8 78.2 78.3 77.9 77.9</td></tr>
+<tr><td>unfuse by type (p03)</td><td>bf16-base-a</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">49.8</td><td class="num">50.4</td><td class="num">47.4 50.4 50.4 50.4 50.4</td></tr>
+<tr><td>unfuse by type (p03)</td><td>bf16-base-d</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">49.8</td><td class="num">50.32</td><td class="num">47.7 50.3 50.4 50.3 50.3</td></tr>
+<tr><td>unfuse by type (p03)</td><td>bf16-bf16-b</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">59.14</td><td class="num">60.08</td><td class="num">55.4 60.1 60.1 60.1 60.1</td></tr>
+<tr><td>unfuse by type (p03)</td><td>bf16-bf16-c</td><td>granitemoe 1B.A400M BF16</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">58.51</td><td class="num">59.99</td><td class="num">52.6 60.1 59.9 59.9 60.1</td></tr>
+<tr><td>unfuse by type (p03)</td><td>mixE4K-base-a</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">84.15</td><td class="num">85.08</td><td class="num">80.4 85.1 85.0 85.2 85.0</td></tr>
+<tr><td>unfuse by type (p03)</td><td>mixE4K-base-d</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">84.12</td><td class="num">85.0</td><td class="num">80.6 85.0 85.0 85.0 85.0</td></tr>
+<tr><td>unfuse by type (p03)</td><td>mixE4K-q4_K-b</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">104.31</td><td class="num">105.33</td><td class="num">100.2 105.3 105.3 105.4 105.3</td></tr>
+<tr><td>unfuse by type (p03)</td><td>mixE4K-q4_K-c</td><td>granitemoe 1B.A400M Q8_0</td><td class="num">0</td><td class="num">128</td><td class="num">0</td><td class="num">103.86</td><td class="num">104.96</td><td class="num">99.4 105.5 105.0 105.0 104.4</td></tr>
+</tbody></table></div>
+<h3>Quality runs (ppl / KL vs bf16 base logits)</h3>
+<div class="tbl"><table><thead><tr><th>experiment</th><th>file</th><th>ppl</th><th>mean KLD</th><th>p99 KLD</th><th>max KLD</th><th>top-1 %</th></tr></thead><tbody>
+<tr><td>J-E005-patch-ab</td><td>kl-P1.txt</td><td class="num">8.016339</td><td class="num">0.000267</td><td class="num">0.004242</td><td class="num">0.009133</td><td class="num">99.603</td></tr>
+<tr><td>J-E005-patch-ab</td><td>kl-P2.txt</td><td class="num">8.035763</td><td class="num">0.000203</td><td class="num">0.003778</td><td class="num">0.005633</td><td class="num">99.206</td></tr>
+<tr><td>J-E005-patch-ab</td><td>kl-base2.txt</td><td class="num">8.033206</td><td class="num">-0.000001</td><td class="num">0.000041</td><td class="num">0.000060</td><td class="num">100.000</td></tr>
+<tr><td>J-E006-quant-track</td><td>kl-Q8_0.txt</td><td class="num">8.064006</td><td class="num">0.004051</td><td class="num">0.035923</td><td class="num">0.105170</td><td class="num">97.024</td></tr>
+<tr><td>J-E006-quant-track</td><td>kl-mixE4K.txt</td><td class="num">8.548401</td><td class="num">0.060395</td><td class="num">0.688181</td><td class="num">1.842127</td><td class="num">87.103</td></tr>
+<tr><td>J-E007-unfuse-by-type</td><td>kl-mixE4K-base.txt</td><td class="num">8.548401</td><td class="num">0.060395</td><td class="num">0.688181</td><td class="num">1.842127</td><td class="num">87.103</td></tr>
+<tr><td>J-E007-unfuse-by-type</td><td>kl-mixE4K-q4_K.txt</td><td class="num">8.548401</td><td class="num">0.060395</td><td class="num">0.688181</td><td class="num">1.842127</td><td class="num">87.103</td></tr>
+<tr><td>J-E004-fusion-screen</td><td>ppl20-A.txt</td><td class="num">10.0094</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>J-E004-fusion-screen</td><td>ppl20-B.txt</td><td class="num">10.0096</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>J-E005-patch-ab</td><td>ppl20-P1.txt</td><td class="num">10.0094</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>J-E005-patch-ab</td><td>ppl20-P2.txt</td><td class="num">10.0094</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>J-E005-patch-ab</td><td>ppl20-base.txt</td><td class="num">10.0094</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>J-E005-patch-ab</td><td>pplub1-P1.txt</td><td class="num">8.0163</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>J-E005-patch-ab</td><td>pplub1-P2.txt</td><td class="num">8.0358</td><td></td><td></td><td></td><td></td></tr>
+<tr><td>J-E005-patch-ab</td><td>pplub1-base.txt</td><td class="num">8.0332</td><td></td><td></td><td></td><td></td></tr>
+</tbody></table></div>
+<h3>Over-memory runs: Qwen3.6-35B-A3B UD-Q4_K_XL 20.8 GiB on 7.4 GiB (every attempt)</h3>
+<p class="small">upv-* timings contaminated by a concurrent simulation; cmp-* partially overlapped a nice-19 simulation</p>
+<div class="tbl"><table><thead><tr><th>run</th><th>image</th><th>args</th><th>status</th><th>wall s</th><th>pp t/s</th><th>tg t/s</th><th>cache hit</th><th>uploaded GiB</th><th>NVMe read GiB</th><th>peak MiB/s</th><th>min MemAvail MiB</th><th>peak majflt/s</th><th>peak zram MiB</th></tr></thead><tbody>
+<tr><td>base-20261110-0435/auto-default</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -c 4096 -p 128 -n 64 -r 2 -o json -ngl 99 -ncmoe 40</td><td>failed</td><td class="num">0.14</td><td></td><td></td><td></td><td></td><td class="num">0.0</td><td></td><td class="num">6116.0</td><td></td><td></td></tr>
+<tr><td>base-20261110-0435/mmap-ncmoe38</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -c 4096 -p 128 -n 64 -r 2 -o json -lm mmap -ngl 99 -ncmoe 38</td><td>failed</td><td class="num">0.15</td><td></td><td></td><td></td><td></td><td class="num">0.0</td><td></td><td class="num">5945.0</td><td></td><td></td></tr>
+<tr><td>base-20261110-0435/mmap-ncmoe40-a</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -c 4096 -p 128 -n 64 -r 2 -o json -lm mmap -ngl 99 -ncmoe 40</td><td>failed</td><td class="num">0.5</td><td></td><td></td><td></td><td></td><td class="num">0.0</td><td></td><td class="num">5945.0</td><td></td><td></td></tr>
+<tr><td>base-20261110-0435/mmap-ncmoe40-b</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -c 4096 -p 128 -n 64 -r 2 -o json -lm mmap -ngl 99 -ncmoe 40</td><td>failed</td><td class="num">0.16</td><td></td><td></td><td></td><td></td><td class="num">0.0</td><td></td><td class="num">5958.0</td><td></td><td></td></tr>
+<tr><td>base-20261110-0435/mmap-ngl0</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -c 4096 -p 128 -n 64 -r 2 -o json -lm mmap -ngl 0</td><td>failed</td><td class="num">0.14</td><td></td><td></td><td></td><td></td><td class="num">0.0</td><td></td><td class="num">6129.0</td><td></td><td></td></tr>
+<tr><td>base-20261110-0435/none-ncmoe40</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -c 4096 -p 128 -n 64 -r 2 -o json -lm none -ngl 99 -ncmoe 40</td><td>failed</td><td class="num">0.14</td><td></td><td></td><td></td><td></td><td class="num">0.0</td><td></td><td class="num">6117.0</td><td></td><td></td></tr>
+<tr><td>base-20261110-0448/auto-default</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -p 128 -n 64 -r 2 -o json -ngl 99 -ncmoe 40</td><td>watchdog_killed</td><td class="num">7.22</td><td></td><td></td><td></td><td></td><td class="num">0.2</td><td class="num">133.0</td><td class="num">266.0</td><td class="num">5099.0</td><td class="num">1168</td></tr>
+<tr><td>base-20261110-0448/mmap-ncmoe38</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm mmap -ngl 99 -ncmoe 38</td><td>ok</td><td class="num">243.86</td><td class="num">4.665</td><td class="num">1.213</td><td></td><td></td><td class="num">93.9</td><td class="num">580.0</td><td class="num">2395.0</td><td class="num">24326.0</td><td class="num">1201</td></tr>
+<tr><td>base-20261110-0448/mmap-ncmoe40-a</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm mmap -ngl 99 -ncmoe 40</td><td>ok</td><td class="num">237.71</td><td class="num">4.489</td><td class="num">1.298</td><td></td><td></td><td class="num">90.4</td><td class="num">585.0</td><td class="num">3201.0</td><td class="num">32032.0</td><td class="num">914</td></tr>
+<tr><td>base-20261110-0448/mmap-ncmoe40-b</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm mmap -ngl 99 -ncmoe 40</td><td>watchdog_killed</td><td class="num">134.61</td><td></td><td></td><td></td><td></td><td class="num">56.3</td><td class="num">576.0</td><td class="num">3506.0</td><td class="num">41659.0</td><td class="num">1024</td></tr>
+<tr><td>base-20261110-0448/mmap-ngl0</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm mmap -ngl 0</td><td>ok</td><td class="num">256.6</td><td class="num">4.093</td><td class="num">1.087</td><td></td><td></td><td class="num">90.9</td><td class="num">581.0</td><td class="num">5116.0</td><td class="num">33466.0</td><td class="num">1209</td></tr>
+<tr><td>base-20261110-0448/none-ncmoe40</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm none -ngl 99 -ncmoe 40</td><td>watchdog_killed</td><td class="num">11.15</td><td></td><td></td><td></td><td></td><td class="num">2.7</td><td class="num">579.0</td><td class="num">299.0</td><td class="num">1556.0</td><td class="num">822</td></tr>
+<tr><td>cmp-20261110-0534/pin-a</td><td>jetson-c1-p03</td><td>-m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm mmap -ngl 99 -ncmoe 40</td><td>ok</td><td class="num">239.53</td><td class="num">4.515</td><td class="num">1.255</td><td></td><td></td><td class="num">91.7</td><td class="num">576.0</td><td class="num">3175.0</td><td class="num">29135.0</td><td class="num">793</td></tr>
+<tr><td>cmp-20261110-0534/up-a</td><td>jetson-up1108</td><td>-m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm mmap -ngl 99 -ncmoe 40</td><td>ok</td><td class="num">225.7</td><td class="num">4.773</td><td class="num">1.365</td><td></td><td></td><td class="num">85.6</td><td class="num">580.0</td><td class="num">3399.0</td><td class="num">38727.0</td><td class="num">1372</td></tr>
+<tr><td>cmp-20261110-0534/up-b</td><td>jetson-up1108</td><td>-m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm mmap -ngl 99 -ncmoe 40</td><td>ok</td><td class="num">227.91</td><td class="num">4.753</td><td class="num">1.353</td><td></td><td></td><td class="num">85.3</td><td class="num">576.0</td><td class="num">3429.0</td><td class="num">25622.0</td><td class="num">1260</td></tr>
+<tr><td>up-20261110-0436/base-cmoe-a</td><td>jetson-up1108</td><td>-m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mm</td><td>ok</td><td class="num">141.52</td><td class="num">5.70</td><td class="num">1.18</td><td></td><td></td><td class="num">57.3</td><td class="num">586.0</td><td class="num">2861.0</td><td class="num">27949.0</td><td class="num">990</td></tr>
+<tr><td>up-20261110-0436/base-cmoe-b</td><td>jetson-up1108</td><td>-m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mm</td><td>ok</td><td class="num">138.85</td><td class="num">5.69</td><td class="num">1.19</td><td></td><td></td><td class="num">57.4</td><td class="num">579.0</td><td class="num">3067.0</td><td class="num">3733.0</td><td class="num">852</td></tr>
+<tr><td>up-20261110-0436/cache1024</td><td>jetson-up1108</td><td>-m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mm</td><td>ok</td><td class="num">160.54</td><td class="num">5.78</td><td class="num">0.91</td><td></td><td></td><td class="num">61.7</td><td class="num">573.0</td><td class="num">1891.0</td><td class="num">27405.0</td><td class="num">815</td></tr>
+<tr><td>up-20261110-0436/cache2048-cpu50</td><td>jetson-up1108</td><td>-m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mm</td><td>ok</td><td class="num">144.92</td><td class="num">5.74</td><td class="num">1.13</td><td></td><td></td><td class="num">57.7</td><td class="num">581.0</td><td class="num">1025.0</td><td class="num">17109.0</td><td class="num">908</td></tr>
+<tr><td>up-20261110-0436/cache2048</td><td>jetson-up1108</td><td>-m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mm</td><td>ok</td><td class="num">153.71</td><td class="num">5.79</td><td class="num">0.98</td><td></td><td></td><td class="num">60.9</td><td class="num">585.0</td><td class="num">933.0</td><td class="num">21155.0</td><td class="num">994</td></tr>
+<tr><td>upv-20261110-0519/base-cmoe-a</td><td>jetson-up1108</td><td>-m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mm</td><td>ok</td><td class="num">140.01</td><td class="num">5.82</td><td class="num">1.21</td><td></td><td></td><td class="num">55.2</td><td class="num">575.0</td><td class="num">3010.0</td><td class="num">43402.0</td><td class="num">1217</td></tr>
+<tr><td>upv-20261110-0519/base-cmoe-b</td><td>jetson-up1108</td><td>-m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mm</td><td>ok</td><td class="num">141.65</td><td class="num">5.78</td><td class="num">1.16</td><td></td><td></td><td class="num">57.2</td><td class="num">579.0</td><td class="num">2966.0</td><td class="num">15622.0</td><td class="num">891</td></tr>
+<tr><td>upv-20261110-0519/cache1024-cpu50</td><td>jetson-up1108</td><td>-m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mm</td><td>ok</td><td class="num">149.17</td><td class="num">5.89</td><td class="num">1.02</td><td class="num">54.67%</td><td class="num">8.7</td><td class="num">59.8</td><td class="num">578.0</td><td class="num">1940.0</td><td class="num">19023.0</td><td class="num">908</td></tr>
+<tr><td>upv-20261110-0519/cache2048-cpu100</td><td>jetson-up1108</td><td>-m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mm</td><td>ok</td><td class="num">162.64</td><td class="num">5.48</td><td class="num">0.87</td><td class="num">36.24%</td><td class="num">2.0</td><td class="num">65.9</td><td class="num">582.0</td><td class="num">883.0</td><td class="num">27626.0</td><td class="num">1109</td></tr>
+<tr><td>upv-20261110-0519/cache2048</td><td>jetson-up1108</td><td>-m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mm</td><td>ok</td><td class="num">156.25</td><td class="num">5.79</td><td class="num">0.98</td><td class="num">64.02%</td><td class="num">13.5</td><td class="num">61.2</td><td class="num">580.0</td><td class="num">935.0</td><td class="num">25620.0</td><td class="num">988</td></tr>
+<tr><td>upv-20261110-0519/cache512</td><td>jetson-up1108</td><td>-m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mm</td><td>ok</td><td class="num">151.97</td><td class="num">5.81</td><td class="num">0.98</td><td class="num">37.73%</td><td class="num">22.5</td><td class="num">59.0</td><td class="num">581.0</td><td class="num">2501.0</td><td class="num">21090.0</td><td class="num">1045</td></tr>
+</tbody></table></div>
+<h3>Expert-cache replay sweep (decode hit rate; static-profile = leave-one-out profile from the other 3 workloads)</h3>
+<p class="small">expert = 1.92 MB; capacity 1300 ≈ 2.5 GB ≈ 12.7%</p>
+<div class="tbl"><table><thead><tr><th>workload</th><th>capacity (experts of 10240)</th><th>policy</th><th>overall hit</th><th>decode hit</th><th>decode MB moved/token</th></tr></thead><tbody>
+<tr><td>wiki</td><td class="num">512</td><td>lru</td><td class="num">0.351</td><td class="num">0.2834</td><td class="num">440.5</td></tr>
+<tr><td>wiki</td><td class="num">512</td><td>lfu</td><td class="num">0.0844</td><td class="num">0.0626</td><td class="num">576.3</td></tr>
+<tr><td>wiki</td><td class="num">512</td><td>lfu-decay:128</td><td class="num">0.3544</td><td class="num">0.2856</td><td class="num">439.1</td></tr>
+<tr><td>wiki</td><td class="num">512</td><td>belady</td><td class="num">0.6099</td><td class="num">0.5742</td><td class="num">261.8</td></tr>
+<tr><td>wiki</td><td class="num">512</td><td>static-profile</td><td class="num">0.0306</td><td class="num">0.0328</td><td class="num">594.6</td></tr>
+<tr><td>wiki</td><td class="num">1024</td><td>lru</td><td class="num">0.533</td><td class="num">0.4777</td><td class="num">321.1</td></tr>
+<tr><td>wiki</td><td class="num">1024</td><td>lfu</td><td class="num">0.3119</td><td class="num">0.2383</td><td class="num">468.2</td></tr>
+<tr><td>wiki</td><td class="num">1024</td><td>lfu-decay:128</td><td class="num">0.5332</td><td class="num">0.4779</td><td class="num">321.0</td></tr>
+<tr><td>wiki</td><td class="num">1024</td><td>belady</td><td class="num">0.7398</td><td class="num">0.7135</td><td class="num">176.1</td></tr>
+<tr><td>wiki</td><td class="num">1024</td><td>static-profile</td><td class="num">0.0794</td><td class="num">0.0938</td><td class="num">557.0</td></tr>
+<tr><td>wiki</td><td class="num">1300</td><td>lru</td><td class="num">0.5884</td><td class="num">0.5357</td><td class="num">285.4</td></tr>
+<tr><td>wiki</td><td class="num">1300</td><td>lfu</td><td class="num">0.384</td><td class="num">0.3069</td><td class="num">426.1</td></tr>
+<tr><td>wiki</td><td class="num">1300</td><td>lfu-decay:128</td><td class="num">0.5885</td><td class="num">0.5358</td><td class="num">285.4</td></tr>
+<tr><td>wiki</td><td class="num">1300</td><td>belady</td><td class="num">0.7842</td><td class="num">0.763</td><td class="num">145.7</td></tr>
+<tr><td>wiki</td><td class="num">1300</td><td>static-profile</td><td class="num">0.1112</td><td class="num">0.13</td><td class="num">534.8</td></tr>
+<tr><td>wiki</td><td class="num">2048</td><td>lru</td><td class="num">0.7085</td><td class="num">0.6572</td><td class="num">210.7</td></tr>
+<tr><td>wiki</td><td class="num">2048</td><td>lfu</td><td class="num">0.5979</td><td class="num">0.4753</td><td class="num">322.6</td></tr>
+<tr><td>wiki</td><td class="num">2048</td><td>lfu-decay:128</td><td class="num">0.7088</td><td class="num">0.6576</td><td class="num">210.5</td></tr>
+<tr><td>wiki</td><td class="num">2048</td><td>belady</td><td class="num">0.8566</td><td class="num">0.8483</td><td class="num">93.3</td></tr>
+<tr><td>wiki</td><td class="num">2048</td><td>static-profile</td><td class="num">0.1928</td><td class="num">0.2111</td><td class="num">485.0</td></tr>
+<tr><td>wiki</td><td class="num">3072</td><td>lru</td><td class="num">0.8267</td><td class="num">0.7984</td><td class="num">123.9</td></tr>
+<tr><td>wiki</td><td class="num">3072</td><td>lfu</td><td class="num">0.7422</td><td class="num">0.619</td><td class="num">234.2</td></tr>
+<tr><td>wiki</td><td class="num">3072</td><td>lfu-decay:128</td><td class="num">0.8267</td><td class="num">0.7984</td><td class="num">123.9</td></tr>
+<tr><td>wiki</td><td class="num">3072</td><td>belady</td><td class="num">0.9044</td><td class="num">0.915</td><td class="num">52.3</td></tr>
+<tr><td>wiki</td><td class="num">3072</td><td>static-profile</td><td class="num">0.3084</td><td class="num">0.3208</td><td class="num">417.5</td></tr>
+<tr><td>code</td><td class="num">512</td><td>lru</td><td class="num">0.4108</td><td class="num">0.3856</td><td class="num">377.7</td></tr>
+<tr><td>code</td><td class="num">512</td><td>lfu</td><td class="num">0.0445</td><td class="num">0.0355</td><td class="num">592.9</td></tr>
+<tr><td>code</td><td class="num">512</td><td>lfu-decay:128</td><td class="num">0.4158</td><td class="num">0.3893</td><td class="num">375.4</td></tr>
+<tr><td>code</td><td class="num">512</td><td>belady</td><td class="num">0.6579</td><td class="num">0.6515</td><td class="num">214.2</td></tr>
+<tr><td>code</td><td class="num">512</td><td>static-profile</td><td class="num">0.0328</td><td class="num">0.0551</td><td class="num">580.9</td></tr>
+<tr><td>code</td><td class="num">1024</td><td>lru</td><td class="num">0.6038</td><td class="num">0.5982</td><td class="num">247.0</td></tr>
+<tr><td>code</td><td class="num">1024</td><td>lfu</td><td class="num">0.2121</td><td class="num">0.2244</td><td class="num">476.8</td></tr>
+<tr><td>code</td><td class="num">1024</td><td>lfu-decay:128</td><td class="num">0.6041</td><td class="num">0.5984</td><td class="num">246.9</td></tr>
+<tr><td>code</td><td class="num">1024</td><td>belady</td><td class="num">0.7776</td><td class="num">0.7803</td><td class="num">135.0</td></tr>
+<tr><td>code</td><td class="num">1024</td><td>static-profile</td><td class="num">0.0694</td><td class="num">0.1364</td><td class="num">530.9</td></tr>
+<tr><td>code</td><td class="num">1300</td><td>lru</td><td class="num">0.6564</td><td class="num">0.6619</td><td class="num">207.8</td></tr>
+<tr><td>code</td><td class="num">1300</td><td>lfu</td><td class="num">0.2579</td><td class="num">0.2823</td><td class="num">441.2</td></tr>
+<tr><td>code</td><td class="num">1300</td><td>lfu-decay:128</td><td class="num">0.6566</td><td class="num">0.6621</td><td class="num">207.7</td></tr>
+<tr><td>code</td><td class="num">1300</td><td>belady</td><td class="num">0.8139</td><td class="num">0.8194</td><td class="num">111.0</td></tr>
+<tr><td>code</td><td class="num">1300</td><td>static-profile</td><td class="num">0.0918</td><td class="num">0.1795</td><td class="num">504.4</td></tr>
+<tr><td>code</td><td class="num">2048</td><td>lru</td><td class="num">0.7578</td><td class="num">0.7598</td><td class="num">147.6</td></tr>
+<tr><td>code</td><td class="num">2048</td><td>lfu</td><td class="num">0.4672</td><td class="num">0.4171</td><td class="num">358.3</td></tr>
+<tr><td>code</td><td class="num">2048</td><td>lfu-decay:128</td><td class="num">0.7579</td><td class="num">0.7599</td><td class="num">147.6</td></tr>
+<tr><td>code</td><td class="num">2048</td><td>belady</td><td class="num">0.871</td><td class="num">0.8897</td><td class="num">67.8</td></tr>
+<tr><td>code</td><td class="num">2048</td><td>static-profile</td><td class="num">0.1595</td><td class="num">0.3</td><td class="num">430.3</td></tr>
+<tr><td>code</td><td class="num">3072</td><td>lru</td><td class="num">0.8344</td><td class="num">0.8539</td><td class="num">89.8</td></tr>
+<tr><td>code</td><td class="num">3072</td><td>lfu</td><td class="num">0.6865</td><td class="num">0.5293</td><td class="num">289.4</td></tr>
+<tr><td>code</td><td class="num">3072</td><td>lfu-decay:128</td><td class="num">0.8345</td><td class="num">0.8539</td><td class="num">89.8</td></tr>
+<tr><td>code</td><td class="num">3072</td><td>belady</td><td class="num">0.9126</td><td class="num">0.9373</td><td class="num">38.5</td></tr>
+<tr><td>code</td><td class="num">3072</td><td>static-profile</td><td class="num">0.2417</td><td class="num">0.4354</td><td class="num">347.1</td></tr>
+<tr><td>chat</td><td class="num">512</td><td>lru</td><td class="num">0.4477</td><td class="num">0.4505</td><td class="num">337.8</td></tr>
+<tr><td>chat</td><td class="num">512</td><td>lfu</td><td class="num">0.1259</td><td class="num">0.0962</td><td class="num">555.6</td></tr>
+<tr><td>chat</td><td class="num">512</td><td>lfu-decay:128</td><td class="num">0.4528</td><td class="num">0.4565</td><td class="num">334.1</td></tr>
+<tr><td>chat</td><td class="num">512</td><td>belady</td><td class="num">0.6634</td><td class="num">0.6782</td><td class="num">197.8</td></tr>
+<tr><td>chat</td><td class="num">512</td><td>static-profile</td><td class="num">0.0759</td><td class="num">0.0732</td><td class="num">569.7</td></tr>
+<tr><td>chat</td><td class="num">1024</td><td>lru</td><td class="num">0.6259</td><td class="num">0.6364</td><td class="num">223.5</td></tr>
+<tr><td>chat</td><td class="num">1024</td><td>lfu</td><td class="num">0.4207</td><td class="num">0.3918</td><td class="num">373.9</td></tr>
+<tr><td>chat</td><td class="num">1024</td><td>lfu-decay:128</td><td class="num">0.6264</td><td class="num">0.6369</td><td class="num">223.2</td></tr>
+<tr><td>chat</td><td class="num">1024</td><td>belady</td><td class="num">0.7814</td><td class="num">0.8056</td><td class="num">119.5</td></tr>
+<tr><td>chat</td><td class="num">1024</td><td>static-profile</td><td class="num">0.1614</td><td class="num">0.1591</td><td class="num">517.0</td></tr>
+<tr><td>chat</td><td class="num">1300</td><td>lru</td><td class="num">0.6775</td><td class="num">0.6937</td><td class="num">188.3</td></tr>
+<tr><td>chat</td><td class="num">1300</td><td>lfu</td><td class="num">0.488</td><td class="num">0.4615</td><td class="num">331.1</td></tr>
+<tr><td>chat</td><td class="num">1300</td><td>lfu-decay:128</td><td class="num">0.6778</td><td class="num">0.6941</td><td class="num">188.1</td></tr>
+<tr><td>chat</td><td class="num">1300</td><td>belady</td><td class="num">0.8143</td><td class="num">0.8421</td><td class="num">97.1</td></tr>
+<tr><td>chat</td><td class="num">1300</td><td>static-profile</td><td class="num">0.2073</td><td class="num">0.2063</td><td class="num">487.9</td></tr>
+<tr><td>chat</td><td class="num">2048</td><td>lru</td><td class="num">0.7759</td><td class="num">0.7999</td><td class="num">123.0</td></tr>
+<tr><td>chat</td><td class="num">2048</td><td>lfu</td><td class="num">0.6692</td><td class="num">0.667</td><td class="num">204.7</td></tr>
+<tr><td>chat</td><td class="num">2048</td><td>lfu-decay:128</td><td class="num">0.776</td><td class="num">0.8</td><td class="num">123.0</td></tr>
+<tr><td>chat</td><td class="num">2048</td><td>belady</td><td class="num">0.8625</td><td class="num">0.9015</td><td class="num">60.6</td></tr>
+<tr><td>chat</td><td class="num">2048</td><td>static-profile</td><td class="num">0.3258</td><td class="num">0.3328</td><td class="num">410.1</td></tr>
+<tr><td>chat</td><td class="num">3072</td><td>lru</td><td class="num">0.8446</td><td class="num">0.8794</td><td class="num">74.2</td></tr>
+<tr><td>chat</td><td class="num">3072</td><td>lfu</td><td class="num">0.8053</td><td class="num">0.831</td><td class="num">103.9</td></tr>
+<tr><td>chat</td><td class="num">3072</td><td>lfu-decay:128</td><td class="num">0.8446</td><td class="num">0.8794</td><td class="num">74.2</td></tr>
+<tr><td>chat</td><td class="num">3072</td><td>belady</td><td class="num">0.8914</td><td class="num">0.9372</td><td class="num">38.6</td></tr>
+<tr><td>chat</td><td class="num">3072</td><td>static-profile</td><td class="num">0.4622</td><td class="num">0.4784</td><td class="num">320.6</td></tr>
+<tr><td>math</td><td class="num">512</td><td>lru</td><td class="num">0.4175</td><td class="num">0.3687</td><td class="num">388.1</td></tr>
+<tr><td>math</td><td class="num">512</td><td>lfu</td><td class="num">0.1015</td><td class="num">0.0717</td><td class="num">570.6</td></tr>
+<tr><td>math</td><td class="num">512</td><td>lfu-decay:128</td><td class="num">0.419</td><td class="num">0.3699</td><td class="num">387.3</td></tr>
+<tr><td>math</td><td class="num">512</td><td>belady</td><td class="num">0.6416</td><td class="num">0.6188</td><td class="num">234.3</td></tr>
+<tr><td>math</td><td class="num">512</td><td>static-profile</td><td class="num">0.0636</td><td class="num">0.0492</td><td class="num">584.5</td></tr>
+<tr><td>math</td><td class="num">1024</td><td>lru</td><td class="num">0.5788</td><td class="num">0.5368</td><td class="num">284.7</td></tr>
+<tr><td>math</td><td class="num">1024</td><td>lfu</td><td class="num">0.3766</td><td class="num">0.2869</td><td class="num">438.3</td></tr>
+<tr><td>math</td><td class="num">1024</td><td>lfu-decay:128</td><td class="num">0.5795</td><td class="num">0.5377</td><td class="num">284.2</td></tr>
+<tr><td>math</td><td class="num">1024</td><td>belady</td><td class="num">0.7568</td><td class="num">0.7499</td><td class="num">153.7</td></tr>
+<tr><td>math</td><td class="num">1024</td><td>static-profile</td><td class="num">0.1272</td><td class="num">0.1128</td><td class="num">545.4</td></tr>
+<tr><td>math</td><td class="num">1300</td><td>lru</td><td class="num">0.6388</td><td class="num">0.6045</td><td class="num">243.1</td></tr>
+<tr><td>math</td><td class="num">1300</td><td>lfu</td><td class="num">0.4468</td><td class="num">0.3471</td><td class="num">401.4</td></tr>
+<tr><td>math</td><td class="num">1300</td><td>lfu-decay:128</td><td class="num">0.6389</td><td class="num">0.6047</td><td class="num">243.0</td></tr>
+<tr><td>math</td><td class="num">1300</td><td>belady</td><td class="num">0.7913</td><td class="num">0.7937</td><td class="num">126.8</td></tr>
+<tr><td>math</td><td class="num">1300</td><td>static-profile</td><td class="num">0.1616</td><td class="num">0.1489</td><td class="num">523.2</td></tr>
+<tr><td>math</td><td class="num">2048</td><td>lru</td><td class="num">0.7382</td><td class="num">0.7195</td><td class="num">172.5</td></tr>
+<tr><td>math</td><td class="num">2048</td><td>lfu</td><td class="num">0.5552</td><td class="num">0.4559</td><td class="num">334.5</td></tr>
+<tr><td>math</td><td class="num">2048</td><td>lfu-decay:128</td><td class="num">0.7382</td><td class="num">0.7195</td><td class="num">172.5</td></tr>
+<tr><td>math</td><td class="num">2048</td><td>belady</td><td class="num">0.8488</td><td class="num">0.8676</td><td class="num">81.4</td></tr>
+<tr><td>math</td><td class="num">2048</td><td>static-profile</td><td class="num">0.2398</td><td class="num">0.2334</td><td class="num">471.3</td></tr>
+<tr><td>math</td><td class="num">3072</td><td>lru</td><td class="num">0.8209</td><td class="num">0.8292</td><td class="num">105.0</td></tr>
+<tr><td>math</td><td class="num">3072</td><td>lfu</td><td class="num">0.6988</td><td class="num">0.6503</td><td class="num">214.9</td></tr>
+<tr><td>math</td><td class="num">3072</td><td>lfu-decay:128</td><td class="num">0.821</td><td class="num">0.8292</td><td class="num">105.0</td></tr>
+<tr><td>math</td><td class="num">3072</td><td>belady</td><td class="num">0.8817</td><td class="num">0.9156</td><td class="num">51.9</td></tr>
+<tr><td>math</td><td class="num">3072</td><td>static-profile</td><td class="num">0.3401</td><td class="num">0.3436</td><td class="num">403.5</td></tr>
+</tbody></table></div>
+<h3>Routing trace statistics (40 layers × 256 experts, top-8)</h3>
+<p class="small">uniform routing would give top-1024 share ≈ 0.10 if all experts were touched; entropy 8.0 = uniform over 256</p>
+<div class="tbl"><table><thead><tr><th>workload</th><th>tokens</th><th>prefill tok</th><th>decode tok</th><th>expert requests</th><th>distinct (layer,expert)</th><th>fraction touched</th><th>share served by top-512</th><th>top-1024</th><th>top-2048</th><th>mean per-layer entropy (bits, max 8)</th></tr></thead><tbody>
+<tr><td>wiki</td><td class="num">315</td><td class="num">187</td><td class="num">128</td><td class="num">100800</td><td class="num">7115</td><td class="num">0.695</td><td class="num">0.394</td><td class="num">0.549</td><td class="num">0.745</td><td class="num">6.44</td></tr>
+<tr><td>code</td><td class="num">537</td><td class="num">409</td><td class="num">128</td><td class="num">171840</td><td class="num">8637</td><td class="num">0.843</td><td class="num">0.394</td><td class="num">0.54</td><td class="num">0.703</td><td class="num">6.64</td></tr>
+<tr><td>chat</td><td class="num">158</td><td class="num">30</td><td class="num">128</td><td class="num">50560</td><td class="num">5397</td><td class="num">0.527</td><td class="num">0.438</td><td class="num">0.609</td><td class="num">0.81</td><td class="num">6.13</td></tr>
+<tr><td>math</td><td class="num">187</td><td class="num">59</td><td class="num">128</td><td class="num">59840</td><td class="num">6627</td><td class="num">0.647</td><td class="num">0.397</td><td class="num">0.544</td><td class="num">0.727</td><td class="num">6.45</td></tr>
+</tbody></table></div>
+<h3>Top decode kernels (nsys, tg64 under profiler)</h3>
+<div class="tbl"><table><thead><tr><th>profile</th><th>time %</th><th>instances</th><th>avg µs</th><th>kernel</th></tr></thead><tbody>
+<tr><td>J-P001-nsys-decode/stats</td><td class="num">41.1</td><td class="num">1560</td><td class="num">396.5</td><td>void mul_mat_vec_f&lt;__nv_bfloat16, float, (int)1, (int)256, (bool)1, (bool)0&gt;(const T1 *, c</td></tr>
+<tr><td>J-P001-nsys-decode/stats</td><td class="num">40.2</td><td class="num">6305</td><td class="num">95.9</td><td>void mul_mat_vec_f&lt;__nv_bfloat16, float, (int)1, (int)256, (bool)0, (bool)0&gt;(const T1 *, c</td></tr>
+<tr><td>J-P001-nsys-decode/stats</td><td class="num">12.2</td><td class="num">1560</td><td class="num">117.7</td><td>void mul_mat_f&lt;__nv_bfloat162, (int)32, (int)1, (int)4, (bool)1&gt;(const T1 *, const float *</td></tr>
+<tr><td>J-P001-nsys-decode/stats</td><td class="num">1.4</td><td class="num">1560</td><td class="num">13.7</td><td>void flash_attn_ext_f16&lt;(int)64, (int)64, (int)4, (int)2, (bool)0, (bool)0, (bool)0&gt;(const</td></tr>
+<tr><td>J-P002-nsys-P1/P1</td><td class="num">46.8</td><td class="num">6305</td><td class="num">100.3</td><td>void mul_mat_vec_f&lt;__nv_bfloat16, float, (int)1, (int)256, (bool)0, (bool)0&gt;(const T1 *, c</td></tr>
+<tr><td>J-P002-nsys-P1/P1</td><td class="num">30.3</td><td class="num">3120</td><td class="num">131.3</td><td>void mul_mat_f&lt;__nv_bfloat162, (int)32, (int)1, (int)8, (bool)1&gt;(const T1 *, const float *</td></tr>
+<tr><td>J-P002-nsys-P1/P1</td><td class="num">14.8</td><td class="num">1560</td><td class="num">128.3</td><td>void mul_mat_f&lt;__nv_bfloat162, (int)32, (int)1, (int)4, (bool)1&gt;(const T1 *, const float *</td></tr>
+<tr><td>J-P002-nsys-P1/P1</td><td class="num">1.7</td><td class="num">1560</td><td class="num">14.7</td><td>void flash_attn_ext_f16&lt;(int)64, (int)64, (int)4, (int)2, (bool)0, (bool)0, (bool)0&gt;(const</td></tr>
+<tr><td>J-P002-nsys-P1/base</td><td class="num">40.6</td><td class="num">1560</td><td class="num">385.5</td><td>void mul_mat_vec_f&lt;__nv_bfloat16, float, (int)1, (int)256, (bool)1, (bool)0&gt;(const T1 *, c</td></tr>
+<tr><td>J-P002-nsys-P1/base</td><td class="num">40.1</td><td class="num">6305</td><td class="num">94.3</td><td>void mul_mat_vec_f&lt;__nv_bfloat16, float, (int)1, (int)256, (bool)0, (bool)0&gt;(const T1 *, c</td></tr>
+<tr><td>J-P002-nsys-P1/base</td><td class="num">12.7</td><td class="num">1560</td><td class="num">121.1</td><td>void mul_mat_f&lt;__nv_bfloat162, (int)32, (int)1, (int)4, (bool)1&gt;(const T1 *, const float *</td></tr>
+<tr><td>J-P002-nsys-P1/base</td><td class="num">1.4</td><td class="num">1560</td><td class="num">13.7</td><td>void flash_attn_ext_f16&lt;(int)64, (int)64, (int)4, (int)2, (bool)0, (bool)0, (bool)0&gt;(const</td></tr>
+<tr><td>J-P001-nsys-decode/stats</td><td class="num">41.1</td><td class="num">1560</td><td class="num">396.5</td><td>void mul_mat_vec_f&lt;__nv_bfloat16, float, (int)1, (int)256, (bool)1, (bool)0&gt;(const T1 *, c</td></tr>
+<tr><td>J-P001-nsys-decode/stats</td><td class="num">40.2</td><td class="num">6305</td><td class="num">95.9</td><td>void mul_mat_vec_f&lt;__nv_bfloat16, float, (int)1, (int)256, (bool)0, (bool)0&gt;(const T1 *, c</td></tr>
+<tr><td>J-P001-nsys-decode/stats</td><td class="num">12.2</td><td class="num">1560</td><td class="num">117.7</td><td>void mul_mat_f&lt;__nv_bfloat162, (int)32, (int)1, (int)4, (bool)1&gt;(const T1 *, const float *</td></tr>
+<tr><td>J-P001-nsys-decode/stats</td><td class="num">1.4</td><td class="num">1560</td><td class="num">13.7</td><td>void flash_attn_ext_f16&lt;(int)64, (int)64, (int)4, (int)2, (bool)0, (bool)0, (bool)0&gt;(const</td></tr>
+<tr><td>J-P003/mixE4K</td><td class="num">39.5</td><td class="num">1,560</td><td class="num">254.9</td><td>void mul_mat_vec_q&lt;(ggml_type)12, (int)1, (bool)1, (bool)1, (bool)0&gt;(const void *, const v</td></tr>
+<tr><td>J-P003/mixE4K</td><td class="num">31.6</td><td class="num">6,305</td><td class="num">50.4</td><td>void mul_mat_vec_q&lt;(ggml_type)8, (int)1, (bool)0, (bool)0, (bool)0&gt;(const void *, const vo</td></tr>
+<tr><td>J-P003/mixE4K</td><td class="num">15.5</td><td class="num">1,560</td><td class="num">99.7</td><td>void mul_mat_vec_q&lt;(ggml_type)12, (int)1, (bool)0, (bool)1, (bool)0&gt;(const void *, const v</td></tr>
+<tr><td>J-P003/mixE4K</td><td class="num">2.6</td><td class="num">1,560</td><td class="num">16.5</td><td>void flash_attn_ext_f16&lt;(int)64, (int)64, (int)4, (int)2, (bool)0, (bool)0, (bool)0&gt;(const</td></tr>
+</tbody></table></div>
+<h3>NVMe ceiling (fio)</h3><p class="small">Queued behind the engine comparison; not yet run.</p>
+<h3>Lab jobs on jetson-arm with admission decisions</h3>
+<div class="tbl"><table><thead><tr><th>job</th><th>image</th><th>tests</th><th>admission</th><th>reasons</th><th>attempts</th></tr></thead><tbody>
+<tr><td>job-0ec3b98dbb</td><td>x86-cuda-declared</td><td>gen_smoke</td><td>rejected</td><td>platform mismatch: linux/amd64; cuda_arch mismatch; image requirement missing: r</td><td></td></tr>
+<tr><td>job-43ef050ce9</td><td>jetson-c1</td><td>gen_smoke</td><td>accepted</td><td></td><td>att-1:interrupted att-2:completed</td></tr>
+<tr><td>job-4433960e61</td><td>jetson-c1</td><td>gen_smoke</td><td>accepted</td><td></td><td>att-1:completed</td></tr>
+<tr><td>job-5c142dd5df</td><td>jetson-c1</td><td>ppl20,gen_smoke</td><td>accepted</td><td></td><td>att-1:interrupted_sandbox_terminated att-2:completed</td></tr>
+<tr><td>job-82c4a257d3</td><td>jetson-c1</td><td>gen_smoke</td><td>needs_information</td><td>model path missing</td><td></td></tr>
+<tr><td>job-88a9bbd69d</td><td>jetson-c1</td><td>gen_smoke_c2k</td><td>accepted</td><td></td><td>att-1:completed</td></tr>
+<tr><td>job-b894d71b23</td><td>llamacpp-31288c9</td><td>gen_smoke</td><td>needs_information</td><td>image platform missing; image target_requirements missing</td><td></td></tr>
+<tr><td>job-c7046d34b6</td><td>nope</td><td>gen_smoke</td><td>needs_information</td><td>unknown image record nope</td><td></td></tr>
+<tr><td>job-ecf12fd41a</td><td>jetson-c1</td><td>gen_smoke</td><td>accepted</td><td></td><td>att-1:completed</td></tr>
+</tbody></table></div>
+<h3>Host inventory (hosts/jetson-arm.json)</h3>
+<div class="tbl"><table><thead><tr><th>group</th><th>fact</th><th>value</th></tr></thead><tbody>
+<tr><td>identity</td><td>host_id</td><td>jetson-arm</td></tr>
+<tr><td>identity</td><td>hostname</td><td>satay</td></tr>
+<tr><td>identity</td><td>uname</td><td>Linux satay 5.15.199-tegra #1 SMP PREEMPT Thu Jul 16 11:27:38 PDT 2026 aarch64 aarch64 aarch64 GNU/Linux</td></tr>
+<tr><td>identity</td><td>os_pretty_name</td><td>Ubuntu 22.04.5 LTS</td></tr>
+<tr><td>identity</td><td>nv_tegra_release</td><td># R36 (release), REVISION: 5.2, GCID: 46426093, BOARD: generic, EABI: aarch64, DATE: Thu Jul 16 18:56:22 UTC 2</td></tr>
+<tr><td>identity</td><td>device_model</td><td>NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super</td></tr>
+<tr><td>identity</td><td>device_compatible</td><td>nvidia,p3768-0000+p3767-0005-super nvidia,p3767-0005 nvidia,tegra234</td></tr>
+<tr><td>cpu</td><td>model_name</td><td>Cortex-A78AE</td></tr>
+<tr><td>cpu</td><td>cpus</td><td>6 (1 thread/core, 3 cores/cluster, 2 clusters, NUMA nodes 1)</td></tr>
+<tr><td>cpu</td><td>max_mhz</td><td class="num">1728.0000</td></tr>
+<tr><td>cpu</td><td>cache</td><td>L1d 384 KiB (6), L1i 384 KiB (6), L2 1.5 MiB (6), L3 4 MiB (2)</td></tr>
+<tr><td>cpu</td><td>features</td><td>fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp uscat ilrcp</td></tr>
+<tr><td>cpu</td><td>sve</td><td>absent (no sve in Features line)</td></tr>
+<tr><td>memory</td><td>MemTotal</td><td>7789756 kB</td></tr>
+<tr><td>memory</td><td>SwapTotal</td><td>3894864 kB</td></tr>
+<tr><td>memory</td><td>swapon</td><td>6 x /dev/zram0-5, 633.9M each, PRIO 5, 0B used</td></tr>
+<tr><td>memory</td><td>zramctl</td><td>6 devices, lzo-rle, DISKSIZE 633.9M each, [SWAP]</td></tr>
+<tr><td>storage</td><td>df_root</td><td>/dev/nvme0n1p1 116G size, 22G used, 88G avail, 20% use, mounted on /</td></tr>
+<tr><td>storage</td><td>lsblk</td><td>nvme0n1 119.2G &#x27;X15 Lite SSD 128GB&#x27; (plus zram0-5 and loop0)</td></tr>
+<tr><td>packages</td><td>nvidia-jetpack</td><td>6.2.3+b81</td></tr>
+<tr><td>packages</td><td>nvidia-l4t-core</td><td class="num">36.5.2-20260716114719</td></tr>
+<tr><td>packages</td><td>cuda-toolkit-12-6</td><td class="num">12.6.11-1</td></tr>
+<tr><td>packages</td><td>cuda-nsight-compute-12-6</td><td class="num">12.6.11-1</td></tr>
+<tr><td>packages</td><td>libcudnn9-cuda-12</td><td>9.3.0.75-1 (cuDNN for CUDA 12.6)</td></tr>
+<tr><td>packages</td><td>tensorrt</td><td>10.3.0.30-1+cuda12.5 (tensorrt, tensorrt-libs)</td></tr>
+<tr><td>packages</td><td>nsight-compute-2024.3.1</td><td class="num">2024.3.1.2-1</td></tr>
+<tr><td>packages</td><td>nsight-systems-2024.5.4</td><td>2024.5.4.34-245434855735v0</td></tr>
+<tr><td>packages</td><td>nvidia-container-toolkit</td><td>1.16.2-1 (libnvidia-container1 and -tools 1.16.2-1)</td></tr>
+<tr><td>cuda</td><td>nvcc_version</td><td>Cuda compilation tools, release 12.6, V12.6.68</td></tr>
+<tr><td>cuda</td><td>list_gpu_arch_tail5</td><td>compute_80, compute_86, compute_87, compute_89, compute_90</td></tr>
+<tr><td>profilers</td><td>nsys</td><td>NVIDIA Nsight Systems version 2024.5.4.34-245434855735v0</td></tr>
+<tr><td>profilers</td><td>nsight_compute_dir</td><td class="num">2024.3.1</td></tr>
+<tr><td>profilers</td><td>ncu</td><td>NVIDIA (R) Nsight Compute Version 2024.3.1.0 (build 34702747)</td></tr>
+<tr><td>profilers</td><td>which_ncu</td><td>not on PATH (command not found); versioned binary under /opt/nvidia/nsight-compute/2024.3.1/</td></tr>
+<tr><td>power_thermal</td><td>nvpmodel_q</td><td>NV Power Mode: MAXN_SUPER; mode id 2</td></tr>
+<tr><td>power_thermal</td><td>gpu_cur_freq</td><td class="num">306000000</td></tr>
+<tr><td>power_thermal</td><td>gpu_max_freq</td><td class="num">1020000000</td></tr>
+<tr><td>power_thermal</td><td>gpu_min_freq</td><td class="num">306000000</td></tr>
+<tr><td>power_thermal</td><td>gpu_available_frequencies</td><td class="num">306000000 408000000 510000000 612000000 714000000 816000000 918000000 1020000000</td></tr>
+<tr><td>power_thermal</td><td>gpu_governor</td><td>nvhost_podgov</td></tr>
+<tr><td>power_thermal</td><td>thermal_zones</td><td>cpu-thermal 48406; gpu-thermal 48968; cv0/cv1/cv2-thermal no data available; soc0-thermal 49312; soc1-thermal </td></tr>
+<tr><td>power_thermal</td><td>emc_rate_debugfs</td><td>cat: /sys/kernel/debug/bpmp/debug/clk/emc/rate: Permission denied</td></tr>
+<tr><td>containers</td><td>which_docker_podman</td><td>neither found (exit 1)</td></tr>
+<tr><td>containers</td><td>nvidia_container_runtime_config_head20</td><td>present; accept-nvidia-visible-devices-envvar-when-unprivileged = true (default), supported-driver-capabilitie</td></tr>
+<tr><td>toolchain_and_kernel</td><td>python3</td><td>Python 3.10.12</td></tr>
+<tr><td>toolchain_and_kernel</td><td>perf_event_paranoid</td><td class="num">2</td></tr>
+<tr><td>toolchain_and_kernel</td><td>nvhost_nvmap_devices</td><td>crw-rw---- root:video for nvhost-as-gpu, nvhost-ctrl-gpu, nvhost-ctrl-isp, nvhost-ctrl-isp-thi, nvhost-ctrl-nv</td></tr>
+<tr><td>toolchain_and_kernel</td><td>nvidia_driver_version</td><td>NVRM version: NVIDIA UNIX Open Kernel Module for aarch64 540.5.0 Release Build (Thu Jul 16 11:39:50 PDT 2026);</td></tr>
+<tr><td>toolchain_and_kernel</td><td>nvidia_params_profiling</td><td>RmProfilingAdminOnly: 1 (the parameter name as shown; NVreg_RestrictProfilingToAdminUsers string not present v</td></tr>
+</tbody></table></div>
+<h3>Decision log</h3>
+<div class="tbl"><table><thead><tr><th>id</th><th>title</th></tr></thead><tbody>
+<tr><td>D001</td><td>D001 — run_op leaves orphan child when wrapper is SIGKILLed</td></tr>
+<tr><td>D002</td><td>D002 — GPU freed with explicit user approval</td></tr>
+<tr><td>D003</td><td>D003 — Goal addition: reverse-engineer Strata&#x27;s methodology to build something similar</td></tr>
+<tr><td>D004</td><td>D004 — Profiler qualification (host RmProfilingAdminOnly=1, perf_event_paranoid=4; GPU RTX 5070 Ti sm_120)</td></tr>
+<tr><td>D005</td><td>D005 — 2-chunk PPL smoke gate calibration (E001, 5 A/A attempts)</td></tr>
+<tr><td>D006</td><td>D006 — BUG found by recovery test: reconcile overwrote a completed result</td></tr>
+<tr><td>D007</td><td>D007 — GPU admission lock removed (user decision)</td></tr>
+<tr><td>D008</td><td>D008 — Decode profile of Granite BF16 on llama.cpp (build 11723) and first screens</td></tr>
+<tr><td>D009</td><td>D009 — Representation screen (REPRESENTATION CHANGE, not an engine change)</td></tr>
+<tr><td>D010</td><td>D010 — Paired token-level quality check (KL vs BF16, 20 chunks x 512, wikitext-2 test)</td></tr>
+<tr><td>D011</td><td>D011 — Bandwidth screen (ncu) and Q8_0 decode profile; engine candidate selected</td></tr>
+<tr><td>D012</td><td>D012 — Objective reframed: reduce GPU memory at similar accuracy and acceptable tokens/s (user, mid-session)</td></tr>
+<tr><td>D013</td><td>D013 — Representation Pareto for GPU memory (job-aa57700ee5; BF16 baseline logits artifacts/kl/bf16.kl, 20x512 wikitext-2)</td></tr>
+<tr><td>D014</td><td>D014 — Expert-granular slot cache: PREDICTION from real routing traces + measured static-offload calibration</td></tr>
+<tr><td>D015</td><td>D015 — SSD-tier emulation via container memory limit (job-6e6b2d39b8; engine b0, mixE4K, --n-cpu-moe 24, own-file cold cache)</td></tr>
+<tr><td>D016</td><td>D016 — Build CC recorded the wrong &quot;image config id&quot; (found by independent observation, T-K)</td></tr>
+<tr><td>D017</td><td>D017 — Is Granite routing skew real? (answering claim-register P12; ProMoE says modern MoEs have near-uniform expert access)</td></tr>
+<tr><td>D018</td><td>D018 — Directive (user, mid-session): apply Strata&#x27;s concepts to Granite to reduce GPU memory; impose a memory restriction to simulate a super-big MoE</td></tr>
+<tr><td>D019</td><td>D019 — hybrid_moe_bench (Opus T-J) result on the D014 prediction (all timings UNSCORED/exploratory; discrete GPU; synthetic activations; replayed rout</td></tr>
+<tr><td>D020</td><td>D020 — Lab runner crashed on non-UTF-8 test output (job-8df3c7bb27 att-1, static --n-cpu-moe sweep, prose prompt)</td></tr>
+<tr><td>D021</td><td>D021 — Jetson lane start: per-host evidence streams; run_op non-UTF-8 echo crash (2026-11-09, host jetson-arm)</td></tr>
+<tr><td>D022</td><td>D022 — Jetson container path qualified; GPU visibility must be explicit (2026-11-09, jetson-arm)</td></tr>
+<tr><td>D023</td><td>D023 — llama.cpp auto-fit context consumes Jetson shared DRAM; pin -c in test policy (2026-11-10, jetson-arm)</td></tr>
+<tr><td>D024</td><td>D024 — Build CC outputs nearly pushed; history rewritten before publication (2026-11-10, jetson-arm, Opus own error)</td></tr>
+<tr><td>D025</td><td>D025 — Full-engine decode gain on Jetson: route bf16 MoE gate/up (batch 1) to MMF instead of fused MMVF (2026-11-10, jetson-arm)</td></tr>
+<tr><td>D026</td><td>D026 — Build CC rebuilds now hit ccache (22x faster); binaries are NOT bit-reproducible across attempts (2026-11-10, jetson-arm)</td></tr>
+<tr><td>D027</td><td>D027 — Per-weight-type MoE gate/up unfuse: +23.6% decode for Q4_K-expert model on Orin, outputs identical (2026-11-10, jetson-arm)</td></tr>
+<tr><td>D028</td><td>D028 — Container memory cap is NOT a reliable bound on CUDA allocations on Tegra (2026-11-10, jetson-arm)</td></tr>
+<tr><td>D029</td><td>D029 — First real over-memory run on Jetson; watchdog kill path was broken under `sg` (2026-11-10, jetson-arm)</td></tr>
+<tr><td>D030</td><td>D030 — Over-memory baselines on Jetson; upstream moe-cache is a net loss on UMA (2026-11-10, jetson-arm)</td></tr>
+</tbody></table></div>
+  <p class="small" style="margin-top:28px">Prepared from campaign records on branch jetson/c1. Claims are local to the Jetson unless stated; nothing here pools raw throughput across machines.</p>
+</div>

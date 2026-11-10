@@ -1,0 +1,599 @@
+diff --git a/common/arg.cpp b/common/arg.cpp
+index aaaa0bc..6a0fd9c 100644
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -2754,6 +2754,11 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
+             params.moe_cache_size = (size_t) value*1024*1024;
+         }
+     ).set_env("LLAMA_ARG_MOE_CACHE_MIB"));
++    add_opt(common_arg(
++        {"--moe-cache-direct-fill"},
++        "fill MoE cache slots from file with direct I/O (Linux CUDA)",
++        [](common_params & params) { params.moe_cache_direct_fill = true; }
++    ).set_env("LLAMA_MOE_CACHE_DIRECT_FILL"));
+     add_opt(common_arg(
+         {"--moe-cache-uma-dedupe"},
+         "release mmap expert pages after cache uploads on integrated devices",
+diff --git a/common/common.cpp b/common/common.cpp
+index 2d1c7e1..c14e0d7 100644
+--- a/common/common.cpp
++++ b/common/common.cpp
+@@ -1763,6 +1763,7 @@ struct llama_context_params common_context_params_to_llama(const common_params &
+     cparams.moe_cache_profile   = params.moe_cache_profile.c_str();
+     cparams.moe_cache_pin_frac  = params.moe_cache_pin_frac;
+     cparams.moe_cache_uma_dedupe = params.moe_cache_uma_dedupe;
++    cparams.moe_cache_direct_fill = params.moe_cache_direct_fill;
+ 
+     return cparams;
+ }
+diff --git a/common/common.h b/common/common.h
+index d3afd6c..14579b1 100644
+--- a/common/common.h
++++ b/common/common.h
+@@ -602,6 +602,7 @@ struct common_params {
+     std::string moe_cache_profile;
+     float moe_cache_pin_frac = 1.0f;
+     int32_t moe_cache_uma_dedupe = 0;
++    bool moe_cache_direct_fill = false;
+ 
+     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
+ 
+diff --git a/ggml/src/ggml-cuda/ggml-cuda.cu b/ggml/src/ggml-cuda/ggml-cuda.cu
+index a49c524..bafd129 100644
+--- a/ggml/src/ggml-cuda/ggml-cuda.cu
++++ b/ggml/src/ggml-cuda/ggml-cuda.cu
+@@ -6531,6 +6531,23 @@ static ggml_backend_feature * ggml_backend_cuda_get_features(ggml_backend_reg_t
+     GGML_UNUSED(reg);
+ }
+ 
++static void * ggml_backend_cuda_moe_host_alloc(size_t size) {
++    void * ptr = nullptr;
++    if (ggml_cuda_pinned_memory_disabled()) {
++        return nullptr;
++    }
++    const cudaError_t err = cudaHostAlloc(&ptr, size, cudaHostAllocPortable);
++    if (err != cudaSuccess) {
++        (void) cudaGetLastError();
++        return nullptr;
++    }
++    return ptr;
++}
++
++static void ggml_backend_cuda_moe_host_free(void * ptr) {
++    CUDA_CHECK(cudaFreeHost(ptr));
++}
++
+ static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, const char * name) {
+     GGML_UNUSED(reg);
+     if (strcmp(name, "ggml_backend_comm_init") == 0) {
+@@ -6547,6 +6564,12 @@ static void * ggml_backend_cuda_reg_get_proc_address(ggml_backend_reg_t reg, con
+         return (void *)ggml_backend_cuda_comm_init_rank;
+     }
+ #endif // GGML_USE_NCCL
++    if (strcmp(name, "ggml_backend_moe_host_alloc") == 0) {
++        return (void *) ggml_backend_cuda_moe_host_alloc;
++    }
++    if (strcmp(name, "ggml_backend_moe_host_free") == 0) {
++        return (void *) ggml_backend_cuda_moe_host_free;
++    }
+     if (strcmp(name, "ggml_backend_register_host_buffer") == 0) {
+         return (void *)ggml_backend_cuda_register_host_buffer;
+     }
+diff --git a/include/llama.h b/include/llama.h
+index 32c125e..7a1967b 100644
+--- a/include/llama.h
++++ b/include/llama.h
+@@ -402,6 +402,7 @@ extern "C" {
+         const char * moe_cache_profile; // ranked expert profile, NULL = disabled [EXPERIMENTAL]
+         float moe_cache_pin_frac;       // static fraction of the cache budget [EXPERIMENTAL]
+         int32_t moe_cache_uma_dedupe;    // 0 = disabled, 1 = IGPU only, 2 = force [EXPERIMENTAL]
++        bool moe_cache_direct_fill;    // read cache fills from file, bypass mmap [EXPERIMENTAL]
+ 
+         // Abort callback
+         // if it returns true, execution of llama_decode() will be aborted
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 0fd0858..337c93b 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -396,6 +396,7 @@ llama_context::llama_context(
+     cparams.moe_cache_profile   = params.moe_cache_profile ? params.moe_cache_profile : "";
+     cparams.moe_cache_pin_frac  = params.moe_cache_pin_frac;
+     cparams.moe_cache_uma_dedupe = params.moe_cache_uma_dedupe;
++    cparams.moe_cache_direct_fill = params.moe_cache_direct_fill;
+ 
+     // resolved after flash attention, see resolve_fused_ops()
+     {
+@@ -619,7 +620,7 @@ llama_context::llama_context(
+             throw std::runtime_error("--moe-cache-profile requires --moe-cache-mib > 0");
+         }
+         if (cparams.moe_cache_size > 0) {
+-            moe_cache = std::make_unique<llama_moe_cache>(model, model.no_alloc(), backend_ptrs, backend_buft, cparams.moe_cache_size, cparams.moe_cache_cpu_share, cparams.moe_cache_profile, cparams.moe_cache_pin_frac, cparams.moe_cache_uma_dedupe);
++            moe_cache = std::make_unique<llama_moe_cache>(model, model.no_alloc(), backend_ptrs, backend_buft, cparams.moe_cache_size, cparams.moe_cache_cpu_share, cparams.moe_cache_profile, cparams.moe_cache_pin_frac, cparams.moe_cache_uma_dedupe, cparams.moe_cache_direct_fill);
+         }
+ 
+         sched_reserve();
+@@ -4284,6 +4285,7 @@ llama_context_params llama_context_default_params() {
+         /*.moe_cache_profile           =*/ nullptr,
+         /*.moe_cache_pin_frac          =*/ 1.0f,
+         /*.moe_cache_uma_dedupe        =*/ 0,
++        /*.moe_cache_direct_fill       =*/ false,
+         /*.abort_callback              =*/ nullptr,
+         /*.abort_callback_data         =*/ nullptr,
+         /*.embeddings                  =*/ false,
+diff --git a/src/llama-cparams.h b/src/llama-cparams.h
+index c3a75fd..8423f91 100644
+--- a/src/llama-cparams.h
++++ b/src/llama-cparams.h
+@@ -65,6 +65,7 @@ struct llama_cparams {
+     std::string moe_cache_profile;
+     float moe_cache_pin_frac;
+     int32_t moe_cache_uma_dedupe;
++    bool moe_cache_direct_fill;
+ 
+     std::vector<bool> embeddings_layer_inp; // [n_layer()] extract input embeddings for layer
+     bool embeddings_layer_inp_dev; // write enabled layer inputs to a device buffer instead of host
+diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+index 2606928..d4a85df 100644
+--- a/src/llama-model.cpp
++++ b/src/llama-model.cpp
+@@ -40,6 +40,11 @@
+ #include <string>
+ #include <vector>
+ 
++#if defined(__linux__)
++#include <fcntl.h>
++#include <unistd.h>
++#endif
++
+ static llama_model * llama_model_mapping(llm_arch arch, const llama_model_params & params) {
+     switch (arch) {
+         case LLM_ARCH_CLIP:
+@@ -1349,6 +1354,13 @@ struct llama_model::impl {
+ 
+     llama_ftype ftype = LLAMA_FTYPE_ALL_F32;
+ 
++    struct tensor_file {
++        size_t index;
++        size_t offset;
++    };
++    std::vector<std::shared_ptr<int>> source_files;
++    std::unordered_map<const ggml_tensor *, tensor_file> tensor_files;
++
+     // model memory mapped files
+     llama_mmaps mappings;
+ 
+@@ -1376,6 +1388,16 @@ struct llama_model::impl {
+     std::vector<float> tensor_split_owned;
+ };
+ 
++bool llama_model::tensor_file_source(const ggml_tensor * tensor, int & fd, size_t & offset) const {
++    const auto it = pimpl->tensor_files.find(tensor);
++    if (it == pimpl->tensor_files.end()) {
++        return false;
++    }
++    fd = *pimpl->source_files.at(it->second.index);
++    offset = it->second.offset;
++    return fd >= 0;
++}
++
+ bool llama_model::is_mmap_range(const void * data, size_t size) const {
+     const uintptr_t start = reinterpret_cast<uintptr_t>(data);
+     for (const auto & mapping : pimpl->mappings) {
+@@ -2157,6 +2179,29 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
+ 
+     load_tensors_hadamard();
+ 
++#if defined(__linux__)
++    pimpl->source_files.resize(ml.files.size());
++    for (const auto & ctx_buf : pimpl->ctxs_bufs) {
++        for (auto * t = ggml_get_first_tensor(ctx_buf.first.get()); t; t = ggml_get_next_tensor(ctx_buf.first.get(), t)) {
++            const auto * w = ml.get_weight(t->name);
++            if (!w || t->view_src || t->ne[2] <= 1 || t->ne[3] != 1 || !ggml_is_contiguous(t) ||
++                    t->type != w->tensor->type || memcmp(t->ne, w->tensor->ne, sizeof(t->ne)) != 0 ||
++                    memcmp(t->nb, w->tensor->nb, sizeof(t->nb)) != 0 || !is_mmap_range(t->data, ggml_nbytes(t))) {
++                continue;
++            }
++            auto & source = pimpl->source_files.at(w->idx);
++            if (!source) {
++                const int fd = fcntl(ml.files.at(w->idx)->file_id(), F_DUPFD_CLOEXEC, 0);
++                source = std::shared_ptr<int>(new int(fd), [](int * p) { if (*p >= 0) { close(*p); } delete p; });
++                if (fd < 0) {
++                    LLAMA_LOG_WARN("%s: cannot retain GGUF split %u descriptor; direct fill unavailable for it\n", __func__, w->idx);
++                }
++            }
++            pimpl->tensor_files[t] = { w->idx, w->offs };
++        }
++    }
++#endif
++
+     return true;
+ }
+ 
+diff --git a/src/llama-model.h b/src/llama-model.h
+index bdfb6f2..c390325 100644
+--- a/src/llama-model.h
++++ b/src/llama-model.h
+@@ -972,6 +972,7 @@ struct llama_model {
+     llama_split_mode split_mode() const;
+     bool no_alloc() const;
+     bool is_mmap_range(const void * data, size_t size) const;
++    bool tensor_file_source(const ggml_tensor * tensor, int & fd, size_t & offset) const;
+ 
+     std::map<ggml_backend_buffer_type_t, size_t> memory_breakdown() const;
+ 
+diff --git a/src/llama-moe-cache.cpp b/src/llama-moe-cache.cpp
+index 35420bd..61614a6 100644
+--- a/src/llama-moe-cache.cpp
++++ b/src/llama-moe-cache.cpp
+@@ -14,6 +14,7 @@
+ #include <cstdlib>
+ #include <cstring>
+ #include <fstream>
++#include <limits>
+ #include <set>
+ #include <sstream>
+ #include <stdexcept>
+@@ -21,6 +22,7 @@
+ #include <vector>
+ 
+ #if defined(__linux__)
++#include <fcntl.h>
+ #include <sys/mman.h>
+ #include <unistd.h>
+ #endif
+@@ -412,6 +414,38 @@ static bool llama_moe_cache_is_host_weight(const ggml_tensor * t) {
+ }
+ 
+ struct llama_moe_cache::impl {
++    struct direct_file {
++        int fd = -1;
++        bool direct = false;
++        bool advice_warned = false;
++        ~direct_file() {
++#if defined(__linux__)
++            if (fd >= 0) { close(fd); }
++#endif
++        }
++    };
++
++    struct direct_source {
++        direct_file * file = nullptr;
++        size_t offset = 0;
++    };
++
++    struct staging_buffer {
++        std::shared_ptr<void> allocation;
++        void * data = nullptr;
++        ggml_backend_event_ptr done;
++        bool busy = false;
++        ~staging_buffer() {
++            if (busy) { ggml_backend_event_synchronize(done.get()); }
++        }
++    };
++
++    struct staging_ring {
++        staging_buffer buffers[2];
++        size_t next = 0;
++        size_t bytes = 0;
++    };
++
+     // a GPU with its own budget and banks, it caches the layers assigned to it
+     struct device {
+         ggml_backend_t backend;
+@@ -423,6 +457,7 @@ struct llama_moe_cache::impl {
+         ggml_context_ptr ctx;
+         ggml_backend_buffer_ptr buf;
+         size_t buf_size = 0;
++        std::unique_ptr<staging_ring> staging; // drain uploads before freeing the banks
+     };
+ 
+     // layers of the same device with the same expert tensor layout share the banks and the LRU of a group
+@@ -440,6 +475,7 @@ struct llama_moe_cache::impl {
+ 
+     struct layer {
+         bool mmap_experts = false;
++        std::vector<direct_source> sources; // one per expert tensor
+         int32_t ig = -1;                    // -1 if the layer is not cached
+         ggml_tensor * slot_map = nullptr;   // I32 [1, n_expert] in host memory
+         ggml_tensor * slot_map_cpu = nullptr; // looked up in place of slot_map by the graphs with a CPU part, if cpu_share > 0, its data is not used
+@@ -468,6 +504,12 @@ struct llama_moe_cache::impl {
+     int32_t n_expert_used;
+ 
+     bool profiled = false;
++    bool direct_requested = false;
++    size_t direct_reads = 0;
++    size_t direct_bytes = 0;
++    int64_t direct_read_us = 0;
++    size_t direct_fallbacks = 0;
++    std::map<int, std::unique_ptr<direct_file>> direct_files;
+     bool dedupe_requested = false;
+     size_t dedupe_calls = 0;
+     size_t dedupe_bytes = 0;
+@@ -480,7 +522,11 @@ struct llama_moe_cache::impl {
+         if (!groups[l.ig].dedupe || !l.mmap_experts || page_size == 0) {
+             return;
+         }
+-        for (const auto * w : l.experts) {
++        for (size_t ip = 0; ip < l.experts.size(); ++ip) {
++            if (!l.sources.empty() && l.sources[ip].file) {
++                continue;
++            }
++            const auto * w = l.experts[ip];
+             const uintptr_t start = reinterpret_cast<uintptr_t>(w->data) + expert*w->nb[2];
+             const size_t skip = (page_size - start%page_size)%page_size;
+             if (skip >= w->nb[2]) {
+@@ -517,6 +563,151 @@ struct llama_moe_cache::impl {
+ #endif
+     }
+ 
++    void init_direct(const llama_model & model) {
++#if defined(__linux__)
++        if (!direct_requested) { return; }
++        for (size_t id = 0; id < devices.size(); ++id) {
++            auto & d = devices[id];
++            size_t max_bytes = 0;
++            for (const auto & l : layers) {
++                if (l.ig < 0 || groups[l.ig].id != (int32_t) id) { continue; }
++                for (const auto * w : l.experts) { max_bytes = std::max(max_bytes, w->nb[2]); }
++            }
++            if (max_bytes == 0) { continue; }
++            auto dev = ggml_backend_get_device(d.backend);
++            auto reg = ggml_backend_dev_backend_reg(dev);
++            using alloc_fn = void * (*)(size_t);
++            using free_fn = void (*)(void *);
++            auto alloc = (alloc_fn) ggml_backend_reg_get_proc_address(reg, "ggml_backend_moe_host_alloc");
++            auto release = (free_fn) ggml_backend_reg_get_proc_address(reg, "ggml_backend_moe_host_free");
++            ggml_backend_dev_props props;
++            ggml_backend_dev_get_props(dev, &props);
++            if (!alloc || !release || !props.caps.events || !props.caps.async || max_bytes > SIZE_MAX/2 - 4095) {
++                LLAMA_LOG_WARN("llama_moe_cache: direct fill unavailable on %s (needs CUDA pinned allocation and events); mmap fallback\n", ggml_backend_dev_name(dev));
++                continue;
++            }
++            auto ring = std::make_unique<staging_ring>();
++            ring->bytes = 2*(max_bytes + 4095);
++            bool ready = true;
++            for (auto & b : ring->buffers) {
++                void * allocation = alloc(max_bytes + 4095);
++                if (!allocation) { ready = false; break; }
++                b.allocation = std::shared_ptr<void>(allocation, release);
++                b.done.reset(ggml_backend_event_new(dev));
++                if (!b.done) { ready = false; break; }
++                const uintptr_t ptr = reinterpret_cast<uintptr_t>(b.allocation.get());
++                b.data = reinterpret_cast<void *>(ptr + (4096 - ptr%4096)%4096);
++            }
++            if (!ready) {
++                LLAMA_LOG_WARN("llama_moe_cache: direct fill pinned ring allocation failed on %s; mmap fallback\n", ggml_backend_dev_name(dev));
++                continue;
++            }
++            d.staging = std::move(ring);
++            LLAMA_LOG_INFO("llama_moe_cache: direct fill on %s: 2 pinned buffers, %zu bytes each (+4095 alignment slack)\n", ggml_backend_dev_name(dev), max_bytes);
++        }
++        for (auto & l : layers) {
++            if (l.ig < 0) { continue; }
++            l.sources.resize(l.experts.size());
++            if (!devices[groups[l.ig].id].staging) { continue; }
++            for (size_t ip = 0; ip < l.experts.size(); ++ip) {
++                const auto * w = l.experts[ip];
++                int fd;
++                size_t offset;
++                if (w->view_src || w->ne[3] != 1 || !ggml_is_contiguous(w) ||
++                        !model.tensor_file_source(w, fd, offset) || offset%4096 || w->nb[2]%4096 ||
++                        w->nb[2] == 0 || offset > (uint64_t) std::numeric_limits<off_t>::max() ||
++                        ggml_nbytes(w) > (uint64_t) std::numeric_limits<off_t>::max() - offset) {
++                    LLAMA_LOG_WARN("llama_moe_cache: direct fill tensor %s is not unchanged file-backed expert-contiguous [ne0,ne1,n_expert] or not 4 KiB aligned; mmap fallback\n", w->name);
++                    continue;
++                }
++                auto it = direct_files.find(fd);
++                if (it == direct_files.end()) {
++                    auto file = std::make_unique<direct_file>();
++                    const std::string path = "/proc/self/fd/" + std::to_string(fd);
++                    int direct_err = EOPNOTSUPP;
++#if defined(O_DIRECT)
++                    file->fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_DIRECT);
++                    file->direct = file->fd >= 0;
++                    if (!file->direct) { direct_err = errno; }
++#endif
++                    if (!file->direct) {
++                        file->fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
++                        LLAMA_LOG_WARN("llama_moe_cache: O_DIRECT unavailable for source fd %d (%s); buffered pread + POSIX_FADV_DONTNEED fallback\n", fd, strerror(direct_err));
++                    }
++                    if (file->fd < 0) {
++                        LLAMA_LOG_WARN("llama_moe_cache: cannot reopen source fd %d (%s); mmap fallback\n", fd, strerror(errno));
++                    }
++                    it = direct_files.emplace(fd, std::move(file)).first;
++                }
++                if (it->second->fd >= 0) { l.sources[ip] = { it->second.get(), offset }; }
++            }
++        }
++#else
++        GGML_UNUSED(model);
++        if (direct_requested) { LLAMA_LOG_WARN("llama_moe_cache: direct fill requires Linux CUDA; mmap fallback\n"); }
++#endif
++    }
++
++    bool upload_direct(layer & l, size_t ip, int32_t expert, int32_t slot) {
++#if defined(__linux__)
++        if (!direct_requested) { return false; }
++        if (l.sources.empty() || !l.sources[ip].file) { ++direct_fallbacks; return false; }
++        auto & source = l.sources[ip];
++        auto & file = *source.file;
++        const auto * w = l.experts[ip];
++        const size_t bytes = w->nb[2];
++        const size_t offset = source.offset + (size_t) expert*bytes;
++        auto & d = devices[groups[l.ig].id];
++        auto & ring = *d.staging;
++        auto & b = ring.buffers[ring.next];
++        ring.next = (ring.next + 1)%2;
++        // Reuse only after the previous upload from this buffer is complete.
++        if (b.busy) { ggml_backend_event_synchronize(b.done.get()); b.busy = false; }
++        const int64_t start = ggml_time_us();
++        size_t read_bytes = 0;
++        while (read_bytes < bytes) {
++            const ssize_t n = pread(file.fd, (uint8_t *) b.data + read_bytes, bytes - read_bytes, (off_t) (offset + read_bytes));
++            if (n < 0 && errno == EINTR) { continue; }
++            const int err = n < 0 ? errno : EIO;
++            if (file.direct && ((n < 0 && (err == EINVAL || err == EOPNOTSUPP || err == ENOSYS)) ||
++                    (n > 0 && (size_t) n < bytes - read_bytes))) {
++                const std::string path = "/proc/self/fd/" + std::to_string(file.fd);
++                const int buffered = open(path.c_str(), O_RDONLY | O_CLOEXEC);
++                if (buffered < 0) { throw std::runtime_error("MoE direct fill: cannot reopen buffered fd"); }
++                close(file.fd);
++                file.fd = buffered;
++                file.direct = false;
++                read_bytes = 0;
++                LLAMA_LOG_WARN("llama_moe_cache: O_DIRECT read rejected/short for %s (%s); buffered pread + POSIX_FADV_DONTNEED fallback\n", w->name, strerror(err));
++                continue;
++            }
++            if (n <= 0) {
++                throw std::runtime_error(std::string("MoE direct fill: pread failed for ") + w->name + ": " + strerror(err));
++            }
++            read_bytes += (size_t) n;
++        }
++        direct_read_us += ggml_time_us() - start;
++        ++direct_reads;
++        direct_bytes += bytes;
++        if (!file.direct) {
++            ++direct_fallbacks;
++            const int err = posix_fadvise(file.fd, (off_t) offset, (off_t) bytes, POSIX_FADV_DONTNEED);
++            if (err && !file.advice_warned) {
++                LLAMA_LOG_WARN("llama_moe_cache: POSIX_FADV_DONTNEED failed: %s\n", strerror(err));
++                file.advice_warned = true;
++            }
++        }
++        ggml_backend_tensor_set_async(d.backend, groups[l.ig].banks[ip], b.data, (size_t) slot*bytes, bytes);
++        ggml_backend_event_record(b.done.get(), d.backend);
++        b.busy = true;
++        return true;
++#else
++        GGML_UNUSED(l); GGML_UNUSED(ip); GGML_UNUSED(expert); GGML_UNUSED(slot);
++        if (direct_requested) { ++direct_fallbacks; }
++        return false;
++#endif
++    }
++
+     size_t pinned_bytes = 0;
+     size_t pinned_slots = 0;
+     std::vector<stats> stats_layer;
+@@ -550,11 +741,12 @@ struct llama_moe_cache::impl {
+     // views used by copy_experts
+     ggml_context_ptr ctx_views;
+ 
+-    impl(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac, int32_t uma_dedupe) :
++    impl(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac, int32_t uma_dedupe, bool direct_fill) :
+             n_expert_used(model.hparams.n_expert_used_max()), layers(model.layers.size()), cpu_share(std::clamp(cpu_share, 0.0f, 1.0f)) {
+         if (uma_dedupe < 0 || uma_dedupe > 2) {
+             throw std::runtime_error("MoE cache: invalid UMA dedupe mode");
+         }
++        direct_requested = direct_fill;
+         dedupe_requested = uma_dedupe != 0;
+ #if defined(__linux__)
+         const long system_page_size = sysconf(_SC_PAGESIZE);
+@@ -801,6 +993,8 @@ struct llama_moe_cache::impl {
+             }
+         }
+ 
++        if (!no_alloc) { init_direct(model); }
++
+         if (profiled && !no_alloc) {
+             const int64_t start = ggml_time_us();
+             for (group & g : groups) {
+@@ -811,14 +1005,17 @@ struct llama_moe_cache::impl {
+                     const auto & experts = layers[pair.first].experts;
+                     for (size_t ip = 0; ip < experts.size(); ++ip) {
+                         const size_t bytes = experts[ip]->nb[2];
+-                        ggml_backend_tensor_set(g.banks[ip], (const uint8_t *) experts[ip]->data + pair.second*bytes, slot*bytes, bytes);
++                        if (!upload_direct(layers[pair.first], ip, pair.second, slot)) {
++                            ggml_backend_tensor_set(g.banks[ip], (const uint8_t *) experts[ip]->data + pair.second*bytes, slot*bytes, bytes);
++                        }
+                         pinned_bytes += bytes;
+                     }
+-                    // tensor_set is synchronous; all slices of this expert are complete.
++                    // Only mmap tensor_set sources need advice here; those uploads are synchronous.
+                     dedupe_expert(layers[pair.first], pair.second);
+                     ++pinned_slots;
+                 }
+             }
++            for (auto & d : devices) { if (d.staging) { ggml_backend_synchronize(d.backend); } }
+             LLAMA_LOG_INFO("llama_moe_cache: pinned %zu slots, %zu bytes, synchronous upload %.3f ms\n", pinned_slots, pinned_bytes, (ggml_time_us() - start)/1000.0);
+         }
+ 
+@@ -1058,17 +1255,24 @@ struct llama_moe_cache::impl {
+             ggml_tensor       * bank = g.banks[ip];
+             const size_t expert_size = w->nb[2];
+             for (size_t i = 0; i < fills.size();) {
++                if (upload_direct(l, ip, fills[i].expert, fills[i].slot)) {
++                    bytes += expert_size;
++                    ++i;
++                    continue;
++                }
+                 size_t n = 1;
+                 while (i + n < fills.size() && fills[i + n].expert == fills[i].expert + (int32_t) n && fills[i + n].slot == fills[i].slot + (int32_t) n) {
+                     n++;
+                 }
+                 ggml_backend_tensor_set_async(backend, bank, (const uint8_t *) w->data + fills[i].expert*expert_size, fills[i].slot*expert_size, n*expert_size);
++                if (direct_requested) { direct_fallbacks += n - 1; }
+                 bytes += n*expert_size;
+                 i += n;
+             }
+         }
+ 
+-        if (g.dedupe && l.mmap_experts && !fills.empty()) {
++        const bool mmap_fills = l.sources.empty() || std::any_of(l.sources.begin(), l.sources.end(), [](const direct_source & s) { return !s.file; });
++        if (g.dedupe && l.mmap_experts && mmap_fills && !fills.empty()) {
+             // Wait for every slice before releasing any upload source pages.
+             ggml_backend_synchronize(backend);
+             for (const auto & f : fills) {
+@@ -1096,6 +1300,10 @@ struct llama_moe_cache::impl {
+     }
+ 
+     void log_stats() const {
++        if (direct_requested) {
++            LLAMA_LOG_INFO("llama_moe_cache: direct fill reads = %zu, bytes = %zu, mean read = %.3f us, fallbacks = %zu\n",
++                direct_reads, direct_bytes, direct_reads ? (double) direct_read_us/direct_reads : 0.0, direct_fallbacks);
++        }
+         if (dedupe_requested) {
+             LLAMA_LOG_INFO("llama_moe_cache: dedupe calls = %zu, bytes advised = %zu, failures = %zu\n", dedupe_calls, dedupe_bytes, dedupe_failures);
+             for (const auto & failure : dedupe_errno) {
+@@ -1138,6 +1346,8 @@ struct llama_moe_cache::impl {
+                 json doc{{"pinned_slots", pinned_slots}, {"pinned_bytes", pinned_bytes},
+                     {"ubatch_small", encode(stats_small)}, {"ubatch_large", encode(stats_large)},
+                     {"large_batch_copy", {{"experts", stats_copy.hits}, {"bytes", stats_copy.bytes}}}};
++                doc["direct_fill"] = {{"reads", direct_reads}, {"bytes", direct_bytes}, {"read_us", direct_read_us},
++                    {"mean_read_us", direct_reads ? json((double) direct_read_us/direct_reads) : json(nullptr)}, {"fallbacks", direct_fallbacks}};
+                 doc["dedupe"] = {{"calls", dedupe_calls}, {"bytes_advised", dedupe_bytes}, {"failures", dedupe_failures}, {"errno", json::object()}};
+                 for (const auto & failure : dedupe_errno) {
+                     doc["dedupe"]["errno"][std::to_string(failure.first)] = failure.second;
+@@ -1160,8 +1370,8 @@ struct llama_moe_cache::impl {
+     }
+ };
+ 
+-llama_moe_cache::llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac, int32_t uma_dedupe) :
+-    pimpl(new impl(model, no_alloc, backends, bufts, size, cpu_share, profile, pin_frac, uma_dedupe)) {
++llama_moe_cache::llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac, int32_t uma_dedupe, bool direct_fill) :
++    pimpl(new impl(model, no_alloc, backends, bufts, size, cpu_share, profile, pin_frac, uma_dedupe, direct_fill)) {
+ }
+ 
+ llama_moe_cache::~llama_moe_cache() = default;
+@@ -1196,6 +1406,9 @@ std::map<ggml_backend_buffer_type_t, size_t> llama_moe_cache::memory_breakdown()
+         if (d.buf) {
+             res[ggml_backend_buffer_get_type(d.buf.get())] += d.buf_size;
+         }
++        if (d.staging) {
++            res[ggml_backend_cpu_buffer_type()] += d.staging->bytes;
++        }
+     }
+     if (pimpl->buf_host) {
+         res[ggml_backend_buffer_get_type(pimpl->buf_host.get())] += pimpl->buf_host_size;
+diff --git a/src/llama-moe-cache.h b/src/llama-moe-cache.h
+index 2e21f2c..8418fcc 100644
+--- a/src/llama-moe-cache.h
++++ b/src/llama-moe-cache.h
+@@ -15,7 +15,7 @@ class llama_moe_cache {
+ public:
+     // backends are all the backends of the context, each GPU gets its own cache of the given size for the layers assigned to it
+     // cpu_share is the share of the misses computed on the CPU instead of uploaded
+-    llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac, int32_t uma_dedupe);
++    llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac, int32_t uma_dedupe, bool direct_fill);
+     ~llama_moe_cache();
+ 
+     // the device that caches layer il
