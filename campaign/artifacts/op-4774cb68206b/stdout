@@ -1,0 +1,13 @@
+Implemented in `bin/lab` and `lab/test_lab_hosts.py`:
+
+1. Legacy jobs skip admission re-evaluation; Docker memory suffixes accepted.
+2. Admission precedes writes; hashes persisted and verified; exceptions produce `needs_information`.
+3. Unknown images produce complete job and admission records.
+4. Declared images, immutable bindings, and image-load metadata supported.
+5. Baseline waits ≤2 seconds before workload; successful samples clear unavailable status.
+6. Unknown exclusivity stays null; optional NVIDIA fields retain raw values.
+7. Reasons deduplicated; missing profiles name the expected file and exit 12.
+8. Sampler exit/signal cleanup, owner PID recording, and reconcile cleanup added.
+
+`python3 -m pytest -q lab/test_lab_hosts.py`: **63 passed in 0.81s**.
+Risks: hardware behavior remains unverified; SIGKILL can orphan tegrastats until reconciliation. No Docker/GPU/`lab run` executed.

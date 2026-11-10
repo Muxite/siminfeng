@@ -1,0 +1,9 @@
+Completed: [README](cc/moe_dispatch_sm87/README.md) contains source-line answers, template decoding, and correctness tests.
+
+- Gate/up fusion selects MMVF via the 512-row heuristic; standalone NVIDIA ID dispatch selects MMF.
+- [Patch 1](cc/moe_dispatch_sm87/patches/01-unfuse-bf16-ids-to-mmf.patch): env-switched unfusion to MMF.
+- [Patch 2](cc/moe_dispatch_sm87/patches/02-fused-bf16-ids-block-128.patch): env-switched 128-thread fused MMVF.
+- Both default to upstream behavior and pass `apply --check` independently and together.
+- Main risks: MMF activation rounding, accumulation order, GLU semantics, and expert-slot ordering.
+
+Pinned source unchanged. No builds, GPU work, or network access performed.

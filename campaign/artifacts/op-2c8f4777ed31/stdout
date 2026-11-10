@@ -1,0 +1,17 @@
+Implemented `bin/lab`, both `lab/hosts/*.json` profiles, and `lab/test_lab_hosts.py`. Job history unchanged.
+
+`python3 -m pytest -q lab/test_lab_hosts.py` → **45 passed**. No Docker, GPU tools, or `lab run` executed.
+
+Opus commands on `jetson-arm`:
+```bash
+export DOCKER_CMD_PREFIX='sg docker -c'
+MODEL=/home/muk/models/campaign/gguf/granite-3.1-1b-a400m-instruct-bf16.gguf
+bin/lab image add jetson-c1 campaign/llamacpp:jetson-c1 --requirements cc/build_engine/results/jetson-c1/build-record.json
+bin/lab submit --image jetson-c1 --model "$MODEL" --tests gen_smoke --key jt4-jetson-accepted --res cpus=6,memory=5g
+bin/lab image add amd64-check ghcr.io/ggml-org/llama.cpp@sha256:395d01bb47eb23d5e967129c6ebd2b5969365401621e16dd3db33e50fa7462e3 --platform linux/amd64
+bin/lab submit --image amd64-check --model "$MODEL" --tests gen_smoke --key jt4-amd64-rejected --res cpus=6,memory=5g
+bin/lab status
+```
+Expected decisions: Jetson accepted; amd64 rejected for platform mismatch.
+
+Open risks: live integration unverified; amd64 registration requires that image locally. Admission trusts registered platform/build metadata.

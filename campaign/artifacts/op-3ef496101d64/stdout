@@ -1,0 +1,19 @@
+Implemented J-T1. Changed:
+- [build_engine.py](/home/muk/projects/siminfeng/campaign/cc/build_engine/build_engine.py): Jetson profile, native build, schema 2, Docker prefix, Python 3.10 support.
+- [test_build_engine.py](/home/muk/projects/siminfeng/campaign/cc/build_engine/test_build_engine.py): Jetson coverage; existing amd64 tests preserved.
+- [README.md](/home/muk/projects/siminfeng/campaign/cc/build_engine/README.md) and new [Dockerfile](/home/muk/projects/siminfeng/campaign/builds/llamacpp-jetson/Dockerfile).
+
+Validation: **16 passed**; diff whitespace check passed.
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q cc/build_engine/test_build_engine.py --basetemp=cc/build_engine/.pytest-tmp -o cache_dir=cc/build_engine/.pytest_cache
+```
+
+Opus should run this after the existing native compile finishes:
+```bash
+DOCKER_CMD_PREFIX='sg docker -c' BUILD_JOBS=3 python3 cc/build_engine/build_engine.py \
+  --target jetson-orin --source ref/llama.cpp \
+  --commit 31288c9c66e59377f7788d920678a565bb89dd37 \
+  --tag campaign/llamacpp:jetson-c1 --out cc/build_engine/results/jetson-c1
+```
+
+No Docker or real build ran. Open risks: native memory use, runtime library compatibility, and GPU execution remain unverified.
