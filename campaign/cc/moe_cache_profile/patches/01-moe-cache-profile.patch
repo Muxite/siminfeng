@@ -1,0 +1,542 @@
+diff --git a/common/arg.cpp b/common/arg.cpp
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -2755,6 +2755,25 @@
+         }
+     ).set_env("LLAMA_ARG_MOE_CACHE_MIB"));
+     add_opt(common_arg(
++        {"--moe-cache-profile"}, "FILE",
++        "ranked JSON or text expert profile to pin (requires --moe-cache-mib)",
++        [](common_params & params, const std::string & value) {
++            params.moe_cache_profile = value;
++        }
++    ).set_env("LLAMA_MOE_CACHE_PROFILE"));
++    add_opt(common_arg(
++        {"--moe-cache-pin-frac"}, "F",
++        "fraction of the MoE cache budget for pinned experts, from 0 to 1 (default: 1)",
++        [](common_params & params, const std::string & value) {
++            size_t end = 0;
++            const float frac = std::stof(value, &end);
++            if (end != value.size() || !std::isfinite(frac) || frac < 0.0f || frac > 1.0f) {
++                throw std::invalid_argument("invalid MoE cache pin fraction");
++            }
++            params.moe_cache_pin_frac = frac;
++        }
++    ));
++    add_opt(common_arg(
+         {"--moe-cache-cpu-share"}, "F",
+         string_format("share of the MoE cache misses that the CPU computes from the host experts instead of uploading them to the GPU once the cache is full, from 0 to 1 (default: %.2f)", (double) params.moe_cache_cpu_share),
+         [](common_params & params, const std::string & value) {
+diff --git a/common/common.cpp b/common/common.cpp
+--- a/common/common.cpp
++++ b/common/common.cpp
+@@ -1760,6 +1760,8 @@
+ 
+     cparams.moe_cache_size      = params.moe_cache_size;
+     cparams.moe_cache_cpu_share = params.moe_cache_cpu_share;
++    cparams.moe_cache_profile   = params.moe_cache_profile.c_str();
++    cparams.moe_cache_pin_frac  = params.moe_cache_pin_frac;
+ 
+     return cparams;
+ }
+diff --git a/common/common.h b/common/common.h
+--- a/common/common.h
++++ b/common/common.h
+@@ -599,6 +599,8 @@
+ 
+     size_t moe_cache_size      = 0;    // GPU cache size in bytes for the MoE experts kept in the CPU, split among the GPUs like the layers
+     float  moe_cache_cpu_share = 0.0f; // share of the MoE cache misses computed on the CPU instead of uploaded
++    std::string moe_cache_profile;
++    float moe_cache_pin_frac = 1.0f;
+ 
+     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
+ 
+diff --git a/include/llama.h b/include/llama.h
+--- a/include/llama.h
++++ b/include/llama.h
+@@ -399,6 +399,8 @@
+ 
+         size_t moe_cache_size;      // device cache in bytes for the experts kept in host memory, split among the devices like the layers, 0 = disabled [EXPERIMENTAL]
+         float  moe_cache_cpu_share; // share of the MoE cache misses computed on the CPU instead of uploaded, 0 = all uploaded [EXPERIMENTAL]
++        const char * moe_cache_profile; // ranked expert profile, NULL = disabled [EXPERIMENTAL]
++        float moe_cache_pin_frac;       // static fraction of the cache budget [EXPERIMENTAL]
+ 
+         // Abort callback
+         // if it returns true, execution of llama_decode() will be aborted
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -393,6 +393,8 @@
+     cparams.kv_unified     = params.kv_unified;
+     cparams.moe_cache_size      = params.moe_cache_size;
+     cparams.moe_cache_cpu_share = params.moe_cache_cpu_share;
++    cparams.moe_cache_profile   = params.moe_cache_profile ? params.moe_cache_profile : "";
++    cparams.moe_cache_pin_frac  = params.moe_cache_pin_frac;
+ 
+     // resolved after flash attention, see resolve_fused_ops()
+     {
+@@ -612,8 +614,11 @@
+             LLAMA_LOG_INFO("%s: pipeline parallelism enabled\n", __func__);
+         }
+ 
++        if (!cparams.moe_cache_profile.empty() && cparams.moe_cache_size == 0) {
++            throw std::runtime_error("--moe-cache-profile requires --moe-cache-mib > 0");
++        }
+         if (cparams.moe_cache_size > 0) {
+-            moe_cache = std::make_unique<llama_moe_cache>(model, model.no_alloc(), backend_ptrs, backend_buft, cparams.moe_cache_size, cparams.moe_cache_cpu_share);
++            moe_cache = std::make_unique<llama_moe_cache>(model, model.no_alloc(), backend_ptrs, backend_buft, cparams.moe_cache_size, cparams.moe_cache_cpu_share, cparams.moe_cache_profile, cparams.moe_cache_pin_frac);
+         }
+ 
+         sched_reserve();
+@@ -4275,6 +4280,8 @@
+         /*.type_v                      =*/ GGML_TYPE_F16,
+         /*.moe_cache_size              =*/ 0,
+         /*.moe_cache_cpu_share         =*/ 0.0f,
++        /*.moe_cache_profile           =*/ nullptr,
++        /*.moe_cache_pin_frac          =*/ 1.0f,
+         /*.abort_callback              =*/ nullptr,
+         /*.abort_callback_data         =*/ nullptr,
+         /*.embeddings                  =*/ false,
+diff --git a/src/llama-cparams.h b/src/llama-cparams.h
+--- a/src/llama-cparams.h
++++ b/src/llama-cparams.h
+@@ -3,6 +3,7 @@
+ #include "llama.h"
+ 
+ #include <cstdint>
++#include <string>
+ #include <vector>
+ 
+ #define LLAMA_MAX_SEQ 256
+@@ -61,6 +62,8 @@
+ 
+     size_t moe_cache_size;
+     float  moe_cache_cpu_share;
++    std::string moe_cache_profile;
++    float moe_cache_pin_frac;
+ 
+     std::vector<bool> embeddings_layer_inp; // [n_layer()] extract input embeddings for layer
+     bool embeddings_layer_inp_dev; // write enabled layer inputs to a device buffer instead of host
+diff --git a/src/llama-moe-cache.cpp b/src/llama-moe-cache.cpp
+--- a/src/llama-moe-cache.cpp
++++ b/src/llama-moe-cache.cpp
+@@ -5,17 +5,92 @@
+ #include "llama-model.h"
+ 
+ #include "ggml-cpp.h"
++#include "../vendor/nlohmann/json.hpp"
+ 
+ #include <algorithm>
+ #include <cmath>
+ #include <cstdio>
+ #include <cstdlib>
+ #include <cstring>
++#include <fstream>
++#include <set>
++#include <sstream>
+ #include <stdexcept>
+ #include <unordered_map>
+ #include <vector>
+ 
+ namespace {
++
++static std::vector<std::pair<int32_t, int32_t>> read_profile(const std::string & path, int32_t n_layer, int32_t n_expert) {
++    std::ifstream in(path);
++    if (!in) {
++        throw std::runtime_error("MoE cache profile: cannot open " + path);
++    }
++    std::vector<std::pair<int32_t, int32_t>> result;
++    std::set<std::pair<int32_t, int32_t>> seen;
++    auto add = [&](int64_t il, int64_t e) {
++        if (il < 0 || il >= n_layer || e < 0 || e >= n_expert) {
++            throw std::runtime_error("MoE cache profile: out-of-range layer/expert " + std::to_string(il) + " " + std::to_string(e));
++        }
++        const auto pair = std::make_pair((int32_t) il, (int32_t) e);
++        if (!seen.insert(pair).second) {
++            throw std::runtime_error("MoE cache profile: duplicate layer/expert");
++        }
++        result.push_back(pair);
++    };
++    in >> std::ws;
++    if (in.peek() == '{' || in.peek() == '[') {
++        using json = nlohmann::ordered_json;
++        const json doc = json::parse(in);
++        auto integer = [](const json & value) -> int64_t {
++            if (!value.is_number_integer() || (value.is_number_unsigned() && value.get<uint64_t>() > INT64_MAX)) {
++                throw std::runtime_error("MoE cache profile: expected an integer");
++            }
++            return value.get<int64_t>();
++        };
++        if (doc.is_object()) {
++            for (const char * key : { "layers", "n_layer", "experts", "n_expert" }) {
++                if (doc.contains(key) && integer(doc.at(key)) != (std::string(key).find("layer") != std::string::npos ? n_layer : n_expert)) {
++                    throw std::runtime_error(std::string("MoE cache profile: model dimension mismatch: ") + key);
++                }
++            }
++        }
++        const json & ranked = doc.is_array() ? doc : doc.at("ranked");
++        if (!ranked.is_array()) {
++            throw std::runtime_error("MoE cache profile: ranked must be an array");
++        }
++        for (const auto & item : ranked) {
++            if (item.is_object()) {
++                add(integer(item.at("layer")), integer(item.at("expert")));
++            } else if (item.is_array() && item.size() == 2) {
++                add(integer(item.at(0)), integer(item.at(1)));
++            } else {
++                throw std::runtime_error("MoE cache profile: expected layer/expert pair");
++            }
++        }
++    } else {
++        std::string line;
++        size_t line_no = 0;
++        while (std::getline(in, line)) {
++            ++line_no;
++            std::istringstream row(line);
++            row >> std::ws;
++            if (row.eof() || row.peek() == '#') {
++                continue;
++            }
++            int64_t il, e;
++            std::string extra;
++            if (!(row >> il >> e) || (row >> extra)) {
++                throw std::runtime_error("MoE cache profile: expected 'layer expert' at line " + std::to_string(line_no));
++            }
++            add(il, e);
++        }
++    }
++    if (in.bad() || result.empty()) {
++        throw std::runtime_error("MoE cache profile: empty profile or read error");
++    }
++    return result;
++}
+ 
+ // ClassLRU: one LRU list per frequency class, over the experts of a group of layers
+ // slot_map[il][e] is the slot of expert e of layer il, n_slots or later if not cached, the host slot map tensor
+@@ -28,6 +103,7 @@
+ 
+     int32_t n_expert = 0;
+     int32_t n_slots  = 0;
++    int32_t n_managed = 0;
+     int32_t empty    = 0; // slot of the experts that are not cached
+ 
+     // [n_layer] data of the slot maps, the experts at slot n_slots or later are not cached
+@@ -53,25 +129,26 @@
+     std::vector<int32_t> misses;
+     std::vector<uint64_t> token_zero; // [n_tokens] zero slots used by each token
+ 
+-    void init(int32_t n_layer, int32_t n_expert, int32_t n_slots) {
++    void init(int32_t n_layer, int32_t n_expert, int32_t n_slots, int32_t n_pin = 0) {
+         GGML_ASSERT(n_class == (int) std::log2(1.0f/(1.0f - std::exp2(-1.0f/crf_half_life))) + 1);
+         this->n_expert = n_expert;
+         this->n_slots  = n_slots;
+         this->empty    = n_slots;
++        n_managed = n_slots - n_pin;
+         slot_map.assign(n_layer, nullptr);
+         key_of.assign(n_slots, -1);
+         prev.resize(n_slots);
+         next.resize(n_slots);
+-        for (int32_t s = 0; s < n_slots; ++s) {
++        for (int32_t s = 0; s < n_managed; ++s) {
+             prev[s] = s - 1;
+-            next[s] = s + 1 < n_slots ? s + 1 : -1;
++            next[s] = s + 1 < n_managed ? s + 1 : -1;
+         }
+         for (int c = 0; c < n_class; ++c) {
+             head[c] = -1;
+             tail[c] = -1;
+         }
+-        head[0] = 0;
+-        tail[0] = n_slots - 1;
++        head[0] = n_managed > 0 ? 0 : -1;
++        tail[0] = n_managed - 1;
+         list_of.assign(n_slots, 0);
+         crf.assign((size_t) n_layer*n_expert, 0.0f);
+         last_use.assign((size_t) n_layer*n_expert, -1);
+@@ -185,10 +262,11 @@
+     // returns false if the ids select more distinct experts than there are slots
+     template <typename F>
+     bool plan(int32_t il, const int32_t * ids, size_t n_ids, int64_t n_tokens, int32_t n_used, int32_t n_zero, F && n_cpu,
+-            std::vector<fill> & fills, std::vector<fill> & cpu, size_t & n_hit) {
++            std::vector<fill> & fills, std::vector<fill> & cpu, size_t & n_hit, size_t & n_pinned_hit) {
+         fills.clear();
+         cpu.clear();
+         n_hit = 0;
++        n_pinned_hit = 0;
+ 
+         if (++seen_gen == 0) {
+             std::fill(seen.begin(), seen.end(), 0);
+@@ -214,7 +292,11 @@
+             const int32_t key = make_key(il, e);
+             use(il, key);
+             if (slots[e] < n_slots) {
+-                move(slots[e], class_of(key));
++                if (slots[e] < n_managed) {
++                    move(slots[e], class_of(key));
++                } else {
++                    ++n_pinned_hit;
++                }
+                 n_hit++;
+             } else {
+                 misses.push_back(e);
+@@ -223,7 +305,13 @@
+ 
+         // the misses with the lowest CRF are left to the CPU, a miss that keeps being used gains CRF and enters the cache
+         // all misses are used at the same clock, so their CRF compare without decay
+-        const size_t n_c = std::min(n_cpu(misses.size()), misses.size());
++        size_t selected_managed = 0;
++        for (int32_t e : uniq) {
++            selected_managed += slots[e] < n_managed;
++        }
++        const size_t room = n_managed - selected_managed;
++        const size_t overflow = misses.size() > room ? misses.size() - room : 0;
++        const size_t n_c = std::min(std::max(n_cpu(misses.size()), overflow), misses.size());
+         if (n_c > 0) {
+             std::sort(misses.begin(), misses.end(), [&](int32_t a, int32_t b) {
+                 const float crf_a = crf[make_key(il, a)];
+@@ -340,6 +428,7 @@
+         size_t host_bytes = 0;
+         int32_t n_slots = 0;
+         moe_cache_lru lru;
++        std::vector<std::pair<int32_t, int32_t>> pinned;
+     };
+ 
+     struct layer {
+@@ -359,6 +448,7 @@
+     };
+ 
+     struct stats {
++        size_t pinned = 0;
+         size_t hits   = 0;
+         size_t misses = 0;
+         size_t cpu    = 0; // misses computed on the CPU
+@@ -369,6 +459,11 @@
+ 
+     int32_t n_expert_used;
+ 
++    bool profiled = false;
++    size_t pinned_bytes = 0;
++    size_t pinned_slots = 0;
++    std::vector<stats> stats_layer;
++
+     stats stats_small; // up to 8 tokens per ubatch
+     stats stats_large;
+     stats stats_copy;  // experts copied from the cache for large batches
+@@ -398,8 +493,14 @@
+     // views used by copy_experts
+     ggml_context_ptr ctx_views;
+ 
+-    impl(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share) :
++    impl(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac) :
+             n_expert_used(model.hparams.n_expert_used_max()), layers(model.layers.size()), cpu_share(std::clamp(cpu_share, 0.0f, 1.0f)) {
++        profiled = !profile.empty();
++        if (!std::isfinite(pin_frac) || pin_frac < 0.0f || pin_frac > 1.0f) {
++            throw std::runtime_error("MoE cache profile: pin fraction must be in [0, 1]");
++        }
++        const auto ranking = profiled ? read_profile(profile, model.layers.size(), model.hparams.n_expert) : std::vector<std::pair<int32_t, int32_t>>{};
++        stats_layer.resize(model.layers.size());
+         for (size_t i = 0; i < backends.size(); ++i) {
+             const auto dev_type = ggml_backend_dev_type(ggml_backend_get_device(backends[i]));
+             if (dev_type == GGML_BACKEND_DEVICE_TYPE_GPU || dev_type == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+@@ -449,7 +550,7 @@
+ 
+         // with misses on the CPU, the n_zero slots after the cached ones stay zero: the device computes these misses as zero
+         // one extra slot at the end, CUDA MMQ can read past the last expert
+-        n_zero = cpu_share > 0.0f ? std::min<int32_t>(n_expert_used, 64) : 0;
++        n_zero = cpu_share > 0.0f || profiled ? std::min<int32_t>(n_expert_used, 64) : 0;
+         auto alloc_size = [&](const group & g, int32_t n_slots) {
+             const size_t alignment = ggml_backend_buft_get_alignment(devices[g.id].buft);
+             size_t res = 0;
+@@ -513,7 +614,20 @@
+                 g.n_slots = 0;
+                 continue;
+             }
+-            g.lru.init(model.layers.size(), n_expert, g.n_slots);
++            if (profiled) {
++                size_t expert_bytes = 0;
++                for (const auto * t : g.ref) {
++                    expert_bytes += t->nb[2];
++                }
++                const size_t pin_budget = (size_t) (std::floor((double) size/1048576*pin_frac)*1048576*d.split/split_sum*g.host_bytes/d.host_bytes);
++                for (const auto & pair : ranking) {
++                    if (std::find(g.layers.begin(), g.layers.end(), pair.first) != g.layers.end() &&
++                            g.pinned.size() < (size_t) g.n_slots && g.pinned.size() < pin_budget/expert_bytes) {
++                        g.pinned.push_back(pair);
++                    }
++                }
++            }
++            g.lru.init(model.layers.size(), n_expert, g.n_slots, (int32_t) g.pinned.size());
+             n_tensors[g.id] += g.ref.size()*(1 + g.layers.size());
+             n_tensors_host  += g.layers.size()*(n_zero > 0 ? 3 : 1); // slot maps and CPU map
+         }
+@@ -608,6 +722,25 @@
+                     }
+                 }
+             }
++        }
++
++        if (profiled && !no_alloc) {
++            const int64_t start = ggml_time_us();
++            for (group & g : groups) {
++                for (size_t i = 0; i < g.pinned.size(); ++i) {
++                    const auto pair = g.pinned[i];
++                    const int32_t slot = g.lru.n_managed + (int32_t) i;
++                    g.lru.slot_map[pair.first][pair.second] = slot;
++                    const auto & experts = layers[pair.first].experts;
++                    for (size_t ip = 0; ip < experts.size(); ++ip) {
++                        const size_t bytes = experts[ip]->nb[2];
++                        ggml_backend_tensor_set(g.banks[ip], (const uint8_t *) experts[ip]->data + pair.second*bytes, slot*bytes, bytes);
++                        pinned_bytes += bytes;
++                    }
++                    ++pinned_slots;
++                }
++            }
++            LLAMA_LOG_INFO("llama_moe_cache: pinned %zu slots, %zu bytes, synchronous upload %.3f ms\n", pinned_slots, pinned_bytes, (ggml_time_us() - start)/1000.0);
+         }
+ 
+         // as weights, the ops that read the banks run on the device and the slot maps are copied with the copy callback
+@@ -694,6 +827,18 @@
+         if (n_tokens == 0 || n_tokens > max_batch || std::min(n_tokens*n_expert_used, l.slot_map->ne[1]) > groups[l.ig].n_slots) {
+             return nullptr;
+         }
++        if (profiled) {
++            const group & g = groups[l.ig];
++            size_t pinned_here = 0;
++            for (const auto & pair : g.pinned) {
++                pinned_here += pair.first == il;
++            }
++            const int64_t possible = std::min<int64_t>(n_tokens*n_expert_used, l.slot_map->ne[1] - (int64_t) pinned_here);
++            // Only single-token CPU plans guarantee enough distinct zero slots for capacity overflow.
++            if (possible > g.lru.n_managed && (!cpu_part || n_tokens != 1 || n_expert_used > n_zero)) {
++                return nullptr;
++            }
++        }
+         GGML_ASSERT(!cpu_part || l.slot_map_cpu != nullptr);
+         return cpu_part ? l.slot_map_cpu : l.slot_map;
+     }
+@@ -711,7 +856,7 @@
+         probe.ne[2] = n_tokens;
+         probe.ne[3] = 1;
+         for (const device & d : devices) {
+-            if (ggml_backend_offload_op(d.backend, &probe)) {
++            if (!profiled && ggml_backend_offload_op(d.backend, &probe)) {
+                 return nullptr;
+             }
+         }
+@@ -804,14 +949,15 @@
+         }
+ 
+         // part of the misses is computed on the CPU once the cache is full, the carry keeps the share right on average
+-        const uint32_t share_q = has_cpu && g.lru.n_filled == g.lru.n_slots ? cpu_share_q : 0;
++        const uint32_t share_q = has_cpu && g.lru.n_filled == g.lru.n_managed ? cpu_share_q : 0;
+         auto n_cpu = [&](size_t n_miss) {
+             const uint64_t acc = (uint64_t) n_miss*share_q + l.cpu_acc;
+             l.cpu_acc = acc & 0xffff;
+             return (size_t) (acc >> 16);
+         };
++        size_t n_pinned_hit = 0;
+         size_t n_hit = 0;
+-        if (!g.lru.plan(il, ids.data(), ids.size(), sel->src[0]->ne[1], n_used, n_zero, n_cpu, fills, cpu, n_hit)) {
++        if (!g.lru.plan(il, ids.data(), ids.size(), sel->src[0]->ne[1], n_used, n_zero, n_cpu, fills, cpu, n_hit, n_pinned_hit)) {
+             GGML_ABORT("the MoE cache is too small for the experts selected in layer %d", il);
+         }
+         if (has_cpu) {
+@@ -844,6 +990,13 @@
+         }
+ 
+         stats & st = ids.size() <= (size_t) 8*n_expert_used ? stats_small : stats_large;
++        st.pinned += n_pinned_hit;
++        stats & sl = stats_layer[il];
++        sl.pinned += n_pinned_hit;
++        sl.hits += n_hit;
++        sl.misses += fills.size() + cpu.size();
++        sl.cpu += cpu.size();
++        sl.bytes += bytes;
+         st.hits   += n_hit;
+         st.misses += fills.size() + cpu.size();
+         st.cpu    += cpu.size();
+@@ -856,14 +1009,52 @@
+     }
+ 
+     void log_stats() const {
+-        auto log = [](const char * name, const stats & st) {
++        auto log = [this](const char * name, const stats & st) {
+             const size_t n = st.hits + st.misses;
+             if (n == 0) {
+                 return;
+             }
+             LLAMA_LOG_INFO("llama_moe_cache: %s: hits = %zu, misses = %zu (%zu on the CPU), hit rate = %.2f%%, uploaded = %.2f MiB\n",
+                 name, st.hits, st.misses, st.cpu, 100.0*st.hits/n, st.bytes/1024.0/1024.0);
++            if (profiled) {
++                LLAMA_LOG_INFO("llama_moe_cache: %s: pinned hits = %zu, managed hits = %zu\n", name, st.pinned, st.hits - st.pinned);
++            }
+         };
++        if (profiled) {
++            LLAMA_LOG_INFO("llama_moe_cache: pinned slots = %zu, bytes = %zu\n", pinned_slots, pinned_bytes);
++            for (size_t first = 0; first < stats_layer.size(); first += 8) {
++                std::ostringstream line;
++                for (size_t il = first; il < std::min(first + 8, stats_layer.size()); ++il) {
++                    const auto & st = stats_layer[il];
++                    const size_t n = st.hits + st.misses;
++                    line << " " << il << "=";
++                    if (n) { line << 100.0*st.hits/n << "%"; } else { line << "n/a"; }
++                }
++                LLAMA_LOG_INFO("llama_moe_cache: layer hit rates:%s\n", line.str().c_str());
++            }
++        }
++        if (const char * path = getenv("LLAMA_MOE_CACHE_STATS_JSON"); path && *path) {
++            try {
++                using json = nlohmann::ordered_json;
++                auto encode = [](const stats & st) -> json {
++                    const size_t n = st.hits + st.misses;
++                    return json{{"hits", st.hits}, {"pinned_hits", st.pinned}, {"managed_hits", st.hits - st.pinned},
++                        {"misses", st.misses}, {"cpu_misses", st.cpu}, {"bytes", st.bytes},
++                        {"hit_rate", n ? json((double) st.hits/n) : json(nullptr)}};
++                };
++                json doc{{"pinned_slots", pinned_slots}, {"pinned_bytes", pinned_bytes},
++                    {"ubatch_small", encode(stats_small)}, {"ubatch_large", encode(stats_large)},
++                    {"large_batch_copy", {{"experts", stats_copy.hits}, {"bytes", stats_copy.bytes}}}};
++                doc["layers"] = json::array();
++                for (const auto & st : stats_layer) { doc["layers"].push_back(encode(st)); }
++                std::ofstream out(path);
++                out << doc.dump(2) << '\n';
++                out.close();
++                if (!out) { LLAMA_LOG_ERROR("llama_moe_cache: failed to write statistics JSON: %s\n", path); }
++            } catch (const std::exception & ex) {
++                LLAMA_LOG_ERROR("llama_moe_cache: statistics JSON failed: %s\n", ex.what());
++            }
++        }
+         log("ubatch <= 8", stats_small);
+         log("ubatch  > 8", stats_large);
+         if (stats_copy.hits > 0) {
+@@ -872,8 +1063,8 @@
+     }
+ };
+ 
+-llama_moe_cache::llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share) :
+-    pimpl(new impl(model, no_alloc, backends, bufts, size, cpu_share)) {
++llama_moe_cache::llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac) :
++    pimpl(new impl(model, no_alloc, backends, bufts, size, cpu_share, profile, pin_frac)) {
+ }
+ 
+ llama_moe_cache::~llama_moe_cache() = default;
+diff --git a/src/llama-moe-cache.h b/src/llama-moe-cache.h
+--- a/src/llama-moe-cache.h
++++ b/src/llama-moe-cache.h
+@@ -4,6 +4,7 @@
+ 
+ #include <map>
+ #include <memory>
++#include <string>
+ #include <vector>
+ 
+ struct llama_model;
+@@ -14,7 +15,7 @@
+ public:
+     // backends are all the backends of the context, each GPU gets its own cache of the given size for the layers assigned to it
+     // cpu_share is the share of the misses computed on the CPU instead of uploaded
+-    llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share);
++    llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac);
+     ~llama_moe_cache();
+ 
+     // the device that caches layer il

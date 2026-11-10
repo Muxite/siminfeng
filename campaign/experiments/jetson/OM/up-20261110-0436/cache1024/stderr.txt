@@ -1,0 +1,25 @@
+0.00.023.069 I llama_completion: llama backend init
+0.00.023.119 I llama_completion: load the model and apply lora adapter, if any
+0.01.770.018 W llama_model_loader: tensor overrides to CPU are used with mmap enabled - consider using --load-mode none for better performance
+0.50.702.090 I cmn          init: llama threadpool init, n_threads = 6
+0.55.759.615 I 
+0.55.762.503 I system_info: n_threads = 6 (n_threads_batch = 6) / 6 | CUDA : ARCHS = 870 | USE_GRAPHS = 1 | FA_QUANTS = q4_0-q4_0,q8_0-q8_0,f16-f16,bf16-bf16 | CPU : NEON = 1 | ARM_FMA = 1 | FP16_VA = 1 | DOTPROD = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.55.762.509 I 
+0.55.766.018 I sampler seed: 4294967295
+0.55.766.470 I sampler params: 
+	repeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000
+	dry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 64
+	top_k = 20, top_p = 0.950, min_p = 0.050, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000
+	mirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900
+0.55.766.501 I sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> greedy 
+0.55.766.504 I generate: n_ctx = 4096, n_batch = 2048, n_predict = 64, n_keep = 0
+0.55.766.505 I 
+2.38.489.598 I common_perf_print:    sampling time =      73.50 ms
+2.38.489.616 I common_perf_print:    samplers time =      29.30 ms /   259 tokens
+2.38.490.520 I common_perf_print:        load time =   54481.70 ms
+2.38.490.560 I common_perf_print: prompt eval time =   33722.31 ms /   195 tokens (  172.93 ms per token,     5.78 tokens per second)
+2.38.490.568 I common_perf_print:        eval time =   68908.59 ms /    63 runs   ( 1093.79 ms per token,     0.91 tokens per second)
+2.38.490.570 I common_perf_print:       total time =  102730.91 ms /   258 tokens
+2.38.490.572 I common_perf_print: unaccounted time =      26.52 ms /   0.0 %      (total - sampling - prompt eval - eval) / (total)
+2.38.490.577 I common_perf_print:    graphs reused =         61
+2.38.490.578 I common_perf_print:   graph reallocs =          1    /     0        (same size) / (changed size)

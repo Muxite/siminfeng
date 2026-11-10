@@ -1,0 +1,30 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c3f4-640b-7402-a6dc-127a7cb8d959
+--------
+user
+Execute the assignment in assignments/J-OM6-direct-fill.md exactly. Read it first.
+codex
+I’ll read the assignment first, then carry out its instructions and required checks.
+exec
+/bin/bash -lc 'cat assignments/J-OM6-direct-fill.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Assignment J-OM6 — O_DIRECT fill for moe-cache slots (component; host jetson-arm; worker Codex)
+Tree: ref/llama.cpp-up1108 @ cf34d311 + cc/moe_cache_profile/patches/01-moe-cache-profile.patch + 02-uma-dedupe.patch. Your patch 03 must apply on top of both (`git -C ref/llama.cpp-up1108 apply --check` on the concatenation 01+02+03).
+Evidence: decisions/D030 (upstream cache: 64% hit rate at 2 GiB yet decode slower than no cache on Jetson UMA — misses page-fault 20 KB at a time from NVMe AND get copied into the bank; bank DRAM is taken from the page cache). Model layout: experts are contiguous per-expert slices inside fused per-layer tensors (gate/up 589,824 B, down 720,896 B, 4 KiB aligned — experiments/jetson/OM/qwen36-layout.json).
+Write `cc/moe_cache_profile/patches/03-direct-fill.patch`:
+- Opt-in `--moe-cache-direct-fill` (+ env LLAMA_MOE_CACHE_DIRECT_FILL=1). When uploading an expert into a slot (pinned-profile fill at startup AND miss uploads), read its gate/up/down slices from the model FILE with pread() on an fd opened O_DIRECT (fallback: no O_DIRECT + posix_fadvise DONTNEED after read, logged) into a pinned staging ring (cudaHostAlloc, 2–4 buffers of max expert size, 4 KiB aligned), then cudaMemcpyAsync into the slot; never touch the mmap pages for that expert. File offset = GGUF data offset of the tensor + expert_index * per-expert slice bytes (verify slices are contiguous per expert for ggml layout [n_embd, n_ff, n_expert]; reject/disable with a clear log if a tensor is not expert-contiguous or not 4 KiB aligned for O_DIRECT, fall back to the mmap path for that tensor).
+- Find where the loader keeps file path/offsets per tensor (llama-model-loader: weights map with offs, file index) and plumb what the cache needs; multi-file (split GGUF) must work or be rejected explicitly.
+- Overlap: keep reads on a worker thread or at least double-buffer so one expert's read overlaps the previous memcpy; respect existing sync points.
+- Counters: direct-fill reads, bytes, mean read latency, fallbacks.
+- README section: mechanism, interaction with 02-uma-dedupe (dedupe becomes unnecessary for direct-filled experts), expected effect, the A/B to run.
+No builds/GPU. Time 50 min. Final ≤ 10 lines: patch, combined apply --check result, functions touched, risks.
+

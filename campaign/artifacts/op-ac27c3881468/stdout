@@ -1,0 +1,7 @@
+Created [patch](/home/muk/projects/siminfeng/campaign/cc/moe_cache_profile/patches/01-moe-cache-profile.patch) and [README](/home/muk/projects/siminfeng/campaign/cc/moe_cache_profile/README.md).
+
+- Flags: `--moe-cache-profile FILE`, `--moe-cache-pin-frac F`; profile and statistics environment variables supported.
+- Changed: parameter plumbing, profile parser, cache constructors, ClassLRU `init/plan`, `get_slot_map`, `get_cpu_map`, `copy`, and `log_stats`.
+- `apply --check --whitespace=error-all`: passed on `cf34d311`; reference tree unchanged.
+- Existing expert-replay suite: 10 tests passed. No builds/GPU runs.
+- Risks: compilation/runtime unverified; conservative batch fallback, public parameter ABI change, and UMA double residency documented.

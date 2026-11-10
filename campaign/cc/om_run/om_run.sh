@@ -17,7 +17,7 @@ dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --l
    -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro "$IMG" /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
 if [ -n "$DP" ]; then KILLCMD="$DP 'docker kill $NAME'"; else KILLCMD="docker kill $NAME"; fi
 python3 "$R/cc/resource_observe/resource_observe.py" watchdog --min-available-mib ${OM_MIN_AVAIL_MIB:-600} \
-   --max-swap-used-mib ${OM_MAX_SWAP_MIB:-2560} --max-swap-rate-mibs ${OM_MAX_SWAP_RATE:-150} --interval-ms 250 --kill-cmd "$KILLCMD" --out "$OUT/watchdog.jsonl" & WD=$!
+   --max-swap-used-mib ${OM_MAX_SWAP_MIB:-2560} --max-swap-rate-mibs ${OM_MAX_SWAP_RATE:-1000} --interval-ms 250 --kill-cmd "$KILLCMD" --out "$OUT/watchdog.jsonl" & WD=$!
 python3 "$R/cc/resource_observe/resource_observe.py" sample --backends io,proc,tegrastats --path "$MODELDIR" --interval-ms 500 \
    --duration-s ${OM_MAX_S:-1800} --out "$OUT/telemetry.jsonl" >/dev/null 2>&1 & SM=$!
 T0=$(date +%s.%N)

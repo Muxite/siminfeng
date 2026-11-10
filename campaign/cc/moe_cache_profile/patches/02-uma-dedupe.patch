@@ -1,0 +1,330 @@
+diff --git a/common/arg.cpp b/common/arg.cpp
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -2755,6 +2755,16 @@
+         }
+     ).set_env("LLAMA_ARG_MOE_CACHE_MIB"));
+     add_opt(common_arg(
++        {"--moe-cache-uma-dedupe"},
++        "release mmap expert pages after cache uploads on integrated devices",
++        [](common_params & params) { params.moe_cache_uma_dedupe = 1; }
++    ).set_env("LLAMA_MOE_CACHE_UMA_DEDUPE"));
++    add_opt(common_arg(
++        {"--moe-cache-uma-dedupe=force"},
++        "release mmap expert pages even on discrete devices (may increase disk reads)",
++        [](common_params & params) { params.moe_cache_uma_dedupe = 2; }
++    ));
++    add_opt(common_arg(
+         {"--moe-cache-profile"}, "FILE",
+         "ranked JSON or text expert profile to pin (requires --moe-cache-mib)",
+         [](common_params & params, const std::string & value) {
+diff --git a/common/common.cpp b/common/common.cpp
+--- a/common/common.cpp
++++ b/common/common.cpp
+@@ -1762,6 +1762,7 @@
+     cparams.moe_cache_cpu_share = params.moe_cache_cpu_share;
+     cparams.moe_cache_profile   = params.moe_cache_profile.c_str();
+     cparams.moe_cache_pin_frac  = params.moe_cache_pin_frac;
++    cparams.moe_cache_uma_dedupe = params.moe_cache_uma_dedupe;
+ 
+     return cparams;
+ }
+diff --git a/common/common.h b/common/common.h
+--- a/common/common.h
++++ b/common/common.h
+@@ -601,6 +601,7 @@
+     float  moe_cache_cpu_share = 0.0f; // share of the MoE cache misses computed on the CPU instead of uploaded
+     std::string moe_cache_profile;
+     float moe_cache_pin_frac = 1.0f;
++    int32_t moe_cache_uma_dedupe = 0;
+ 
+     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
+ 
+diff --git a/include/llama.h b/include/llama.h
+--- a/include/llama.h
++++ b/include/llama.h
+@@ -401,6 +401,7 @@
+         float  moe_cache_cpu_share; // share of the MoE cache misses computed on the CPU instead of uploaded, 0 = all uploaded [EXPERIMENTAL]
+         const char * moe_cache_profile; // ranked expert profile, NULL = disabled [EXPERIMENTAL]
+         float moe_cache_pin_frac;       // static fraction of the cache budget [EXPERIMENTAL]
++        int32_t moe_cache_uma_dedupe;    // 0 = disabled, 1 = IGPU only, 2 = force [EXPERIMENTAL]
+ 
+         // Abort callback
+         // if it returns true, execution of llama_decode() will be aborted
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -395,6 +395,7 @@
+     cparams.moe_cache_cpu_share = params.moe_cache_cpu_share;
+     cparams.moe_cache_profile   = params.moe_cache_profile ? params.moe_cache_profile : "";
+     cparams.moe_cache_pin_frac  = params.moe_cache_pin_frac;
++    cparams.moe_cache_uma_dedupe = params.moe_cache_uma_dedupe;
+ 
+     // resolved after flash attention, see resolve_fused_ops()
+     {
+@@ -618,7 +619,7 @@
+             throw std::runtime_error("--moe-cache-profile requires --moe-cache-mib > 0");
+         }
+         if (cparams.moe_cache_size > 0) {
+-            moe_cache = std::make_unique<llama_moe_cache>(model, model.no_alloc(), backend_ptrs, backend_buft, cparams.moe_cache_size, cparams.moe_cache_cpu_share, cparams.moe_cache_profile, cparams.moe_cache_pin_frac);
++            moe_cache = std::make_unique<llama_moe_cache>(model, model.no_alloc(), backend_ptrs, backend_buft, cparams.moe_cache_size, cparams.moe_cache_cpu_share, cparams.moe_cache_profile, cparams.moe_cache_pin_frac, cparams.moe_cache_uma_dedupe);
+         }
+ 
+         sched_reserve();
+@@ -4282,6 +4283,7 @@
+         /*.moe_cache_cpu_share         =*/ 0.0f,
+         /*.moe_cache_profile           =*/ nullptr,
+         /*.moe_cache_pin_frac          =*/ 1.0f,
++        /*.moe_cache_uma_dedupe        =*/ 0,
+         /*.abort_callback              =*/ nullptr,
+         /*.abort_callback_data         =*/ nullptr,
+         /*.embeddings                  =*/ false,
+diff --git a/src/llama-cparams.h b/src/llama-cparams.h
+--- a/src/llama-cparams.h
++++ b/src/llama-cparams.h
+@@ -64,6 +64,7 @@
+     float  moe_cache_cpu_share;
+     std::string moe_cache_profile;
+     float moe_cache_pin_frac;
++    int32_t moe_cache_uma_dedupe;
+ 
+     std::vector<bool> embeddings_layer_inp; // [n_layer()] extract input embeddings for layer
+     bool embeddings_layer_inp_dev; // write enabled layer inputs to a device buffer instead of host
+diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+--- a/src/llama-model.cpp
++++ b/src/llama-model.cpp
+@@ -1376,6 +1376,17 @@
+     std::vector<float> tensor_split_owned;
+ };
+ 
++bool llama_model::is_mmap_range(const void * data, size_t size) const {
++    const uintptr_t start = reinterpret_cast<uintptr_t>(data);
++    for (const auto & mapping : pimpl->mappings) {
++        const uintptr_t base = reinterpret_cast<uintptr_t>(mapping->addr());
++        if (start >= base && start - base <= mapping->size() && size <= mapping->size() - (start - base)) {
++            return true;
++        }
++    }
++    return false;
++}
++
+ bool llama_prec_policy::apply(ggml_tensor * res) const {
+     if (!res || !res->src[0]) {
+         return false;
+diff --git a/src/llama-model.h b/src/llama-model.h
+--- a/src/llama-model.h
++++ b/src/llama-model.h
+@@ -971,6 +971,7 @@
+     uint32_t n_gpu_layers() const;
+     llama_split_mode split_mode() const;
+     bool no_alloc() const;
++    bool is_mmap_range(const void * data, size_t size) const;
+ 
+     std::map<ggml_backend_buffer_type_t, size_t> memory_breakdown() const;
+ 
+diff --git a/src/llama-moe-cache.cpp b/src/llama-moe-cache.cpp
+--- a/src/llama-moe-cache.cpp
++++ b/src/llama-moe-cache.cpp
+@@ -8,6 +8,7 @@
+ #include "../vendor/nlohmann/json.hpp"
+ 
+ #include <algorithm>
++#include <cerrno>
+ #include <cmath>
+ #include <cstdio>
+ #include <cstdlib>
+@@ -18,6 +19,11 @@
+ #include <stdexcept>
+ #include <unordered_map>
+ #include <vector>
++
++#if defined(__linux__)
++#include <sys/mman.h>
++#include <unistd.h>
++#endif
+ 
+ namespace {
+ 
+@@ -429,9 +435,11 @@
+         int32_t n_slots = 0;
+         moe_cache_lru lru;
+         std::vector<std::pair<int32_t, int32_t>> pinned;
++        bool dedupe = false;
+     };
+ 
+     struct layer {
++        bool mmap_experts = false;
+         int32_t ig = -1;                    // -1 if the layer is not cached
+         ggml_tensor * slot_map = nullptr;   // I32 [1, n_expert] in host memory
+         ggml_tensor * slot_map_cpu = nullptr; // looked up in place of slot_map by the graphs with a CPU part, if cpu_share > 0, its data is not used
+@@ -460,6 +468,55 @@
+     int32_t n_expert_used;
+ 
+     bool profiled = false;
++    bool dedupe_requested = false;
++    size_t dedupe_calls = 0;
++    size_t dedupe_bytes = 0;
++    size_t dedupe_failures = 0;
++    std::map<int, size_t> dedupe_errno;
++    size_t page_size = 0;
++
++    void dedupe_expert(const layer & l, int32_t expert) {
++#if defined(__linux__)
++        if (!groups[l.ig].dedupe || !l.mmap_experts || page_size == 0) {
++            return;
++        }
++        for (const auto * w : l.experts) {
++            const uintptr_t start = reinterpret_cast<uintptr_t>(w->data) + expert*w->nb[2];
++            const size_t skip = (page_size - start%page_size)%page_size;
++            if (skip >= w->nb[2]) {
++                continue;
++            }
++            const size_t len = (w->nb[2] - skip)/page_size*page_size;
++            if (len == 0) {
++                continue;
++            }
++            void * addr = reinterpret_cast<void *>(start + skip);
++            auto advise = [&](int advice) {
++                ++dedupe_calls;
++                if (madvise(addr, len, advice) == 0) {
++                    dedupe_bytes += len;
++                    return 0;
++                }
++                const int err = errno;
++                ++dedupe_failures;
++                ++dedupe_errno[err];
++                return err;
++            };
++#if defined(MADV_PAGEOUT)
++            const int err = advise(MADV_PAGEOUT);
++            if (err == EINVAL || err == ENOSYS || err == EOPNOTSUPP) {
++                advise(MADV_DONTNEED);
++            }
++#else
++            advise(MADV_DONTNEED);
++#endif
++        }
++#else
++        GGML_UNUSED(l);
++        GGML_UNUSED(expert);
++#endif
++    }
++
+     size_t pinned_bytes = 0;
+     size_t pinned_slots = 0;
+     std::vector<stats> stats_layer;
+@@ -493,8 +550,20 @@
+     // views used by copy_experts
+     ggml_context_ptr ctx_views;
+ 
+-    impl(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac) :
++    impl(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac, int32_t uma_dedupe) :
+             n_expert_used(model.hparams.n_expert_used_max()), layers(model.layers.size()), cpu_share(std::clamp(cpu_share, 0.0f, 1.0f)) {
++        if (uma_dedupe < 0 || uma_dedupe > 2) {
++            throw std::runtime_error("MoE cache: invalid UMA dedupe mode");
++        }
++        dedupe_requested = uma_dedupe != 0;
++#if defined(__linux__)
++        const long system_page_size = sysconf(_SC_PAGESIZE);
++        page_size = system_page_size > 0 ? (size_t) system_page_size : 0;
++#else
++        if (dedupe_requested) {
++            LLAMA_LOG_WARN("llama_moe_cache: UMA dedupe requires Linux, disabled\n");
++        }
++#endif
+         profiled = !profile.empty();
+         if (!std::isfinite(pin_frac) || pin_frac < 0.0f || pin_frac > 1.0f) {
+             throw std::runtime_error("MoE cache profile: pin fraction must be in [0, 1]");
+@@ -536,6 +605,11 @@
+                 it = groups.end() - 1;
+                 it->id  = id;
+                 it->ref = experts;
++                const auto dev_type = ggml_backend_dev_type(ggml_backend_get_device(it_dev->backend));
++                it->dedupe = page_size != 0 && (uma_dedupe == 2 || (uma_dedupe == 1 && dev_type == GGML_BACKEND_DEVICE_TYPE_IGPU));
++                if (dedupe_requested && !it->dedupe) {
++                    LLAMA_LOG_WARN("llama_moe_cache: UMA dedupe disabled for cache group on %s\n", ggml_backend_dev_name(model.dev_layer(il)));
++                }
+             }
+             it->layers.push_back(il);
+             for (const ggml_tensor * t : experts) {
+@@ -674,6 +748,9 @@
+                 layer & l = layers[il];
+                 l.ig      = (int32_t) ig;
+                 l.experts = llama_moe_cache_layer_experts(model.layers[il]);
++                l.mmap_experts = g.dedupe && std::all_of(l.experts.begin(), l.experts.end(), [&](const ggml_tensor * w) {
++                    return llama_moe_cache_is_host_weight(w) && model.is_mmap_range(w->data, ggml_nbytes(w));
++                });
+                 for (size_t ip = 0; ip < l.experts.size(); ++ip) {
+                     ggml_tensor * bank   = g.banks[ip];
+                     ggml_tensor * cached = ggml_view_3d(ctx, bank, bank->ne[0], bank->ne[1], g.n_slots + n_zero, bank->nb[1], bank->nb[2], 0);
+@@ -737,6 +814,8 @@
+                         ggml_backend_tensor_set(g.banks[ip], (const uint8_t *) experts[ip]->data + pair.second*bytes, slot*bytes, bytes);
+                         pinned_bytes += bytes;
+                     }
++                    // tensor_set is synchronous; all slices of this expert are complete.
++                    dedupe_expert(layers[pair.first], pair.second);
+                     ++pinned_slots;
+                 }
+             }
+@@ -989,6 +1068,14 @@
+             }
+         }
+ 
++        if (g.dedupe && l.mmap_experts && !fills.empty()) {
++            // Wait for every slice before releasing any upload source pages.
++            ggml_backend_synchronize(backend);
++            for (const auto & f : fills) {
++                dedupe_expert(l, f.expert);
++            }
++        }
++
+         stats & st = ids.size() <= (size_t) 8*n_expert_used ? stats_small : stats_large;
+         st.pinned += n_pinned_hit;
+         stats & sl = stats_layer[il];
+@@ -1009,6 +1096,12 @@
+     }
+ 
+     void log_stats() const {
++        if (dedupe_requested) {
++            LLAMA_LOG_INFO("llama_moe_cache: dedupe calls = %zu, bytes advised = %zu, failures = %zu\n", dedupe_calls, dedupe_bytes, dedupe_failures);
++            for (const auto & failure : dedupe_errno) {
++                LLAMA_LOG_INFO("llama_moe_cache: dedupe errno %d (%s) = %zu\n", failure.first, strerror(failure.first), failure.second);
++            }
++        }
+         auto log = [this](const char * name, const stats & st) {
+             const size_t n = st.hits + st.misses;
+             if (n == 0) {
+@@ -1045,6 +1138,10 @@
+                 json doc{{"pinned_slots", pinned_slots}, {"pinned_bytes", pinned_bytes},
+                     {"ubatch_small", encode(stats_small)}, {"ubatch_large", encode(stats_large)},
+                     {"large_batch_copy", {{"experts", stats_copy.hits}, {"bytes", stats_copy.bytes}}}};
++                doc["dedupe"] = {{"calls", dedupe_calls}, {"bytes_advised", dedupe_bytes}, {"failures", dedupe_failures}, {"errno", json::object()}};
++                for (const auto & failure : dedupe_errno) {
++                    doc["dedupe"]["errno"][std::to_string(failure.first)] = failure.second;
++                }
+                 doc["layers"] = json::array();
+                 for (const auto & st : stats_layer) { doc["layers"].push_back(encode(st)); }
+                 std::ofstream out(path);
+@@ -1063,8 +1160,8 @@
+     }
+ };
+ 
+-llama_moe_cache::llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac) :
+-    pimpl(new impl(model, no_alloc, backends, bufts, size, cpu_share, profile, pin_frac)) {
++llama_moe_cache::llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac, int32_t uma_dedupe) :
++    pimpl(new impl(model, no_alloc, backends, bufts, size, cpu_share, profile, pin_frac, uma_dedupe)) {
+ }
+ 
+ llama_moe_cache::~llama_moe_cache() = default;
+diff --git a/src/llama-moe-cache.h b/src/llama-moe-cache.h
+--- a/src/llama-moe-cache.h
++++ b/src/llama-moe-cache.h
+@@ -15,7 +15,7 @@
+ public:
+     // backends are all the backends of the context, each GPU gets its own cache of the given size for the layers assigned to it
+     // cpu_share is the share of the misses computed on the CPU instead of uploaded
+-    llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac);
++    llama_moe_cache(const llama_model & model, bool no_alloc, const std::vector<ggml_backend_t> & backends, const std::vector<ggml_backend_buffer_type_t> & bufts, size_t size, float cpu_share, const std::string & profile, float pin_frac, int32_t uma_dedupe);
+     ~llama_moe_cache();
+ 
+     // the device that caches layer il

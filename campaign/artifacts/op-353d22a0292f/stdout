@@ -1,0 +1,5 @@
+Created [02-uma-dedupe.patch](cc/moe_cache_profile/patches/02-uma-dedupe.patch) and updated [README.md](cc/moe_cache_profile/README.md) with mechanism, risks, counters, and A/B procedure.
+
+Combined `01 + 02` apply check passed with whitespace validation. Inward alignment passed 200,060 arithmetic cases. Reference tree remains clean; no builds/GPU runs.
+
+Risks: synchronization overhead, CPU refaults/NVMe reads, shared-mapping fallback retaining page-cache residency, and huge/locked pages limiting reclaim.
