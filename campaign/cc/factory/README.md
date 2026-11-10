@@ -104,10 +104,10 @@ artifacts cannot masquerade as completed builds or submitted jobs.
 `components.json` is an ordered registry. Entries have accepted/pending/rejected
 status plus evidence decision IDs and scope. Default: q8_reuse accepted D029;
 gpu_budget accepted infrastructure D021/D023; flash attention recommended D028.
-Pending: scheduler kv_quant_fix D028/T-KVB2 and PAP T-PAP/D032.
+Accepted since: kv_quant_fix (D033; release-1 D037/D040) and imatrix_quant (D035). Rejected: PAP (D040).
 Rejected: hybrid_split in the small-expert regime D030/D031, static-hot D024.
 `--include-pending` opts into pending patches and PAP proposals; it never includes
-rejected components. Quantized KV plans require the pending scheduler fix.
+rejected components. Quantized KV plans require the (now accepted) kv_quant_fix component; q4_0 KV is quality-failing (D033).
 New planner APIs receive exactly the same enabled components as the recipe.
 The cooperative budget shim is documented infrastructure, not an automatically
 enabled cap or a hard VRAM guarantee. It requires a no-VMM engine and verified
