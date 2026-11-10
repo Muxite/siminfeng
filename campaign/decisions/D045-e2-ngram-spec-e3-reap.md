@@ -81,3 +81,18 @@ Median decode t/s, n=2. Each pair varies by ≤ 4%, except cache-none chat (54.9
 - Pruned models need a domain-matched quality check. Wikitext alone would reject REAP-15B, and code PPL alone would accept it.
 
 **Method lesson:** a multi-prompt server shares state across prompts. Order and history are experimental variables.
+
+## Addendum: diagnosis of the E2 cache text mismatch (op T-E2DIAG, exp `e2diag`, run after D045)
+Setup: one server per run, chat prompt only, ABBA × 2.
+
+| Arm | text | t/s r1, r2 |
+|---|---|---|
+| C3 none | ee080114 | 77.1, 72.6 |
+| C3 ngram | ee080114 | 71.5, 76.1 |
+| C2 none | df2e7b05 | 68.8, 68.4 |
+| C2 ngram | df2e7b05 | 68.1, 67.7 |
+
+- On a fresh server, text is **identical with and without ngram** for both share values. The E2 mismatch is **cache-history dependence, not speculation**. The chat text after rewrite → repeat (43c59811 or 67923475) differs from the fresh-server text (ee080114).
+- Decode depends on history too. C3 chat runs at about 74 t/s on a fresh server against 57–66 after the two code-heavy prompts, because the earlier prompts leave the wrong experts resident.
+- Under the corrected (post-hoc) reading, the cache + ngram arm meets the E2 criteria. As frozen, the literal verdict stays REJECTED.
+- **Factory rule:** benchmark cache placements per workload with a fresh or warmed-for-that-workload cache, and treat multi-tenant or mixed workloads as a separate condition. The planner's hit-rate prediction must come from the target workload's traces.
