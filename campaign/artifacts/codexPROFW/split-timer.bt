@@ -1,0 +1,18 @@
+// PROFW v1: elapsed graph-call time, not summed worker CPU time.
+uprobe:/proc/12345/root/app/libggml-cpu.so.0.27.0:ggml_graph_compute /pid == 12345/ {
+  @s[tid] = nsecs;
+}
+uretprobe:/proc/12345/root/app/libggml-cpu.so.0.27.0:ggml_graph_compute /pid == 12345 && @s[tid]/ {
+  $us = (nsecs - @s[tid]) / 1000;
+  @graphs = count();
+  @graph_tot_us = sum($us);
+  @graph_us = hist($us);
+  @thread_graphs[tid] = count();
+  @thread_tot_us[tid] = sum($us);
+  delete(@s[tid]);
+}
+interval:ms:5000 { exit(); }
+END {
+  printf("PROFW window_s=5.0\n");
+  clear(@s);
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "cache-policy-protocol/1",
+  "frozen_before_replay": true,
+  "source_pin": "3b4d6ab3f",
+  "budgets_decimal_GB": [2, 4, 6, 8, 10],
+  "training": "prose prefill only; static frequency ranks within each upstream layout group; expert key (layer,id) ascending on ties",
+  "evaluation": "chat and code decode, all 64 positions each, independent cold state per trace; no evaluation prefill or decode used to fit static sets",
+  "request_order": "(sequence,position,layer), top-8 rank order for hit touches; misses admitted in ascending expert ID",
+  "allocation": "one GPU, host expert bytes proportional allocation across exact layout groups, CUDA 128-byte alignment, one guard slot; eight additional zero slots for CPU-share",
+  "miss_modes": {"upload": 0, "CPU": 1},
+  "cpu_share": "100% of misses bypass admission after the group is full, matching upstream; LRU/SLRU are counterfactual combinations with pinned CPU-share mechanism",
+  "SLRU_status": "50/50 reconstruction, NOT verified against #30637: historical blob 4d3596b244cb46e429b7bda8f7369c528c02dd1c absent and fetch unavailable; do not claim faithful upstream SLRU",
+  "h2d_decimal_GB_s": 28.7,
+  "gpu_floor_seconds": 0.004637503,
+  "cpu_full_layer_seconds": 0.000757210,
+  "cpu_boundary_seconds": 0.000030,
+  "calibration": "D041 LRU chat at 2200 and 6000 MiB; fixed GPU floor, fit nonnegative upload-cost multiplier by least squares in seconds; report residuals and leave-one-out error; do not fit evaluation static sets",
+  "static_baseline": "D041 static K30=37.1 and K42=27.4 t/s define linear seconds per CPU layer; at each budget select minimum K whose suffix expert weights fit",
+  "crossover": "first below-to-above parity transition in piecewise linear latency-margin interpolation on frozen grid [0.5,1,1.5,...,12] decimal GB; report reentrant intervals, no monotonicity assumption",
+  "scope": "offline simulation and latency forecasts only; not measured inference; cold decode differs from D041 prefill-warmed cache; short two-domain traces limit inference"
+}

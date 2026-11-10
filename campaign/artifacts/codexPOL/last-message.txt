@@ -1,0 +1,38 @@
+Saved the [simulator and documentation](cc/cache_policy/README.md) and [frozen-run report](artifacts/codexPOL/REPORT.md). **15 pytest tests passed**, including comparisons against compiled upstream LRU and ClassLRU.
+
+**SLRU verification remains incomplete:** its historical source blob was unavailable. SLRU* below is an explicitly unverified 50/50 reconstruction.
+
+Each cell shows **upload / CPU-share=1**. Budgets are decimal GB of cache banks.
+
+Held-out hit rates (%):
+
+| GB | LRU | SLRU* | ClassLRU | Static top-frequency |
+|---:|---:|---:|---:|---:|
+| 2 | 52.77 / 35.12 | 51.83 / 35.12 | 54.28 / 35.12 | 12.30 / 11.94 |
+| 4 | 71.49 / 59.18 | 72.43 / 59.18 | 73.00 / 59.18 | 29.01 / 28.73 |
+| 6 | 82.77 / 73.90 | 82.87 / 73.90 | 83.05 / 73.90 | 41.76 / 41.46 |
+| 8 | 86.50 / 84.23 | 86.60 / 84.23 | 86.55 / 84.23 | 51.64 / 51.30 |
+| 10 | 87.08 / 87.08 | 87.08 / 87.08 | 87.08 / 87.08 | 58.49 / 58.43 |
+
+Calibrated predicted decode t/s:
+
+| GB | LRU | SLRU* | ClassLRU | Static top-frequency |
+|---:|---:|---:|---:|---:|
+| 2 | 18.93 / 31.77 | 18.63 / 31.77 | 19.51 / 31.77 | 10.70 / 26.28 |
+| 4 | 29.57 / 41.13 | 30.43 / 41.13 | 30.97 / 41.13 | 13.07 / 31.30 |
+| 6 | 44.82 / 48.85 | 45.05 / 48.85 | 45.46 / 48.85 | 15.74 / 36.63 |
+| 8 | 54.27 / 55.25 | 54.59 / 55.25 | 54.43 / 55.25 | 18.69 / 42.25 |
+| 10 | 56.19 / 56.19 | 56.19 / 56.19 | 56.19 / 56.19 | 21.44 / 47.62 |
+
+D041 calibration:
+
+| Cache MiB | Measured t/s | Fitted t/s | Error |
+|---:|---:|---:|---:|
+| 2200 | 18.10 | 18.46 | +0.36 |
+| 6000 | 51.30 | 44.45 | −6.85 |
+
+Fit RMSE: **4.85 t/s**, or **2.26 ms/token**.
+
+Predicted upload-mode crossover against D041 whole-layer static: **LRU 4.16 GB**, **SLRU* 3.93 GB**, **ClassLRU 3.82 GB**. CPU-share wins at the lowest evaluated 0.5 GB budget. All reverse near 10.88 GB in this short, cold replay.
+
+These are model forecasts; calibration error and the 64-token cold traces limit confidence in precise crossover budgets.
