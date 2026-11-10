@@ -1,0 +1,1152 @@
+Implemented Jetson ccache environment settings, build paths inside the staged source, and before/after statistics in `build-record.json`. amd64 behavior remains unchanged.
+
+Tests: README pytest command — **17 passed**; diff checks clean.
+
+CUDA `.cu` object compilations are cacheable with [ccache 4.5.1’s NVCC support](https://ccache.dev/manual/4.5.1.html). Observed stats: zero hits, 456 misses, ~0.11 GB; these aggregate figures cannot prove CUDA-specific caching.
+
+Risks: shared-cache activity can skew deltas; changing content or external paths can still cause misses. Actual rebuild hits remain unverified.
+
+No real build or Docker invocation; existing results untouched.
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c2f5-c669-73e1-8f84-22e269c51e9c
+--------
+user
+Execute the assignment in assignments/J-T1b-ccache-keying.md exactly. Read it first.
+codex
+I’ll read the assignment first, then make the required changes and run its checks.
+exec
+/bin/bash -lc 'cat assignments/J-T1b-ccache-keying.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Assignment J-T1b — make Build CC rebuilds hit ccache (host jetson-arm; parent J-T1; worker Codex)
+Observed: second jetson-orin build (patched candidate jetson-c1-j3) had ccache 0/454 hits; each attempt stages source in a random `staging-XXXX` dir, so absolute paths differ. Cache size only 0.11 GB after 454 misses — check whether nvcc (.cu) compiles are cached at all with ccache 4.5.1 (`ccache -s -v`, ccache docs on nvcc support) and report.
+Allowed: `cc/build_engine/build_engine.py`, its test, README. Do not run a real build or docker (a build is in progress; do not touch `cc/build_engine/results/`).
+Do: for the host-native (jetson) builder set `CCACHE_BASEDIR=<staging source dir>`, `CCACHE_NOHASHDIR=1`, `CCACHE_COMPILERCHECK=content`, keep the build dir INSIDE the base dir or make paths relative so `-I`/`-o` match across attempts; record ccache stats before/after (`ccache --print-stats` or `-s`) into build-record.json `ccache{}` (hits, misses, uncacheable, version). Also add a `--build-dir-name` stable path option if needed. Keep amd64 behaviour unchanged. Unit tests for env/argv/record fields. pytest command as in README. Time 25 min. Final ≤ 12 lines: change, test line, whether .cu files are cacheable with this ccache, risks.
+
+exec
+/bin/bash -lc "pwd; rg --files -g AGENTS.md -g '"'!node_modules'"' -g '"'!vendor'"'" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+/home/muk/projects/siminfeng/campaign
+ref/llama.cpp/AGENTS.md
+cc/build_engine/results/jetson-c1-j3/staging-rmzp0u9o/source/AGENTS.md
+
+exec
+/bin/bash -lc 'git status --short; ls cc/build_engine; cat cc/build_engine/README.md; cat cc/build_engine/build_engine.py' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+ M evidence/jetson-arm/claude-code.jsonl
+ M evidence/jetson-arm/opus-jetson.jsonl
+?? artifacts/codex/J-T1b.final.txt
+?? artifacts/op-31b047a921fe/
+?? assignments/J-T1b-ccache-keying.md
+?? cc/build_engine/results/jetson-c1-j3/
+README.md
+build_engine.py
+results
+test_build_engine.py
+# build_engine
+
+Use this capability to turn a clean, identified local llama.cpp checkout and an optional Git patch into a local, runtime-only CUDA image and an evidence directory. The default target `x86-5070ti` uses linux/amd64 and CUDA architecture 120 (RTX 5070 Ti); `--target jetson-orin` uses linux/arm64 and sm_87. Model weights are supplied separately at runtime.
+
+Requires Python 3.10+ (stdlib only), Git, Docker daemon access, and Docker Buildx/Bake. pytest is needed only for tests. No GPU is needed to compile or collect hashes. The builder installs Ubuntu build packages with apt; an actual build needs cached packages/base layers or repository/registry access. This implementation does not download source, patches, models, or web UI assets. The existing `campaign/cuda-tools:c1` image is not used as the builder because the required builder base is the digest-pinned NVIDIA devel image.
+
+## Run
+
+Run from the campaign directory. Give every attempt a new or empty output directory. While executing assignment T-D, keep outputs under `cc/build_engine/` or `builds/llamacpp/`.
+
+```bash
+# Supply the real runtime image digest from trusted/local image evidence.
+export BASE_RUNTIME='nvidia/cuda:12.8.1-runtime-ubuntu24.04@sha256:<64-hex-digest>'
+python3 cc/build_engine/build_engine.py \
+  --source ref/llama.cpp --commit 31288c9c6 \
+  --tag campaign/llamacpp:c1 --out cc/build_engine/results/baseline
+```
+
+The placeholder must be replaced; it is not a working digest. If BASE_RUNTIME is unset, the CLI inspects the local runtime tag and selects its NVIDIA RepoDigest without pulling it. Missing local images or RepoDigests fail at `base_images`. BASE_DEVEL defaults to the devel digest already recorded in `artifacts/op-309e1f95c716/stdout`; override it with a full `nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:...` reference when needed. Both bases are validated and supplied as separate name and digest Dockerfile arguments. The CLI never builds from a floating base tag.
+
+To add a patch, save a unified Git diff to a file and add `--patch path/to/change.patch`. Source HEAD must resolve to `--commit`; tracked changes and untracked files cause rejection. The source checkout remains read-only: Git optional locks are disabled, a `git archive` snapshot is extracted under the output directory, and `git apply --check` runs there before `git apply`. Git discovery stops before the enclosing campaign repository. Binary patches supported by Git are accepted. Submodules are rejected. Git archive honors committed export attributes; ignored and untracked files and `.git` are omitted. Docker ignore files in the staged snapshot are emptied to prevent omission of tracked source. Temporary staging is removed after either result. Keep the supplied patch and original commit for rebuilding; patch bytes are identified by SHA256 but are not retained as a separate output artifact.
+
+The image contains only the seven requested tools in `/app`, their generated shared libraries and the OpenMP runtime, on top of the CUDA runtime base. It has no compiler, source checkout, or weights. Its entrypoint is cleared, so invoke tools by full path, for example `/app/llama-bench`. Release/shared CUDA compilation uses the flags in `build-record.json`; CPU-native tuning, tests, downloaded UI, and OpenSSL are disabled. `LLAMA_CURL=OFF` is passed as requested, although this checkout treats LLAMA_CURL as deprecated. Source and patch identity are recorded as image labels; binaries' built-in Git version may say `unknown` because `.git` is not staged.
+
+## Outputs and failure handling
+
+`build-record.json` uses schema version 1 for amd64 and version 2 for Jetson. It records status, failure stage/error, requested and resolved commit, Git tree ID and dirty status, patch SHA256 or null, tag/platform, recipe SHA256 and sizes, base references/digests, Docker and Buildx versions, CMake flags, Buildx metadata, image config ID/RepoDigests/Created/Architecture/Os, tool SHA256 values, saved archive SHA256/bytes, build duration and total duration. Fields remain null or empty when a failure occurs before collection. `build_wall_seconds` measures the Bake invocation, including export; `wall_seconds` covers the whole attempt.
+
+The other files are:
+
+- `build.stdout` and `build.stderr`: full subprocess stdout/stderr, including compiler output and diagnostics on failure. Binary Git archive output is directed to staging rather than the logs.
+- `buildx-metadata.json`: Buildx metadata, when the build produces it; retained even when the build exits nonzero.
+- `engine-image.docker.tar`: `docker save` of the built immutable image config ID, on success. Its bytes and SHA256 are recorded after saving.
+
+The CLI exits 0 only after all evidence collection succeeds, otherwise nonzero. Failures include source mismatch/dirty tree, unsupported submodules, malformed or inapplicable patch, unavailable Docker/base image, build/export failure, incorrect architecture, missing binaries, save failure, or malformed archive. A failure after building can leave the tagged local image and partial evidence; inspect `failure_stage` and retry in a fresh output directory. Invalid CLI arguments, an unwritable output path, or a nonempty output directory fail before a record can be created. Existing evidence is never overwritten. The CLI does not push, prune, mount the Docker socket in an image, or operate on unrelated containers. A single short-lived `docker run --rm --network=none --read-only --entrypoint /usr/bin/sha256sum` container hashes the tools without requesting a GPU. Subsequent hashing and saving use the immutable config ID so a later tag change cannot change the evidence target.
+
+Bake requests maximum provenance and saves metadata separately. This does not imply provenance survives image loading and `docker save`. The archive inspector checks `index.json` and reachable OCI manifests for actual in-toto SLSA provenance statements. A classic Docker archive without an OCI index records `retained: false`; an SBOM or an attestation annotation alone does not count. A save or inspection failure leaves provenance unconfirmed. No signature or attestation trust verification is performed.
+
+## Validation without a build
+
+From `builds/llamacpp/`, run `docker buildx bake --print`; the retained `bake-print.json` is the validated default expansion. Its runtime digest is intentionally empty until supplied; print mode validates Bake syntax, not base availability or compilation. For a direct Bake build, supply digest-pinned BASE_DEVEL and BASE_RUNTIME plus SOURCE_DIR, SOURCE_COMMIT and PATCH_SHA256, and use a prepared staging snapshot. Prefer the CLI, which verifies those inputs. Bake uses `BAKE_CMD_CONTEXT` to locate the recipe Dockerfile outside the source context; invoke it from the recipe directory.
+
+From the campaign directory, run:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q \
+  cc/build_engine/test_build_engine.py \
+  --basetemp=cc/build_engine/.pytest-tmp \
+  -o cache_dir=cc/build_engine/.pytest_cache
+```
+
+Tests use temporary Git repositories and mocked Docker subprocesses. They cover patch rejection, successful patch isolation, successful record schema, build failure logs/metadata, dirty or mismatched source, archive/tool hashing, provenance versus SBOM, and refusing to overwrite evidence. They use no network, GPU, or real build.
+
+This evidence does not prove bitwise reproducibility, runtime correctness, model accuracy, GPU compatibility/performance, or the absence of vulnerabilities. Apt package versions, compiler behavior, timestamps, and upstream build scripts can vary. Base digests and input hashes identify inputs; they do not establish equivalence to an upstream image. The orchestrator must perform the real build and runtime checks. No full build was performed for T-D.
+
+
+## Jetson Orin target
+
+Requires an Orin host with L4T 36, JetPack >=6.1 (qualified toolchain: JetPack
+6.2.3, nvcc 12.6.68), native GCC, CMake, Ninja, Git, Docker and Buildx.
+ccache is optional and enables C, C++ and CUDA compiler launchers when found.
+Python 3.10 is supported, including safe snapshot extraction on versions without
+`tarfile` extraction filters. No packages are installed by this target.
+
+Compilation is host-native to use the device's JetPack CUDA toolchain and avoid
+pulling the roughly 9 GB l4t-jetpack development image. Source verification,
+archive isolation and patch checking are the same as for amd64. CMake configures
+`<out>/build` with Ninja, Release/shared libraries, CUDA architecture 87,
+`GGML_NATIVE=OFF`, `GGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16`,
+`LLAMA_CURL=OFF` and `LLAMA_BUILD_TESTS=OFF`. `BUILD_JOBS` defaults to 3 and
+must be a positive integer. The seven standard tools and any `--extra-target`
+executables are compiled. Generated `lib*.so*` files retain their symlinks, and
+GCC's libgomp.so.1 is copied into the runtime context alongside the tools.
+
+Run from the campaign directory, after any other native build has finished:
+
+```bash
+DOCKER_CMD_PREFIX='sg docker -c' BUILD_JOBS=3 python3 cc/build_engine/build_engine.py \
+  --target jetson-orin --source ref/llama.cpp \
+  --commit 31288c9c66e59377f7788d920678a565bb89dd37 \
+  --tag campaign/llamacpp:jetson-c1 --out cc/build_engine/results/jetson-c1
+```
+
+Use a fresh output directory for each attempt. `DOCKER_CMD_PREFIX` is optional;
+when set, it is parsed as a launcher and receives the entire shell-quoted Docker
+command as one final argument. `sg docker -c` is needed in this login session
+because its group membership predates the Docker group change. Every Docker
+invocation, including version queries, inspection, hashing and saving, uses it.
+Native build and Git commands do not use this prefix.
+
+Buildx packages only the prebuilt runtime context with `--platform linux/arm64
+--load`. The default base is
+`nvcr.io/nvidia/l4t-cuda:12.6.11-runtime@sha256:49853e9fe2a0305efa51fcbb3426eea1bca658085f2d26bb40347711434849b1`.
+`BASE_RUNTIME` may override its digest using the same image name/tag;
+`BASE_DEVEL` is unused. The Dockerfile clears the entrypoint, sets
+`LD_LIBRARY_PATH=/app`, and sets `NVIDIA_VISIBLE_DEVICES=all` and
+`NVIDIA_DRIVER_CAPABILITIES=compute,utility` per D022. GPU execution still needs
+`--runtime nvidia`; tool hashing explicitly uses `--runtime runc` with no network
+or GPU request.
+
+Schema 2 adds `target_profile`, `builder: "host-native"`, `toolchain` (nvcc,
+GCC, CMake, Ninja, first `/etc/nv_tegra_release` line and nvidia-jetpack dpkg
+version), and `target_requirements` (linux/arm64, L4T major 36, sm_87,
+JetPack >=6.1, NVIDIA runtime with explicit visibility). Source commit/tree,
+patch SHA256, toolchain and target profile are also image labels. The native
+build directory remains as evidence; its temporary source snapshot and runtime
+context are removed on success or failure. Rebuilding requires a fresh attempt.
+`build_wall_seconds` covers native compilation plus image packaging. Failures
+retain logs, partial toolchain identity, available Buildx metadata and the usual
+`failure_stage` field.
+
+Mocked tests verify commands, source isolation, records, packaging inputs,
+Docker launcher quoting and failure reporting on Python 3.10. No real build or
+Docker invocation was performed for J-T1. Toolchain identities and target
+requirements are recorded, not checked against a compatibility matrix. Image
+architecture and shipped file hashes are checked during a real attempt; ABI
+compatibility, dynamic library closure, GPU execution, memory use, performance,
+model correctness and reproducibility still require the orchestrator's real
+build and runtime checks. Wait for the existing native compile to finish before
+running this command on the 8 GB device.
+#!/usr/bin/env python3
+"""Build a local CUDA engine and record evidence; uses only the Python stdlib."""
+import argparse
+import hashlib
+import json
+import shutil
+import shlex
+import os
+from pathlib import Path
+import re
+import subprocess
+import tarfile
+import tempfile
+import time
+from datetime import datetime, timezone
+
+RECIPES = Path(__file__).resolve().parents[2] / "builds" / "llamacpp"
+TOOLS = ("llama-bench", "llama-perplexity", "llama-completion", "llama-server",
+         "llama-eval-callback", "llama-cli", "llama-tokenize")
+CMAKE_FLAGS = ["-DCMAKE_BUILD_TYPE=Release", "-DGGML_CUDA=ON",
+               "-DCMAKE_CUDA_ARCHITECTURES=120", "-DLLAMA_CURL=OFF",
+               "-DBUILD_SHARED_LIBS=ON", "-DGGML_NATIVE=OFF",
+               "-DLLAMA_BUILD_TESTS=OFF", "-DLLAMA_BUILD_UI=OFF",
+               "-DLLAMA_USE_PREBUILT_UI=OFF", "-DLLAMA_OPENSSL=OFF"]
+DEFAULT_DEVEL = ("nvidia/cuda:12.8.1-devel-ubuntu24.04@sha256:"
+                 "520292dbb4f755fd360766059e62956e9379485d9e073bbd2f6e3c20c270ed66")
+DEFAULT_RUNTIME = "nvidia/cuda:12.8.1-runtime-ubuntu24.04"
+
+JETSON_RECIPES = RECIPES.parent / "llamacpp-jetson"
+JETSON_RUNTIME = ("nvcr.io/nvidia/l4t-cuda:12.6.11-runtime@sha256:"
+                  "49853e9fe2a0305efa51fcbb3426eea1bca658085f2d26bb40347711434849b1")
+JETSON_FLAGS = ["-DCMAKE_BUILD_TYPE=Release", "-DGGML_CUDA=ON",
+                "-DCMAKE_CUDA_ARCHITECTURES=87", "-DGGML_NATIVE=OFF",
+                "-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16", "-DLLAMA_CURL=OFF",
+                "-DLLAMA_BUILD_TESTS=OFF", "-DBUILD_SHARED_LIBS=ON"]
+
+
+def docker_command(command):
+    """Prefix is a launcher, e.g. DOCKER_CMD_PREFIX='sg docker -c'."""
+    prefix = shlex.split(os.environ.get("DOCKER_CMD_PREFIX", ""))
+    return prefix + [shlex.join(command)] if prefix else command
+
+
+def extract_snapshot(archive, destination):
+    # Python 3.10 lacks extractall(filter=...). Validate every member first.
+    root = destination.resolve()
+    for member in archive.getmembers():
+        path = (root / member.name).resolve()
+        if not path.is_relative_to(root) or member.isdev() or member.isfifo():
+            raise ValueError("Unsafe archive member: " + member.name)
+        if member.issym() or member.islnk():
+            target = ((path.parent if member.issym() else root) / member.linkname).resolve()
+            if not target.is_relative_to(root):
+                raise ValueError("Unsafe archive link: " + member.name)
+    if hasattr(tarfile, "data_filter"):
+        archive.extractall(destination, filter="data")
+    else:
+        # Git archives contain no hardlinks; rejecting them also avoids link chains.
+        if any(m.islnk() for m in archive.getmembers()):
+            raise ValueError("Archive hardlinks unsupported on Python 3.10")
+        # Extract files before symlinks so no member can traverse an archive link.
+        members = archive.getmembers()
+        links = {m.name.rstrip("/") for m in members if m.issym()}
+        if any(parent.as_posix() in links for m in members for parent in Path(m.name).parents):
+            raise ValueError("Archive member traverses a symlink")
+        archive.extractall(destination, members=[m for m in members if not m.issym()])
+        archive.extractall(destination, members=[m for m in members if m.issym()])
+
+
+def jetson_build(run, staged, out, record, args):
+    for name, command in (
+        ("nvcc", ["nvcc", "--version"]), ("gcc", ["gcc", "--version"]),
+        ("cmake", ["cmake", "--version"]), ("ninja", ["ninja", "--version"]),
+        ("nv_tegra_release", ["head", "-n", "1", "/etc/nv_tegra_release"]),
+        ("nvidia-jetpack", ["dpkg-query", "-W", "-f=${Version}", "nvidia-jetpack"])):
+        record["toolchain"][name] = run(command).strip()
+    flags = list(JETSON_FLAGS)
+    if shutil.which("ccache"):
+        flags += ["-DCMAKE_" + lang + "_COMPILER_LAUNCHER=ccache" for lang in ("C", "CXX", "CUDA")]
+    record["cmake_flags"] = flags
+    jobs = os.environ.get("BUILD_JOBS", "3")
+    if not jobs.isdigit() or int(jobs) < 1:
+        raise ValueError("BUILD_JOBS must be a positive integer")
+    tools = TOOLS + tuple(getattr(args, "extra_target", []) or [])
+    run(["cmake", "-S", str(staged), "-B", str(out / "build"), "-G", "Ninja", *flags], capture=False)
+    run(["cmake", "--build", str(out / "build"), "-j" + jobs, "--target", *tools], capture=False)
+    context = staged.parent / "runtime"
+    app = context / "app"
+    app.mkdir(parents=True)
+    binaries = out / "build" / "bin"
+    for tool in tools:
+        shutil.copy2(binaries / tool, app / tool)
+    libraries = list(binaries.glob("lib*.so*"))
+    if not libraries:
+        raise ValueError("No generated shared libraries")
+    for library in libraries:
+        shutil.copy2(library, app / library.name, follow_symlinks=False)
+    # GCC's OpenMP runtime is needed by the host-built CPU backend.
+    libgomp = Path(run(["gcc", "-print-file-name=libgomp.so.1"]).strip())
+    shutil.copy2(libgomp, app / "libgomp.so.1")
+    command = ["docker", "buildx", "build", "--platform", "linux/arm64", "--load",
+               "--tag", args.tag, "--file", str(JETSON_RECIPES / "Dockerfile"),
+               "--metadata-file", str(out / "buildx-metadata.json"), "--provenance=mode=max"]
+    for key, value in {"BASE_RUNTIME": record["base_images"]["runtime"]["reference"],
+                       "SOURCE_COMMIT": record["source"]["commit"], "SOURCE_TREE": record["source"]["tree"],
+                       "PATCH_SHA256": record["patch_sha256"] or "",
+                       "TOOLCHAIN": json.dumps(record["toolchain"], sort_keys=True),
+                       "TARGET_PROFILE": "jetson-orin"}.items():
+        command += ["--build-arg", key + "=" + value]
+    run(command + [str(context)], capture=False)
+
+
+def file_digest(path):
+    digest = hashlib.sha256()
+    size = 0
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+            size += len(chunk)
+    return {"sha256": digest.hexdigest(), "bytes": size}
+
+
+def archive_identities(path):
+    """Distinct identities from a `docker save` archive: config digest (image config), top-level index digest (what the containerd store
+    reports as `Id`), and image-manifest digests. Never conflate them: only the config digest is the classic image ID."""
+    out = {"config_digest": None, "index_digest": None, "index_manifests": []}
+    with tarfile.open(path) as t:
+        names = t.getnames()
+        if "manifest.json" in names:
+            m = json.load(t.extractfile("manifest.json"))
+            if m and m[0].get("Config", "").startswith("blobs/sha256/"):
+                out["config_digest"] = "sha256:" + m[0]["Config"].split("/")[-1]
+        if "index.json" in names:
+            raw = t.extractfile("index.json").read()
+            idx = json.loads(raw)
+            out["index_manifests"] = [{"digest": d.get("digest"), "mediaType": d.get("mediaType")} for d in idx.get("manifests", [])]
+            out["index_digest"] = out["index_manifests"][0]["digest"] if len(out["index_manifests"]) == 1 else None
+            out["index_entry_digests"] = [d["digest"] for d in out["index_manifests"]]   # may include an attestation manifest next to the image manifest
+    return out
+
+
+def archive_provenance(path):
+    """Follow only manifests reachable from the saved archive's OCI index."""
+    with tarfile.open(path, "r:*") as archive:
+        names = {member.name.removeprefix("./"): member for member in archive}
+
+        def read_json(name):
+            member = names.get(name)
+            if member is None:
+                raise ValueError("missing OCI manifest: " + name)
+            with archive.extractfile(member) as stream:
+                return json.load(stream)
+
+        if "index.json" not in names:
+            return {"retained": False, "reason": "No OCI index.json in docker save archive",
+                    "attestation_manifests": []}
+        found, seen = [], set()
+
+        def visit(desc, attestation=False):
+            digest = desc.get("digest", "")
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest) or digest in seen:
+                return
+            seen.add(digest)
+            name = "blobs/sha256/" + digest.split(":")[1]
+            doc = read_json(name)
+            marked = (attestation or desc.get("annotations", {}).get(
+                "vnd.docker.reference.type") == "attestation-manifest")
+            for layer in doc.get("layers", []):
+                if layer.get("mediaType") != "application/vnd.in-toto+json":
+                    continue
+                statement = read_json("blobs/sha256/" + layer["digest"].split(":")[1])
+                if statement.get("predicateType", "").startswith("https://slsa.dev/provenance/"):
+                    # The in-toto predicate itself proves this is provenance, not just an SBOM.
+                    found.append({"manifest": digest, "statement": layer["digest"],
+                                  "predicate_type": statement["predicateType"],
+                                  "attestation_annotation": marked})
+            for child in doc.get("manifests", []):
+                visit(child, marked)
+
+        for descriptor in read_json("index.json").get("manifests", []):
+            visit(descriptor)
+        return {"retained": bool(found), "reason": "Inspected reachable OCI manifests and predicates",
+                "attestation_manifests": found}
+
+
+class Runner:
+    def __init__(self, out):
+        self.out = out
+
+    def __call__(self, command, *, cwd=None, env=None, stdout_path=None, capture=True):
+        # Spool process output to files: full compiler logs never accumulate in RAM.
+        with tempfile.TemporaryFile(dir=self.out) as stdout, tempfile.TemporaryFile(dir=self.out) as stderr:
+            result = subprocess.run(command, cwd=cwd, env=env, stdout=stdout, stderr=stderr)
+            stdout.seek(0)
+            stderr.seek(0)
+            with (self.out / "build.stdout").open("ab") as log:
+                if stdout_path:
+                    with Path(stdout_path).open("wb") as target:
+                        copy_stream(stdout, target)
+                else:
+                    copy_stream(stdout, log)
+            with (self.out / "build.stderr").open("ab") as log:
+                copy_stream(stderr, log)
+            if result.returncode:
+                raise RuntimeError(f"Command exited {result.returncode}: {command!r}")
+            if stdout_path or not capture:
+                return ""
+            stdout.seek(0)
+            return stdout.read().decode("utf-8", errors="replace")
+
+
+def copy_stream(source, target):
+    for chunk in iter(lambda: source.read(1024 * 1024), b""):
+        target.write(chunk)
+
+
+def resolve_base(run, value, kind):
+    expected = f"nvidia/cuda:12.8.1-{kind}-ubuntu24.04"
+    name, separator, digest = value.partition("@")
+    if name not in (expected, "docker.io/" + expected):
+        raise ValueError(f"Expected {expected}, got {name}")
+    if not separator:
+        info = json.loads(run(["docker", "image", "inspect", name]))[0]
+        candidates = [item.partition("@")[2] for item in info.get("RepoDigests", [])
+                      if item.partition("@")[0] in ("nvidia/cuda", "docker.io/nvidia/cuda")]
+        if not candidates:
+            raise ValueError(f"No local RepoDigest for {name}; set BASE_{kind.upper()}=name@sha256:...")
+        digest = candidates[0]
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        raise ValueError("Invalid base digest: " + digest)
+    return {"reference": name + "@" + digest, "digest": digest}
+
+
+def build(args, runner=None):
+    out = Path(args.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    # Never overwrite evidence from an earlier attempt.
+    if any(out.iterdir()):
+        raise ValueError("--out must be an empty directory")
+    for name in ("build.stdout", "build.stderr"):
+        (out / name).touch()
+    raw_run = runner or Runner(out)
+
+    def run(command, **kwargs):
+        return raw_run(docker_command(command) if command[0] == "docker" else command, **kwargs)
+
+    jetson = getattr(args, "target", "x86-5070ti") == "jetson-orin"
+    recipes = JETSON_RECIPES if jetson else RECIPES
+    started = time.monotonic()
+    record = {
+        "schema_version": 1, "status": "failed", "failure_stage": None,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "source": {"path": str(Path(args.source).resolve()), "requested_commit": args.commit,
+                   "commit": None, "tree": None, "dirty": None, "status_porcelain": None},
+        "patch_sha256": None, "extra_targets": list(getattr(args, "extra_target", []) or []), "tag": args.tag, "platform": "linux/amd64",
+        "cmake_flags": CMAKE_FLAGS,
+        "recipes": {}, "base_images": {}, "versions": {},
+        "image": None, "tools": {}, "app_files": {}, "archive": None, "buildx_metadata": None,
+        "provenance": {"retained": False, "reason": "Archive not inspected"},
+        "build_wall_seconds": None,
+    }
+    if jetson:
+        record.update(schema_version=2, target_profile="jetson-orin", builder="host-native",
+                      toolchain={}, platform="linux/arm64", cmake_flags=list(JETSON_FLAGS),
+                      target_requirements={"platform": "linux/arm64", "l4t_major": 36,
+                                           "cuda_arch": "sm_87", "jetpack": ">=6.1",
+                                           "runtime": "nvidia (NVIDIA_VISIBLE_DEVICES required)"})
+    stage = "recipes"
+    try:
+        record["recipes"] = {name: file_digest(recipes / name)
+                             for name in (("Dockerfile",) if jetson else ("Dockerfile", "docker-bake.hcl"))}
+        stage = "verify_source"
+        source = Path(args.source).resolve()
+        git_env = os.environ.copy()
+        git_env["GIT_OPTIONAL_LOCKS"] = "0"
+
+        def git(*items):
+            return run(["git", "-C", str(source), *items], env=git_env).strip()
+
+        if not re.fullmatch(r"[0-9a-fA-F]{7,40}", args.commit):
+            raise ValueError("--commit must be a hexadecimal SHA (7-40 characters)")
+        if Path(git("rev-parse", "--show-toplevel")).resolve() != source:
+            raise ValueError("--source must be the checkout root")
+        head = git("rev-parse", "HEAD")
+        expected = git("rev-parse", "--verify", args.commit + "^{commit}")
+        record["source"].update(commit=head, tree=git("rev-parse", "HEAD^{tree}"))
+        dirty = git("status", "--porcelain=v1", "--untracked-files=all")
+        record["source"].update(dirty=bool(dirty), status_porcelain=dirty)
+        if head != expected:
+            raise ValueError("Source HEAD does not match --commit")
+        if dirty:
+            raise ValueError("Source is dirty; commit changes or supply --patch")
+        if any(line.startswith("160000 ") for line in git("ls-files", "--stage").splitlines()):
+            raise ValueError("Submodules are unsupported; git archive would omit their contents")
+
+        with tempfile.TemporaryDirectory(prefix="staging-", dir=out) as temporary:
+            temporary = Path(temporary)
+            stage = "stage_source"
+            snapshot = temporary / "source.tar"
+            run(["git", "-C", str(source), "archive", "--format=tar", head],
+                env=git_env, stdout_path=snapshot)
+            staged = temporary / "source"
+            staged.mkdir()
+            with tarfile.open(snapshot) as archive:
+                extract_snapshot(archive, staged)
+            if args.patch:
+                stage = "patch_check"
+                patch = temporary / "input.patch"
+                patch.write_bytes(Path(args.patch).read_bytes())
+                record["patch_sha256"] = file_digest(patch)["sha256"]
+                patch_env = git_env.copy()
+                patch_env["GIT_CEILING_DIRECTORIES"] = str(temporary)
+                run(["git", "apply", "--check", str(patch)], cwd=staged, env=patch_env)
+                stage = "patch_apply"
+                run(["git", "apply", str(patch)], cwd=staged, env=patch_env)
+            # User-supplied ignore rules must not silently remove tracked source.
+            for ignore in (".dockerignore", "Dockerfile.dockerignore"):
+                ignore_path = staged / ignore
+                if ignore_path.is_symlink():
+                    ignore_path.unlink()
+                ignore_path.write_text("")
+
+            stage = "versions"
+            record["versions"]["docker"] = run(["docker", "version", "--format", "{{json .}}"])
+            record["versions"]["buildx"] = run(["docker", "buildx", "version"]).strip()
+            stage = "base_images"
+            if jetson:
+                runtime = os.environ.get("BASE_RUNTIME", JETSON_RUNTIME)
+                if not re.fullmatch(r"nvcr.io/nvidia/l4t-cuda:12\.6\.11-runtime@sha256:[0-9a-f]{64}", runtime):
+                    raise ValueError("Expected digest-pinned Jetson l4t-cuda 12.6.11 runtime")
+                record["base_images"]["runtime"] = {"reference": runtime, "digest": runtime.split("@")[1]}
+            else:
+                record["base_images"]["devel"] = resolve_base(
+                    run, os.environ.get("BASE_DEVEL", DEFAULT_DEVEL), "devel")
+                record["base_images"]["runtime"] = resolve_base(
+                    run, os.environ.get("BASE_RUNTIME", DEFAULT_RUNTIME), "runtime")
+            env = os.environ.copy()
+            env.update(TAG=args.tag, SOURCE_DIR=str(staged), SOURCE_COMMIT=head, EXTRA_TARGETS=" ".join(getattr(args, "extra_target", []) or []),
+                       PATCH_SHA256=record["patch_sha256"] or "",
+                       BASE_DEVEL=record["base_images"].get("devel", {}).get("reference", ""),
+                       BASE_RUNTIME=record["base_images"]["runtime"]["reference"],
+                       BUILDX_METADATA_PROVENANCE="max")
+            stage = "build"
+            build_started = time.monotonic()
+            try:
+                if jetson:
+                    jetson_build(run, staged, out, record, args)
+                else:
+                    # Stage the recipe INSIDE the build context so Bake needs no filesystem entitlements (no fs.read=/).
+                    recipe_dir = staged / ".campaign-recipe"; recipe_dir.mkdir(exist_ok=True)
+                    for name in ("Dockerfile", "docker-bake.hcl"):
+                        shutil.copy2(RECIPES / name, recipe_dir / name)
+                    env["SOURCE_DIR"] = "."
+                    run(["docker", "buildx", "bake", "--file", str(recipe_dir / "docker-bake.hcl"),
+                         "--metadata-file", str(out / "buildx-metadata.json"), "--progress", "plain", "engine"],
+                        cwd=staged, env=env, capture=False)
+            finally:
+                record["build_wall_seconds"] = time.monotonic() - build_started
+                if (out / "buildx-metadata.json").exists():
+                    record["buildx_metadata"] = json.loads((out / "buildx-metadata.json").read_text())
+
+        stage = "inspect_image"
+        info = json.loads(run(["docker", "image", "inspect", args.tag]))[0]
+        record["image"] = {key: info.get(key) for key in
+                           ("Id", "RepoDigests", "Created", "Architecture", "Os")}
+        if info.get("Architecture") != ("arm64" if jetson else "amd64") or info.get("Os") != "linux":
+            raise ValueError("Built image is not " + record["platform"])
+        # Use the immutable config ID after resolving the tag exactly once.
+        image_id = info["Id"]
+        stage = "hash_tools"
+        hashes = run(["docker", "run", *(["--runtime", "runc"] if jetson else []), "--rm", "--network=none", "--read-only",
+                      "--entrypoint", "/bin/sh", image_id, "-c",
+                      "find /app -type f -print0 | sort -z | xargs -0 /usr/bin/sha256sum"])
+        for line in hashes.splitlines():
+            digest, name = line.split(maxsplit=1)
+            if not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise ValueError("Invalid file sha256")
+            record["app_files"][name.strip()] = digest   # every regular file shipped in /app (binaries AND shared libraries)
+        required = {"/app/" + tool for tool in TOOLS + tuple(getattr(args, "extra_target", []) or [])}
+        if not required <= set(record["app_files"]):
+            raise ValueError("Missing tool hashes: " + ", ".join(sorted(required - set(record["app_files"]))))
+        record["tools"] = {k: v for k, v in record["app_files"].items() if k in required}
+        stage = "save_image"
+        image_tar = out / "engine-image.docker.tar"
+        run(["docker", "save", "--output", str(image_tar), image_id])
+        record["archive"] = {"path": image_tar.name, **file_digest(image_tar)}
+        record["image"].update({"docker_reported_id": info["Id"], **{"config_digest": None, "index_digest": None}})
+        ids = archive_identities(image_tar)
+        record["image"]["config_digest"], record["image"]["index_digest"] = ids["config_digest"], ids["index_digest"]
+        record["image"]["index_manifests"] = ids["index_manifests"]
+        record["image"]["docker_id_in_archive_index"] = info["Id"] in ids.get("index_entry_digests", [])
+        record["image"]["id_note"] = "Id/docker_reported_id is whatever `docker image inspect` returned (containerd store: an index digest). config_digest is the image config digest. They are different objects."
+        stage = "inspect_provenance"
+        record["provenance"] = archive_provenance(image_tar)
+        record.update(status="success", failure_stage=None)
+    except Exception as exc:
+        record.update(status="failed", failure_stage=stage, error=str(exc))
+        with (out / "build.stderr").open("a") as log:
+            log.write(f"\n{stage}: {exc}\n")
+    finally:
+        record["wall_seconds"] = time.monotonic() - started
+        record["finished_at"] = datetime.now(timezone.utc).isoformat()
+        (out / "build-record.json").write_text(json.dumps(record, indent=2) + "\n")
+    return 0 if record["status"] == "success" else 1
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--target", choices=("x86-5070ti", "jetson-orin"), default="x86-5070ti")
+    parser.add_argument("--source", required=True)
+    parser.add_argument("--commit", required=True)
+    parser.add_argument("--patch")
+    parser.add_argument("--extra-target", action="append", default=[], help="extra CMake executable target to build and ship in /app (e.g. llama-routing-trace added by a patch)")
+    parser.add_argument("--tag", required=True)
+    parser.add_argument("--out", required=True)
+    args = parser.parse_args()
+    try:
+        return build(args)
+    except (OSError, ValueError) as exc:
+        parser.exit(1, str(exc) + "\n")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+exec
+/bin/bash -lc "sed -n '1,140p' cc/build_engine/test_build_engine.py; rg -n 'jetson|ccache|cmake' cc/build_engine/test_build_engine.py; command -v ccache; ccache -s -v" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+"""No Docker daemon, CUDA toolkit, GPU, or network needed."""
+import argparse
+import hashlib
+import io
+import json
+import shlex
+from pathlib import Path
+import subprocess
+import sys
+import tarfile
+
+import pytest
+
+import build_engine as engine
+
+
+@pytest.fixture
+def source(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(repo)], check=True)
+    (repo / "input.txt").write_text("original\n")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=Test", "-c",
+                    "user.email=test@example.invalid", "-c", "core.hooksPath=/dev/null",
+                    "commit", "--quiet", "-m", "fixture"], check=True)
+    return repo
+
+
+def arguments(source, tmp_path, patch=None):
+    commit = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+    return argparse.Namespace(source=str(source), commit=commit, patch=patch,
+                              tag="campaign/test:unit", out=str(tmp_path / "out"))
+
+
+def record(args):
+    return json.loads((Path(args.out) / "build-record.json").read_text())
+
+
+def make_tar(path, objects):
+    with tarfile.open(path, "w") as archive:
+        for name, obj in objects.items():
+            data = json.dumps(obj).encode()
+            member = tarfile.TarInfo(name)
+            member.size = len(data)
+            archive.addfile(member, io.BytesIO(data))
+
+
+def test_sha256_bytes(tmp_path):
+    path = tmp_path / "payload"
+    data = b"hello\x00world" * 200000
+    path.write_bytes(data)
+    assert engine.file_digest(path) == {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
+    path.write_bytes(b"")
+    assert engine.file_digest(path) == {"sha256": hashlib.sha256(b"").hexdigest(), "bytes": 0}
+
+
+def test_patch_check_failure(source, tmp_path):
+    patch = tmp_path / "bad.patch"
+    patch.write_text("diff --git a/input.txt b/input.txt\n--- a/input.txt\n+++ b/input.txt\n@@ -1 +1 @@\n-missing\n+changed\n")
+    args = arguments(source, tmp_path, str(patch))
+    assert engine.build(args) == 1
+    result = record(args)
+    assert result["failure_stage"] == "patch_check"
+    assert result["patch_sha256"] == engine.file_digest(patch)["sha256"]
+    assert result["source"]["dirty"] is False
+    assert (source / "input.txt").read_text() == "original\n"
+    assert "patch failed" in (Path(args.out) / "build.stderr").read_text()
+    assert (Path(args.out) / "build.stdout").exists()
+    assert not list(Path(args.out).glob("staging-*"))
+
+
+@pytest.fixture
+def mock_docker(monkeypatch):
+    real_run = subprocess.run
+    calls = []
+    state = {"fail_build": False, "staged_content": None, "jetson": False, "native_calls": [], "prefix_calls": []}
+
+    def fake(command, **kwargs):
+        if command[:3] == ["sg", "docker", "-c"]:
+            state["prefix_calls"].append(command)
+            command = shlex.split(command[3])
+        if command[0] != "docker":
+            if state["jetson"] and command[0] in ("cmake", "ninja", "nvcc", "gcc", "head", "dpkg-query"):
+                state["native_calls"].append(command)
+                result = "test toolchain"
+                if command[:2] == ["gcc", "-print-file-name=libgomp.so.1"]:
+                    library = state["libgomp"]
+                    result = str(library)
+                if command[:2] == ["cmake", "--build"]:
+                    if state["fail_build"]:
+                        kwargs["stderr"].write(b"native compile failed\n")
+                        return subprocess.CompletedProcess(command, 42)
+                    binaries = Path(command[2]) / "bin"
+                    binaries.mkdir(parents=True)
+                    for tool in command[command.index("--target") + 1:]:
+                        (binaries / tool).write_text("binary")
+                    (binaries / "libggml.so.0").write_text("library")
+                    (binaries / "libggml.so").symlink_to("libggml.so.0")
+                if "-S" in command:
+                    state["staged_content"] = (Path(command[command.index("-S") + 1]) / "input.txt").read_text()
+                kwargs["stdout"].write(result.encode())
+                return subprocess.CompletedProcess(command, 0)
+            return real_run(command, **kwargs)
+        calls.append(command)
+        stdout, stderr = kwargs["stdout"], kwargs["stderr"]
+        result = ""
+        code = 0
+        if command[1] == "version":
+            result = '{"Client":{"Version":"test"},"Server":{"Version":"test"}}'
+        elif command[1:3] == ["buildx", "version"]:
+            result = "buildx unit-test"
+        elif command[1:3] == ["buildx", "build"]:
+            app = Path(command[-1]) / "app"
+            assert (app / "libggml.so").is_symlink()
+            assert (app / "libggml.so.0").read_text() == "library"
+            assert (app / "libgomp.so.1").exists()
+            assert set(p.name for p in app.iterdir()) == set(engine.TOOLS) | {"libggml.so", "libggml.so.0", "libgomp.so.1"}
+            Path(command[command.index("--metadata-file") + 1]).write_text('{"native": true}')
+        elif command[1:3] == ["buildx", "bake"]:
+            env = kwargs["env"]
+            staged = Path(kwargs["cwd"])
+            assert env["SOURCE_DIR"] == "."
+            assert (staged / ".campaign-recipe" / "Dockerfile").exists()
+            assert Path(command[command.index("--file") + 1]).parent == staged / ".campaign-recipe"
+            assert not any(a.startswith("--allow") for a in command)  # no filesystem entitlements requested
+            state["staged_content"] = (staged / "input.txt").read_text()
+            assert not (staged / ".git").exists()
+            assert "@sha256:" in env["BASE_RUNTIME"]
+            result = "full compiler stdout\n"
+            stderr.write(b"full compiler stderr\n")
+            metadata = {"engine": {"containerimage.config.digest": "sha256:" + "1" * 64}}
+            Path(command[command.index("--metadata-file") + 1]).write_text(json.dumps(metadata))
+            code = 42 if state["fail_build"] else 0
+        elif command[1:3] == ["image", "inspect"]:
+            if command[-1].startswith("nvidia/"):
+                result = json.dumps([{"RepoDigests": ["nvidia/cuda@sha256:" + "2" * 64]}])
+            else:
+                result = json.dumps([{"Id": "sha256:" + "1" * 64, "RepoDigests": [],
+                                      "Created": "2026-01-01T00:00:00Z", "Architecture": "arm64" if state["jetson"] else "amd64", "Os": "linux"}])
+77:    state = {"fail_build": False, "staged_content": None, "jetson": False, "native_calls": [], "prefix_calls": []}
+84:            if state["jetson"] and command[0] in ("cmake", "ninja", "nvcc", "gcc", "head", "dpkg-query"):
+90:                if command[:2] == ["cmake", "--build"]:
+140:                                      "Created": "2026-01-01T00:00:00Z", "Architecture": "arm64" if state["jetson"] else "amd64", "Os": "linux"}])
+175:    assert result["cmake_flags"] == engine.CMAKE_FLAGS
+269:@pytest.mark.parametrize("ccache,prefix", [(False, ""), (True, "sg docker -c")])
+270:def test_jetson_success(source, tmp_path, mock_docker, monkeypatch, ccache, prefix):
+272:    state["jetson"] = True
+275:    monkeypatch.setattr(engine.shutil, "which", lambda name: "/usr/bin/ccache" if ccache else None)
+279:    args.target = "jetson-orin"
+284:    assert result["target_profile"] == "jetson-orin"
+290:    assert set(result["toolchain"]) == {"nvcc", "gcc", "cmake", "ninja", "nv_tegra_release", "nvidia-jetpack"}
+297:    launchers = ["-DCMAKE_" + lang + "_COMPILER_LAUNCHER=ccache" for lang in ("C", "CXX", "CUDA")]
+298:    assert all((flag in configure) == ccache for flag in launchers)
+299:    assert result["cmake_flags"] == engine.JETSON_FLAGS + (launchers if ccache else [])
+300:    compile_cmd = next(c for c in state["native_calls"] if c[:2] == ["cmake", "--build"])
+308:                          "TOOLCHAIN": json.dumps(result["toolchain"], sort_keys=True), "TARGET_PROFILE": "jetson-orin"}
+318:def test_jetson_native_failure(source, tmp_path, mock_docker, monkeypatch):
+320:    state.update(jetson=True, fail_build=True)
+323:    args.target = "jetson-orin"
+333:def test_jetson_dockerfile():
+/usr/bin/ccache
+Summary:
+  Cache directory:  /home/muk/.cache/ccache
+  Primary config:   /home/muk/.config/ccache/ccache.conf
+  Secondary config: /etc/ccache.conf
+  Stats updated:    Tue Nov 10 00:57:18 2026
+  Hits:                0 /  456 (0.00 %)
+    Direct:            0 /  456 (0.00 %)
+    Preprocessed:      0 /  456 (0.00 %)
+  Misses:            456
+    Direct:          456
+    Preprocessed:    456
+Primary storage:
+  Hits:                0 /  912 (0.00 %)
+  Misses:            912
+  Cache size (GB):  0.11 / 5.00 (2.19 %)
+  Files:             911
+
+web search: 
+web search: https://ccache.dev/manual/4.5.1.html
+exec
+/bin/bash -lc "ccache --version; ccache --print-stats; sed -n '269,335p' cc/build_engine/test_build_engine.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+ccache version 4.5.1
+Features: file-storage http-storage redis-storage
+
+Copyright (C) 2002-2007 Andrew Tridgell
+Copyright (C) 2009-2021 Joel Rosdahl and other contributors
+
+See <https://ccache.dev/credits.html> for a complete list of contributors.
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation; either version 3 of the License, or (at your option) any later
+version.
+autoconf_test	0
+bad_compiler_arguments	0
+bad_output_file	0
+cache_miss	457
+cache_size_kibibyte	107408
+called_for_link	0
+called_for_preprocessing	0
+cleanups_performed	0
+compile_failed	0
+compiler_check_failed	0
+compiler_produced_empty_output	0
+compiler_produced_no_output	0
+compiler_produced_stdout	0
+could_not_find_compiler	0
+could_not_use_modules	0
+could_not_use_precompiled_header	0
+direct_cache_hit	0
+direct_cache_miss	457
+error_hashing_extra_file	0
+files_in_cache	913
+internal_error	0
+missing_cache_file	0
+multiple_source_files	0
+no_input_file	0
+output_to_stdout	0
+preprocessed_cache_hit	0
+preprocessed_cache_miss	457
+preprocessor_error	0
+primary_storage_hit	0
+primary_storage_miss	914
+recache	0
+secondary_storage_error	0
+secondary_storage_hit	0
+secondary_storage_miss	0
+secondary_storage_timeout	0
+stats_updated_timestamp	1794272268
+stats_zeroed_timestamp	0
+unsupported_code_directive	0
+unsupported_compiler_option	0
+unsupported_source_language	0
+@pytest.mark.parametrize("ccache,prefix", [(False, ""), (True, "sg docker -c")])
+def test_jetson_success(source, tmp_path, mock_docker, monkeypatch, ccache, prefix):
+    calls, state = mock_docker
+    state["jetson"] = True
+    state["libgomp"] = tmp_path / "libgomp.so.1"
+    state["libgomp"].write_text("openmp")
+    monkeypatch.setattr(engine.shutil, "which", lambda name: "/usr/bin/ccache" if ccache else None)
+    monkeypatch.setenv("DOCKER_CMD_PREFIX", prefix)
+    monkeypatch.setenv("BUILD_JOBS", "2")
+    args = arguments(source, tmp_path)
+    args.target = "jetson-orin"
+    args.tag = "campaign/test:quoted;literal"
+    assert engine.build(args) == 0
+    result = record(args)
+    assert result["schema_version"] == 2
+    assert result["target_profile"] == "jetson-orin"
+    assert result["builder"] == "host-native"
+    assert result["platform"] == "linux/arm64"
+    assert result["target_requirements"] == {
+        "platform": "linux/arm64", "l4t_major": 36, "cuda_arch": "sm_87",
+        "jetpack": ">=6.1", "runtime": "nvidia (NVIDIA_VISIBLE_DEVICES required)"}
+    assert set(result["toolchain"]) == {"nvcc", "gcc", "cmake", "ninja", "nv_tegra_release", "nvidia-jetpack"}
+    assert result["base_images"]["runtime"]["reference"] == engine.JETSON_RUNTIME
+    assert "devel" not in result["base_images"]
+    configure = next(c for c in state["native_calls"] if "-S" in c)
+    assert configure[configure.index("-G") + 1] == "Ninja"
+    assert configure[configure.index("-B") + 1] == str(Path(args.out) / "build")
+    assert set(engine.JETSON_FLAGS) <= set(configure)
+    launchers = ["-DCMAKE_" + lang + "_COMPILER_LAUNCHER=ccache" for lang in ("C", "CXX", "CUDA")]
+    assert all((flag in configure) == ccache for flag in launchers)
+    assert result["cmake_flags"] == engine.JETSON_FLAGS + (launchers if ccache else [])
+    compile_cmd = next(c for c in state["native_calls"] if c[:2] == ["cmake", "--build"])
+    assert compile_cmd[3:] == ["-j2", "--target", *engine.TOOLS]
+    image_cmd = next(c for c in calls if c[1:3] == ["buildx", "build"])
+    assert image_cmd[image_cmd.index("--platform") + 1] == "linux/arm64"
+    assert "--load" in image_cmd
+    build_args = dict(image_cmd[i + 1].split("=", 1) for i, v in enumerate(image_cmd) if v == "--build-arg")
+    assert build_args == {"BASE_RUNTIME": engine.JETSON_RUNTIME, "SOURCE_COMMIT": args.commit,
+                          "SOURCE_TREE": result["source"]["tree"], "PATCH_SHA256": "",
+                          "TOOLCHAIN": json.dumps(result["toolchain"], sort_keys=True), "TARGET_PROFILE": "jetson-orin"}
+    hash_cmd = next(c for c in calls if c[1] == "run")
+    assert hash_cmd[hash_cmd.index("--runtime") + 1] == "runc"
+    assert bool(state["prefix_calls"]) == bool(prefix)
+    if prefix:
+        assert len(state["prefix_calls"]) == len(calls)
+    assert state["staged_content"] == "original\n"
+    assert not list(Path(args.out).glob("staging-*"))
+
+
+def test_jetson_native_failure(source, tmp_path, mock_docker, monkeypatch):
+    calls, state = mock_docker
+    state.update(jetson=True, fail_build=True)
+    monkeypatch.setattr(engine.shutil, "which", lambda name: None)
+    args = arguments(source, tmp_path)
+    args.target = "jetson-orin"
+    assert engine.build(args) == 1
+    result = record(args)
+    assert result["failure_stage"] == "build"
+    assert result["toolchain"]["nvcc"]
+    assert result["build_wall_seconds"] >= 0
+    assert not any(c[1:3] == ["buildx", "build"] for c in calls)
+    assert "native compile failed" in (Path(args.out) / "build.stderr").read_text()
+
+
+def test_jetson_dockerfile():
+    text = (engine.JETSON_RECIPES / "Dockerfile").read_text()
+    assert "ARG BASE_RUNTIME=" + engine.JETSON_RUNTIME in text
+
+web search: 
+web search: 'nvcc'
+codex
+The native build directory is outside the staged source, which leaves attempt-specific paths in compiler arguments. I’ll put it inside the source during compilation and preserve it under the output directory afterward. I’ll also record ccache counters before and after compilation, including failures.
+
+The installed ccache is 4.5.1. Its manual lists NVCC support; current stats show zero hits and about 0.11 GB cached, but don’t identify which source languages produced those entries.
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='cc/build_engine/build_engine.py'
+s=open(p).read(); pos=s.index('\\ndef jetson_build(')
+s=s[:pos]+'''
+def ccache_stats(run, env):
+    raw = run([\"ccache\", \"--print-stats\"], env=env)
+    counters = {key: int(value) for key, value in
+                (line.split() for line in raw.splitlines() if line.strip())}
+    summary = run([\"ccache\", \"-s\", \"-v\"], env=env)
+    uncacheable = re.search(r\""'^'"\\\\s*Uncacheable:\\\\s*(\\\\d+)\", summary, re.MULTILINE)
+    return {\"hits\": counters.get(\"direct_cache_hit\", 0) + counters.get(\"preprocessed_cache_hit\", 0),
+            \"misses\": counters.get(\"cache_miss\", 0),
+            \"uncacheable\": int(uncacheable.group(1)) if uncacheable else 0,
+            \"counters\": counters, \"summary\": summary}
+
+''' +s[pos:]
+s=s.replace('    if shutil.which(\"ccache\"):\\n', '''    cached = bool(shutil.which(\"ccache\"))
+    cache = record[\"ccache\"]
+    cache[\"enabled\"] = cached
+    native_env = os.environ.copy()
+    native_env.update(CCACHE_BASEDIR=str(staged), CCACHE_NOHASHDIR=\"1\",
+                      CCACHE_COMPILERCHECK=\"content\")
+    if cached:
+        cache[\"version\"] = run([\"ccache\", \"--version\"], env=native_env).splitlines()[0]
+''')
+s=s.replace('    run([\"cmake\", \"-S\", str(staged), \"-B\", str(out / \"build\"), \"-G\", \"Ninja\", *flags], capture=False)\\n    run([\"cmake\", \"--build\", str(out / \"build\"), \"-j\" + jobs, \"--target\", *tools], capture=False)', '''    # Keep all generated include/output paths below CCACHE_BASEDIR. ccache
+    # rewrites those paths relative to the compiler cwd across random staging roots.
+    build_dir = staged / \".campaign-build\"
+    try:
+        if cached:
+            cache[\"before\"] = ccache_stats(run, native_env)
+        try:
+            run([\"cmake\", \"-S\", \".\", \"-B\", \".campaign-build\", \"-G\", \"Ninja\", *flags],
+                cwd=staged, env=native_env, capture=False)
+            run([\"cmake\", \"--build\", \".campaign-build\", \"-j\" + jobs, \"--target\", *tools],
+                cwd=staged, env=native_env, capture=False)
+        finally:
+            if cached:
+                try:
+                    cache[\"after\"] = ccache_stats(run, native_env)
+                    cache[\"delta\"] = {key: cache[\"after\"][key] - cache[\"before\"][key]
+                                      for key in (\"hits\", \"misses\", \"uncacheable\")}
+                except Exception as exc:
+                    cache[\"stats_error\"] = str(exc)
+    finally:
+        if build_dir.exists():
+            shutil.move(str(build_dir), out / \"build\")''')
+s=s.replace('                      toolchain={}, platform=', '                      ccache={\"enabled\": False, \"version\": None, \"before\": None, \"after\": None, \"delta\": None},\\n                      toolchain={}, platform=')
+open(p,'w').write(s)
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='cc/build_engine/test_build_engine.py';s=open(p).read().replace('\"prefix_calls\": []}', '\"prefix_calls\": [], \"native_kwargs\": [], \"stats_calls\": 0}')
+s=s.replace('(\"cmake\", \"ninja\", \"nvcc\", \"gcc\", \"head\", \"dpkg-query\")', '(\"cmake\", \"ninja\", \"nvcc\", \"gcc\", \"head\", \"dpkg-query\", \"ccache\")')
+s=s.replace('                result = \"test toolchain\"','''                state[\"native_kwargs\"].append(kwargs.copy())
+                result = \"test toolchain\"
+                if command == [\"ccache\", \"--version\"]:
+                    result = \"ccache version 4.5.1\\\\n\"
+                if command == [\"ccache\", \"--print-stats\"]:
+                    n = state[\"stats_calls\"]
+                    state[\"stats_calls\"] += 1
+                    result = f\"direct_cache_hit\\\\t{10 + n * 3}\\\\npreprocessed_cache_hit\\\\t2\\\\ncache_miss\\\\t{20 + n}\\\\n\"
+                if command == [\"ccache\", \"-s\", \"-v\"]:
+                    result = f\"  Uncacheable: {state['stats_calls']} / 30 (0.0 %)\\\\n\"''')
+s=s.replace('binaries = Path(command[2]) / \"bin\"','binaries = Path(kwargs[\"cwd\"]) / command[2] / \"bin\"')
+s=s.replace('(Path(command[command.index(\"-S\") + 1]) / \"input.txt\")','(Path(kwargs[\"cwd\"]) / command[command.index(\"-S\") + 1] / \"input.txt\")')
+s=s.replace('assert configure[configure.index(\"-B\") + 1] == str(Path(args.out) / \"build\")', '''assert configure[configure.index(\"-B\") + 1] == \".campaign-build\"
+    assert configure[configure.index(\"-S\") + 1] == \".\"
+    for command, kwargs in zip(state[\"native_calls\"], state[\"native_kwargs\"]):
+        if command[0] == \"cmake\" and command[1] "'!= "--version":
+            assert kwargs["env"]["CCACHE_BASEDIR"] == str(kwargs["cwd"])
+            assert kwargs["env"]["CCACHE_NOHASHDIR"] == "1"
+            assert kwargs["env"]["CCACHE_COMPILERCHECK"] == "content"
+    assert (Path(args.out) / "build" / "bin" / "llama-cli").exists()
+    assert result["ccache"]["enabled"] == ccache
+    if ccache:
+        assert result["ccache"]["version"] == "ccache version 4.5.1"
+        assert result["ccache"]["before"]["hits"] == 12
+        assert result["ccache"]["after"]["misses"] == 21
+        assert result["ccache"]["delta"] == {"hits": 3, "misses": 1, "uncacheable": 1}
+    else:
+        assert result["ccache"]["before"] is None'"''')
+s=s.replace('def test_jetson_native_failure(source, tmp_path, mock_docker, monkeypatch):','@pytest.mark.parametrize(\"cached\", [False, True])\\ndef test_jetson_native_failure(source, tmp_path, mock_docker, monkeypatch, cached):')
+s=s.replace('lambda name: None)\\n    args = arguments(source, tmp_path)\\n    args.target', 'lambda name: \"/usr/bin/ccache\" if cached else None)\\n    args = arguments(source, tmp_path)\\n    args.target')
+s=s.replace('    assert result[\"failure_stage\"] == \"build\"\\n    assert result[\"toolchain\"]', '    assert result[\"failure_stage\"] == \"build\"\\n    if cached:\\n        assert result[\"ccache\"][\"after\"][\"hits\"] == 15\\n    assert result[\"toolchain\"]')
+open(p,'w').write(s)
+PY
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q cc/build_engine/test_build_engine.py --basetemp=cc/build_engine/.pytest-tmp -o cache_dir=cc/build_engine/.pytest_cache" in /home/muk/projects/siminfeng/campaign
+ succeeded in 1887ms:
+.................                                                        [100%]
+17 passed in 1.09s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='cc/build_engine/build_engine.py';s=open(p).read().replace('    raw = run([\"ccache\", \"--print-stats\"], env=env)','    env = dict(env, LC_ALL=\"C\")\\n    raw = run([\"ccache\", \"--print-stats\"], env=env)').replace('    build_dir = staged / \".campaign-build\"\\n    try:', '    build_dir = staged / \".campaign-build\"\\n    if build_dir.exists() or build_dir.is_symlink():\\n        raise ValueError(\"Source contains reserved native build path .campaign-build\")\\n    try:');open(p,'w').write(s)
+p='cc/build_engine/README.md';s=open(p).read().replace('"'`<out>/build` with Ninja'"', '"'`<staged-source>/.campaign-build` with Ninja'"');s += '''
+### Native ccache keying and evidence (J-T1b)
+
+Jetson configure and compile commands run from the staged source with relative
+"'`-S .`, `-B .campaign-build` and `--build .campaign-build` arguments. The build
+stays inside `CCACHE_BASEDIR=<staged-source>`, so generated include/output paths
+can be normalized across random staging directories. Native commands inherit
+`CCACHE_NOHASHDIR=1` and `CCACHE_COMPILERCHECK=content`. The reserved
+`.campaign-build` path must not exist in the source snapshot. No stable path
+option is needed. On success or compile failure the build directory is moved to
+`<out>/build` as evidence before staging cleanup; its absolute CMake cache paths
+refer to the removed snapshot, so it is not a resumable build directory.
+The amd64 recipe, environment and record schema are unchanged.
+
+Jetson records include `ccache.enabled`, `version`, `before`, `after` and `delta`.
+Snapshots bracket native configure/compilation (including failed compilation),
+using `ccache --print-stats` plus English `ccache -s -v`; each contains hits,
+misses, uncacheable, raw counters and the verbose summary. Delta contains the
+three counter differences. Disabled/unreached snapshots are null; failure to
+collect final stats is recorded as `stats_error`. These are shared-cache
+counters: concurrent users or counter resets can distort the differences.
+No statistics are reset and no cache settings are persisted.
+
+Read-only inspection on 2026-11-10 found ccache 4.5.1, zero hits, 456 misses
+and about 0.11 GB in `ccache -s -v`; a later machine-readable snapshot had 457
+misses and zero unsupported-language/option or failed-compilation counters.
+The running build can change those totals. The
+[ccache 4.5.1 manual](https://ccache.dev/manual/4.5.1.html#_configuration_options)
+explicitly supports compiler type `nvcc`: single-source CUDA `.cu` object
+compilations are cacheable. Aggregate counters and compressed cache size do not
+prove that any specific `.cu` invocation was cached; no real build was run for
+this assignment. Confirm CUDA hits in a later authorized rebuild. Compiler
+flags, generated content, absolute paths outside the base directory and embedded
+source paths can still affect reuse. Disabling directory hashing can reuse old
+debug compilation-directory paths; Release builds here do not request debug info.
+'"''';open(p,'w').write(s)
+PY
+ git diff --stat -- cc/build_engine/build_engine.py cc/build_engine/test_build_engine.py cc/build_engine/README.md" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+ campaign/cc/build_engine/README.md            | 37 +++++++++++++++++++-
+ campaign/cc/build_engine/build_engine.py      | 49 +++++++++++++++++++++++++--
+ campaign/cc/build_engine/test_build_engine.py | 41 ++++++++++++++++++----
+ 3 files changed, 116 insertions(+), 11 deletions(-)
+
+codex
+The changes pass all 17 mocked tests, including ccache environment, relative CMake arguments, record fields, and stats collection after compile failure. I’m checking the final diff and rerunning the suite after a small guard against a source directory colliding with the build path. No real build or Docker command has run, and existing results are untouched.
+exec
+/bin/bash -lc 'git diff -- cc/build_engine/build_engine.py; PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q cc/build_engine/test_build_engine.py --basetemp=cc/build_engine/.pytest-tmp -o cache_dir=cc/build_engine/.pytest_cache; git diff --check -- cc/build_engine/build_engine.py cc/build_engine/test_build_engine.py cc/build_engine/README.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 1625ms:
+diff --git a/campaign/cc/build_engine/build_engine.py b/campaign/cc/build_engine/build_engine.py
+index ce8af2b..62fa900 100755
+--- a/campaign/cc/build_engine/build_engine.py
++++ b/campaign/cc/build_engine/build_engine.py
+@@ -67,6 +67,19 @@ def extract_snapshot(archive, destination):
+         archive.extractall(destination, members=[m for m in members if m.issym()])
+ 
+ 
++def ccache_stats(run, env):
++    env = dict(env, LC_ALL="C")
++    raw = run(["ccache", "--print-stats"], env=env)
++    counters = {key: int(value) for key, value in
++                (line.split() for line in raw.splitlines() if line.strip())}
++    summary = run(["ccache", "-s", "-v"], env=env)
++    uncacheable = re.search(r"^\s*Uncacheable:\s*(\d+)", summary, re.MULTILINE)
++    return {"hits": counters.get("direct_cache_hit", 0) + counters.get("preprocessed_cache_hit", 0),
++            "misses": counters.get("cache_miss", 0),
++            "uncacheable": int(uncacheable.group(1)) if uncacheable else 0,
++            "counters": counters, "summary": summary}
++
++
+ def jetson_build(run, staged, out, record, args):
+     for name, command in (
+         ("nvcc", ["nvcc", "--version"]), ("gcc", ["gcc", "--version"]),
+@@ -75,15 +88,44 @@ def jetson_build(run, staged, out, record, args):
+         ("nvidia-jetpack", ["dpkg-query", "-W", "-f=${Version}", "nvidia-jetpack"])):
+         record["toolchain"][name] = run(command).strip()
+     flags = list(JETSON_FLAGS)
+-    if shutil.which("ccache"):
++    cached = bool(shutil.which("ccache"))
++    cache = record["ccache"]
++    cache["enabled"] = cached
++    native_env = os.environ.copy()
++    native_env.update(CCACHE_BASEDIR=str(staged), CCACHE_NOHASHDIR="1",
++                      CCACHE_COMPILERCHECK="content")
++    if cached:
++        cache["version"] = run(["ccache", "--version"], env=native_env).splitlines()[0]
+         flags += ["-DCMAKE_" + lang + "_COMPILER_LAUNCHER=ccache" for lang in ("C", "CXX", "CUDA")]
+     record["cmake_flags"] = flags
+     jobs = os.environ.get("BUILD_JOBS", "3")
+     if not jobs.isdigit() or int(jobs) < 1:
+         raise ValueError("BUILD_JOBS must be a positive integer")
+     tools = TOOLS + tuple(getattr(args, "extra_target", []) or [])
+-    run(["cmake", "-S", str(staged), "-B", str(out / "build"), "-G", "Ninja", *flags], capture=False)
+-    run(["cmake", "--build", str(out / "build"), "-j" + jobs, "--target", *tools], capture=False)
++    # Keep all generated include/output paths below CCACHE_BASEDIR. ccache
++    # rewrites those paths relative to the compiler cwd across random staging roots.
++    build_dir = staged / ".campaign-build"
++    if build_dir.exists() or build_dir.is_symlink():
++        raise ValueError("Source contains reserved native build path .campaign-build")
++    try:
++        if cached:
++            cache["before"] = ccache_stats(run, native_env)
++        try:
++            run(["cmake", "-S", ".", "-B", ".campaign-build", "-G", "Ninja", *flags],
++                cwd=staged, env=native_env, capture=False)
++            run(["cmake", "--build", ".campaign-build", "-j" + jobs, "--target", *tools],
++                cwd=staged, env=native_env, capture=False)
++        finally:
++            if cached:
++                try:
++                    cache["after"] = ccache_stats(run, native_env)
++                    cache["delta"] = {key: cache["after"][key] - cache["before"][key]
++                                      for key in ("hits", "misses", "uncacheable")}
++                except Exception as exc:
++                    cache["stats_error"] = str(exc)
++    finally:
++        if build_dir.exists():
++            shutil.move(str(build_dir), out / "build")
+     context = staged.parent / "runtime"
+     app = context / "app"
+     app.mkdir(parents=True)
+@@ -261,6 +303,7 @@ def build(args, runner=None):
+     }
+     if jetson:
+         record.update(schema_version=2, target_profile="jetson-orin", builder="host-native",
++                      ccache={"enabled": False, "version": None, "before": None, "after": None, "delta": None},
+                       toolchain={}, platform="linux/arm64", cmake_flags=list(JETSON_FLAGS),
+                       target_requirements={"platform": "linux/arm64", "l4t_major": 36,
+                                            "cuda_arch": "sm_87", "jetpack": ">=6.1",
+.................                                                        [100%]
+17 passed in 0.99s
+
+codex
+Implemented Jetson ccache environment settings, build paths inside the staged source, and before/after statistics in `build-record.json`. amd64 behavior remains unchanged.
+
+Tests: README pytest command — **17 passed**; diff checks clean.
+
+CUDA `.cu` object compilations are cacheable with [ccache 4.5.1’s NVCC support](https://ccache.dev/manual/4.5.1.html). Observed stats: zero hits, 456 misses, ~0.11 GB; these aggregate figures cannot prove CUDA-specific caching.
+
+Risks: shared-cache activity can skew deltas; changing content or external paths can still cause misses. Actual rebuild hits remain unverified.
+
+No real build or Docker invocation; existing results untouched.
+tokens used
+32,684

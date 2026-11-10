@@ -1,0 +1,187 @@
+{
+  "schema_version": 2,
+  "status": "success",
+  "failure_stage": null,
+  "started_at": "2026-11-10T00:50:07.749330+00:00",
+  "source": {
+    "path": "/home/muk/projects/siminfeng/campaign/ref/llama.cpp",
+    "requested_commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+    "commit": "31288c9c66e59377f7788d920678a565bb89dd37",
+    "tree": "158a7ade930818efdb06c5561920a8d018d404ba",
+    "dirty": false,
+    "status_porcelain": ""
+  },
+  "patch_sha256": "9cd5745bc8334a863893adbf80b76414154c6679c38401f7bb427588befe5ee4",
+  "extra_targets": [],
+  "tag": "campaign/llamacpp:jetson-c1-j3",
+  "platform": "linux/arm64",
+  "cmake_flags": [
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DGGML_CUDA=ON",
+    "-DCMAKE_CUDA_ARCHITECTURES=87",
+    "-DGGML_NATIVE=OFF",
+    "-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16",
+    "-DLLAMA_CURL=OFF",
+    "-DLLAMA_BUILD_TESTS=OFF",
+    "-DBUILD_SHARED_LIBS=ON",
+    "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
+    "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+    "-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache"
+  ],
+  "recipes": {
+    "Dockerfile": {
+      "sha256": "e77a8372f66991d4e0e377143c4557282ff2dba0ce529cfc855c37c483612da2",
+      "bytes": 668
+    }
+  },
+  "base_images": {
+    "runtime": {
+      "reference": "nvcr.io/nvidia/l4t-cuda:12.6.11-runtime@sha256:49853e9fe2a0305efa51fcbb3426eea1bca658085f2d26bb40347711434849b1",
+      "digest": "sha256:49853e9fe2a0305efa51fcbb3426eea1bca658085f2d26bb40347711434849b1"
+    }
+  },
+  "versions": {
+    "docker": "{\"Client\":{\"Version\":\"29.1.3\",\"ApiVersion\":\"1.52\",\"DefaultAPIVersion\":\"1.52\",\"GitCommit\":\"29.1.3-0ubuntu3~22.04.2\",\"GoVersion\":\"go1.24.4\",\"Os\":\"linux\",\"Arch\":\"arm64\",\"BuildTime\":\"Wed Apr 29 22:18:59 2026\",\"Context\":\"default\"},\"Server\":{\"Platform\":{\"Name\":\"\"},\"Version\":\"29.1.3\",\"ApiVersion\":\"1.52\",\"MinAPIVersion\":\"1.44\",\"Os\":\"linux\",\"Arch\":\"arm64\",\"Components\":[{\"Name\":\"Engine\",\"Version\":\"29.1.3\",\"Details\":{\"ApiVersion\":\"1.52\",\"Arch\":\"arm64\",\"BuildTime\":\"Wed Apr 29 22:18:59 2026\",\"Experimental\":\"false\",\"GitCommit\":\"29.1.3-0ubuntu3~22.04.2\",\"GoVersion\":\"go1.24.4\",\"KernelVersion\":\"5.15.199-tegra\",\"MinAPIVersion\":\"1.44\",\"Os\":\"linux\"}},{\"Name\":\"containerd\",\"Version\":\"2.2.1\",\"Details\":{\"GitCommit\":\"\"}},{\"Name\":\"runc\",\"Version\":\"1.3.4-0ubuntu1~22.04.1\",\"Details\":{\"GitCommit\":\"\"}},{\"Name\":\"docker-init\",\"Version\":\"0.19.0\",\"Details\":{\"GitCommit\":\"\"}}],\"GitCommit\":\"29.1.3-0ubuntu3~22.04.2\",\"GoVersion\":\"go1.24.4\",\"KernelVersion\":\"5.15.199-tegra\",\"BuildTime\":\"2026-04-29T22:18:59.000000000+00:00\"}}\n",
+    "buildx": "github.com/docker/buildx v0.29.1 a32761aeb3debd39be1eca514af3693af0db334b"
+  },
+  "image": {
+    "Id": "sha256:29d0041dc0975c6b85e1fc034ab703785bcaa592bfa564f11547cb07116ecf00",
+    "RepoDigests": [
+      "campaign/llamacpp@sha256:29d0041dc0975c6b85e1fc034ab703785bcaa592bfa564f11547cb07116ecf00"
+    ],
+    "Created": "2026-11-10T01:26:58.340020755Z",
+    "Architecture": "arm64",
+    "Os": "linux",
+    "docker_reported_id": "sha256:29d0041dc0975c6b85e1fc034ab703785bcaa592bfa564f11547cb07116ecf00",
+    "config_digest": "sha256:20c7d7790190edadffe65b6836d25819d33ffa1bd35ad49d35c2fbb48a31127e",
+    "index_digest": "sha256:29d0041dc0975c6b85e1fc034ab703785bcaa592bfa564f11547cb07116ecf00",
+    "index_manifests": [
+      {
+        "digest": "sha256:29d0041dc0975c6b85e1fc034ab703785bcaa592bfa564f11547cb07116ecf00",
+        "mediaType": "application/vnd.oci.image.index.v1+json"
+      }
+    ],
+    "docker_id_in_archive_index": true,
+    "id_note": "Id/docker_reported_id is whatever `docker image inspect` returned (containerd store: an index digest). config_digest is the image config digest. They are different objects."
+  },
+  "tools": {
+    "/app/llama-bench": "af30ea679d8e199435b71f1ccb00fd61158357968305d3d1a0e8459f72e4e465",
+    "/app/llama-cli": "b21f259778367a1d0cc75b1dc6ceac466ea5f98078bbb4a67f8daee5f5e069ab",
+    "/app/llama-completion": "3ae900777ef7bd3ce6dbafeb10fad00a3a7950680a946d6916aacf1e16ac6508",
+    "/app/llama-eval-callback": "3a85d1ced6408c212ecc7082d72a5a160038ff7fe3f9846b8d9bc9f63dc7ac05",
+    "/app/llama-perplexity": "6c15669492a2ef0a807615958a5e784a582c5d8d470b9df35ebf69e2f94215a3",
+    "/app/llama-server": "6955ff9ba258ae491f914a01230622cdeb17d8bf880bfe5b6c4f6762963caee3",
+    "/app/llama-tokenize": "ccc4fcef8d6fcbf1c182ab6c93665d0d6f88419d47c2784f368d4eb65870edb9"
+  },
+  "app_files": {
+    "/app/libggml-base.so.0.27.0": "bccde3e38279490f1f4ac5a0c0aff096dee79c8729f876fa4d639e4cf4eb66e2",
+    "/app/libggml-cpu.so.0.27.0": "a3d92adc749693527e3800ae8407e8430442d7dd79f29083e6e0f47dadf36518",
+    "/app/libggml-cuda.so.0.27.0": "23ae693dc531f14734515847be2d665f0a0a5fd5ce8cd23c8b9004e07be46a84",
+    "/app/libggml.so.0.27.0": "ca6f956c80cd0ebf627ab902bbf7901c5893f5f4650468dbd3c800b8f36d6d50",
+    "/app/libgomp.so.1": "53d7318d8e1addc4d2990c028daba609f8dc1af16a501255eb5c4d59b7e2b601",
+    "/app/libllama-bench-impl.so": "3499c63a9d638bc68a4e40bac0cee43fdca24bb986ff4bbfd130cbe60bfa4131",
+    "/app/libllama-cli-impl.so": "ef71801de13e9f9075c340830d9aa8d1a12365af7837aa6a17a600cf9e25bdfb",
+    "/app/libllama-common.so.0.7.0": "bb92da843dd8f334a50f9f766ddaea2e7ed0e65fa28507480064337a50cdfca6",
+    "/app/libllama-completion-impl.so": "a7608f97c65af2caa277ea2f2f3451824c312615c2b4da4e178f706720bd212d",
+    "/app/libllama-perplexity-impl.so": "3d590b9e95c8fe5d70ea19f8b10dce1bc7a4930044e20c9868f49b346348f193",
+    "/app/libllama-server-impl.so": "9cf9a046b388c78a2aaea6a2634ce1cf74966293b6d8dc1c68cb8c321e617e85",
+    "/app/libllama.so.0.7.0": "3468c62c2fb453c198d871c9adc23abcb9a70efbb0a4cb1c3148152eef1470e3",
+    "/app/libmtmd.so.0.7.0": "2074494ccc240c9157bfc5b57676fd90fb68570f4414b71891009e29985465f5",
+    "/app/llama-bench": "af30ea679d8e199435b71f1ccb00fd61158357968305d3d1a0e8459f72e4e465",
+    "/app/llama-cli": "b21f259778367a1d0cc75b1dc6ceac466ea5f98078bbb4a67f8daee5f5e069ab",
+    "/app/llama-completion": "3ae900777ef7bd3ce6dbafeb10fad00a3a7950680a946d6916aacf1e16ac6508",
+    "/app/llama-eval-callback": "3a85d1ced6408c212ecc7082d72a5a160038ff7fe3f9846b8d9bc9f63dc7ac05",
+    "/app/llama-perplexity": "6c15669492a2ef0a807615958a5e784a582c5d8d470b9df35ebf69e2f94215a3",
+    "/app/llama-server": "6955ff9ba258ae491f914a01230622cdeb17d8bf880bfe5b6c4f6762963caee3",
+    "/app/llama-tokenize": "ccc4fcef8d6fcbf1c182ab6c93665d0d6f88419d47c2784f368d4eb65870edb9"
+  },
+  "archive": {
+    "path": "engine-image.docker.tar",
+    "sha256": "b730a81fcf08a90219ee2a83b18eac98d4e16014a305b6198f6f363b9e21e893",
+    "bytes": 1386953728
+  },
+  "buildx_metadata": {
+    "buildx.build.provenance": {
+      "builder": {
+        "id": ""
+      },
+      "buildType": "https://mobyproject.org/buildkit@v1",
+      "materials": [
+        {
+          "uri": "pkg:docker/nvcr.io/nvidia/l4t-cuda@12.6.11-runtime?digest=sha256:49853e9fe2a0305efa51fcbb3426eea1bca658085f2d26bb40347711434849b1&platform=linux%2Farm64",
+          "digest": {
+            "sha256": "49853e9fe2a0305efa51fcbb3426eea1bca658085f2d26bb40347711434849b1"
+          }
+        }
+      ],
+      "invocation": {
+        "configSource": {
+          "entryPoint": "Dockerfile"
+        },
+        "parameters": {
+          "frontend": "dockerfile.v0",
+          "args": {
+            "build-arg:BASE_RUNTIME": "nvcr.io/nvidia/l4t-cuda:12.6.11-runtime@sha256:49853e9fe2a0305efa51fcbb3426eea1bca658085f2d26bb40347711434849b1",
+            "build-arg:PATCH_SHA256": "9cd5745bc8334a863893adbf80b76414154c6679c38401f7bb427588befe5ee4",
+            "build-arg:SOURCE_COMMIT": "31288c9c66e59377f7788d920678a565bb89dd37",
+            "build-arg:SOURCE_TREE": "158a7ade930818efdb06c5561920a8d018d404ba",
+            "build-arg:TARGET_PROFILE": "jetson-orin",
+            "build-arg:TOOLCHAIN": "{\"cmake\": \"cmake version 4.4.4\\n\\nCMake suite maintained and supported by Kitware (kitware.com/cmake).\", \"gcc\": \"gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0\\nCopyright (C) 2021 Free Software Foundation, Inc.\\nThis is free software; see the source for copying conditions.  There is NO\\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\", \"ninja\": \"1.13.2.git.kitware.jobserver-pipe-1\", \"nv_tegra_release\": \"# R36 (release), REVISION: 5.2, GCID: 46426093, BOARD: generic, EABI: aarch64, DATE: Thu Jul 16 18:56:22 UTC 2026\", \"nvcc\": \"nvcc: NVIDIA (R) Cuda compiler driver\\nCopyright (c) 2005-2024 NVIDIA Corporation\\nBuilt on Wed_Aug_14_10:14:07_PDT_2024\\nCuda compilation tools, release 12.6, V12.6.68\\nBuild cuda_12.6.r12.6/compiler.34714021_0\", \"nvidia-jetpack\": \"6.2.3+b81\"}"
+          },
+          "locals": [
+            {
+              "name": "context"
+            },
+            {
+              "name": "dockerfile"
+            }
+          ]
+        },
+        "environment": {
+          "platform": "linux/arm64",
+          "ProvenanceCustomEnv": null
+        }
+      }
+    },
+    "buildx.build.ref": "default/default/54e2ltjzbgbk1i6mpwa8euv3s",
+    "containerimage.descriptor": {
+      "mediaType": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:29d0041dc0975c6b85e1fc034ab703785bcaa592bfa564f11547cb07116ecf00",
+      "size": 856
+    },
+    "containerimage.digest": "sha256:29d0041dc0975c6b85e1fc034ab703785bcaa592bfa564f11547cb07116ecf00",
+    "image.name": "docker.io/campaign/llamacpp:jetson-c1-j3"
+  },
+  "provenance": {
+    "retained": true,
+    "reason": "Inspected reachable OCI manifests and predicates",
+    "attestation_manifests": [
+      {
+        "manifest": "sha256:e8b440fa5f443682b55d0d3ff695bef7576ccad8cd2911734f817692fbbe7d91",
+        "statement": "sha256:0bbc7f32ac6addbc78a41d6d21f22d6d7bfaddf1721cb71c05f93362b4a17912",
+        "predicate_type": "https://slsa.dev/provenance/v0.2",
+        "attestation_annotation": true
+      }
+    ]
+  },
+  "build_wall_seconds": 2234.8703295390587,
+  "target_profile": "jetson-orin",
+  "builder": "host-native",
+  "toolchain": {
+    "nvcc": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2024 NVIDIA Corporation\nBuilt on Wed_Aug_14_10:14:07_PDT_2024\nCuda compilation tools, release 12.6, V12.6.68\nBuild cuda_12.6.r12.6/compiler.34714021_0",
+    "gcc": "gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0\nCopyright (C) 2021 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "cmake": "cmake version 4.4.4\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+    "ninja": "1.13.2.git.kitware.jobserver-pipe-1",
+    "nv_tegra_release": "# R36 (release), REVISION: 5.2, GCID: 46426093, BOARD: generic, EABI: aarch64, DATE: Thu Jul 16 18:56:22 UTC 2026",
+    "nvidia-jetpack": "6.2.3+b81"
+  },
+  "target_requirements": {
+    "platform": "linux/arm64",
+    "l4t_major": 36,
+    "cuda_arch": "sm_87",
+    "jetpack": ">=6.1",
+    "runtime": "nvidia (NVIDIA_VISIBLE_DEVICES required)"
+  },
+  "wall_seconds": 2282.552505488042,
+  "finished_at": "2026-11-10T01:28:10.301837+00:00"
+}

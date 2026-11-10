@@ -67,6 +67,19 @@ def extract_snapshot(archive, destination):
         archive.extractall(destination, members=[m for m in members if m.issym()])
 
 
+def ccache_stats(run, env):
+    env = dict(env, LC_ALL="C")
+    raw = run(["ccache", "--print-stats"], env=env)
+    counters = {key: int(value) for key, value in
+                (line.split() for line in raw.splitlines() if line.strip())}
+    summary = run(["ccache", "-s", "-v"], env=env)
+    uncacheable = re.search(r"^\s*Uncacheable:\s*(\d+)", summary, re.MULTILINE)
+    return {"hits": counters.get("direct_cache_hit", 0) + counters.get("preprocessed_cache_hit", 0),
+            "misses": counters.get("cache_miss", 0),
+            "uncacheable": int(uncacheable.group(1)) if uncacheable else 0,
+            "counters": counters, "summary": summary}
+
+
 def jetson_build(run, staged, out, record, args):
     for name, command in (
         ("nvcc", ["nvcc", "--version"]), ("gcc", ["gcc", "--version"]),
@@ -75,15 +88,44 @@ def jetson_build(run, staged, out, record, args):
         ("nvidia-jetpack", ["dpkg-query", "-W", "-f=${Version}", "nvidia-jetpack"])):
         record["toolchain"][name] = run(command).strip()
     flags = list(JETSON_FLAGS)
-    if shutil.which("ccache"):
+    cached = bool(shutil.which("ccache"))
+    cache = record["ccache"]
+    cache["enabled"] = cached
+    native_env = os.environ.copy()
+    native_env.update(CCACHE_BASEDIR=str(staged), CCACHE_NOHASHDIR="1",
+                      CCACHE_COMPILERCHECK="content")
+    if cached:
+        cache["version"] = run(["ccache", "--version"], env=native_env).splitlines()[0]
         flags += ["-DCMAKE_" + lang + "_COMPILER_LAUNCHER=ccache" for lang in ("C", "CXX", "CUDA")]
     record["cmake_flags"] = flags
     jobs = os.environ.get("BUILD_JOBS", "3")
     if not jobs.isdigit() or int(jobs) < 1:
         raise ValueError("BUILD_JOBS must be a positive integer")
     tools = TOOLS + tuple(getattr(args, "extra_target", []) or [])
-    run(["cmake", "-S", str(staged), "-B", str(out / "build"), "-G", "Ninja", *flags], capture=False)
-    run(["cmake", "--build", str(out / "build"), "-j" + jobs, "--target", *tools], capture=False)
+    # Keep all generated include/output paths below CCACHE_BASEDIR. ccache
+    # rewrites those paths relative to the compiler cwd across random staging roots.
+    build_dir = staged / ".campaign-build"
+    if build_dir.exists() or build_dir.is_symlink():
+        raise ValueError("Source contains reserved native build path .campaign-build")
+    try:
+        if cached:
+            cache["before"] = ccache_stats(run, native_env)
+        try:
+            run(["cmake", "-S", ".", "-B", ".campaign-build", "-G", "Ninja", *flags],
+                cwd=staged, env=native_env, capture=False)
+            run(["cmake", "--build", ".campaign-build", "-j" + jobs, "--target", *tools],
+                cwd=staged, env=native_env, capture=False)
+        finally:
+            if cached:
+                try:
+                    cache["after"] = ccache_stats(run, native_env)
+                    cache["delta"] = {key: cache["after"][key] - cache["before"][key]
+                                      for key in ("hits", "misses", "uncacheable")}
+                except Exception as exc:
+                    cache["stats_error"] = str(exc)
+    finally:
+        if build_dir.exists():
+            shutil.move(str(build_dir), out / "build")
     context = staged.parent / "runtime"
     app = context / "app"
     app.mkdir(parents=True)
@@ -261,6 +303,7 @@ def build(args, runner=None):
     }
     if jetson:
         record.update(schema_version=2, target_profile="jetson-orin", builder="host-native",
+                      ccache={"enabled": False, "version": None, "before": None, "after": None, "delta": None},
                       toolchain={}, platform="linux/arm64", cmake_flags=list(JETSON_FLAGS),
                       target_requirements={"platform": "linux/arm64", "l4t_major": 36,
                                            "cuda_arch": "sm_87", "jetpack": ">=6.1",

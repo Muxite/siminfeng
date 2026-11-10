@@ -1,0 +1,9 @@
+Implemented Jetson ccache environment settings, build paths inside the staged source, and before/after statistics in `build-record.json`. amd64 behavior remains unchanged.
+
+Tests: README pytest command — **17 passed**; diff checks clean.
+
+CUDA `.cu` object compilations are cacheable with [ccache 4.5.1’s NVCC support](https://ccache.dev/manual/4.5.1.html). Observed stats: zero hits, 456 misses, ~0.11 GB; these aggregate figures cannot prove CUDA-specific caching.
+
+Risks: shared-cache activity can skew deltas; changing content or external paths can still cause misses. Actual rebuild hits remain unverified.
+
+No real build or Docker invocation; existing results untouched.

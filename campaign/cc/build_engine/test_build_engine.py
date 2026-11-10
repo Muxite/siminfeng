@@ -74,16 +74,25 @@ def test_patch_check_failure(source, tmp_path):
 def mock_docker(monkeypatch):
     real_run = subprocess.run
     calls = []
-    state = {"fail_build": False, "staged_content": None, "jetson": False, "native_calls": [], "prefix_calls": []}
+    state = {"fail_build": False, "staged_content": None, "jetson": False, "native_calls": [], "prefix_calls": [], "native_kwargs": [], "stats_calls": 0}
 
     def fake(command, **kwargs):
         if command[:3] == ["sg", "docker", "-c"]:
             state["prefix_calls"].append(command)
             command = shlex.split(command[3])
         if command[0] != "docker":
-            if state["jetson"] and command[0] in ("cmake", "ninja", "nvcc", "gcc", "head", "dpkg-query"):
+            if state["jetson"] and command[0] in ("cmake", "ninja", "nvcc", "gcc", "head", "dpkg-query", "ccache"):
                 state["native_calls"].append(command)
+                state["native_kwargs"].append(kwargs.copy())
                 result = "test toolchain"
+                if command == ["ccache", "--version"]:
+                    result = "ccache version 4.5.1\n"
+                if command == ["ccache", "--print-stats"]:
+                    n = state["stats_calls"]
+                    state["stats_calls"] += 1
+                    result = f"direct_cache_hit\t{10 + n * 3}\npreprocessed_cache_hit\t2\ncache_miss\t{20 + n}\n"
+                if command == ["ccache", "-s", "-v"]:
+                    result = f"  Uncacheable: {state['stats_calls']} / 30 (0.0 %)\n"
                 if command[:2] == ["gcc", "-print-file-name=libgomp.so.1"]:
                     library = state["libgomp"]
                     result = str(library)
@@ -91,14 +100,14 @@ def mock_docker(monkeypatch):
                     if state["fail_build"]:
                         kwargs["stderr"].write(b"native compile failed\n")
                         return subprocess.CompletedProcess(command, 42)
-                    binaries = Path(command[2]) / "bin"
+                    binaries = Path(kwargs["cwd"]) / command[2] / "bin"
                     binaries.mkdir(parents=True)
                     for tool in command[command.index("--target") + 1:]:
                         (binaries / tool).write_text("binary")
                     (binaries / "libggml.so.0").write_text("library")
                     (binaries / "libggml.so").symlink_to("libggml.so.0")
                 if "-S" in command:
-                    state["staged_content"] = (Path(command[command.index("-S") + 1]) / "input.txt").read_text()
+                    state["staged_content"] = (Path(kwargs["cwd"]) / command[command.index("-S") + 1] / "input.txt").read_text()
                 kwargs["stdout"].write(result.encode())
                 return subprocess.CompletedProcess(command, 0)
             return real_run(command, **kwargs)
@@ -292,7 +301,22 @@ def test_jetson_success(source, tmp_path, mock_docker, monkeypatch, ccache, pref
     assert "devel" not in result["base_images"]
     configure = next(c for c in state["native_calls"] if "-S" in c)
     assert configure[configure.index("-G") + 1] == "Ninja"
-    assert configure[configure.index("-B") + 1] == str(Path(args.out) / "build")
+    assert configure[configure.index("-B") + 1] == ".campaign-build"
+    assert configure[configure.index("-S") + 1] == "."
+    for command, kwargs in zip(state["native_calls"], state["native_kwargs"]):
+        if command[0] == "cmake" and command[1] != "--version":
+            assert kwargs["env"]["CCACHE_BASEDIR"] == str(kwargs["cwd"])
+            assert kwargs["env"]["CCACHE_NOHASHDIR"] == "1"
+            assert kwargs["env"]["CCACHE_COMPILERCHECK"] == "content"
+    assert (Path(args.out) / "build" / "bin" / "llama-cli").exists()
+    assert result["ccache"]["enabled"] == ccache
+    if ccache:
+        assert result["ccache"]["version"] == "ccache version 4.5.1"
+        assert result["ccache"]["before"]["hits"] == 12
+        assert result["ccache"]["after"]["misses"] == 21
+        assert result["ccache"]["delta"] == {"hits": 3, "misses": 1, "uncacheable": 1}
+    else:
+        assert result["ccache"]["before"] is None
     assert set(engine.JETSON_FLAGS) <= set(configure)
     launchers = ["-DCMAKE_" + lang + "_COMPILER_LAUNCHER=ccache" for lang in ("C", "CXX", "CUDA")]
     assert all((flag in configure) == ccache for flag in launchers)
@@ -315,15 +339,18 @@ def test_jetson_success(source, tmp_path, mock_docker, monkeypatch, ccache, pref
     assert not list(Path(args.out).glob("staging-*"))
 
 
-def test_jetson_native_failure(source, tmp_path, mock_docker, monkeypatch):
+@pytest.mark.parametrize("cached", [False, True])
+def test_jetson_native_failure(source, tmp_path, mock_docker, monkeypatch, cached):
     calls, state = mock_docker
     state.update(jetson=True, fail_build=True)
-    monkeypatch.setattr(engine.shutil, "which", lambda name: None)
+    monkeypatch.setattr(engine.shutil, "which", lambda name: "/usr/bin/ccache" if cached else None)
     args = arguments(source, tmp_path)
     args.target = "jetson-orin"
     assert engine.build(args) == 1
     result = record(args)
     assert result["failure_stage"] == "build"
+    if cached:
+        assert result["ccache"]["after"]["hits"] == 15
     assert result["toolchain"]["nvcc"]
     assert result["build_wall_seconds"] >= 0
     assert not any(c[1:3] == ["buildx", "build"] for c in calls)

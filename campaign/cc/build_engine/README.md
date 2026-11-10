@@ -65,7 +65,7 @@ Python 3.10 is supported, including safe snapshot extraction on versions without
 Compilation is host-native to use the device's JetPack CUDA toolchain and avoid
 pulling the roughly 9 GB l4t-jetpack development image. Source verification,
 archive isolation and patch checking are the same as for amd64. CMake configures
-`<out>/build` with Ninja, Release/shared libraries, CUDA architecture 87,
+`<staged-source>/.campaign-build` with Ninja, Release/shared libraries, CUDA architecture 87,
 `GGML_NATIVE=OFF`, `GGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16`,
 `LLAMA_CURL=OFF` and `LLAMA_BUILD_TESTS=OFF`. `BUILD_JOBS` defaults to 3 and
 must be a positive integer. The seven standard tools and any `--extra-target`
@@ -118,3 +118,38 @@ compatibility, dynamic library closure, GPU execution, memory use, performance,
 model correctness and reproducibility still require the orchestrator's real
 build and runtime checks. Wait for the existing native compile to finish before
 running this command on the 8 GB device.
+
+### Native ccache keying and evidence (J-T1b)
+
+Jetson configure and compile commands run from the staged source with relative
+`-S .`, `-B .campaign-build` and `--build .campaign-build` arguments. The build
+stays inside `CCACHE_BASEDIR=<staged-source>`, so generated include/output paths
+can be normalized across random staging directories. Native commands inherit
+`CCACHE_NOHASHDIR=1` and `CCACHE_COMPILERCHECK=content`. The reserved
+`.campaign-build` path must not exist in the source snapshot. No stable path
+option is needed. On success or compile failure the build directory is moved to
+`<out>/build` as evidence before staging cleanup; its absolute CMake cache paths
+refer to the removed snapshot, so it is not a resumable build directory.
+The amd64 recipe, environment and record schema are unchanged.
+
+Jetson records include `ccache.enabled`, `version`, `before`, `after` and `delta`.
+Snapshots bracket native configure/compilation (including failed compilation),
+using `ccache --print-stats` plus English `ccache -s -v`; each contains hits,
+misses, uncacheable, raw counters and the verbose summary. Delta contains the
+three counter differences. Disabled/unreached snapshots are null; failure to
+collect final stats is recorded as `stats_error`. These are shared-cache
+counters: concurrent users or counter resets can distort the differences.
+No statistics are reset and no cache settings are persisted.
+
+Read-only inspection on 2026-11-10 found ccache 4.5.1, zero hits, 456 misses
+and about 0.11 GB in `ccache -s -v`; a later machine-readable snapshot had 457
+misses and zero unsupported-language/option or failed-compilation counters.
+The running build can change those totals. The
+[ccache 4.5.1 manual](https://ccache.dev/manual/4.5.1.html#_configuration_options)
+explicitly supports compiler type `nvcc`: single-source CUDA `.cu` object
+compilations are cacheable. Aggregate counters and compressed cache size do not
+prove that any specific `.cu` invocation was cached; no real build was run for
+this assignment. Confirm CUDA hits in a later authorized rebuild. Compiler
+flags, generated content, absolute paths outside the base directory and embedded
+source paths can still affect reuse. Disabling directory hashing can reuse old
+debug compilation-directory paths; Release builds here do not request debug info.

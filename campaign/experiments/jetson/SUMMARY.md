@@ -9,3 +9,5 @@ All runs: image campaign/llamacpp:jetson-c1 (Build CC record cc/build_engine/res
 Telemetry for each: *.jsonl via cc/resource_observe.
 | J-P001 | Where does decode time go? (nsys) | GPU-kernel bound, CUDA graphs on; bf16 matvec 81%; fused MoE gate/up MMVF ≈40 GB/s vs down MMF ≈68 GB/s | profile / hypothesis H-J1 |
 | J-E004 | Screen H-J1 with existing switch GGML_CUDA_DISABLE_FUSION=1 (ABAB, tg128 r5 each) | steady 50.4 → 57.4 t/s (+14%), means 49.69/49.96 vs 56.69/56.51; ppl20 10.0094 vs 10.0096; 64-tok greedy byte-identical | runtime-configuration screen (all fusions off — attribution to gate/up pending patched build) |
+| J-E005 | Patched candidate (env-gated) A/B: P1 gate/up→MMF, P2 MMVF block128, F all-fusion-off | steady tg: base 50.3, **P1 60.06 (+19.3%)**, P2 59.4 (+18%), F 57.3 (+14%); depth1024 48.65→57.8; pp unchanged; ub1 ppl base 8.0332 / P1 8.0163 / P2 8.0358; KL mean P1 2.7e-4 (top-1 99.6%), P2 2.0e-4 (99.2%), A/A ≈0 | **full-engine code gain (local, D025)** |
+| J-P002 | nsys kernel inventory base vs P1 | fused MMVF 1560×385 µs → MMF 3120×131 µs; kernels +3120 (extra MMF + GLU), none dropped | mechanism confirmation |
