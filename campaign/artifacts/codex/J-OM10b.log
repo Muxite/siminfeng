@@ -1,0 +1,2504 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /tmp]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c958-d37a-7dd3-9236-79c07df69177
+--------
+user
+# Assignment J-OM10b — fix pre-gate prefetch scheduling (component rework; worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Builds on 01-06 (cc/mmap_advice/patches/combined-01-02-03-04-05-06.patch, cc/expert_fill/expert_fill.h single source). Engine tree ref/llama.cpp-up1108 @ cf34d311, never modify in place.
+## Evidence (experiments/jetson/OM/J-OM10: REPORT.md, `expert_pregate: stats` in */stderr.txt)
+Predictor works: recall@8 0.81. But decode pg8 1.23 vs frd16 (no prefetch) 1.29 t/s; pg16 0.75. pg8 run: async_bytes_read 10.3 GB + sync 3.4 GB (frd16 reads ~10.5 GB total) → ~30% more IO; pending_reads 3725, inflight_at_arrival 571.
+Lead's diagnosis from 06-pregate.patch (verify, then fix):
+ (a) In the CPU observer path, `expert_pregate_hook(il, ...)` (prefetch for L+1) is called BEFORE `expert_fill_selected(il, ...)` (demand fill for L) → prefetch reads compete with the demand fill on the drive and on the workers.
+ (b) When layer L+1 arrives, async jobs for L+1 that have NOT started are still queued; the sync fill reads the same non-resident pages, and the stale async jobs later read them again (or evict useful pages).
+ (c) Async jobs may occupy all fill workers, delaying demand jobs that arrive while they run.
+## Deliverables
+1. `cc/mmap_advice/patches/07-pregate-sched.patch` (on 01-06) + `combined-01-02-03-04-05-06-07.patch`:
+   - Order: demand fill for L first, then enqueue the L+1 prediction (`LLAMA_EXPERT_PREGATE_ORDER=after` default; `before` keeps old behaviour for A/B).
+   - At arrival of layer L+1 (before its demand fill), cancel not-yet-started async jobs belonging to layer L+1's batch (and any older layer's), count `cancelled_jobs` / `cancelled_bytes`. In-flight jobs finish.
+   - Async concurrency cap `LLAMA_EXPERT_PREGATE_MAX_INFLIGHT` (default 4 workers may run async jobs at once; demand jobs always preferred).
+   - Stats add: cancelled_jobs, cancelled_bytes, async_wait_ns_in_demand (time demand fill spent while any async job of the same layer was in flight, if cheap to measure; else omit and say so).
+   - Header single-source rule; `make -C cc/expert_fill test` passes, add unit tests for cancel-before-start and the in-flight cap.
+2. COMPILE-CHECK 07 section.
+3. `cc/abrun/specs/J-OM10b.json` image `campaign/llamacpp:jetson-up1108-om10b`, argv as J-OM10. Arms: base; frd16 (as J-OM10); pg8b (PREGATE=1 K=8, ORDER=after, MAX_INFLIGHT=4); pg12b (K=12, same). Order explicit: base frd16 pg8b pg12b pg12b pg8b frd16 base. Per-arm switch regexes as in J-OM10 for pg arms.
+## Acceptance (checker runs)
+- A1 `make -C cc/expert_fill test` PASS (incl. new cancel/cap tests by name).
+- A2 fresh cf34d311: sequential 01..07 == combined-01..07 (diff -r empty).
+- A3 COMPILE-CHECK 07 all exit 0.
+- A4 dry-run J-OM10b = 8 runs in order.
+- A5 header single-source diff empty.
+- A6 checker quotes the call order in the observer (demand fill before pregate enqueue when ORDER=after) and the cancel site.
+Constraints: no docker/GPU/full build; no commits; no evidence edits. Time 60 min. Final <= 10 lines.
+
+You are a Codex worker in campaign c2. Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
+codex
+I’ll inspect the patches, fill-worker code, and J-OM10 spec, then implement the scheduling changes and run the required checks without modifying the reference engine tree.
+exec
+/bin/bash -lc "pwd; rg --files -g 'AGENTS.md' -g '*COMPILE*' -g '*pregate*' -g 'J-OM10*' -g '*test*' cc | head -70" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+/home/muk/projects/siminfeng/campaign
+cc/expert_fill/test_expert_fill
+cc/expert_fill/COMPILE-CHECK.txt
+cc/expert_fill/test_expert_fill.cpp
+cc/routing_trace/test_trace_replay.py
+cc/routing_trace/test_generic_trace.py
+cc/engine_handoff/test_archive_observation.py
+cc/mmap_advice/patches/06-pregate.patch
+cc/engine_handoff/test_engine_handoff.py
+cc/memory_pareto/test_pareto.py
+cc/build_engine/test_build_engine.py
+cc/expert_replay/test_expert_replay.py
+cc/gpu_budget/run_test.sh
+cc/gpu_budget/test_budget.cu
+cc/resource_observe/test_resource_observe.py
+cc/abrun/test_abrun.py
+cc/expert_replay/__pycache__/test_expert_replay.cpython-310-pytest-9.2.0.pyc
+cc/resource_observe/test_io_watchdog.py
+cc/abrun/specs/J-OM10.json
+cc/resource_observe/__pycache__/test_io_watchdog.cpython-310-pytest-9.2.0.pyc
+cc/resource_observe/__pycache__/test_resource_observe.cpython-310-pytest-9.2.0.pyc
+cc/kernel_screen/test_kernel_screen.py
+cc/kernel_screen/__pycache__/test_kernel_screen.cpython-310-pytest-9.2.0.pyc
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/gguf-py/tests/test_gguf_reader_validation.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/gguf-py/tests/test_quants.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/gguf-py/tests/test_metadata.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/AGENTS.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/gguf-split/tests.sh
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/tests.sh
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/conftest.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/pytest.ini
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_infill.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_systemone.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_tokenize.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_completion.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_metrics.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_vision_api.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_ctx_shift.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_slot_save.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_kv_keep_only_active.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_rerank.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_template.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_compat_gcp.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_tools_builtin.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_chat_completion.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_lora.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_router.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_proxy.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_speculative.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_basic.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_compat_anthropic.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_tool_call.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_ignore_eos.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_security.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_sleep.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_compat_oai_responses.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_stream.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_mcp_servers.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/unit/test_embedding.py
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/vitest-setup-client.ts
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/vitest.shims.d.ts
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/tests/unit/sse.test.ts
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/tests/unit/chat-form-input-rich-tokenizer.test.ts
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/tests/unit/agentic-sections.test.ts
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/tests/unit/mention-segments.test.ts
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/tests/unit/compute-line-diff.test.ts
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/tests/unit/abort.test.ts
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/tests/unit/latex-protection.test.ts
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/tests/unit/mcp-default-overrides-merge.test.ts
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/tests/unit/model-sidecar-grammar.test.ts
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/ui/tests/unit/model-compatibility.test.ts
+
+exec
+/bin/bash -lc 'git status --short; ls cc/mmap_advice/patches; cat cc/expert_fill/Makefile; cat cc/abrun/specs/J-OM10.json' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+ M ../.gitignore
+ M cc/kernel_screen/fixtures/perf.txt
+ M cc/kernel_screen/kernel_screen.py
+ M cc/om_run/om_run.sh
+ M cc/resource_observe/resource_observe.py
+ M cc/resource_observe/test_resource_observe.py
+ M evidence/jetson-arm/claude-code.jsonl
+?? ../.claude/skills/
+?? artifacts/codex/H1.final.txt
+?? artifacts/codex/H1.log
+?? artifacts/codex/H2.final.txt
+?? artifacts/codex/H2.log
+?? artifacts/codex/H2b-H4b.final.txt
+?? artifacts/codex/H2b-H4b.log
+?? artifacts/codex/H3.final.txt
+?? artifacts/codex/H3.log
+?? artifacts/codex/H4.final.txt
+?? artifacts/codex/H4.log
+?? artifacts/codex/J-OM10.final.txt
+?? artifacts/codex/J-OM10.log
+?? artifacts/codex/J-OM10b.log
+?? artifacts/codex/J-OM8.final.txt
+?? artifacts/codex/J-OM8.log
+?? artifacts/codex/J-OM8b.final.txt
+?? artifacts/codex/J-OM8b.log
+?? artifacts/codex/J-OM9.final.txt
+?? artifacts/codex/J-OM9.log
+?? artifacts/op-04810239fd04/
+?? artifacts/op-0c94b8514514/
+?? artifacts/op-103a1fb13e8b/
+?? artifacts/op-1252946c2dd9/
+?? artifacts/op-1e0844fa4f46/
+?? artifacts/op-218a56d373af/
+?? artifacts/op-23c099229e1d/
+?? artifacts/op-26ab3d78735f/
+?? artifacts/op-2b6791aa3ad9/
+?? artifacts/op-2c9e8772e3a5/
+?? artifacts/op-347e678ed12a/
+?? artifacts/op-36926980ce1b/
+?? artifacts/op-39141c29107a/
+?? artifacts/op-3921a3841393/
+?? artifacts/op-3d31f5fbfc73/
+?? artifacts/op-3df6c2e1288c/
+?? artifacts/op-4196624781b6/
+?? artifacts/op-4361d6251871/
+?? artifacts/op-4c92db73ea1c/
+?? artifacts/op-4f1547f4295e/
+?? artifacts/op-55af713c70a4/
+?? artifacts/op-55e94e8f2ec9/
+?? artifacts/op-5609857025b0/
+?? artifacts/op-5759ddb8786c/
+?? artifacts/op-5849d5542eba/
+?? artifacts/op-5c2e0a7f1ab1/
+?? artifacts/op-65ecd7bf6823/
+?? artifacts/op-6761df1a3b2c/
+?? artifacts/op-6e1f873a67b4/
+?? artifacts/op-7c79aa7bb0cd/
+?? artifacts/op-80a6b2fd96db/
+?? artifacts/op-879bc80daaab/
+?? artifacts/op-8ee9ad760af0/
+?? artifacts/op-90ff6bd2ec26/
+?? artifacts/op-9347a535f6e0/
+?? artifacts/op-9d3a71114383/
+?? artifacts/op-9deabb96fe51/
+?? artifacts/op-a9d8140fc151/
+?? artifacts/op-ab2efde81bf5/
+?? artifacts/op-acee8700aac1/
+?? artifacts/op-b7250c184f56/
+?? artifacts/op-b7ff0512c3ae/
+?? artifacts/op-b823058ff03a/
+?? artifacts/op-bb8eee8a430b/
+?? artifacts/op-bd396749651d/
+?? artifacts/op-bfe0a8b74c24/
+?? artifacts/op-c55b5b317906/
+?? artifacts/op-c8070da6cf62/
+?? artifacts/op-cadfede37e48/
+?? artifacts/op-d0fda3ae10b1/
+?? artifacts/op-d4a75015c69e/
+?? artifacts/op-dd91c84c9197/
+?? artifacts/op-e0f4aa3068cf/
+?? artifacts/op-e5d0a38d479d/
+?? artifacts/op-eb80b5651d94/
+?? artifacts/op-ed103f15b7bf/
+?? artifacts/op-f3a91310220b/
+?? artifacts/op-f46fc32ed368/
+?? artifacts/op-ffac23b48ee5/
+?? assignments/H1-jobq.md
+?? assignments/H2-abrun.md
+?? assignments/H2b-H4b-fixes.md
+?? assignments/H3-methods-skills.md
+?? assignments/H4-shape-report.md
+?? assignments/J-OM10-pregate-prefetch.md
+?? assignments/J-OM10b-pregate-scheduling.md
+?? assignments/J-OM8-expert-pread-fill.md
+?? assignments/J-OM8b-decode-random.md
+?? assignments/J-OM9-fill-diag-populate.md
+?? bin/README-jobq.md
+?? bin/jobq
+?? bin/test_jobq.py
+?? c2/
+?? cc/abrun/
+?? cc/build_engine/results/jetson-up1108-om10/
+?? cc/build_engine/results/jetson-up1108-om8/
+?? cc/build_engine/results/jetson-up1108-om8b/
+?? cc/build_engine/results/jetson-up1108-om9/
+?? cc/expert_fill/
+?? cc/mmap_advice/patches/03-expert-fill.patch
+?? cc/mmap_advice/patches/04-fill-phase.patch
+?? cc/mmap_advice/patches/05-fill-diag.patch
+?? cc/mmap_advice/patches/06-pregate.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04-05-06.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04-05.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04.patch
+?? cc/mmap_advice/patches/combined-01-02-03.patch
+?? evidence/jetson-arm/abrun.jsonl
+?? evidence/jetson-arm/jobq.jsonl
+?? experiments/jetson/KS-q4K-20261111-r2/
+?? experiments/jetson/KS-q4K-20261111-r3/
+?? experiments/jetson/KS-q4K-20261111/
+?? experiments/jetson/OM/J-OM10/
+?? experiments/jetson/OM/J-OM8/
+?? experiments/jetson/OM/J-OM8b/
+?? experiments/jetson/OM/J-OM9/
+01-mmap-advice-random.patch
+02-router-prefetch.patch
+03-expert-fill.patch
+04-fill-phase.patch
+05-fill-diag.patch
+06-pregate.patch
+combined-01-02-03-04-05-06.patch
+combined-01-02-03-04-05.patch
+combined-01-02-03-04.patch
+combined-01-02-03.patch
+combined-01-02.patch
+CXX = g++
+CXXFLAGS = -std=c++17 -O2 -pthread -Wall -Wextra -Werror
+.PHONY: test clean
+test: test_expert_fill
+	./test_expert_fill
+test_expert_fill: test_expert_fill.cpp expert_fill.h
+	$(CXX) $(CXXFLAGS) test_expert_fill.cpp -o $@
+clean:
+	rm -f test_expert_fill
+{
+  "id": "J-OM10",
+  "outdir_base": "experiments/jetson/OM",
+  "runner": "om_run",
+  "tool": "llama-completion",
+  "argv": [
+    "-m",
+    "/om/model.gguf",
+    "-f",
+    "/om/prompts/p1.txt",
+    "-n",
+    "64",
+    "-c",
+    "4096",
+    "--temp",
+    "0",
+    "-s",
+    "1",
+    "-no-cnv",
+    "-ngl",
+    "99",
+    "-lm",
+    "mmap",
+    "-cmoe",
+    "-lv",
+    "4"
+  ],
+  "metric": "eval_tps",
+  "arms": {
+    "base": {
+      "image": "campaign/llamacpp:jetson-up1108-om10",
+      "env": {
+        "LLAMA_EXPERT_FILL": "0",
+        "LLAMA_EXPERT_FILL_RANDOM": "0",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "0"
+      },
+      "expect_switch": false,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode"
+      ]
+    },
+    "frd16": {
+      "image": "campaign/llamacpp:jetson-up1108-om10",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "0"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode"
+      ]
+    },
+    "pg8": {
+      "image": "campaign/llamacpp:jetson-up1108-om10",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "8"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active",
+        "expert_pregate: stats"
+      ]
+    },
+    "pg16": {
+      "image": "campaign/llamacpp:jetson-up1108-om10",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "16"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active",
+        "expert_pregate: stats"
+      ]
+    }
+  },
+  "order": "explicit",
+  "rounds": 1,
+  "explicit_order": [
+    "base",
+    "frd16",
+    "pg8",
+    "pg16",
+    "pg16",
+    "pg8",
+    "frd16",
+    "base"
+  ]
+}
+
+exec
+/bin/bash -lc "find .. -name AGENTS.md -not -path '*/ref/*' -not -path '*/results/*' -print; cat cc/expert_fill/COMPILE-CHECK.txt; cat cc/expert_fill/expert_fill.h" in /home/muk/projects/siminfeng/campaign
+ succeeded in 878ms:
+J-OM8 syntax-only compile proof (no engine build, no Docker, no GPU)
+Source: cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03.patch
+Patch SHA256: d0435da67d3c59ae2e4d5238461b0eb9e231d901204a636c11f2994291eb5a0a
+Fresh copy: /tmp/j-om8-check-combined
+Compiler: g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+Preparation: git apply --check and git apply of the combined patch both exited 0.
+Sequential 01 then 02 then 03 versus combined: diff -qr --exclude=.git exited 0.
+Header extracted with acceptance A5 sed/grep/cut: cmp exited 0.
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+Every touched .cpp: exit 0.
+
+J-OM8b / 04 phase-aware fill syntax-only compile proof
+Source: cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03-04.patch
+Patch SHA256: d1792e9565df2d2d27d1e24492b665f9704db674b6d823ab7ca482407a9e3036
+Compiler: g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+Every touched .cpp in 01-04: exit 0.
+
+04 patch verification: fresh cf34d311 archive; git apply --check and apply exit 0 for each of 01,02,03,04 and combined-01-02-03-04.
+Sequential versus combined: diff -r exit 0 (empty).
+Final src/llama-expert-fill.h versus cc/expert_fill/expert_fill.h: byte comparison equal.
+Final combined header extracted with J-OM8 A5 sed/grep/cut pipeline: cmp exit 0.
+make -C cc/expert_fill test: exit 0, PASS (cold prompt/decode bytes, warm decode skip, phase sums including bounds failure).
+python3 cc/abrun/abrun.py cc/abrun/specs/J-OM8b.json --dry-run: exit 0; exact requested 16-run order.
+Shared switch regex OR semantics checked: base matches none; each fill arm matches >=1; inactive marker matches neither. The runner cannot independently require the decode marker.
+
+05 / J-OM9 syntax-only compile proof (no Docker/GPU/full build)
+Source: fresh cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03-04-05.patch
+Patch SHA256: f79fcf38de248cbf05fd934ef74191b2fc6bbcf6c50bc08cce40b5fc6697e7b0
+05 touches src/llama-context.cpp and two headers; all C++ files touched by 01-05 are checked below.
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+05 fresh archives: git apply --check and apply of sequential 01,02,03,04,05 and combined each exit 0.
+A2 diff -r /tmp/j-om9-check-seq /tmp/j-om9-check-combined: exit 0, empty.
+A5 canonical header versus applied combined and extracted full added header: byte-equal.
+A1 make -C cc/expert_fill test: exit 0, PASS including populate residency and zero-major-fault retouch.
+A4 dry-run: exit 0, 8 runs: base frd16 frd16d frd16p frd16p frd16d frd16 base.
+A6 guards and runner leak-regex limitation: see README.md 05 section.
+
+06 / J-OM10 pre-gated async fill syntax-only compile proof (no Docker/GPU/full build)
+Source: fresh cf34d311332e362198f0a410c466d1e940287d02 archive + combined-01-02-03-04-05-06.patch
+Combined patch SHA256: fdda6bbc8b3e92b9eddfe4a9aa97481082512dc8c912bad08a56989e32aa5005
+Canonical header: cc/expert_fill/expert_fill.h
+All C++ files touched by 01-06 are checked below. Engine reference tree unchanged.
+Compiler: g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/01-mmap-advice-random.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/01-mmap-advice-random.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/02-router-prefetch.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/02-router-prefetch.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/03-expert-fill.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/03-expert-fill.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/04-fill-phase.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/04-fill-phase.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/05-fill-diag.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/05-fill-diag.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/06-pregate.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/06-pregate.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/combined-01-02-03-04-05-06.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/combined-01-02-03-04-05-06.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /home/muk/projects/siminfeng/campaign
+$ diff -r /tmp/j-om10-check-seq /tmp/j-om10-check-combined
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /home/muk/projects/siminfeng/campaign
+$ cmp /home/muk/projects/siminfeng/campaign/cc/expert_fill/expert_fill.h /tmp/j-om10-check-combined/src/llama-expert-fill.h
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+A5 full added-header extraction versus canonical header: byte equal.
+
+$ cd /tmp/j-om10-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /home/muk/projects/siminfeng/campaign
+$ make -C cc/expert_fill test
+stdout:
+make: Entering directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+./test_expert_fill
+measured readahead extra pages: 31 (126976 bytes)
+PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds, async completion and zero-read sync repeat, populate residency and zero-major-fault retouch
+make: Leaving directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+stderr:
+(empty)
+exit 0
+
+A4 python3 cc/abrun/abrun.py cc/abrun/specs/J-OM10.json --dry-run: exit 0.
+Exactly 8 runs: base frd16 pg8 pg16 pg16 pg8 frd16 base; no DIAG in spec.
+A6 reviewable quotes and false assumptions: README.md section 06.
+#pragma once
+// Linux buffered reads populate the same page cache as the model mmap.
+#include <algorithm>
+#include <atomic>
+#include <cstdio>
+#include <sys/resource.h>
+#ifndef MADV_POPULATE_READ
+#define MADV_POPULATE_READ 22
+#endif
+#include <cerrno>
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
+#include <list>
+#include <memory>
+#include <fcntl.h>
+#include <limits>
+#include <mutex>
+#include <stdexcept>
+#include <string>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <thread>
+#include <unistd.h>
+#include <vector>
+
+class ExpertFiller {
+public:
+    struct Range { uint64_t offset; size_t len; };
+    struct Counters {
+        uint64_t populate_calls = 0, populate_ns = 0, populate_errors = 0;
+        uint64_t thread_majflt = 0, thread_minflt = 0;
+        uint64_t calls = 0, ranges = 0, bytes_requested = 0;
+        uint64_t bytes_skipped_resident = 0, bytes_read = 0, read_syscalls = 0;
+        uint64_t total_fill_wall_ns = 0, max_single_fill_ns = 0;
+        uint64_t prompt_calls = 0, prompt_bytes_read = 0, prompt_fill_wall_ns = 0;
+        uint64_t decode_calls = 0, decode_bytes_read = 0, decode_fill_wall_ns = 0;
+    };
+    struct AsyncBatch {
+        std::atomic<uint64_t> pending {0}, running {0}, bytes_read {0}, read_syscalls {0}, errors {0};
+    };
+    using Async = std::shared_ptr<AsyncBatch>;
+    struct AsyncCounters { uint64_t bytes_read, read_syscalls, errors, dropped; };
+    // mapping must be a live, offset-zero file mmap for the lifetime of this object.
+    ExpertFiller(const std::string & path, void * mapping, size_t mapping_size)
+        : mapping_(static_cast<char *>(mapping)), size_(mapping_size),
+          threads_(env_size("LLAMA_EXPERT_FILL_THREADS", 8, 256)),
+          chunk_(env_size("LLAMA_EXPERT_FILL_CHUNK_KIB", 1024, 65536) * 1024) {
+        diag_ = enabled("LLAMA_EXPERT_FILL_DIAG");
+        populate_ = enabled("LLAMA_EXPERT_FILL_POPULATE");
+        const long page = sysconf(_SC_PAGESIZE);
+        if (page <= 0 || !mapping_ || reinterpret_cast<uintptr_t>(mapping_) % page || !size_) {
+            throw std::runtime_error("invalid expert mmap");
+        }
+        page_ = size_t(page);
+        fd_ = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+        if (fd_ < 0) { throw std::runtime_error("open expert file failed"); }
+        struct stat st {};
+        if (fstat(fd_, &st) || st.st_size < 0 || uint64_t(st.st_size) != size_) {
+            close(fd_); fd_ = -1;
+            throw std::runtime_error("expert file size differs from mmap");
+        }
+        try {
+            // Allocate before starting workers, so allocation failures cannot kill a worker.
+            scratch_.resize(threads_); residency_.resize(threads_);
+            for (auto & b : scratch_) { b.resize(std::max(page_, chunk_)); }
+            for (auto & b : residency_) { b.resize((std::max(page_, chunk_) + page_ - 1) / page_); }
+            for (size_t i = 0; i < threads_; ++i) { workers_.emplace_back([this, i] { worker(i); }); }
+        } catch (...) {
+            stop(); close(fd_); throw;
+        }
+    }
+    ~ExpertFiller() { wait_async(); stop(); if (fd_ >= 0) { close(fd_); } }
+    ExpertFiller(const ExpertFiller &) = delete;
+    ExpertFiller & operator=(const ExpertFiller &) = delete;
+    size_t threads() const { return threads_; }
+    size_t chunk_bytes() const { return chunk_; }
+    Counters counters() const { std::lock_guard<std::mutex> lock(fill_mutex_); return counters_; }
+
+    // Enqueue only: no residency query, file IO, or wait for worker completion.
+    // Jobs use the existing pool, after all available synchronous jobs.
+    Async enqueue_async(const std::vector<Range> & ranges) {
+        std::vector<Range> jobs;
+        for (const auto & r : ranges) {
+            if (r.offset > size_ || r.len > size_ - r.offset) { throw std::out_of_range("async range outside mmap"); }
+            if (!r.len) { continue; }
+            const uint64_t first = r.offset / page_ * page_;
+            const uint64_t end = r.offset + r.len;
+            const uint64_t last = end + std::min<uint64_t>((page_ - end % page_) % page_, size_ - end);
+            const size_t step = std::max(page_, chunk_ / page_ * page_);
+            for (uint64_t at = first; at < last;) {
+                const size_t len = std::min<uint64_t>(step, last - at);
+                jobs.push_back({at, len}); at += len;
+            }
+        }
+        auto batch = std::make_shared<AsyncBatch>();
+        // Construct off-lock; splice publishes the whole submission without allocation.
+        std::list<AsyncJob> submission;
+        for (auto r : jobs) { submission.push_back({r, batch}); }
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            // Bound speculative backlog; drop a whole submission, never block on IO.
+            if (async_queue_.size() + jobs.size() > 4096) { ++async_dropped_; return {}; }
+            async_queue_.splice(async_queue_.end(), submission);
+            batch->pending = jobs.size(); async_pending_ += jobs.size();
+        }
+        ready_.notify_all();
+        return batch;
+    }
+    // Teardown/tests only. The CPU observer never calls this.
+    void wait_async() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        async_done_.wait(lock, [this] { return async_pending_ == 0; });
+    }
+    AsyncCounters async_counters() const {
+        return {async_bytes_.load(), async_syscalls_.load(), async_errors_.load(), async_dropped_.load()};
+    }
+
+    bool diagnostic() const { return diag_; }
+    // Called only under the opt-in diagnostic guard. Counts page cache residency,
+    // not installed PTEs; errors are explicit rather than counted as residency.
+    uint64_t nonresident(const std::vector<Range> & ranges) const {
+        uint64_t count = 0;
+        std::vector<Range> sorted = ranges;
+        std::sort(sorted.begin(), sorted.end(), [](const Range & a, const Range & b) { return a.offset < b.offset; });
+        uint64_t checked_end = 0;
+        for (const auto & r : sorted) {
+            if (!r.len) { continue; }
+            const size_t first = std::max<uint64_t>(r.offset / page_ * page_, checked_end);
+            if (r.offset + r.len <= first) { continue; }
+            const size_t len = r.offset + r.len - first;
+            checked_end = first + ((len + page_ - 1) / page_) * page_;
+            std::vector<unsigned char> v((len + page_ - 1) / page_);
+            if (mincore(mapping_ + first, len, v.data())) { throw std::runtime_error("diag mincore failed"); }
+            for (auto b : v) { count += !(b & 1); }
+        }
+        return count;
+    }
+    uint64_t fill(const std::vector<Range> & ranges, bool decode = false) {
+        std::lock_guard<std::mutex> serial(fill_mutex_);
+        const auto start = std::chrono::steady_clock::now();
+        batch_diag_ = diag_ && decode;
+        ++counters_.calls;
+        ++(decode ? counters_.decode_calls : counters_.prompt_calls);
+        const uint64_t bytes_before = counters_.bytes_read;
+        counters_.ranges += ranges.size();
+        auto finish = [&] {
+            const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - start).count();
+            counters_.total_fill_wall_ns += ns;
+            (decode ? counters_.decode_fill_wall_ns : counters_.prompt_fill_wall_ns) += ns;
+            (decode ? counters_.decode_bytes_read : counters_.prompt_bytes_read) += counters_.bytes_read - bytes_before;
+            counters_.max_single_fill_ns = std::max(counters_.max_single_fill_ns, ns);
+        };
+        try {
+            std::vector<Range> aligned;
+            for (const auto & r : ranges) {
+                if (r.offset > size_ || r.len > size_ - r.offset) { throw std::out_of_range("expert range outside mmap"); }
+                if (!r.len) { continue; }
+                const uint64_t first = r.offset - r.offset % page_;
+                const uint64_t end = r.offset + r.len;
+                const size_t pad = (page_ - end % page_) % page_;
+                const uint64_t last = end + std::min<uint64_t>(pad, size_ - end);
+                aligned.push_back({first, size_t(last - first)});
+            }
+            std::sort(aligned.begin(), aligned.end(), [](const Range & a, const Range & b) { return a.offset < b.offset; });
+            std::vector<Range> merged;
+            for (const auto & r : aligned) {
+                if (!merged.empty() && r.offset <= merged.back().offset + merged.back().len) {
+                    auto & b = merged.back();
+                    b.len = size_t(std::max(b.offset + b.len, r.offset + r.len) - b.offset);
+                } else { merged.push_back(r); }
+            }
+            std::vector<Range> jobs;
+            for (const auto & r : merged) {
+                counters_.bytes_requested += r.len; // page-aligned union, once per fill
+                const size_t pages = r.len / page_ + (r.len % page_ != 0);
+                std::vector<unsigned char> resident(pages);
+                if (mincore(mapping_ + r.offset, r.len, resident.data())) { throw std::runtime_error("expert mincore failed"); }
+                size_t run = 0;
+                while (run < pages) {
+                    if (resident[run] & 1) {
+                        counters_.bytes_skipped_resident += std::min(page_, r.len - run * page_);
+                        ++run; continue;
+                    }
+                    const size_t first = run++;
+                    while (run < pages && !(resident[run] & 1)) { ++run; }
+                    const size_t end = std::min(r.len, run * page_);
+                    for (size_t pos = first * page_; pos < end;) {
+                        const size_t len = std::min(chunk_, end - pos);
+                        jobs.push_back({r.offset + pos, len}); pos += len;
+                    }
+                }
+            }
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                populating_ = false;
+                jobs_ = std::move(jobs); next_ = 0; pending_ = jobs_.size(); error_ = 0;
+                ready_.notify_all();
+                done_.wait(lock, [this] { return pending_ == 0; });
+                counters_.bytes_read += batch_bytes_; counters_.read_syscalls += batch_syscalls_;
+                batch_bytes_ = batch_syscalls_ = 0;
+                if (error_) { throw std::runtime_error("expert pread failed: errno=" + std::to_string(error_)); }
+                // All preads finish before populate, including ranges already resident.
+                if (populate_.load() && !populate_unsupported().load()) {
+                    jobs_.clear();
+                    for (const auto & r : merged) {
+                        for (size_t pos = 0; pos < r.len;) {
+                            const size_t populate_chunk = std::max(page_, chunk_ / page_ * page_);
+                            const size_t len = std::min(populate_chunk, r.len - pos);
+                            jobs_.push_back({r.offset + pos, len}); pos += len;
+                        }
+                    }
+                    populating_ = true; next_ = 0; pending_ = jobs_.size();
+                    ready_.notify_all();
+                    done_.wait(lock, [this] { return pending_ == 0; });
+                    if (error_) { throw std::runtime_error("expert populate failed: errno=" + std::to_string(error_)); }
+                }
+            }
+        } catch (...) { finish(); throw; }
+        finish();
+        return counters_.bytes_read - bytes_before;
+    }
+private:
+    static std::atomic<bool> & populate_unsupported() {
+        static std::atomic<bool> value {false}; return value;
+    }
+    static bool enabled(const char * name) {
+        const char * s = getenv(name); return s && std::string(s) == "1";
+    }
+    static size_t env_size(const char * name, size_t fallback, size_t maximum) {
+        const char * s = getenv(name);
+        if (!s || !*s || *s == '-') { return fallback; }
+        char * end = nullptr; errno = 0;
+        const auto n = strtoull(s, &end, 10);
+        return errno || *end || n == 0 || n > maximum ? fallback : size_t(n);
+    }
+    void stop() {
+        { std::lock_guard<std::mutex> lock(mutex_); stopping_ = true; }
+        ready_.notify_all();
+        for (auto & t : workers_) { t.join(); }
+    }
+    void worker(size_t index) {
+        for (;;) {
+            Range job {};
+            Async async;
+            bool diagnostic = false, populating = false;
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                ready_.wait(lock, [this] { return stopping_ || next_ < jobs_.size() || !async_queue_.empty(); });
+                if (stopping_) { return; }
+                if (next_ < jobs_.size()) {
+                    job = jobs_[next_++]; diagnostic = batch_diag_; populating = populating_;
+                } else {
+                    job = async_queue_.front().range; async = async_queue_.front().batch;
+                    async_queue_.pop_front(); ++async->running;
+                }
+            }
+            size_t bytes = 0; uint64_t syscalls = 0; int error = 0;
+            struct rusage before {}, after {};
+            if (diagnostic) { getrusage(RUSAGE_THREAD, &before); }
+            uint64_t populate_ns = 0, populate_calls = 0, populate_errors = 0;
+            if (populating) {
+                if (populate_.load() && !populate_unsupported().load()) {
+                    const auto start = std::chrono::steady_clock::now();
+                    ++populate_calls;
+                    if (madvise(mapping_ + job.offset, job.len, MADV_POPULATE_READ)) {
+                        ++populate_errors;
+                        if (errno == EINVAL) {
+                            populate_.store(false);
+                            if (!populate_unsupported().exchange(true)) { fprintf(stderr, "expert_fill: populate unsupported\n"); }
+                        } else { error = errno; }
+                    }
+                    populate_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - start).count();
+                }
+            } else if (async) {
+                // Query at consumption time, including when sync filled these pages meanwhile.
+                auto & resident = residency_[index];
+                if (mincore(mapping_ + job.offset, job.len, resident.data())) { error = errno; }
+                size_t pos = 0;
+                while (!error && pos < job.len) {
+                    if (resident[pos / page_] & 1) { pos = std::min(job.len, pos + page_); continue; }
+                    const size_t first = pos;
+                    do { pos = std::min(job.len, pos + page_); }
+                    while (pos < job.len && !(resident[pos / page_] & 1));
+                    size_t at = first;
+                    while (at < pos) {
+                        ++syscalls;
+                        const ssize_t n = pread(fd_, scratch_[index].data() + at, pos - at, off_t(job.offset + at));
+                        if (n < 0 && errno == EINTR) { continue; }
+                        if (n <= 0) { error = n < 0 ? errno : EIO; break; }
+                        at += size_t(n); bytes += size_t(n);
+                    }
+                }
+            } else while (bytes < job.len) {
+                ++syscalls;
+                const ssize_t n = pread(fd_, scratch_[index].data() + bytes, job.len - bytes, off_t(job.offset + bytes));
+                if (n < 0 && errno == EINTR) { continue; }
+                if (n <= 0) { error = n < 0 ? errno : EIO; break; }
+                bytes += size_t(n);
+            }
+            if (diagnostic) { getrusage(RUSAGE_THREAD, &after); }
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (async) {
+                    async->bytes_read += bytes; async->read_syscalls += syscalls;
+                    async->errors += error != 0;
+                    async_bytes_ += bytes; async_syscalls_ += syscalls; async_errors_ += error != 0;
+                    --async->running; --async->pending;
+                    if (--async_pending_ == 0) { async_done_.notify_all(); }
+                    continue;
+                }
+                counters_.populate_calls += populate_calls; counters_.populate_ns += populate_ns;
+                counters_.populate_errors += populate_errors;
+                if (diagnostic) {
+                    counters_.thread_majflt += after.ru_majflt - before.ru_majflt;
+                    counters_.thread_minflt += after.ru_minflt - before.ru_minflt;
+                }
+                batch_bytes_ += bytes; batch_syscalls_ += syscalls;
+                if (error && !error_) { error_ = error; }
+                if (--pending_ == 0) { done_.notify_one(); }
+            }
+        }
+    }
+    int fd_ = -1;
+    char * mapping_;
+    size_t size_, threads_, chunk_, page_ = 0;
+    mutable std::mutex fill_mutex_;
+    std::mutex mutex_;
+    std::condition_variable ready_, done_, async_done_;
+    struct AsyncJob { Range range; Async batch; };
+    std::list<AsyncJob> async_queue_;
+    size_t async_pending_ = 0;
+    std::atomic<uint64_t> async_bytes_ {0}, async_syscalls_ {0}, async_errors_ {0}, async_dropped_ {0};
+    std::vector<std::thread> workers_;
+    std::vector<std::vector<char>> scratch_;
+    std::vector<std::vector<unsigned char>> residency_;
+    std::vector<Range> jobs_;
+    size_t next_ = 0, pending_ = 0;
+    bool stopping_ = false, diag_ = false, batch_diag_ = false, populating_ = false;
+    std::atomic<bool> populate_ {false};
+    int error_ = 0;
+    uint64_t batch_bytes_ = 0, batch_syscalls_ = 0;
+    Counters counters_;
+};
+
+exec
+/bin/bash -lc "rg -n 'pregate|expert_fill_selected' cc/mmap_advice/patches/06-pregate.patch; cat cc/expert_fill/test_expert_fill.cpp" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+8:+        expert_pregate_init();
+23:+void llama_context::expert_pregate_init() {
+28:+            throw std::runtime_error("pregate requires qwen35moe without groups, LoRA, or folded rotations");
+31:+        if (k && strcmp(k, "12") == 0) { expert_pregate_k = 12; }
+32:+        else if (k && strcmp(k, "16") == 0) { expert_pregate_k = 16; }
+33:+        expert_pregate_layers.resize(model.hparams.n_layer()); // excludes unexecuted MTP blocks
+37:+        for (size_t il = 1; il < expert_pregate_layers.size(); ++il) {
+49:+            auto & dst = expert_pregate_layers[il].router;
+64:+        expert_pregate_enabled = true;
+65:+        LLAMA_LOG_INFO("expert_pregate: active k=%zu arch=qwen35moe gating=softmax router=file-cpu-copy\n", expert_pregate_k);
+67:+        expert_pregate_layers.clear();
+68:+        LLAMA_LOG_INFO("expert_pregate: inactive (%s)\n", e.what());
+72:+void llama_context::expert_pregate_hook(size_t il, const ggml_tensor * t, const std::vector<int32_t> & selected) {
+73:+    if (!expert_fill_decode || !expert_fill_this_ubatch || il >= expert_pregate_layers.size()) { return; }
+74:+    auto & current = expert_pregate_layers[il];
+76:+        ++pregate_arrivals;
+77:+        pregate_actual += selected.size(); pregate_predicted += current.predicted.size();
+79:+            pregate_hits += std::find(current.predicted.begin(), current.predicted.end(), id) != current.predicted.end();
+85:+        pregate_pending_reads += pending;
+86:+        pregate_inflight_reads += running; pregate_inflight_arrivals += pending != 0;
+88:+    if (expert_pregate_failed || il + 1 >= expert_pregate_layers.size()) { return; }
+90:+        if (!loras->empty()) { throw std::runtime_error("LoRA activated after pregate initialization"); }
+104:+        const auto & router = expert_pregate_layers[il + 1].router;
+111:+            if (!std::isfinite(dot)) { throw std::runtime_error("nonfinite pregate logits"); }
+114:+        const size_t k = std::min(expert_pregate_k, logits.size());
+118:+        auto & next = expert_pregate_layers[il + 1];
+126:+            if (!model.expert_file_info(expert, info)) { throw std::runtime_error("pregate expert offsets unavailable"); }
+128:+                if (id < 0 || id >= expert->ne[2]) { throw std::runtime_error("pregate expert ID outside tensor"); }
+137:+        ++pregate_predictions;
+139:+        ++pregate_skips; expert_pregate_failed = true;
+140:+        LLAMA_LOG_INFO("expert_pregate: prediction disabled (%s)\n", e.what());
+144:+void llama_context::expert_pregate_stats() {
+151:+    LLAMA_LOG_INFO("expert_pregate: stats predictions=%" PRIu64 " arrivals=%" PRIu64
+157:+        pregate_predictions, pregate_arrivals, pregate_hits, pregate_actual, pregate_predicted,
+158:+        pregate_actual ? double(pregate_hits)/pregate_actual : 0.0,
+159:+        pregate_predicted ? double(pregate_hits)/pregate_predicted : 0.0,
+160:+        bytes, reads, errors, dropped, pregate_inflight_arrivals, pregate_inflight_reads, pregate_pending_reads,
+161:+        pregate_sync_with, pregate_sync_without, pregate_calls_with, pregate_calls_without, pregate_skips);
+171:+            if (expert_pregate_enabled && expert_fill_decode && il < expert_pregate_layers.size()) {
+172:+                const bool predicted = !expert_pregate_layers[il].predicted.empty();
+173:+                (predicted ? pregate_sync_with : pregate_sync_without) += sync_bytes;
+174:+                ++(predicted ? pregate_calls_with : pregate_calls_without);
+183:+        if (ctx.expert_pregate_enabled) { ctx.expert_pregate_hook(il, t, selected); }
+184:         ctx.expert_fill_selected(il, selected);
+191:+    if (expert_pregate_enabled) { expert_pregate_stats(); }
+199:+    if (expert_pregate_enabled) {
+200:+        for (auto & layer : expert_pregate_layers) { layer.predicted.clear(); layer.batches.clear(); }
+212:+    bool expert_pregate_enabled = false, expert_pregate_failed = false;
+213:+    size_t expert_pregate_k = 8;
+214:+    struct pregate_layer {
+219:+    std::vector<pregate_layer> expert_pregate_layers;
+220:+    uint64_t pregate_predictions=0, pregate_predicted=0, pregate_actual=0, pregate_hits=0;
+221:+    uint64_t pregate_arrivals=0, pregate_inflight_arrivals=0, pregate_inflight_reads=0, pregate_pending_reads=0, pregate_skips=0;
+222:+    uint64_t pregate_sync_with=0, pregate_sync_without=0, pregate_calls_with=0, pregate_calls_without=0;
+223:+    void expert_pregate_init();
+224:+    void expert_pregate_hook(size_t il, const ggml_tensor * t, const std::vector<int32_t> & selected);
+225:+    void expert_pregate_stats();
+#include "expert_fill.h"
+#include <cassert>
+#include <cstdio>
+#include <cstring>
+
+int main() {
+    char path[] = "/tmp/expert-fill-XXXXXX";
+    const int fd = mkstemp(path);
+    assert(fd >= 0);
+    const size_t size = 64 * 1024 * 1024, page = size_t(sysconf(_SC_PAGESIZE));
+    std::vector<unsigned char> block(1024 * 1024);
+    for (size_t i = 0; i < block.size(); ++i) { block[i] = (i * 17 + i / 251) % 256; }
+    for (size_t pos = 0; pos < size; pos += block.size()) {
+        assert(pwrite(fd, block.data(), block.size(), pos) == ssize_t(block.size()));
+    }
+    assert(fsync(fd) == 0);
+    auto * map = static_cast<unsigned char *>(mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0));
+    assert(map != MAP_FAILED);
+    assert(posix_fadvise(fd, 0, size, POSIX_FADV_DONTNEED) == 0);
+    std::vector<unsigned char> residency(size / page);
+    assert(mincore(map, size, residency.data()) == 0);
+    size_t before = 0;
+    for (auto v : residency) { before += (v & 1) != 0; }
+    assert(before == 0);
+    // Three unaligned, overlapping ranges form one page-aligned union.
+    const std::vector<ExpertFiller::Range> ranges = {
+        {4 * 1024 * 1024 + 17, 3 * 1024 * 1024},
+        {6 * 1024 * 1024 + 33, 4 * 1024 * 1024},
+        {9 * 1024 * 1024 + 55, 2 * 1024 * 1024}};
+    const size_t first = ranges.front().offset / page * page;
+    const size_t last = (ranges.back().offset + ranges.back().len + page - 1) / page * page;
+    {
+        ExpertFiller filler(path, map, size);
+        filler.fill(ranges);
+        assert(mincore(map, size, residency.data()) == 0);
+        size_t extra = 0;
+        for (size_t i = 0; i < residency.size(); ++i) {
+            if (i * page >= first && i * page < last) { assert(residency[i] & 1); }
+            else { extra += (residency[i] & 1) != 0; }
+        }
+        printf("measured readahead extra pages: %zu (%zu bytes)\n", extra, extra * page);
+        const auto a = filler.counters();
+        assert(a.calls == 1 && a.ranges == 3 && a.bytes_requested == last - first);
+        assert(a.bytes_read > 0 && a.bytes_read <= last - first);
+        assert(a.bytes_read + a.bytes_skipped_resident == last - first);
+        assert(a.read_syscalls > 0 && a.total_fill_wall_ns >= a.max_single_fill_ns);
+        assert(a.max_single_fill_ns > 0);
+        filler.fill(ranges, true);
+        const auto b = filler.counters();
+        assert(a.prompt_calls == 1 && a.decode_calls == 0);
+        assert(a.prompt_bytes_read == a.bytes_read && a.decode_bytes_read == 0);
+        assert(a.prompt_fill_wall_ns == a.total_fill_wall_ns && a.decode_fill_wall_ns == 0);
+        assert(b.prompt_calls == 1 && b.decode_calls == 1);
+        assert(b.prompt_bytes_read == a.bytes_read && b.decode_bytes_read == 0);
+        assert(b.prompt_fill_wall_ns == a.total_fill_wall_ns);
+        assert(b.prompt_fill_wall_ns + b.decode_fill_wall_ns == b.total_fill_wall_ns);
+        assert(b.calls == 2 && b.ranges == 6 && b.bytes_requested == 2 * (last - first));
+        assert(b.bytes_read == a.bytes_read && b.read_syscalls == a.read_syscalls);
+        assert(b.bytes_skipped_resident - a.bytes_skipped_resident == last - first);
+        for (size_t i = first; i < last; ++i) { assert(map[i] == block[i % block.size()]); }
+        filler.fill({{32 * 1024 * 1024, 1024 * 1024}}, true);
+        const auto c = filler.counters();
+        assert(c.prompt_calls == 1 && c.decode_calls == 2);
+        assert(c.decode_bytes_read > 0 && c.prompt_bytes_read == a.bytes_read);
+        assert(c.prompt_bytes_read + c.decode_bytes_read == c.bytes_read);
+        assert(c.prompt_fill_wall_ns + c.decode_fill_wall_ns == c.total_fill_wall_ns);
+        // A partial last page must not cause pread beyond EOF.
+        bool rejected = false;
+        try { filler.fill({{size - 1, 2}}); } catch (const std::out_of_range &) { rejected = true; }
+        assert(rejected);
+        const auto d = filler.counters();
+        assert(d.prompt_calls + d.decode_calls == d.calls);
+        assert(d.prompt_bytes_read + d.decode_bytes_read == d.bytes_read);
+        assert(d.prompt_fill_wall_ns + d.decode_fill_wall_ns == d.total_fill_wall_ns);
+    }
+    setenv("LLAMA_EXPERT_FILL_CHUNK_KIB", "1", 1); // smaller than a page: async scratch must still fit
+    // A cold asynchronous submission populates cache through the shared worker pool;
+    // only teardown/test code waits. The subsequent synchronous fill must read zero.
+    assert(madvise(map, size, MADV_DONTNEED) == 0);
+    assert(posix_fadvise(fd, 0, size, POSIX_FADV_DONTNEED) == 0);
+    {
+        ExpertFiller filler(path, map, size);
+        const std::vector<ExpertFiller::Range> async_ranges = {
+            {16 * 1024 * 1024 + 17, 2 * 1024 * 1024},
+            {18 * 1024 * 1024 + 17, 2 * 1024 * 1024}};
+        assert(filler.nonresident(async_ranges) > 0);
+        auto batch = filler.enqueue_async(async_ranges);
+        assert(batch);
+        filler.wait_async();
+        assert(batch->pending == 0 && batch->running == 0 && batch->errors == 0);
+        assert(batch->bytes_read > 0 && batch->read_syscalls > 0);
+        const auto async_stats = filler.async_counters();
+        assert(async_stats.bytes_read == batch->bytes_read);
+        assert(async_stats.read_syscalls == batch->read_syscalls && async_stats.errors == 0);
+        assert(filler.nonresident(async_ranges) == 0);
+        assert(filler.counters().calls == 0 && filler.counters().bytes_read == 0);
+        assert(filler.fill(async_ranges, true) == 0);
+        assert(filler.counters().bytes_read == 0 && filler.counters().decode_calls == 1);
+        // Exercise sync/async concurrency on disjoint cold ranges; both must complete.
+        auto concurrent = filler.enqueue_async({{24 * 1024 * 1024, 8 * 1024 * 1024}});
+        filler.fill({{40 * 1024 * 1024, 2 * 1024 * 1024}}, true);
+        filler.wait_async();
+        assert(concurrent && concurrent->pending == 0 && concurrent->errors == 0);
+        assert(filler.nonresident({{24 * 1024 * 1024, 8 * 1024 * 1024}}) == 0);
+        assert(filler.nonresident({{40 * 1024 * 1024, 2 * 1024 * 1024}}) == 0);
+        bool rejected = false;
+        try { filler.enqueue_async({{size - 1, 2}}); } catch (const std::out_of_range &) { rejected = true; }
+        assert(rejected);
+    }
+    unsetenv("LLAMA_EXPERT_FILL_CHUNK_KIB");
+    setenv("LLAMA_EXPERT_FILL_POPULATE", "1", 1);
+    setenv("LLAMA_EXPERT_FILL_DIAG", "1", 1);
+    {
+        ExpertFiller filler(path, map, size);
+        const size_t begin = 48 * 1024 * 1024, len = 4 * 1024 * 1024;
+        filler.fill({{begin + 17, len - 34}}, true);
+        assert(filler.nonresident({{begin, len}}) == 0);
+        const auto stats = filler.counters();
+        assert(stats.populate_calls > 0 && stats.populate_ns > 0);
+        // This test requires a Linux >=5.14 kernel implementing POPULATE_READ.
+        assert(stats.populate_errors == 0);
+        volatile unsigned char touched = 0;
+        for (size_t i = begin; i < begin + len; i += page) { touched = map[i]; }
+        struct rusage a {}, b {};
+        assert(getrusage(RUSAGE_SELF, &a) == 0);
+        for (size_t i = begin; i < begin + len; i += page) { touched = map[i]; }
+        assert(getrusage(RUSAGE_SELF, &b) == 0);
+        assert(b.ru_majflt == a.ru_majflt);
+        (void)touched;
+    }
+    unsetenv("LLAMA_EXPERT_FILL_POPULATE"); unsetenv("LLAMA_EXPERT_FILL_DIAG");
+    assert(munmap(map, size) == 0); close(fd); unlink(path);
+    puts("PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds, async completion and zero-read sync repeat, populate residency and zero-major-fault retouch");
+}
+
+exec
+/bin/bash -lc "ls ref/llama.cpp-up1108 >/dev/null; git -C ref/llama.cpp-up1108 rev-parse HEAD; sed -n '1,130p' cc/mmap_advice/patches/06-pregate.patch" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+cf34d311332e362198f0a410c466d1e940287d02
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -665,6 +665,7 @@
+         if (expert_fillers.empty()) { throw std::runtime_error("no mmap-backed expert tensors"); }
+         expert_prefetch_layers.resize(model.layers.size());
+         expert_fill_enabled = true;
++        expert_pregate_init();
+         expert_diag_enabled = expert_fillers.begin()->second->diagnostic();
+         if (expert_diag_enabled) {
+             const char * csv = getenv("LLAMA_EXPERT_FILL_DIAG_CSV");
+@@ -694,6 +695,152 @@
+         expert_fillers.clear();
+         LLAMA_LOG_INFO("expert_fill: inactive (%s)\n", e.what());
+     }
++}
++
++// Qwen35MoE (the Qwen3.6 GGUF uses this arch):
++// x_L = RMSNorm(attention_L + residual_L, attn_post_norm_L, eps).
++// logits = W*x, p = softmax(logits), ids = topk(p); no gate_inp_b,
++// no exp_probs_b, no groups. Selected weights are normalized AFTER top-k.
++// softmax is monotone, so ranking logits gives the same IDs (ties by ID).
++void llama_context::expert_pregate_init() {
++    const char * env = getenv("LLAMA_EXPERT_PREGATE");
++    if (!env || strcmp(env, "1") != 0) { return; }
++    try {
++        if (model.arch != LLM_ARCH_QWEN35MOE || model.hparams.n_expert_groups > 1 || !loras->empty() || !model.hdmd.rot.empty()) {
++            throw std::runtime_error("pregate requires qwen35moe without groups, LoRA, or folded rotations");
++        }
++        const char * k = getenv("LLAMA_EXPERT_PREGATE_K");
++        if (k && strcmp(k, "12") == 0) { expert_pregate_k = 12; }
++        else if (k && strcmp(k, "16") == 0) { expert_pregate_k = 16; }
++        expert_pregate_layers.resize(model.hparams.n_layer()); // excludes unexecuted MTP blocks
++        const long page = sysconf(_SC_PAGESIZE);
++        if (page <= 0) { throw std::runtime_error("invalid page size"); }
++        // Decode/copy from file once, never GPU tensor data. Original mmap may have holes.
++        for (size_t il = 1; il < expert_pregate_layers.size(); ++il) {
++            const auto * w = model.layers[il].ffn_gate_inp;
++            llama_model::expert_file_range info;
++            if (!w || !ggml_is_contiguous(w) || w->ne[0] != model.hparams.n_embd ||
++                    w->ne[1] != model.hparams.n_expert || w->ne[2] != 1 || w->ne[3] != 1 ||
++                    !model.expert_file_info(w, info, false)) {
++                throw std::runtime_error("router file offsets/layout unavailable");
++            }
++            const auto * traits = ggml_get_type_traits(w->type);
++            if (w->type != GGML_TYPE_F32 && !traits->to_float) {
++                throw std::runtime_error("router type has no CPU decoder");
++            }
++            auto & dst = expert_pregate_layers[il].router;
++            dst.resize(ggml_nelements(w));
++            const size_t first = info.offset / size_t(page) * size_t(page);
++            const size_t delta = info.offset - first, len = delta + ggml_nbytes(w);
++            void * ptr = mmap(nullptr, len, PROT_READ, MAP_PRIVATE, info.source_fd, off_t(first));
++            if (ptr == MAP_FAILED) { throw std::runtime_error("router file mmap failed"); }
++            const char * data = static_cast<const char *>(ptr) + delta;
++            if (w->type == GGML_TYPE_F32) { memcpy(dst.data(), data, ggml_nbytes(w)); }
++            else {
++                for (int64_t row = 0; row < w->ne[1]; ++row) {
++                    traits->to_float(data + row * w->nb[1], dst.data() + row * w->ne[0], w->ne[0]);
++                }
++            }
++            munmap(ptr, len);
++        }
++        expert_pregate_enabled = true;
++        LLAMA_LOG_INFO("expert_pregate: active k=%zu arch=qwen35moe gating=softmax router=file-cpu-copy\n", expert_pregate_k);
++    } catch (const std::exception & e) {
++        expert_pregate_layers.clear();
++        LLAMA_LOG_INFO("expert_pregate: inactive (%s)\n", e.what());
++    }
++}
++
++void llama_context::expert_pregate_hook(size_t il, const ggml_tensor * t, const std::vector<int32_t> & selected) {
++    if (!expert_fill_decode || !expert_fill_this_ubatch || il >= expert_pregate_layers.size()) { return; }
++    auto & current = expert_pregate_layers[il];
++    if (!current.predicted.empty()) {
++        ++pregate_arrivals;
++        pregate_actual += selected.size(); pregate_predicted += current.predicted.size();
++        for (auto id : selected) {
++            pregate_hits += std::find(current.predicted.begin(), current.predicted.end(), id) != current.predicted.end();
++        }
++        uint64_t pending = 0, running = 0;
++        for (const auto & batch : current.batches) {
++            if (batch) { pending += batch->pending.load(); running += batch->running.load(); }
++        }
++        pregate_pending_reads += pending;
++        pregate_inflight_reads += running; pregate_inflight_arrivals += pending != 0;
++    }
++    if (expert_pregate_failed || il + 1 >= expert_pregate_layers.size()) { return; }
++    try {
++        if (!loras->empty()) { throw std::runtime_error("LoRA activated after pregate initialization"); }
++        // Before-node CPU callback runs AFTER the scheduler's host copies and prefix
++        // synchronize. src[1] of the FIRST gate/up MUL_MAT_ID is [embd,1,1,1],
++        // a reshape/host copy of attn_post_norm, not the down-projection activation.
++        const ggml_tensor * x = t->src[1];
++        const ggml_tensor * base = x && x->view_src ? x->view_src : x;
++        const auto * w = model.layers[il + 1].ffn_gate_inp;
++        if (!x || !base || !base->buffer || !ggml_backend_buffer_is_host(base->buffer) ||
++                !x->data || x->type != GGML_TYPE_F32 || x->ne[0] != w->ne[0] ||
++                x->ne[1] != 1 || x->ne[2] != 1 || x->ne[3] != 1 || !ggml_is_contiguous(x) ||
++                (t->src[0] != model.layers[il].ffn_up_exps && t->src[0] != model.layers[il].ffn_gate_exps &&
++                 t->src[0] != model.layers[il].ffn_gate_up_exps)) {
++            throw std::runtime_error("first expert input is not a host F32 decode MoE vector");
++        }
++        const auto & router = expert_pregate_layers[il + 1].router;
++        const auto * input = static_cast<const float *>(x->data);
++        std::vector<std::pair<float, int32_t>> logits;
++        logits.reserve(w->ne[1]);
++        for (int64_t e = 0; e < w->ne[1]; ++e) {
++            float dot = 0;
++            for (int64_t j = 0; j < w->ne[0]; ++j) { dot += router[e * w->ne[0] + j] * input[j]; }
++            if (!std::isfinite(dot)) { throw std::runtime_error("nonfinite pregate logits"); }
++            logits.emplace_back(dot, int32_t(e));
++        }
++        const size_t k = std::min(expert_pregate_k, logits.size());
++        std::partial_sort(logits.begin(), logits.begin() + k, logits.end(), [](const auto & a, const auto & b) {
++            return a.first != b.first ? a.first > b.first : a.second < b.second;
++        });
++        auto & next = expert_pregate_layers[il + 1];
++        next.predicted.clear(); next.batches.clear();
++        for (size_t i = 0; i < k; ++i) { next.predicted.push_back(logits[i].second); }
++        std::map<size_t, std::vector<ExpertFiller::Range>> ranges;
++        const auto & layer = model.layers[il + 1];
++        for (const ggml_tensor * expert : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
++            if (!expert) { continue; }
++            llama_model::expert_file_range info;
++            if (!model.expert_file_info(expert, info)) { throw std::runtime_error("pregate expert offsets unavailable"); }
++            for (auto id : next.predicted) {
++                if (id < 0 || id >= expert->ne[2]) { throw std::runtime_error("pregate expert ID outside tensor"); }
++                ranges[info.file_index].push_back({info.offset + size_t(id) * expert->nb[2], expert->nb[2]});
++            }
+
+codex
+Patch 06 confirms that prediction enqueue runs before demand fill. Queued jobs also survive layer arrival, and the pool has no async concurrency cap. I’ll separate arrival handling from prediction so cancellation always runs before demand, including in `ORDER=before` mode.
+exec
+/bin/bash -lc "mkdir -p /tmp/j-om10b-before /tmp/j-om10b-work; git -C ref/llama.cpp-up1108 archive cf34d311 | tar -x -C /tmp/j-om10b-before; git -C /tmp/j-om10b-before apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/combined-01-02-03-04-05-06.patch; cp -a /tmp/j-om10b-before/. /tmp/j-om10b-work/; sed -n '760,870p' /tmp/j-om10b-work/src/llama-context.cpp; rg -n 'pregate_hook|fill_selected|pregate_layer' /tmp/j-om10b-work/src/llama-context.{cpp,h}" in /home/muk/projects/siminfeng/campaign
+ succeeded in 1795ms:
+        for (auto id : selected) {
+            pregate_hits += std::find(current.predicted.begin(), current.predicted.end(), id) != current.predicted.end();
+        }
+        uint64_t pending = 0, running = 0;
+        for (const auto & batch : current.batches) {
+            if (batch) { pending += batch->pending.load(); running += batch->running.load(); }
+        }
+        pregate_pending_reads += pending;
+        pregate_inflight_reads += running; pregate_inflight_arrivals += pending != 0;
+    }
+    if (expert_pregate_failed || il + 1 >= expert_pregate_layers.size()) { return; }
+    try {
+        if (!loras->empty()) { throw std::runtime_error("LoRA activated after pregate initialization"); }
+        // Before-node CPU callback runs AFTER the scheduler's host copies and prefix
+        // synchronize. src[1] of the FIRST gate/up MUL_MAT_ID is [embd,1,1,1],
+        // a reshape/host copy of attn_post_norm, not the down-projection activation.
+        const ggml_tensor * x = t->src[1];
+        const ggml_tensor * base = x && x->view_src ? x->view_src : x;
+        const auto * w = model.layers[il + 1].ffn_gate_inp;
+        if (!x || !base || !base->buffer || !ggml_backend_buffer_is_host(base->buffer) ||
+                !x->data || x->type != GGML_TYPE_F32 || x->ne[0] != w->ne[0] ||
+                x->ne[1] != 1 || x->ne[2] != 1 || x->ne[3] != 1 || !ggml_is_contiguous(x) ||
+                (t->src[0] != model.layers[il].ffn_up_exps && t->src[0] != model.layers[il].ffn_gate_exps &&
+                 t->src[0] != model.layers[il].ffn_gate_up_exps)) {
+            throw std::runtime_error("first expert input is not a host F32 decode MoE vector");
+        }
+        const auto & router = expert_pregate_layers[il + 1].router;
+        const auto * input = static_cast<const float *>(x->data);
+        std::vector<std::pair<float, int32_t>> logits;
+        logits.reserve(w->ne[1]);
+        for (int64_t e = 0; e < w->ne[1]; ++e) {
+            float dot = 0;
+            for (int64_t j = 0; j < w->ne[0]; ++j) { dot += router[e * w->ne[0] + j] * input[j]; }
+            if (!std::isfinite(dot)) { throw std::runtime_error("nonfinite pregate logits"); }
+            logits.emplace_back(dot, int32_t(e));
+        }
+        const size_t k = std::min(expert_pregate_k, logits.size());
+        std::partial_sort(logits.begin(), logits.begin() + k, logits.end(), [](const auto & a, const auto & b) {
+            return a.first != b.first ? a.first > b.first : a.second < b.second;
+        });
+        auto & next = expert_pregate_layers[il + 1];
+        next.predicted.clear(); next.batches.clear();
+        for (size_t i = 0; i < k; ++i) { next.predicted.push_back(logits[i].second); }
+        std::map<size_t, std::vector<ExpertFiller::Range>> ranges;
+        const auto & layer = model.layers[il + 1];
+        for (const ggml_tensor * expert : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
+            if (!expert) { continue; }
+            llama_model::expert_file_range info;
+            if (!model.expert_file_info(expert, info)) { throw std::runtime_error("pregate expert offsets unavailable"); }
+            for (auto id : next.predicted) {
+                if (id < 0 || id >= expert->ne[2]) { throw std::runtime_error("pregate expert ID outside tensor"); }
+                ranges[info.file_index].push_back({info.offset + size_t(id) * expert->nb[2], expert->nb[2]});
+            }
+        }
+        // Never fill()/wait_async() here: enqueue takes only a short queue mutex.
+        // The existing synchronous fill below is unchanged and may duplicate in-flight preads.
+        for (const auto & entry : ranges) {
+            next.batches.push_back(expert_fillers.at(entry.first)->enqueue_async(entry.second));
+        }
+        ++pregate_predictions;
+    } catch (const std::exception & e) {
+        ++pregate_skips; expert_pregate_failed = true;
+        LLAMA_LOG_INFO("expert_pregate: prediction disabled (%s)\n", e.what());
+    }
+}
+
+void llama_context::expert_pregate_stats() {
+    uint64_t bytes=0, reads=0, errors=0, dropped=0;
+    for (auto & entry : expert_fillers) {
+        entry.second->wait_async(); // teardown only, after graph synchronize
+        const auto c = entry.second->async_counters();
+        bytes += c.bytes_read; reads += c.read_syscalls; errors += c.errors; dropped += c.dropped;
+    }
+    LLAMA_LOG_INFO("expert_pregate: stats predictions=%" PRIu64 " arrivals=%" PRIu64
+        " hits=%" PRIu64 " actual=%" PRIu64 " predicted=%" PRIu64 " recall_at_k=%.6f precision=%.6f"
+        " async_bytes_read=%" PRIu64 " async_reads=%" PRIu64 " async_errors=%" PRIu64 " dropped=%" PRIu64
+        " inflight_at_arrival=%" PRIu64 " inflight_reads=%" PRIu64 " pending_reads=%" PRIu64
+        " sync_bytes_with_prediction=%" PRIu64 " sync_bytes_without_prediction=%" PRIu64
+        " sync_calls_with_prediction=%" PRIu64 " sync_calls_without_prediction=%" PRIu64 " skips=%" PRIu64 "\n",
+        pregate_predictions, pregate_arrivals, pregate_hits, pregate_actual, pregate_predicted,
+        pregate_actual ? double(pregate_hits)/pregate_actual : 0.0,
+        pregate_predicted ? double(pregate_hits)/pregate_predicted : 0.0,
+        bytes, reads, errors, dropped, pregate_inflight_arrivals, pregate_inflight_reads, pregate_pending_reads,
+        pregate_sync_with, pregate_sync_without, pregate_calls_with, pregate_calls_without, pregate_skips);
+}
+
+static uint64_t expert_diag_now() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+void llama_context::expert_diag_close_gap() {
+    if (!expert_diag_gap) { return; }
+    struct rusage r {}; getrusage(RUSAGE_SELF, &r);
+    expert_diag_token.between_ns += expert_diag_now() - expert_diag_gap_ns;
+    expert_diag_token.majflt_between += r.ru_majflt - expert_diag_gap_maj;
+    expert_diag_token.minflt_between += r.ru_minflt - expert_diag_gap_min;
+    expert_diag_gap = false;
+}
+void llama_context::expert_diag_finish_token() {
+    if (!expert_diag_enabled || !expert_diag_token_active) { return; }
+    expert_diag_close_gap();
+    const auto & d = expert_diag_token;
+    expert_diag_total.fill_ns += d.fill_ns;
+    expert_diag_total.between_ns += d.between_ns;
+    expert_diag_total.majflt_fill += d.majflt_fill;
+    expert_diag_total.minflt_fill += d.minflt_fill;
+    expert_diag_total.majflt_between += d.majflt_between;
+    expert_diag_total.minflt_between += d.minflt_between;
+    expert_diag_total.thread_majflt += d.thread_majflt;
+    expert_diag_total.thread_minflt += d.thread_minflt;
+    expert_diag_total.post_nonresident += d.post_nonresident;
+/tmp/j-om10b-work/src/llama-context.h:68:    struct pregate_layer {
+/tmp/j-om10b-work/src/llama-context.h:73:    std::vector<pregate_layer> expert_pregate_layers;
+/tmp/j-om10b-work/src/llama-context.h:78:    void expert_pregate_hook(size_t il, const ggml_tensor * t, const std::vector<int32_t> & selected);
+/tmp/j-om10b-work/src/llama-context.h:100:    void expert_fill_selected(size_t il, const std::vector<int32_t> & selected);
+/tmp/j-om10b-work/src/llama-context.cpp:715:        expert_pregate_layers.resize(model.hparams.n_layer()); // excludes unexecuted MTP blocks
+/tmp/j-om10b-work/src/llama-context.cpp:719:        for (size_t il = 1; il < expert_pregate_layers.size(); ++il) {
+/tmp/j-om10b-work/src/llama-context.cpp:731:            auto & dst = expert_pregate_layers[il].router;
+/tmp/j-om10b-work/src/llama-context.cpp:749:        expert_pregate_layers.clear();
+/tmp/j-om10b-work/src/llama-context.cpp:754:void llama_context::expert_pregate_hook(size_t il, const ggml_tensor * t, const std::vector<int32_t> & selected) {
+/tmp/j-om10b-work/src/llama-context.cpp:755:    if (!expert_fill_decode || !expert_fill_this_ubatch || il >= expert_pregate_layers.size()) { return; }
+/tmp/j-om10b-work/src/llama-context.cpp:756:    auto & current = expert_pregate_layers[il];
+/tmp/j-om10b-work/src/llama-context.cpp:770:    if (expert_pregate_failed || il + 1 >= expert_pregate_layers.size()) { return; }
+/tmp/j-om10b-work/src/llama-context.cpp:786:        const auto & router = expert_pregate_layers[il + 1].router;
+/tmp/j-om10b-work/src/llama-context.cpp:800:        auto & next = expert_pregate_layers[il + 1];
+/tmp/j-om10b-work/src/llama-context.cpp:946:void llama_context::expert_fill_selected(size_t il, const std::vector<int32_t> & selected) {
+/tmp/j-om10b-work/src/llama-context.cpp:980:            if (expert_pregate_enabled && expert_fill_decode && il < expert_pregate_layers.size()) {
+/tmp/j-om10b-work/src/llama-context.cpp:981:                const bool predicted = !expert_pregate_layers[il].predicted.empty();
+/tmp/j-om10b-work/src/llama-context.cpp:1140:        if (ctx.expert_pregate_enabled) { ctx.expert_pregate_hook(il, t, selected); }
+/tmp/j-om10b-work/src/llama-context.cpp:1141:        ctx.expert_fill_selected(il, selected);
+/tmp/j-om10b-work/src/llama-context.cpp:2285:        for (auto & layer : expert_pregate_layers) { layer.predicted.clear(); layer.batches.clear(); }
+
+exec
+/bin/bash -lc "sed -n '2260,2295p' /tmp/j-om10b-work/src/llama-context.cpp; sed -n '1120,1150p' /tmp/j-om10b-work/src/llama-context.cpp; sed -n '60,85p' /tmp/j-om10b-work/src/llama-context.h; tail -65 cc/expert_fill/README.md; cat experiments/jetson/OM/J-OM10/REPORT.md | head -65" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+                int32_t   il_start,
+                int32_t   il_end) {
+    LLAMA_LOG_DEBUG("%s: il_start = %d, il_end = %d\n", __func__, il_start, il_end);
+
+    bool res = cvec->apply(model, data, len, n_embd, il_start, il_end);
+
+    sched_need_reserve = true;
+
+    return res;
+}
+
+llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, llm_graph_type gtype, llama_memory_context_i * mctx, ggml_status & ret) {
+    if (mctx && !mctx->apply()) {
+        LLAMA_LOG_ERROR("%s: failed to apply memory context\n", __func__);
+        ret = GGML_STATUS_FAILED;
+        return nullptr;
+    }
+
+    auto * res = get_gf_res_prev();
+    auto * gf  = res->get_gf();
+
+#ifdef __linux__
+    expert_fill_init();
+    expert_fill_phase(ubatch.n_tokens);
+    if (expert_pregate_enabled) {
+        for (auto & layer : expert_pregate_layers) { layer.predicted.clear(); layer.batches.clear(); }
+    }
+    const char * fill = getenv("LLAMA_EXPERT_FILL");
+    const bool fill_requested = fill && strcmp(fill, "1") == 0;
+    const char * ep = getenv("LLAMA_EXPERT_PREFETCH");
+    if (!fill_requested && ep && strcmp(ep, "1") == 0 && expert_prefetch_layers.empty()) {
+        expert_prefetch_layers.resize(model.layers.size());
+        const char * next = getenv("LLAMA_EXPERT_PREFETCH_NEXT");
+        expert_prefetch_next = next && strcmp(next, "1") == 0;
+        LLAMA_LOG_INFO("expert_prefetch: CPU host-consumer hook enabled; device-only experts skipped, next=%d, LRU=32 ids/32 tokens\n", expert_prefetch_next);
+    }
+            } else
+#endif
+            LLAMA_LOG_INFO("expert_prefetch: skipping unsupported router ids (once)\n");
+            ctx.expert_prefetch_warned = true;
+        }
+        return;
+    }
+    std::vector<int32_t> selected;
+    for (int64_t token = 0; token < ids->ne[1]; ++token) {
+        for (int64_t k = 0; k < ids->ne[0]; ++k) {
+            int32_t id;
+            memcpy(&id, static_cast<const char *>(ids->data) + token * ids->nb[1] + k * ids->nb[0], sizeof(id));
+            if (id >= 0 && id < t->src[0]->ne[2] &&
+                    std::find(selected.begin(), selected.end(), id) == selected.end()) {
+                selected.push_back(id);
+            }
+        }
+    }
+#ifdef __linux__
+    if (ctx.expert_fill_enabled) {
+        if (ctx.expert_pregate_enabled) { ctx.expert_pregate_hook(il, t, selected); }
+        ctx.expert_fill_selected(il, selected);
+        if (ctx.expert_diag_enabled) { ctx.expert_diag_pre_use(il); }
+        return;
+    }
+#endif
+    state.tokens += ids->ne[1];
+    for (int32_t id : state.predicted) {
+        ++ctx.expert_prefetch_total;
+        ctx.expert_prefetch_hits += std::find(selected.begin(), selected.end(), id) != selected.end();
+    }
+    bool expert_fill_failed = false;
+    bool expert_fill_random_decode = false;
+    bool expert_fill_random_applied = false;
+    bool expert_fill_decode = false;
+    bool expert_fill_this_ubatch = true;
+    uint64_t expert_fill_min_tokens = 0, expert_fill_max_tokens = 0;
+    bool expert_pregate_enabled = false, expert_pregate_failed = false;
+    size_t expert_pregate_k = 8;
+    struct pregate_layer {
+        std::vector<float> router;
+        std::vector<int32_t> predicted;
+        std::vector<ExpertFiller::Async> batches;
+    };
+    std::vector<pregate_layer> expert_pregate_layers;
+    uint64_t pregate_predictions=0, pregate_predicted=0, pregate_actual=0, pregate_hits=0;
+    uint64_t pregate_arrivals=0, pregate_inflight_arrivals=0, pregate_inflight_reads=0, pregate_pending_reads=0, pregate_skips=0;
+    uint64_t pregate_sync_with=0, pregate_sync_without=0, pregate_calls_with=0, pregate_calls_without=0;
+    void expert_pregate_init();
+    void expert_pregate_hook(size_t il, const ggml_tensor * t, const std::vector<int32_t> & selected);
+    void expert_pregate_stats();
+    // All diagnostic syscalls and residency probes are behind expert_diag_enabled.
+    bool expert_diag_enabled = false, expert_diag_token_active = false, expert_diag_gap = false;
+    struct fill_diag {
+        uint64_t fill_ns=0, between_ns=0, majflt_fill=0, minflt_fill=0;
+        uint64_t majflt_between=0, minflt_between=0, thread_majflt=0, thread_minflt=0;
+        uint64_t post_nonresident=0, pre_use_nonresident=0, next_nonresident=0;
+includes speculative work. The prediction hook never calls `wait_async`.
+The pre-existing synchronous fill still waits for its own jobs and can be
+delayed by an async chunk occupying a worker. Only teardown and tests drain
+async jobs. A sync/async residency race can duplicate preads; both read the
+same immutable file into separate worker scratch and populate the same
+page cache, so this wastes bandwidth but does not alter model results.
+No pinning or exclusion of in-flight ranges is attempted.
+
+Logs: startup `expert_pregate: active k=...`; teardown `expert_pregate: stats`.
+`predictions` counts L->L+1 attempts submitted; `arrivals` counts actual next
+layer hooks with predictions. `hits/actual` is recall@K (fraction of actual
+selected IDs predicted), `hits/predicted` is precision, both over arrivals.
+`async_bytes_read` and `async_reads` count successful bytes and attempted
+pread syscalls, including duplicate reads/retries; errors and dropped
+submissions are explicit. `inflight_at_arrival` counts arrivals with unfinished
+async chunks, `inflight_reads` sums running chunks at arrivals, and
+`pending_reads` sums queued plus running chunks. These are racing snapshots,
+not a wait or exact count of kernel IOs. `sync_bytes_with_prediction` and
+`sync_bytes_without_prediction` are actual decode fill bytes partitioned by
+whether that layer received a prediction; corresponding calls are per-file
+fills. The latter cohort normally contains layer 0, not a counterfactual
+measurement of all layers. Compare each pg arm's `expert_fill: stats
+ decode_bytes_read` with frd16's same counter for the full with/without
+prediction comparison. Counterfactual bytes cannot be recovered from a
+cache already changed by prefetch. Residency snapshots and pread bytes are
+not physical NVMe telemetry. Teardown drains outstanding jobs before logging
+async totals; late reads are included even if they missed their deadline.
+
+Default-off: `if (ctx.expert_pregate_enabled)` guards the prediction hook;
+router setup returns immediately when LLAMA_EXPERT_PREGATE is unset.
+No extra hot-path syscalls, allocations, router math, residency probes or
+resource diagnostics run when unset. The queue and residency scratch are
+initialized with the filler; no new threads or fds are needed for async IO.
+06 preserves 05's separately opt-in diagnostic/populate behavior.
+
+Expected effect, not measured evidence: OM9's approximately 461 ms fill IO
+plus 394 ms other work gives 855 ms/token (about 1.17 tokens/s). With recall r,
+resident predicted bytes and completely hidden prefetch IO, synchronous IO
+falls by roughly fraction r, to `461*(1-r)` ms or `164*(1-r)` MB/token.
+An optimistic incremental model is `T = 394 + 461*(1-r)` ms: r=0.5 gives
+624.5 ms (1.60 tokens/s), r=0.8 gives 486.2 ms (2.06 tokens/s), and r=1
+approaches the compute floor 394 ms (2.54 tokens/s). IO is moved, not erased:
+on one shared drive the pipeline also obeys an IO throughput floor, at
+least `max(394,461)` ms if the original missing 164 MB still needs reading,
+and worse with wrong predictions. Thus the 394 ms limit requires sufficient
+bandwidth/cache hits too; one-layer lead time may not hide all fills.
+L+1 overlap is bounded by L's remaining compute/IO and next attention.
+
+Risks: wrong predictions add IO and page-cache pressure, evicting useful
+experts or even freshly prefetched pages. K=16 may improve recall while
+lowering precision and increasing thrash. Six Jetson CPU cores must share
+expert matmul, CPU router dot products, and up to 16 fill workers; contention
+and page-cache copies can consume the overlap benefit. Float router caching
+adds about 2 MiB per predicted layer of host RAM, plus startup file faults.
+Low-priority queue order does not imply kernel IO priority. Incomplete jobs
+can outlive a layer/token and pollute later cache state. Neither mincore nor
+buffered pread pins pages; async errors leave the normal sync path to recover.
+
+`make -C cc/expert_fill test` includes cold async completion, zero-byte sync
+repeat, simultaneous disjoint sync/async fills, and invalid async bounds.
+`cc/abrun/specs/J-OM10.json` uses image `campaign/llamacpp:jetson-up1108-om10`,
+OM9 argv, no diagnostic settings, and exactly
+`base frd16 pg8 pg16 pg16 pg8 frd16 base`. Each pg arm independently requires
+both `expert_pregate: active` and `expert_pregate: stats` via per-arm regexes.
+No Jetson runtime, recall or performance claim is made by these compile checks.
+# J-OM10
+
+Status: completed
+
+| # | Arm | Status | Metric | Wall s | Output SHA | Switch matches |
+|---|---|---|---:|---:|---|---|
+| 1 | base | ok | 1.19 | 152.38 | 7a1541792364 | {"expert_fill: active": 0, "expert_fill: random advice applied at decode": 0, "expert_pregate: active": 0, "expert_pregate: stats": 0} |
+| 2 | frd16 | ok | 1.29 | 143.29 | 7a1541792364 | {"expert_fill: active": 1, "expert_fill: random advice applied at decode": 1, "expert_pregate: active": 0, "expert_pregate: stats": 0} |
+| 3 | pg8 | ok | 1.24 | 141.16 | 7a1541792364 | {"expert_fill: active": 1, "expert_fill: random advice applied at decode": 1, "expert_pregate: active": 1, "expert_pregate: stats": 1} |
+| 4 | pg16 | ok | 0.75 | 174.75 | 7a1541792364 | {"expert_fill: active": 1, "expert_fill: random advice applied at decode": 1, "expert_pregate: active": 1, "expert_pregate: stats": 1} |
+| 5 | pg16 | ok | 0.75 | 173.48 | 7a1541792364 | {"expert_fill: active": 1, "expert_fill: random advice applied at decode": 1, "expert_pregate: active": 1, "expert_pregate: stats": 1} |
+| 6 | pg8 | ok | 1.22 | 140.51 | 7a1541792364 | {"expert_fill: active": 1, "expert_fill: random advice applied at decode": 1, "expert_pregate: active": 1, "expert_pregate: stats": 1} |
+| 7 | frd16 | ok | 1.29 | 138.33 | 7a1541792364 | {"expert_fill: active": 1, "expert_fill: random advice applied at decode": 1, "expert_pregate: active": 0, "expert_pregate: stats": 0} |
+| 8 | base | ok | 1.18 | 148.09 | 7a1541792364 | {"expert_fill: active": 0, "expert_fill: random advice applied at decode": 0, "expert_pregate: active": 0, "expert_pregate: stats": 0} |
+
+Metric: eval_tps (higher is better)
+
+| Arm | Mean | B/A | Gate |
+|---|---:|---:|---|
+| base | 1.185 | — | base |
+| frd16 | 1.29 | 1.0886075949367089 | improved |
+| pg8 | 1.23 | 1.0379746835443038 | improved |
+| pg16 | 0.75 | 0.6329113924050632 | regressed |
+
+## Secondary metrics (descriptive; no verdict)
+
+| Arm | NVMe GiB/token | Prompt t/s | Eval t/s |
+|---|---:|---:|---:|
+| base | 0.885293445889912 | 5.6899999999999995 | 1.185 |
+| frd16 | 0.8086656540159196 | 5.595 | 1.29 |
+| pg8 | 0.8718466077532088 | 5.67 | 1.23 |
+| pg16 | 1.2145396035815041 | 5.5649999999999995 | 0.75 |
+
+A/A gap: 0.016260162601626032; drift: 0.008438818565400852; threshold: 0.032520325203252064
+
+Output class: identical
+
+Output details: `{"class": "identical", "hashes": {"base": ["7a1541792364", "7a1541792364"], "frd16": ["7a1541792364", "7a1541792364"], "pg8": ["7a1541792364", "7a1541792364"], "pg16": ["7a1541792364", "7a1541792364"]}}`
+
+
+exec
+/bin/bash -lc "cat > /tmp/j-om10b-edit.py <<'PY'
+from pathlib import Path
+p=Path('cc/expert_fill/expert_fill.h')
+s=p.read_text()
+s=s.replace('std::atomic<uint64_t> pending {0}, running {0}, bytes_read {0}, read_syscalls {0}, errors {0};','std::atomic<uint64_t> pending {0}, running {0}, bytes_read {0}, read_syscalls {0}, errors {0};\\n        std::atomic<uint64_t> cancelled_jobs {0}, cancelled_bytes {0};')
+s=s.replace('struct AsyncCounters { uint64_t bytes_read, read_syscalls, errors, dropped; };','struct AsyncCounters {\\n        uint64_t bytes_read, read_syscalls, errors, dropped, cancelled_jobs, cancelled_bytes;\\n        uint64_t max_inflight;\\n    };')
+s=s.replace('diag_ = enabled(', 'async_limit_ = std::min(threads_, env_size(\"LLAMA_EXPERT_PREGATE_MAX_INFLIGHT\", 4, 256));\\n        diag_ = enabled(',1)
+s=s.replace('Async enqueue_async(const std::vector<Range> & ranges)', 'Async enqueue_async(const std::vector<Range> & ranges, size_t layer = 0)')
+s=s.replace('submission.push_back({r, batch});','submission.push_back({r, batch, layer});')
+s=s.replace('    // Teardown/tests only. The CPU observer never calls this.','''    // Arrival deadline: retire queued chunks for this layer and older layers.
+    // The queue mutex makes cancellation atomic with worker dispatch. Running
+    // chunks retain their batch and finish normally; pending includes both kinds.
+    void cancel_async_through(size_t layer) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto it = async_queue_.begin(); it "'!= async_queue_.end();) {
+            if (it->layer > layer) { ++it; continue; }
+            ++it->batch->cancelled_jobs; it->batch->cancelled_bytes += it->range.len;
+            ++async_cancelled_jobs_; async_cancelled_bytes_ += it->range.len;
+            --it->batch->pending; --async_pending_;
+            it = async_queue_.erase(it);
+        }
+        if (!async_pending_) { async_done_.notify_all(); }
+    }
+    // Teardown/tests only. The CPU observer never calls this.'"''')
+s=s.replace('async_errors_.load(), async_dropped_.load()};','async_errors_.load(), async_dropped_.load(),\\n                async_cancelled_jobs_.load(), async_cancelled_bytes_.load(), async_max_inflight_.load()};')
+s=s.replace('        const auto start = std::chrono::steady_clock::now();\\n        batch_diag_', '''        // Reserve scheduling priority before residency queries/job construction,
+        // not just after demand jobs are published. In-flight async IO may finish.
+        DemandScope demand(*this);
+        const auto start = std::chrono::steady_clock::now();
+        batch_diag_''',1)
+s=s.replace('private:\\n', '''private:
+    friend struct ExpertFillerTestAccess;
+    struct DemandScope {
+        ExpertFiller & owner;
+        explicit DemandScope(ExpertFiller & f) : owner(f) {
+            std::lock_guard<std::mutex> lock(owner.mutex_); owner.demand_active_ = true;
+        }
+        ~DemandScope() {
+            { std::lock_guard<std::mutex> lock(owner.mutex_); owner.demand_active_ = false; }
+            owner.ready_.notify_all();
+        }
+    };
+''',1)
+s=s.replace('return stopping_ || next_ < jobs_.size() || "'!async_queue_.empty();'"','''return stopping_ || next_ < jobs_.size() ||
+                    ("'!demand_active_ && !async_queue_.empty() && async_running_ < async_limit_);'"''')
+s=s.replace('async_queue_.pop_front(); ++async->running;', '''async_queue_.pop_front(); ++async->running;
+                    ++async_running_;
+                    async_max_inflight_.store(std::max<uint64_t>(async_max_inflight_.load(), async_running_));''')
+s=s.replace('--async->running; --async->pending;', '--async->running; --async->pending; --async_running_;\\n                    ready_.notify_all(); // a capped async slot is now available')
+s=s.replace('struct AsyncJob { Range range; Async batch; };', 'struct AsyncJob { Range range; Async batch; size_t layer; };')
+s=s.replace('size_t async_pending_ = 0;', 'size_t async_pending_ = 0, async_running_ = 0, async_limit_ = 4;\\n    bool demand_active_ = false;')
+s=s.replace('    std::vector<std::thread> workers_;','    std::atomic<uint64_t> async_cancelled_jobs_ {0}, async_cancelled_bytes_ {0}, async_max_inflight_ {0};\\n    std::vector<std::thread> workers_;')
+p.write_text(s)
+Path('/tmp/j-om10b-work/src/llama-expert-fill.h').write_text(s)
+p=Path('/tmp/j-om10b-work/src/llama-context.cpp'); s=p.read_text()
+s=s.replace('        const char * k = getenv(\"LLAMA_EXPERT_PREGATE_K\");', '''        const char * order = getenv(\"LLAMA_EXPERT_PREGATE_ORDER\");
+        expert_pregate_before = order && strcmp(order, \"before\") == 0;
+        const char * k = getenv(\"LLAMA_EXPERT_PREGATE_K\");''')
+s=s.replace('active k=%zu arch=qwen35moe gating=softmax router=file-cpu-copy\\\\n\", expert_pregate_k);','active k=%zu arch=qwen35moe gating=softmax router=file-cpu-copy order=%s\\\\n\",\\n            expert_pregate_k, expert_pregate_before ? \"before\" : \"after\");')
+s=s.replace('void llama_context::expert_pregate_hook(size_t il, const ggml_tensor * t, const std::vector<int32_t> & selected)', 'void llama_context::expert_pregate_arrive(size_t il, const std::vector<int32_t> & selected)')
+s=s.replace('    if (expert_pregate_failed || il + 1 >= expert_pregate_layers.size()) { return; }', '''    // Always before demand, independent of ORDER. Cancel this batch and any
+    // older layer's queued work; already-dispatched chunks finish normally.
+    for (auto & entry : expert_fillers) { entry.second->cancel_async_through(il); }
+}
+
+void llama_context::expert_pregate_hook(size_t il, const ggml_tensor * t) {
+    if ("'!expert_fill_decode || !expert_fill_this_ubatch || expert_pregate_failed ||
+            il + 1 >= expert_pregate_layers.size()) { return; }'"''',1)
+s=s.replace('        // The existing synchronous fill below is unchanged and may duplicate in-flight preads.', '        // In-flight preads may still overlap demand; queued stale work is cancelled on arrival.')
+s=s.replace('enqueue_async(entry.second)', 'enqueue_async(entry.second, il + 1)')
+s=s.replace('uint64_t bytes=0, reads=0, errors=0, dropped=0;', 'uint64_t bytes=0, reads=0, errors=0, dropped=0, cancelled_jobs=0, cancelled_bytes=0;')
+s=s.replace('errors += c.errors; dropped += c.dropped;', 'errors += c.errors; dropped += c.dropped;\\n        cancelled_jobs += c.cancelled_jobs; cancelled_bytes += c.cancelled_bytes;')
+s=s.replace('        \" inflight_at_arrival=%\"', '        \" cancelled_jobs=%\" PRIu64 \" cancelled_bytes=%\" PRIu64\\n        \" inflight_at_arrival=%\"')
+s=s.replace('bytes, reads, errors, dropped, pregate_inflight_arrivals', 'bytes, reads, errors, dropped, cancelled_jobs, cancelled_bytes, pregate_inflight_arrivals')
+s=s.replace('''        if (ctx.expert_pregate_enabled) { ctx.expert_pregate_hook(il, t, selected); }
+        ctx.expert_fill_selected(il, selected);''','''        if (ctx.expert_pregate_enabled) {
+            ctx.expert_pregate_arrive(il, selected); // cancel before demand
+            if (ctx.expert_pregate_before) { ctx.expert_pregate_hook(il, t); }
+        }
+        ctx.expert_fill_selected(il, selected); // demand for L first by default
+        if (ctx.expert_pregate_enabled && "'!ctx.expert_pregate_before) {
+            ctx.expert_pregate_hook(il, t); // ORDER=after (default): enqueue L+1
+        }'"''')
+s=s.replace('''    if (expert_pregate_enabled) {
+        for (auto & layer : expert_pregate_layers)''','''    if (expert_pregate_enabled) {
+        // Layer numbers restart for every ubatch; retire previous-token backlog.
+        for (auto & entry : expert_fillers) { entry.second->cancel_async_through(SIZE_MAX); }
+        for (auto & layer : expert_pregate_layers)''')
+p.write_text(s)
+p=Path('/tmp/j-om10b-work/src/llama-context.h'); s=p.read_text().replace('bool expert_pregate_enabled = false, expert_pregate_failed = false;', 'bool expert_pregate_enabled = false, expert_pregate_failed = false, expert_pregate_before = false;')
+s=s.replace('void expert_pregate_hook(size_t il, const ggml_tensor * t, const std::vector<int32_t> & selected);', 'void expert_pregate_arrive(size_t il, const std::vector<int32_t> & selected);\\n    void expert_pregate_hook(size_t il, const ggml_tensor * t);')
+p.write_text(s)
+import json
+p=Path('cc/abrun/specs/J-OM10b.json'); spec=json.loads(Path('cc/abrun/specs/J-OM10.json').read_text()); spec['id']='J-OM10b'
+spec['arms']['pg8b']=spec['arms'].pop('pg8'); spec['arms']['pg12b']=spec['arms'].pop('pg16')
+for name,arm in spec['arms'].items():
+    arm['image']='campaign/llamacpp:jetson-up1108-om10b'
+    if name.startswith('pg'):
+        arm['env'].update(LLAMA_EXPERT_PREGATE_K='8' if name=='pg8b' else '12',LLAMA_EXPERT_PREGATE_ORDER='after',LLAMA_EXPERT_PREGATE_MAX_INFLIGHT='4')
+spec['explicit_order']=['base','frd16','pg8b','pg12b','pg12b','pg8b','frd16','base']; p.write_text(json.dumps(spec,indent=2)+'\\n')
+PY
+python3 /tmp/j-om10b-edit.py
+make -C cc/expert_fill test" in /home/muk/projects/siminfeng/campaign
+ succeeded in 7065ms:
+make: Entering directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror test_expert_fill.cpp -o test_expert_fill
+./test_expert_fill
+measured readahead extra pages: 31 (126976 bytes)
+PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds, async completion and zero-read sync repeat, populate residency and zero-major-fault retouch
+make: Leaving directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+
+exec
+/bin/bash -lc "cat > /tmp/j-om10b-tests.py <<'PY'
+from pathlib import Path
+p=Path('cc/expert_fill/test_expert_fill.cpp'); s=p.read_text()
+s=s.replace('int main() {', '''// Freeze speculative dispatch at the same boundary used while demand builds
+// jobs. This makes cancel-before-start deterministic, independent of IO speed.
+struct ExpertFillerTestAccess {
+    static void demand_priority(ExpertFiller & f, bool active) {
+        { std::lock_guard<std::mutex> lock(f.mutex_); f.demand_active_ = active; }
+        f.ready_.notify_all();
+    }
+};
+
+static void test_cancel_before_start(const char * path, void * map, size_t size, size_t page) {
+    setenv(\"LLAMA_EXPERT_FILL_THREADS\", \"8\", 1);
+    setenv(\"LLAMA_EXPERT_FILL_CHUNK_KIB\", \"4\", 1);
+    ExpertFiller filler(path, map, size);
+    ExpertFillerTestAccess::demand_priority(filler, true);
+    auto older = filler.enqueue_async({{0, 3 * page}}, 2);
+    auto current = filler.enqueue_async({{8 * page + 1, page}}, 3);
+    auto future = filler.enqueue_async({{16 * page, 2 * page}}, 4);
+    assert(older && current && future);
+    assert(older->pending == 3 && current->pending == 2 && future->pending == 2);
+    filler.cancel_async_through(3);
+    assert(older->pending == 0 && current->pending == 0 && future->pending == 2);
+    assert(older->running == 0 && current->running == 0);
+    assert(older->cancelled_jobs == 3 && older->cancelled_bytes == 3 * page);
+    assert(current->cancelled_jobs == 2 && current->cancelled_bytes == 2 * page);
+    assert(older->bytes_read == 0 && current->bytes_read == 0);
+    auto c = filler.async_counters();
+    assert(c.cancelled_jobs == 5 && c.cancelled_bytes == 5 * page && c.bytes_read == 0);
+    filler.cancel_async_through(3); // idempotent; future batch untouched
+    assert(filler.async_counters().cancelled_jobs == 5);
+    filler.cancel_async_through(SIZE_MAX); // token boundary retires all layers
+    filler.wait_async(); // cancellation must wake/complete the drain condition
+    assert(future->pending == 0 && future->cancelled_bytes == 2 * page);
+    // A fresh batch after cancellation must dispatch and finish normally.
+    auto fresh = filler.enqueue_async({{32 * page, page}}, 1);
+    ExpertFillerTestAccess::demand_priority(filler, false);
+    filler.wait_async();
+    assert(fresh && fresh->pending == 0 && fresh->errors == 0);
+    assert(filler.async_counters().cancelled_jobs == 7);
+    puts(\"PASS test_cancel_before_start (older/current/future batches, bytes, idempotence, drain)\");
+}
+
+static void test_async_inflight_cap(const char * path, void * map, size_t size) {
+    setenv(\"LLAMA_EXPERT_FILL_THREADS\", \"8\", 1);
+    setenv(\"LLAMA_EXPERT_FILL_CHUNK_KIB\", \"64\", 1);
+    for (const char * cap : {\"1\", \"2\", \"4\", \"invalid\"}) {
+        if (std::string(cap) == \"4\") { unsetenv(\"LLAMA_EXPERT_PREGATE_MAX_INFLIGHT\"); }
+        else { setenv(\"LLAMA_EXPERT_PREGATE_MAX_INFLIGHT\", cap, 1); }
+        const uint64_t expected = std::string(cap) == \"invalid\" ? 4 : std::stoul(cap);
+        ExpertFiller filler(path, map, size);
+        ExpertFillerTestAccess::demand_priority(filler, true);
+        auto a = filler.enqueue_async({{0, size / 2}}, 1);
+        auto b = filler.enqueue_async({{size / 2, size / 2}}, 2);
+        assert(a && b);
+        assert(filler.async_counters().max_inflight == 0);
+        ExpertFillerTestAccess::demand_priority(filler, false);
+        // Demand must complete even with two async batches and a saturated cap.
+        filler.fill({{0, size}}, true);
+        filler.wait_async();
+        const auto c = filler.async_counters();
+        assert(c.max_inflight >= 1 && c.max_inflight <= expected);
+        assert(a->pending == 0 && b->pending == 0 && a->running == 0 && b->running == 0);
+        assert(a->errors == 0 && b->errors == 0 && c.cancelled_jobs == 0);
+        // Completion releases every cap slot, allowing subsequent submissions.
+        auto next = filler.enqueue_async({{0, size / 2}}, 3);
+        filler.wait_async();
+        assert(next && next->pending == 0 && next->errors == 0);
+        assert(filler.async_counters().max_inflight <= expected);
+    }
+    unsetenv(\"LLAMA_EXPERT_PREGATE_MAX_INFLIGHT\");
+    unsetenv(\"LLAMA_EXPERT_FILL_THREADS\");
+    unsetenv(\"LLAMA_EXPERT_FILL_CHUNK_KIB\");
+    puts(\"PASS test_async_inflight_cap (1, 2, default 4, invalid fallback, demand progress, slot reuse)\");
+}
+
+int main() {''')
+s=s.replace('    setenv(\"LLAMA_EXPERT_FILL_POPULATE\", \"1\", 1);', '''    test_cancel_before_start(path, map, size, page);
+    test_async_inflight_cap(path, map, size);
+    setenv(\"LLAMA_EXPERT_FILL_POPULATE\", \"1\", 1);''')
+p.write_text(s)
+PY
+python3 /tmp/j-om10b-tests.py
+make -C cc/expert_fill test" in /home/muk/projects/siminfeng/campaign
+ succeeded in 4237ms:
+make: Entering directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror test_expert_fill.cpp -o test_expert_fill
+./test_expert_fill
+measured readahead extra pages: 31 (126976 bytes)
+PASS test_cancel_before_start (older/current/future batches, bytes, idempotence, drain)
+PASS test_async_inflight_cap (1, 2, default 4, invalid fallback, demand progress, slot reuse)
+PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds, async completion and zero-read sync repeat, populate residency and zero-major-fault retouch
+make: Leaving directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+
+codex
+The changes pass the existing tests and the new cancellation/cap tests. Demand now blocks new async dispatch while it prepares and completes its fill; already-running async chunks finish normally. Cancellation removes queued work for the arriving layer and older layers, and clears leftover queues when layer numbering restarts for a new microbatch. Next I’ll generate both patches and verify fresh application, header equality, compilation, and the eight-run spec.
+exec
+/bin/bash -lc "mkdir -p /tmp/j-om10b-pristine; git -C ref/llama.cpp-up1108 archive cf34d311 | tar -x -C /tmp/j-om10b-pristine; cat > /tmp/j-om10b-patches.py <<'PY'
+from pathlib import Path
+import difflib
+root=Path('/home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches')
+def patch(old,new,target):
+    paths=sorted({p.relative_to(old) for p in old.rglob('*') if p.is_file()} | {p.relative_to(new) for p in new.rglob('*') if p.is_file()})
+    out=[]
+    for rel in paths:
+        a,b=old/rel,new/rel
+        before=a.read_bytes() if a.exists() else b''
+        after=b.read_bytes() if b.exists() else b''
+        if before==after: continue
+        out.append(f'diff --git a/{rel} b/{rel}\\n')
+        if not a.exists(): out.append('new file mode 100644\\n')
+        out.extend(difflib.unified_diff(before.decode().splitlines(True),after.decode().splitlines(True),fromfile=f'a/{rel}' if a.exists() else '/dev/null',tofile=f'b/{rel}' if b.exists() else '/dev/null'))
+    (root/target).write_text(''.join(out))
+patch(Path('/tmp/j-om10b-before'),Path('/tmp/j-om10b-work'),'07-pregate-sched.patch')
+patch(Path('/tmp/j-om10b-pristine'),Path('/tmp/j-om10b-work'),'combined-01-02-03-04-05-06-07.patch')
+PY
+python3 /tmp/j-om10b-patches.py
+python3 cc/abrun/abrun.py cc/abrun/specs/J-OM10b.json --dry-run" in /home/muk/projects/siminfeng/campaign
+ succeeded in 3318ms:
+Order: base, frd16, pg8b, pg12b, pg12b, pg8b, frd16, base
+Run 1: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/001-base campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=0 -e LLAMA_EXPERT_FILL_RANDOM=0 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 2: frd16  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/002-frd16 campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 3: pg8b  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/003-pg8b campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=8 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 4: pg12b  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/004-pg12b campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=12 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 5: pg12b  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/005-pg12b campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=12 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 6: pg8b  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/006-pg8b campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=8 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 7: frd16  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/007-frd16 campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 8: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/008-base campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=0 -e LLAMA_EXPERT_FILL_RANDOM=0 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+
+exec
+/bin/bash -lc "sed -n '1,230p' cc/mmap_advice/patches/07-pregate-sched.patch" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -709,6 +709,8 @@
+         if (model.arch != LLM_ARCH_QWEN35MOE || model.hparams.n_expert_groups > 1 || !loras->empty() || !model.hdmd.rot.empty()) {
+             throw std::runtime_error("pregate requires qwen35moe without groups, LoRA, or folded rotations");
+         }
++        const char * order = getenv("LLAMA_EXPERT_PREGATE_ORDER");
++        expert_pregate_before = order && strcmp(order, "before") == 0;
+         const char * k = getenv("LLAMA_EXPERT_PREGATE_K");
+         if (k && strcmp(k, "12") == 0) { expert_pregate_k = 12; }
+         else if (k && strcmp(k, "16") == 0) { expert_pregate_k = 16; }
+@@ -744,14 +746,15 @@
+             munmap(ptr, len);
+         }
+         expert_pregate_enabled = true;
+-        LLAMA_LOG_INFO("expert_pregate: active k=%zu arch=qwen35moe gating=softmax router=file-cpu-copy\n", expert_pregate_k);
++        LLAMA_LOG_INFO("expert_pregate: active k=%zu arch=qwen35moe gating=softmax router=file-cpu-copy order=%s\n",
++            expert_pregate_k, expert_pregate_before ? "before" : "after");
+     } catch (const std::exception & e) {
+         expert_pregate_layers.clear();
+         LLAMA_LOG_INFO("expert_pregate: inactive (%s)\n", e.what());
+     }
+ }
+ 
+-void llama_context::expert_pregate_hook(size_t il, const ggml_tensor * t, const std::vector<int32_t> & selected) {
++void llama_context::expert_pregate_arrive(size_t il, const std::vector<int32_t> & selected) {
+     if (!expert_fill_decode || !expert_fill_this_ubatch || il >= expert_pregate_layers.size()) { return; }
+     auto & current = expert_pregate_layers[il];
+     if (!current.predicted.empty()) {
+@@ -767,7 +770,14 @@
+         pregate_pending_reads += pending;
+         pregate_inflight_reads += running; pregate_inflight_arrivals += pending != 0;
+     }
+-    if (expert_pregate_failed || il + 1 >= expert_pregate_layers.size()) { return; }
++    // Always before demand, independent of ORDER. Cancel this batch and any
++    // older layer's queued work; already-dispatched chunks finish normally.
++    for (auto & entry : expert_fillers) { entry.second->cancel_async_through(il); }
++}
++
++void llama_context::expert_pregate_hook(size_t il, const ggml_tensor * t) {
++    if (!expert_fill_decode || !expert_fill_this_ubatch || expert_pregate_failed ||
++            il + 1 >= expert_pregate_layers.size()) { return; }
+     try {
+         if (!loras->empty()) { throw std::runtime_error("LoRA activated after pregate initialization"); }
+         // Before-node CPU callback runs AFTER the scheduler's host copies and prefix
+@@ -812,9 +822,9 @@
+             }
+         }
+         // Never fill()/wait_async() here: enqueue takes only a short queue mutex.
+-        // The existing synchronous fill below is unchanged and may duplicate in-flight preads.
++        // In-flight preads may still overlap demand; queued stale work is cancelled on arrival.
+         for (const auto & entry : ranges) {
+-            next.batches.push_back(expert_fillers.at(entry.first)->enqueue_async(entry.second));
++            next.batches.push_back(expert_fillers.at(entry.first)->enqueue_async(entry.second, il + 1));
+         }
+         ++pregate_predictions;
+     } catch (const std::exception & e) {
+@@ -824,22 +834,24 @@
+ }
+ 
+ void llama_context::expert_pregate_stats() {
+-    uint64_t bytes=0, reads=0, errors=0, dropped=0;
++    uint64_t bytes=0, reads=0, errors=0, dropped=0, cancelled_jobs=0, cancelled_bytes=0;
+     for (auto & entry : expert_fillers) {
+         entry.second->wait_async(); // teardown only, after graph synchronize
+         const auto c = entry.second->async_counters();
+         bytes += c.bytes_read; reads += c.read_syscalls; errors += c.errors; dropped += c.dropped;
++        cancelled_jobs += c.cancelled_jobs; cancelled_bytes += c.cancelled_bytes;
+     }
+     LLAMA_LOG_INFO("expert_pregate: stats predictions=%" PRIu64 " arrivals=%" PRIu64
+         " hits=%" PRIu64 " actual=%" PRIu64 " predicted=%" PRIu64 " recall_at_k=%.6f precision=%.6f"
+         " async_bytes_read=%" PRIu64 " async_reads=%" PRIu64 " async_errors=%" PRIu64 " dropped=%" PRIu64
++        " cancelled_jobs=%" PRIu64 " cancelled_bytes=%" PRIu64
+         " inflight_at_arrival=%" PRIu64 " inflight_reads=%" PRIu64 " pending_reads=%" PRIu64
+         " sync_bytes_with_prediction=%" PRIu64 " sync_bytes_without_prediction=%" PRIu64
+         " sync_calls_with_prediction=%" PRIu64 " sync_calls_without_prediction=%" PRIu64 " skips=%" PRIu64 "\n",
+         pregate_predictions, pregate_arrivals, pregate_hits, pregate_actual, pregate_predicted,
+         pregate_actual ? double(pregate_hits)/pregate_actual : 0.0,
+         pregate_predicted ? double(pregate_hits)/pregate_predicted : 0.0,
+-        bytes, reads, errors, dropped, pregate_inflight_arrivals, pregate_inflight_reads, pregate_pending_reads,
++        bytes, reads, errors, dropped, cancelled_jobs, cancelled_bytes, pregate_inflight_arrivals, pregate_inflight_reads, pregate_pending_reads,
+         pregate_sync_with, pregate_sync_without, pregate_calls_with, pregate_calls_without, pregate_skips);
+ }
+ 
+@@ -1137,8 +1149,14 @@
+     }
+ #ifdef __linux__
+     if (ctx.expert_fill_enabled) {
+-        if (ctx.expert_pregate_enabled) { ctx.expert_pregate_hook(il, t, selected); }
+-        ctx.expert_fill_selected(il, selected);
++        if (ctx.expert_pregate_enabled) {
++            ctx.expert_pregate_arrive(il, selected); // cancel before demand
++            if (ctx.expert_pregate_before) { ctx.expert_pregate_hook(il, t); }
++        }
++        ctx.expert_fill_selected(il, selected); // demand for L first by default
++        if (ctx.expert_pregate_enabled && !ctx.expert_pregate_before) {
++            ctx.expert_pregate_hook(il, t); // ORDER=after (default): enqueue L+1
++        }
+         if (ctx.expert_diag_enabled) { ctx.expert_diag_pre_use(il); }
+         return;
+     }
+@@ -2282,6 +2300,8 @@
+     expert_fill_init();
+     expert_fill_phase(ubatch.n_tokens);
+     if (expert_pregate_enabled) {
++        // Layer numbers restart for every ubatch; retire previous-token backlog.
++        for (auto & entry : expert_fillers) { entry.second->cancel_async_through(SIZE_MAX); }
+         for (auto & layer : expert_pregate_layers) { layer.predicted.clear(); layer.batches.clear(); }
+     }
+     const char * fill = getenv("LLAMA_EXPERT_FILL");
+diff --git a/src/llama-context.h b/src/llama-context.h
+--- a/src/llama-context.h
++++ b/src/llama-context.h
+@@ -63,7 +63,7 @@
+     bool expert_fill_decode = false;
+     bool expert_fill_this_ubatch = true;
+     uint64_t expert_fill_min_tokens = 0, expert_fill_max_tokens = 0;
+-    bool expert_pregate_enabled = false, expert_pregate_failed = false;
++    bool expert_pregate_enabled = false, expert_pregate_failed = false, expert_pregate_before = false;
+     size_t expert_pregate_k = 8;
+     struct pregate_layer {
+         std::vector<float> router;
+@@ -75,7 +75,8 @@
+     uint64_t pregate_arrivals=0, pregate_inflight_arrivals=0, pregate_inflight_reads=0, pregate_pending_reads=0, pregate_skips=0;
+     uint64_t pregate_sync_with=0, pregate_sync_without=0, pregate_calls_with=0, pregate_calls_without=0;
+     void expert_pregate_init();
+-    void expert_pregate_hook(size_t il, const ggml_tensor * t, const std::vector<int32_t> & selected);
++    void expert_pregate_arrive(size_t il, const std::vector<int32_t> & selected);
++    void expert_pregate_hook(size_t il, const ggml_tensor * t);
+     void expert_pregate_stats();
+     // All diagnostic syscalls and residency probes are behind expert_diag_enabled.
+     bool expert_diag_enabled = false, expert_diag_token_active = false, expert_diag_gap = false;
+diff --git a/src/llama-expert-fill.h b/src/llama-expert-fill.h
+--- a/src/llama-expert-fill.h
++++ b/src/llama-expert-fill.h
+@@ -40,14 +40,19 @@
+     };
+     struct AsyncBatch {
+         std::atomic<uint64_t> pending {0}, running {0}, bytes_read {0}, read_syscalls {0}, errors {0};
++        std::atomic<uint64_t> cancelled_jobs {0}, cancelled_bytes {0};
+     };
+     using Async = std::shared_ptr<AsyncBatch>;
+-    struct AsyncCounters { uint64_t bytes_read, read_syscalls, errors, dropped; };
++    struct AsyncCounters {
++        uint64_t bytes_read, read_syscalls, errors, dropped, cancelled_jobs, cancelled_bytes;
++        uint64_t max_inflight;
++    };
+     // mapping must be a live, offset-zero file mmap for the lifetime of this object.
+     ExpertFiller(const std::string & path, void * mapping, size_t mapping_size)
+         : mapping_(static_cast<char *>(mapping)), size_(mapping_size),
+           threads_(env_size("LLAMA_EXPERT_FILL_THREADS", 8, 256)),
+           chunk_(env_size("LLAMA_EXPERT_FILL_CHUNK_KIB", 1024, 65536) * 1024) {
++        async_limit_ = std::min(threads_, env_size("LLAMA_EXPERT_PREGATE_MAX_INFLIGHT", 4, 256));
+         diag_ = enabled("LLAMA_EXPERT_FILL_DIAG");
+         populate_ = enabled("LLAMA_EXPERT_FILL_POPULATE");
+         const long page = sysconf(_SC_PAGESIZE);
+@@ -81,7 +86,7 @@
+ 
+     // Enqueue only: no residency query, file IO, or wait for worker completion.
+     // Jobs use the existing pool, after all available synchronous jobs.
+-    Async enqueue_async(const std::vector<Range> & ranges) {
++    Async enqueue_async(const std::vector<Range> & ranges, size_t layer = 0) {
+         std::vector<Range> jobs;
+         for (const auto & r : ranges) {
+             if (r.offset > size_ || r.len > size_ - r.offset) { throw std::out_of_range("async range outside mmap"); }
+@@ -98,7 +103,7 @@
+         auto batch = std::make_shared<AsyncBatch>();
+         // Construct off-lock; splice publishes the whole submission without allocation.
+         std::list<AsyncJob> submission;
+-        for (auto r : jobs) { submission.push_back({r, batch}); }
++        for (auto r : jobs) { submission.push_back({r, batch, layer}); }
+         {
+             std::lock_guard<std::mutex> lock(mutex_);
+             // Bound speculative backlog; drop a whole submission, never block on IO.
+@@ -109,13 +114,28 @@
+         ready_.notify_all();
+         return batch;
+     }
++    // Arrival deadline: retire queued chunks for this layer and older layers.
++    // The queue mutex makes cancellation atomic with worker dispatch. Running
++    // chunks retain their batch and finish normally; pending includes both kinds.
++    void cancel_async_through(size_t layer) {
++        std::lock_guard<std::mutex> lock(mutex_);
++        for (auto it = async_queue_.begin(); it != async_queue_.end();) {
++            if (it->layer > layer) { ++it; continue; }
++            ++it->batch->cancelled_jobs; it->batch->cancelled_bytes += it->range.len;
++            ++async_cancelled_jobs_; async_cancelled_bytes_ += it->range.len;
++            --it->batch->pending; --async_pending_;
++            it = async_queue_.erase(it);
++        }
++        if (!async_pending_) { async_done_.notify_all(); }
++    }
+     // Teardown/tests only. The CPU observer never calls this.
+     void wait_async() {
+         std::unique_lock<std::mutex> lock(mutex_);
+         async_done_.wait(lock, [this] { return async_pending_ == 0; });
+     }
+     AsyncCounters async_counters() const {
+-        return {async_bytes_.load(), async_syscalls_.load(), async_errors_.load(), async_dropped_.load()};
++        return {async_bytes_.load(), async_syscalls_.load(), async_errors_.load(), async_dropped_.load(),
++                async_cancelled_jobs_.load(), async_cancelled_bytes_.load(), async_max_inflight_.load()};
+     }
+ 
+     bool diagnostic() const { return diag_; }
+@@ -140,6 +160,9 @@
+     }
+     uint64_t fill(const std::vector<Range> & ranges, bool decode = false) {
+         std::lock_guard<std::mutex> serial(fill_mutex_);
++        // Reserve scheduling priority before residency queries/job construction,
++        // not just after demand jobs are published. In-flight async IO may finish.
++        DemandScope demand(*this);
+         const auto start = std::chrono::steady_clock::now();
+         batch_diag_ = diag_ && decode;
+         ++counters_.calls;
+@@ -224,6 +247,17 @@
+         return counters_.bytes_read - bytes_before;
+     }
+ private:
++    friend struct ExpertFillerTestAccess;
++    struct DemandScope {
++        ExpertFiller & owner;
++        explicit DemandScope(ExpertFiller & f) : owner(f) {
++            std::lock_guard<std::mutex> lock(owner.mutex_); owner.demand_active_ = true;
++        }
++        ~DemandScope() {
++            { std::lock_guard<std::mutex> lock(owner.mutex_); owner.demand_active_ = false; }
++            owner.ready_.notify_all();
++        }
++    };
+
+exec
+/bin/bash -lc "cat >> cc/expert_fill/README.md <<'EOF'
+
+## 07 / J-OM10b: pre-gate scheduling
+
+06's CPU observer enqueued L+1 before filling L. Workers preferred published
+sync jobs but could all run speculative chunks, including while demand built
+its residency/job list. Queued chunks had no arrival deadline. They did query
+residency at consumption, so a stale chunk could skip resident pages, but
+could reread pages evicted since demand or race an in-flight demand read.
+These code paths support the scheduling diagnosis; no new runtime result is
+claimed here.
+
+07 defaults "'`LLAMA_EXPERT_PREGATE_ORDER` to `after` (unset or any value other
+than `before`). `before` preserves the old enqueue-before-demand call order
+for A/B; cancellation and concurrency controls still apply in both modes.
+In the CPU observer, the reviewable order is:
+
+```cpp
+if (ctx.expert_pregate_enabled) {
+    ctx.expert_pregate_arrive(il, selected); // cancel before demand
+    if (ctx.expert_pregate_before) { ctx.expert_pregate_hook(il, t); }
+}
+ctx.expert_fill_selected(il, selected); // demand for L first by default
+if (ctx.expert_pregate_enabled && !ctx.expert_pregate_before) {
+    ctx.expert_pregate_hook(il, t); // ORDER=after (default): enqueue L+1
+}
+```
+
+The cancel site in `expert_pregate_arrive`, before either demand fill or the
+optional old-order prediction, is:
+
+```cpp
+for (auto & entry : expert_fillers) { entry.second->cancel_async_through(il); }
+```
+
+`enqueue_async(ranges, il + 1)` tags every chunk with its destination layer.
+Under the dispatch mutex, `cancel_async_through` erases only queued chunks
+whose destination is <= the arriving layer, updates their batch pending
+counts, and accounts for cancellation. It never changes running chunks.
+At each new microbatch, `cancel_async_through(SIZE_MAX)` retires all queued
+work before layer numbering/prediction metadata reset. Running chunks keep
+their shared batch alive and finish normally, even across token boundaries.
+
+`LLAMA_EXPERT_PREGATE_MAX_INFLIGHT` defaults to 4 per file'"'s existing worker
+pool, clamped to that pool's thread count. Valid values are 1..256; unset,
+zero, negative, malformed, or larger values fall back to 4. Demand always
+wins dispatch: an exception-safe demand scope suppresses new async starts
+from before residency queries through demand completion (including optional
+populate). Workers still select demand jobs first. The cap counts running
+async chunks across all batches, with a slot released and workers notified
+on every completion, including IO errors. Running speculative IO is not
+preempted and may still duplicate demand IO; kernel IO priority is unchanged.
+With the experiment's 16 workers and cap 4, at least 12 workers remain
+available for demand. No additional threads or descriptors are introduced.
+
+"'`expert_pregate: stats` adds `cancelled_jobs` and `cancelled_bytes` (sum of
+page-aligned queued chunk lengths removed, not physical IO saved). Per-batch
+and filler counters also expose these fields; filler `max_inflight` is the
+observed high-water mark used by tests. Existing arrival counters are sampled
+before cancellation. `async_wait_ns_in_demand` is omitted: running snapshots
+do not measure overlap duration, and exact same-layer overlap would require
+per-layer completion timing/accounting on the worker hot path. No proxy is
+reported as actual demand wait time.
+
+The canonical header remains `cc/expert_fill/expert_fill.h`; both patches
+are generated using its verbatim bytes for `src/llama-expert-fill.h`.
+`test_cancel_before_start` freezes async dispatch at the demand-priority
+boundary and verifies current/older cancellation, future preservation,
+aligned-byte accounting, idempotence, drain completion, and subsequent reuse.
+`test_async_inflight_cap` exercises limits 1 and 2, default 4 and invalid
+fallback, with two batches, demand progress, recorded concurrency, and slot
+reuse. Existing cold IO, warm skip, async completion, and populate checks
+remain enabled.
+
+`cc/abrun/specs/J-OM10b.json` uses image
+`campaign/llamacpp:jetson-up1108-om10b`, the J-OM10 argv, and explicit order
+`base frd16 pg8b pg12b pg12b pg8b frd16 base`. The pg arms set K=8/12,
+ORDER=after, MAX_INFLIGHT=4, and retain J-OM10'"'s per-arm switch regexes.
+Compile/application proof is in "'`COMPILE-CHECK.txt`, section 07. No Docker,
+GPU, full engine build, commits, or experiment evidence edits are required.
+EOF
+cat > /tmp/j-om10b-verify.py <<'"'PY'
+from pathlib import Path
+import subprocess, shutil, hashlib, concurrent.futures, json
+root=Path('/home/muk/projects/siminfeng/campaign')
+patches=root/'cc/mmap_advice/patches'
+seq=Path('/tmp/j-om10b-check-seq'); combined=Path('/tmp/j-om10b-check-combined')
+log=['\\n07 / J-OM10b pre-gate scheduling syntax-only compile proof (no Docker/GPU/full build)\\n',
+     'Source: fresh cf34d311332e362198f0a410c466d1e940287d02 archives; engine reference unchanged.\\n',
+     'Canonical header: cc/expert_fill/expert_fill.h\\n']
+for name in ['07-pregate-sched.patch','combined-01-02-03-04-05-06-07.patch']:
+    log.append(f'{name} SHA256: {hashlib.sha256((patches/name).read_bytes()).hexdigest()}\\n')
+def run(args,cwd=root):
+    result=subprocess.run(args,cwd=cwd,text=True,capture_output=True)
+    record=f'\\n"'$ cd {cwd}'"\\n"'$ '"'+ ' '.join(map(str,args))+'\\nstdout:\\n'+(result.stdout or '(empty)\\n')+'stderr:\\n'+(result.stderr or '(empty)\\n')+f'exit {result.returncode}\\n'
+    if result.returncode:
+        print(record,flush=True)
+        raise RuntimeError('check failed')
+    return record
+for tree in [seq,combined]:
+    if tree.exists(): shutil.rmtree(tree)
+    tree.mkdir()
+    # Each verification tree starts from a fresh archive of the exact ref commit.
+    archive=subprocess.run(['git','-C',str(root/'ref/llama.cpp-up1108'),'archive','cf34d311'],check=True,capture_output=True).stdout
+    subprocess.run(['tar','-x','-C',str(tree)],input=archive,check=True)
+for name in ['01-mmap-advice-random.patch','02-router-prefetch.patch','03-expert-fill.patch','04-fill-phase.patch','05-fill-diag.patch','06-pregate.patch','07-pregate-sched.patch']:
+    for mode in ['--check',None]:
+        log.append(run(['git','apply']+([mode] if mode else [])+[str(patches/name)],seq))
+for mode in ['--check',None]:
+    log.append(run(['git','apply']+([mode] if mode else [])+[str(patches/'combined-01-02-03-04-05-06-07.patch')],combined))
+log.append(run(['diff','-r',str(seq),str(combined)]))
+log.append(run(['cmp',str(root/'cc/expert_fill/expert_fill.h'),str(combined/'src/llama-expert-fill.h')]))
+patch=(patches/'combined-01-02-03-04-05-06-07.patch').read_text()
+block=patch.split('diff --git a/src/llama-expert-fill.h b/src/llama-expert-fill.h\\n')[1].split('diff --git ',1)[0]
+extracted=''.join(line[1:] for line in block.splitlines(True) if line.startswith('+') and not line.startswith('+++'))
+assert extracted.encode()==(root/'cc/expert_fill/expert_fill.h').read_bytes()
+log.append('\\nA2 diff -r: exit 0, empty. A5 applied and full added-header extraction: byte-equal.\\n')
+print('Fresh sequential/combined application, A2, A5: PASS',flush=True)
+files=['ggml/src/ggml-backend.cpp','src/llama-context.cpp','src/llama-mmap.cpp','src/llama-model-loader.cpp','src/llama-model.cpp']
+def compile_one(file):
+    record=run(['g++','-std=c++17','-fsyntax-only','-pthread','-Iinclude','-Iggml/include','-Isrc','-Iggml/src',file],combined)
+    print(f'Syntax-only {file}: exit 0',flush=True)
+    return record
+with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+    log.extend(pool.map(compile_one,files))
+log.append(run(['make','-C','cc/expert_fill','test']))
+log.append(run(['python3','cc/abrun/abrun.py','cc/abrun/specs/J-OM10b.json','--dry-run']))
+spec=json.loads((root/'cc/abrun/specs/J-OM10b.json').read_text()); old=json.loads((root/'cc/abrun/specs/J-OM10.json').read_text())
+assert spec['argv']==old['argv']
+assert spec['explicit_order']==['base','frd16','pg8b','pg12b','pg12b','pg8b','frd16','base']
+for name,arm in spec['arms'].items():
+    assert arm['image']=='campaign/llamacpp:jetson-up1108-om10b'
+    if name in ['base','frd16']: assert arm['env']==old['arms'][name]['env']
+    else:
+        assert arm['switch_regex']==old['arms']['pg8']['switch_regex']
+        assert arm['env']['LLAMA_EXPERT_PREGATE_ORDER']=='after'
+        assert arm['env']['LLAMA_EXPERT_PREGATE_MAX_INFLIGHT']=='4'
+log.append('\\nA1 PASS includes test_cancel_before_start and test_async_inflight_cap.\\nA3 all five C++ units touched by 01-07: exit 0.\\nA4 exactly eight runs: base frd16 pg8b pg12b pg12b pg8b frd16 base.\\nA6 observer/cancel site quotes: README.md section 07.\\nasync_wait_ns_in_demand omitted; rationale in README.md section 07.\\n')
+with (root/'cc/expert_fill/COMPILE-CHECK.txt').open('a') as f: f.write(''.join(log))
+print('A1-A6 verification complete; COMPILE-CHECK 07 appended.',flush=True)
+PY
+python3 /tmp/j-om10b-verify.py" in /home/muk/projects/siminfeng/campaign
+exec
+/bin/bash -lc "rg -n 'diff --git' cc/mmap_advice/patches/combined-01-02-03-04-05-06-07.patch; sed -n '285,330p' cc/expert_fill/expert_fill.h; sed -n '395,455p' cc/expert_fill/expert_fill.h; git diff --stat -- cc/expert_fill cc/abrun/specs/J-OM10b.json cc/mmap_advice/patches/07-pregate-sched.patch; ls experiments/jetson/OM/J-OM10b 2>/dev/null" in /home/muk/projects/siminfeng/campaign
+ exited 2 in 0ms:
+1:diff --git a/ggml/include/ggml-backend.h b/ggml/include/ggml-backend.h
+16:diff --git a/ggml/src/ggml-backend.cpp b/ggml/src/ggml-backend.cpp
+87:diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+749:diff --git a/src/llama-context.h b/src/llama-context.h
+834:diff --git a/src/llama-expert-fill.h b/src/llama-expert-fill.h
+1227:diff --git a/src/llama-mmap.cpp b/src/llama-mmap.cpp
+1264:diff --git a/src/llama-model-loader.cpp b/src/llama-model-loader.cpp
+1295:diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+1367:diff --git a/src/llama-model.h b/src/llama-model.h
+                std::unique_lock<std::mutex> lock(mutex_);
+                ready_.wait(lock, [this] { return stopping_ || next_ < jobs_.size() ||
+                    (!demand_active_ && !async_queue_.empty() && async_running_ < async_limit_); });
+                if (stopping_) { return; }
+                if (next_ < jobs_.size()) {
+                    job = jobs_[next_++]; diagnostic = batch_diag_; populating = populating_;
+                } else {
+                    job = async_queue_.front().range; async = async_queue_.front().batch;
+                    async_queue_.pop_front(); ++async->running;
+                    ++async_running_;
+                    async_max_inflight_.store(std::max<uint64_t>(async_max_inflight_.load(), async_running_));
+                }
+            }
+            size_t bytes = 0; uint64_t syscalls = 0; int error = 0;
+            struct rusage before {}, after {};
+            if (diagnostic) { getrusage(RUSAGE_THREAD, &before); }
+            uint64_t populate_ns = 0, populate_calls = 0, populate_errors = 0;
+            if (populating) {
+                if (populate_.load() && !populate_unsupported().load()) {
+                    const auto start = std::chrono::steady_clock::now();
+                    ++populate_calls;
+                    if (madvise(mapping_ + job.offset, job.len, MADV_POPULATE_READ)) {
+                        ++populate_errors;
+                        if (errno == EINVAL) {
+                            populate_.store(false);
+                            if (!populate_unsupported().exchange(true)) { fprintf(stderr, "expert_fill: populate unsupported\n"); }
+                        } else { error = errno; }
+                    }
+                    populate_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - start).count();
+                }
+            } else if (async) {
+                // Query at consumption time, including when sync filled these pages meanwhile.
+                auto & resident = residency_[index];
+                if (mincore(mapping_ + job.offset, job.len, resident.data())) { error = errno; }
+                size_t pos = 0;
+                while (!error && pos < job.len) {
+                    if (resident[pos / page_] & 1) { pos = std::min(job.len, pos + page_); continue; }
+                    const size_t first = pos;
+                    do { pos = std::min(job.len, pos + page_); }
+                    while (pos < job.len && !(resident[pos / page_] & 1));
+                    size_t at = first;
+                    while (at < pos) {
+                        ++syscalls;
+                        const ssize_t n = pread(fd_, scratch_[index].data() + at, pos - at, off_t(job.offset + at));
+                        if (n < 0 && errno == EINTR) { continue; }
+
+ succeeded in 14980ms:
+Fresh sequential/combined application, A2, A5: PASS
+Syntax-only src/llama-mmap.cpp: exit 0
+Syntax-only ggml/src/ggml-backend.cpp: exit 0
+Syntax-only src/llama-context.cpp: exit 0
+Syntax-only src/llama-model-loader.cpp: exit 0
+Syntax-only src/llama-model.cpp: exit 0
+A1-A6 verification complete; COMPILE-CHECK 07 appended.
+
+exec
+/bin/bash -lc "git -C ref/llama.cpp-up1108 status --short; tail -12 cc/expert_fill/COMPILE-CHECK.txt; wc -l cc/mmap_advice/patches/07-pregate-sched.patch cc/mmap_advice/patches/combined-01-02-03-04-05-06-07.patch; rg -n '07 /|test_cancel_before_start|test_async_inflight_cap' cc/expert_fill/{README.md,COMPILE-CHECK.txt,test_expert_fill.cpp}" in /home/muk/projects/siminfeng/campaign
+ succeeded in 6ms:
+Run 6: pg8b  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/006-pg8b campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=8 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 7: frd16  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/007-frd16 campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 8: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/008-base campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=0 -e LLAMA_EXPERT_FILL_RANDOM=0 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+stderr:
+(empty)
+exit 0
+
+A1 PASS includes test_cancel_before_start and test_async_inflight_cap.
+A3 all five C++ units touched by 01-07: exit 0.
+A4 exactly eight runs: base frd16 pg8b pg12b pg12b pg8b frd16 base.
+A6 observer/cancel site quotes: README.md section 07.
+async_wait_ns_in_demand omitted; rationale in README.md section 07.
+  276 cc/mmap_advice/patches/07-pregate-sched.patch
+ 1385 cc/mmap_advice/patches/combined-01-02-03-04-05-06-07.patch
+ 1661 total
+cc/expert_fill/test_expert_fill.cpp:15:static void test_cancel_before_start(const char * path, void * map, size_t size, size_t page) {
+cc/expert_fill/test_expert_fill.cpp:44:    puts("PASS test_cancel_before_start (older/current/future batches, bytes, idempotence, drain)");
+cc/expert_fill/test_expert_fill.cpp:47:static void test_async_inflight_cap(const char * path, void * map, size_t size) {
+cc/expert_fill/test_expert_fill.cpp:77:    puts("PASS test_async_inflight_cap (1, 2, default 4, invalid fallback, demand progress, slot reuse)");
+cc/expert_fill/test_expert_fill.cpp:185:    test_cancel_before_start(path, map, size, page);
+cc/expert_fill/test_expert_fill.cpp:186:    test_async_inflight_cap(path, map, size);
+cc/expert_fill/COMPILE-CHECK.txt:352:07 / J-OM10b pre-gate scheduling syntax-only compile proof (no Docker/GPU/full build)
+cc/expert_fill/COMPILE-CHECK.txt:550:PASS test_cancel_before_start (older/current/future batches, bytes, idempotence, drain)
+cc/expert_fill/COMPILE-CHECK.txt:551:PASS test_async_inflight_cap (1, 2, default 4, invalid fallback, demand progress, slot reuse)
+cc/expert_fill/COMPILE-CHECK.txt:574:A1 PASS includes test_cancel_before_start and test_async_inflight_cap.
+cc/expert_fill/README.md:246:## 07 / J-OM10b: pre-gate scheduling
+cc/expert_fill/README.md:310:`test_cancel_before_start` freezes async dispatch at the demand-priority
+cc/expert_fill/README.md:313:`test_async_inflight_cap` exercises limits 1 and 2, default 4 and invalid
+
+codex
+Implemented [07 patch](/home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/07-pregate-sched.patch), combined 01–07 patch, and J-OM10b spec.
+
+Demand-first default, arrival cancellation, async cap, and cancellation stats are included.
+Validation passed: named cancel/cap tests, sequential/combined equality, header equality, five syntax checks, and exact eight-run dry-run order.
+[COMPILE-CHECK 07](/home/muk/projects/siminfeng/campaign/cc/expert_fill/COMPILE-CHECK.txt:352) records results; README includes observer/cancel-site quotes.
+`async_wait_ns_in_demand` omitted with rationale documented.
+Reference tree unchanged; no Docker/GPU/full build, commits, or evidence edits.
+tokens used
+55,325
+Implemented [07 patch](/home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/07-pregate-sched.patch), combined 01–07 patch, and J-OM10b spec.
+
+Demand-first default, arrival cancellation, async cap, and cancellation stats are included.
+Validation passed: named cancel/cap tests, sequential/combined equality, header equality, five syntax checks, and exact eight-run dry-run order.
+[COMPILE-CHECK 07](/home/muk/projects/siminfeng/campaign/cc/expert_fill/COMPILE-CHECK.txt:352) records results; README includes observer/cancel-site quotes.
+`async_wait_ns_in_demand` omitted with rationale documented.
+Reference tree unchanged; no Docker/GPU/full build, commits, or evidence edits.

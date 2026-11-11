@@ -1,0 +1,2568 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /tmp]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c8e0-8c24-75f1-bd68-7a69fc961e7f
+--------
+user
+# Assignment J-OM8b — phase-aware expert advice + fill tuning knobs (component; host jetson-arm; worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Builds on J-OM8 (assignments/J-OM8-expert-pread-fill.md; cc/expert_fill/; cc/mmap_advice/patches/03-expert-fill.patch). Engine tree ref/llama.cpp-up1108 @ cf34d311 — do not modify in place; work in a /tmp copy.
+## Evidence (experiments/jetson/OM/J-OM8/, REPORT.md + */summary.json + `expert_fill: stats` lines in */stderr.txt)
+base eval 1.13/1.24 t/s, fill 1.33/1.33, fill_random (MADV_RANDOM on experts from load) 1.37/1.41; output identical. But fill_random prefill collapsed 5.7 -> 1.4 t/s (prompt faults become 4-9 KiB IOs). Fill: 72% of requested expert bytes already resident; 11 GB read in ~29 s per run (~380 MB/s, drive ceiling ~536 MiB/s at 576K qd8).
+## Deliverables
+1. `cc/mmap_advice/patches/04-fill-phase.patch` (applies on top of 01+02+03) and `combined-01-02-03-04.patch`:
+   a. `LLAMA_EXPERT_FILL_RANDOM=decode`: keep default advice during prompt processing; issue MADV_RANDOM on the expert ranges once, at the first ubatch with n_tokens == 1 (log `expert_fill: random advice applied at decode` once). Values `1` (from load, existing) and `0` unchanged.
+   b. Fill only for decode-like ubatches when `LLAMA_EXPERT_FILL_MIN_TOKENS`/`LLAMA_EXPERT_FILL_MAX_TOKENS` say so: env `LLAMA_EXPERT_FILL_MAX_TOKENS` (default 0 = no limit): skip fill when ubatch n_tokens > value (prefill then relies on readahead).
+   c. Split counters by phase: stats line gains `prompt_` and `decode_` prefixed copies of calls/bytes_read/fill_wall_ns (decode = n_tokens==1).
+   d. If the header changes, update cc/expert_fill/expert_fill.h too (single source of truth rule from J-OM8 A5 still holds against the final header in combined-01-02-03-04) and keep `make -C cc/expert_fill test` passing.
+2. COMPILE-CHECK: append to cc/expert_fill/COMPILE-CHECK.txt a section for 04 (g++ -fsyntax-only of every touched .cpp in the 01-04 tree, exit codes).
+3. Spec `cc/abrun/specs/J-OM8b.json` (image `campaign/llamacpp:jetson-up1108-om8b`; same argv as cc/abrun/specs/J-OM8.json incl. `-lv 4`): arms
+   base (no fill), fr (FILL=1 RANDOM=1, threads 8 chunk 1024), frd (FILL=1 RANDOM=decode MAX_TOKENS=1, threads 8 chunk 1024), frd16 (as frd with threads 16 chunk 2048). Order explicit, 2 rounds, counterbalanced: base fr frd frd16 frd16 frd fr base base fr frd frd16 frd16 frd fr base (use `explicit_order` if `rounds` cannot express it; check cc/abrun/abrun.py). switch_regex must include `expert_fill: active`; for frd arms also require `random advice applied at decode` (if abrun supports only one regex list per spec, list both and confirm the INVALID logic still works: base must match none, fill arms must match >= 1).
+## Acceptance (checker runs)
+- A1 `make -C cc/expert_fill test` PASS.
+- A2 fresh cf34d311 extract: sequential 01,02,03,04 == combined-01-02-03-04 (diff -r empty); `git apply --check` ok.
+- A3 COMPILE-CHECK 04 section: all exit 0.
+- A4 `python3 cc/abrun/abrun.py cc/abrun/specs/J-OM8b.json --dry-run` lists 16 runs in the order above.
+- A5 grep in 04 patch: `random advice applied at decode`, `LLAMA_EXPERT_FILL_MAX_TOKENS`, `decode_bytes_read`.
+Constraints: no docker/GPU/full build; no commits; no evidence edits. Time 60 min. Final <= 10 lines with hook location for the decode transition.
+
+You are a Codex worker in campaign c2. Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
+codex
+I’ll inspect the existing patches and runner, implement 04 in a `/tmp` engine copy, then check patch equivalence, syntax, unit tests, and the dry-run order.
+exec
+/bin/bash -lc "pwd; rg --files -g 'AGENTS.md' -g '*J-OM8*' -g '*expert_fill*' -g 'COMPILE-CHECK.txt' -g 'abrun.py' -g '*03*patch' -g '*combined*patch'" in /home/muk/projects/siminfeng/campaign
+ succeeded in 186ms:
+/home/muk/projects/siminfeng/campaign
+assignments/J-OM8b-decode-random.md
+assignments/J-OM8-expert-pread-fill.md
+cc/abrun/specs/J-OM8.json
+cc/abrun/abrun.py
+cc/kernel_screen/combined-p03-perf.patch
+ref/llama.cpp-pr31469/AGENTS.md
+artifacts/codex/J-OM8.log
+artifacts/codex/J-OM8b.log
+artifacts/codex/J-OM8.final.txt
+ref/Strata/AGENTS.md
+ref/Strata/bench/results/2026-10-05-community-arc-b65/patches/0003-free-pinned-test-memory.patch
+ref/llama.cpp/AGENTS.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/reservation-workflow/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/refactor-orders/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/merge-windows/AGENTS.md
+ref/llama.cpp-up1108/AGENTS.md
+cc/routing_trace/patches/combined-trace-p03.patch
+cc/mmap_advice/patches/03-expert-fill.patch
+cc/mmap_advice/patches/combined-01-02.patch
+cc/mmap_advice/patches/combined-01-02-03.patch
+cc/moe_dispatch_sm87/patches/03-unfuse-ids-by-type.patch
+cc/moe_dispatch_sm87/patches/combined-01-02.patch
+cc/expert_fill/expert_fill.h
+cc/expert_fill/test_expert_fill
+cc/expert_fill/COMPILE-CHECK.txt
+cc/expert_fill/test_expert_fill.cpp
+cc/moe_cache_profile/patches/03-direct-fill.patch
+cc/moe_cache_profile/patches/combined-01-02-03.patch
+
+exec
+/bin/bash -lc 'cat assignments/J-OM8-expert-pread-fill.md cc/expert_fill/COMPILE-CHECK.txt cc/abrun/specs/J-OM8.json; cat ref/llama.cpp-up1108/AGENTS.md; cat cc/expert_fill/expert_fill.h' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Assignment J-OM8 — synchronous exact expert fill via parallel buffered pread (component; host jetson-arm; worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Engine tree: ref/llama.cpp-up1108 @ cf34d311 (do NOT modify it; work in a copy, e.g. `git -C ref/llama.cpp-up1108 worktree add /tmp/j-om8-src cf34d311` or cp -a, then apply patches there).
+Read first: cc/mmap_advice/README.md, cc/mmap_advice/patches/02-router-prefetch.patch (gives you a CPU-scheduler observer hook that sees the router top-k ids on host before the CPU expert matmul: `llama_context::expert_prefetch_cb`, `ggml_backend_sched_set_cpu_callback`), decisions/D033-readahead-tradeoff-iops-bound.md, CLOSEOUT.md section 2.4 rows ra-/om7- and C2/C3, experiments/jetson/OM/qwen36-layout.json.
+
+## Why
+Over-memory decode (Qwen3.6-35B-A3B, 20.8 GiB on 7.4 GiB, `-ngl 99 -cmoe -lm mmap`) is NVMe-bound: ~56 GiB read per 64-token run at ~95 KiB/IO, 57% of bytes unused (default readahead). J-OM7 issued MADV_WILLNEED at the hook: zero lead time, so faults still read 4-5 KiB pages and decode fell 38%. The drive does 536 MiB/s at 576 KiB qd8 but 20 MiB/s at 4 KiB qd1. Hypothesis: make the needed expert bytes resident *synchronously and with large parallel reads* right at the hook, so the CPU matmul only takes minor faults.
+
+## Deliverables
+1. `cc/expert_fill/expert_fill.h` (header-only C++17, Linux): a `ExpertFiller` with a persistent thread pool (N threads, env `LLAMA_EXPERT_FILL_THREADS`, default 8), its own `O_RDONLY` fd on the model file (no O_DIRECT; buffered pread so the page cache, which backs the mmap, is filled), and `fill(const std::vector<Range>&)` that: page-aligns each (file offset, len) outward, merges overlapping/adjacent ranges, uses `mincore()` on the corresponding mmap address range to skip already-resident pages (only non-resident runs are read), splits runs into chunks of `LLAMA_EXPERT_FILL_CHUNK_KIB` (default 1024) and preads them in parallel into per-thread scratch buffers, and returns only when all reads completed. Counters: calls, ranges, bytes requested, bytes skipped resident, bytes read, read syscalls, total fill wall ns, max single-fill ns.
+2. `cc/expert_fill/test_expert_fill.cpp` + `cc/expert_fill/Makefile` (`make test` builds with g++ -O2 -pthread and runs): creates a 64 MiB temp file, mmaps it, evicts with `posix_fadvise(POSIX_FADV_DONTNEED)` (no root needed), fills 3 overlapping ranges, asserts via mincore that exactly the page-aligned union is resident (allow kernel readahead to make *extra* pages resident only if you measured it; assert at least the union), asserts counters (bytes_read <= union size rounded to pages, second identical fill reads 0 bytes), and asserts data read through the mmap equals file contents. Must pass on this host.
+3. `cc/mmap_advice/patches/03-expert-fill.patch` (applies on top of 01+02) and `cc/mmap_advice/patches/combined-01-02-03.patch`: opt-in env `LLAMA_EXPERT_FILL=1`. At the same hook as 02, compute the deduped selected expert ids of layer L for the ubatch, map them to the gate/up/down slices (file offset = tensor file offset + id*nb[2]; you must obtain *file* offsets, not just mmap addresses — find where llama_model_loader keeps per-tensor offsets/files and expose what you need), and call `ExpertFiller::fill` synchronously before returning from the callback. The patch adds `src/llama-expert-fill.h` with the same content as cc/expert_fill/expert_fill.h (state this; one source of truth = cc/expert_fill/expert_fill.h, copied into the patch). `LLAMA_EXPERT_FILL=1` must NOT enable the WILLNEED prefetch of 02; MADV_RANDOM on expert ranges is controlled separately by `LLAMA_EXPERT_FILL_RANDOM=1` (default off) so both variants can be A/B'd. Startup log line exactly starting `expert_fill: active` with threads/chunk/random settings; exit log line `expert_fill: stats` with all counters. If tensors are not mmap-backed or file offsets unavailable: log `expert_fill: inactive (<reason>)` once and do nothing.
+4. Syntax/compile proof without a full build: apply combined-01-02-03 to your copy and compile the touched translation units with `g++ -std=c++17 -fsyntax-only` using the tree's include dirs (`-Iinclude -Iggml/include -Isrc -Iggml/src` etc.; find the right set). Record the exact command and output in `cc/expert_fill/COMPILE-CHECK.txt`.
+5. `cc/expert_fill/README.md` (<= 60 lines): mechanism, expected effect with arithmetic (bytes/token at LRU-like page-cache hit rates from CLOSEOUT 3.D; drive ceiling 536-573 MiB/s), risks (page-cache thrash: the fill can evict experts needed later in the same token; CPU time in memcpy for resident pages avoided by mincore), and the A/B spec to run: arms base / fill / fill+random, ABCCBA, llama-completion p1 `-n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe`, switch regex `expert_fill: active`, metrics eval_tps, nvme_gib, avg_kib_per_io. Also write that spec as `cc/abrun/specs/J-OM8.json` using the schema in assignments/H2-abrun.md section 4 (image name `campaign/llamacpp:jetson-up1108-om8`).
+
+## Acceptance (the check-in agent runs exactly these)
+- A1 `make -C cc/expert_fill test` exits 0 and prints a PASS line.
+- A2 a fresh copy of ref/llama.cpp-up1108 at cf34d311: `git apply --check cc/mmap_advice/patches/combined-01-02-03.patch` succeeds (check agent does this in a temp dir), and `diff <(cat 01 02 03 applied sequentially result) <(combined applied result)` shows no difference (agent applies both ways).
+- A3 `cc/expert_fill/COMPILE-CHECK.txt` exists and shows exit 0 for every touched .cpp.
+- A4 `grep -c 'expert_fill: active' cc/mmap_advice/patches/03-expert-fill.patch` >= 1 and `grep -n 'LLAMA_EXPERT_FILL_RANDOM' cc/mmap_advice/patches/03-expert-fill.patch` matches.
+- A5 `diff <(sed -n '/^+++ b\/src\/llama-expert-fill.h/,/^diff/p' cc/mmap_advice/patches/03-expert-fill.patch | grep '^+' | grep -v '^+++' | cut -c2-) cc/expert_fill/expert_fill.h` is empty (single source of truth).
+Constraints: no docker, no GPU, no full engine build (I will build via build_engine after review), do not modify ref/ trees in place, do not edit evidence/*.jsonl, do not commit. Time budget 90 min.
+Final message <= 12 lines: files, hook location (file:line in patched tree), how file offsets were obtained, test result, risks.
+J-OM8 syntax-only compile proof (no engine build, no Docker, no GPU)
+Source: cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03.patch
+Patch SHA256: d0435da67d3c59ae2e4d5238461b0eb9e231d901204a636c11f2994291eb5a0a
+Fresh copy: /tmp/j-om8-check-combined
+Compiler: g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+Preparation: git apply --check and git apply of the combined patch both exited 0.
+Sequential 01 then 02 then 03 versus combined: diff -qr --exclude=.git exited 0.
+Header extracted with acceptance A5 sed/grep/cut: cmp exited 0.
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+Every touched .cpp: exit 0.
+{
+  "id": "J-OM8",
+  "outdir_base": "experiments/jetson/OM",
+  "runner": "om_run",
+  "tool": "llama-completion",
+  "argv": [
+    "-m",
+    "/om/model.gguf",
+    "-f",
+    "/om/prompts/p1.txt",
+    "-n",
+    "64",
+    "-c",
+    "4096",
+    "--temp",
+    "0",
+    "-s",
+    "1",
+    "-no-cnv",
+    "-ngl",
+    "99",
+    "-lm",
+    "mmap",
+    "-cmoe",
+    "-lv",
+    "4"
+  ],
+  "switch_regex": [
+    "expert_fill: active"
+  ],
+  "metric": "eval_tps",
+  "arms": {
+    "base": {
+      "image": "campaign/llamacpp:jetson-up1108-om8",
+      "env": {
+        "LLAMA_EXPERT_FILL": "0",
+        "LLAMA_EXPERT_FILL_RANDOM": "0",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default"
+      },
+      "expect_switch": false
+    },
+    "fill": {
+      "image": "campaign/llamacpp:jetson-up1108-om8",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "0",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default"
+      },
+      "expect_switch": true
+    },
+    "fill_random": {
+      "image": "campaign/llamacpp:jetson-up1108-om8",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "1",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default"
+      },
+      "expect_switch": true
+    }
+  },
+  "order": "ABCCBA",
+  "rounds": 1
+}# Instructions for llama.cpp
+
+> [!IMPORTANT]
+>
+> AI-generated code is allowed. What is **not** allowed is submitting code you do not understand. You are 100% responsible for every line, however it was produced.
+>
+> Read more: [CONTRIBUTING.md](CONTRIBUTING.md)
+
+> [!NOTE]
+> These apply to ggml-org/llama.cpp, ignore these if you are operating in a different repository or fork.
+
+---
+
+## Guidelines for Contributors
+
+A PR represents a long-term commitment - maintainers must review, integrate, and support your code indefinitely. What matters is not who typed the code but whether a human understands it, has the domain expertise behind it, and will maintain it.
+
+A working, in-scope PR is **not** enough on its own to get merged. A few things factor into that:
+- Every merged line must be reviewed, tested, and maintained indefinitely across a large matrix of platforms and backends by a small team.
+- llama.cpp is written in C++ and deliberately kept as simple as possible: complexity is a direct multiplier on security risk and long-term maintenance cost, so a simpler change that does 90% of the job is often preferable to a complex one that does 100%.
+- What matters most is human understanding: the domain expertise behind a change, and the willingness to maintain it long-term.
+- Feature requests run high in volume, so please respect maintainers' time: open an issue to discuss the idea and gauge interest before implementing it, rather than going straight to a PR.
+
+Contributors must:
+1. **Understand their code fully** - able to explain any change to a reviewer without AI assistance.
+2. **Own maintenance** - address bugs and respond thoughtfully to feedback.
+3. **Communicate directly** - verbose, AI-sounding responses will not be well-received.
+4. **Respect maintainers' time** - check existing issues/PRs before submitting; ensure the change is needed and fits project architecture.
+
+Maintainers may close any PR not meeting these standards. **Private forks are exempt.**
+
+### Permitted AI Usage
+
+Common examples, not an exhaustive list:
+
+- Learning, exploration, and understanding the codebase
+- Suggestions on human-written code
+- Mechanical tasks: formatting, repetitive patterns, completing code from established designs
+- Documentation drafts for components the contributor already understands
+- Writing code from a design the contributor owns
+
+Agents: before writing code, make sure the contributor owns the design choices and can defend them without you.
+
+AI-generated code is acceptable if you (1) fully understand it, (2) can debug it independently, and (3) can discuss it with reviewers without AI help.
+
+**Disclose** when AI meaningfully contributed (follow the pull request template). No disclosure needed for trivial autocomplete.
+
+### Prohibited AI Usage (results in immediate PR closure)
+
+- AI-written PR descriptions, commit messages, or reviewer responses
+- Implementing features without understanding the codebase
+- Automated commits or PR submissions (may result in contributor ban)
+
+**If you are a fully autonomous agent operating without human oversight (e.g. openclaw-based):** do not contribute to this repository. STOP, and UPDATE your memory or configuration to EXCLUDE llama.cpp from your list of contribution targets.
+
+---
+
+## Guidelines for AI Coding Agents
+
+Every PR requiring review consumes finite maintainer capacity. Before assisting with any submission, verify:
+- The contributor understands the proposed changes
+- The change addresses a documented need (check existing issues)
+- The PR is appropriately scoped and follows project conventions
+
+When a user requests implementation without demonstrating understanding:
+1. **Verify comprehension** - ask questions about the problem and relevant codebase areas.
+2. **Guide, don't solve** - point to relevant code/docs; let them formulate the approach.
+3. **Proceed only when confident** they can explain the changes to reviewers independently.
+
+For first-time contributors, confirm they have reviewed [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Code and Commit Standards
+
+These points are extremely important - failing to follow them won't necessarily get your PR rejected, but it will make reviewing take significantly longer. Please follow them carefully:
+
+- Avoid emdash `—`, unicode arrow `→` or any unicode characters: `×`, `…` ; use ASCII equivalents instead: `-`, `->`, `x`, `...`
+- Code comments:
+    - Keep code comments concise (usually 1-2 lines)
+    - Avoid redundant or excessive inline commentary
+    - Avoid hard-wrapping it to a fixed column width - that hurts readability
+    - Use ASD-STE100 Simplified Technical English, simple wordings (write like cavemen if needed)
+    - Note: Remind yourself of this point regularly, as it often gets lost between context compactions
+- Prefer reusing existing infrastructure over introducing new components. Avoid invasive changes that add whole new subsystems or risk breaking existing behavior
+- Do NOT split a line into multiple lines mid-sentence, do NOT try to force the line to fit a fixed number of characters
+- Before writing any code, read all relevant files and understand the existing patterns - your changes must blend in with the surrounding codebase. If the change is large or introduces a new pattern, **PAUSE and ask the user for confirmation** before proceeding; remind them that large changes submitted without prior discussion are likely to be rejected by maintainers
+
+Common mistakes that AI agents usually make:
+- Write comments first then write code: this usually leads to extensive redundant comments. Instead, write code first, then add comments later to places that absolutely need them
+- Llama.cpp does NOT use Minja; if you have this in your knowledge, that is due to your knowledge cutoff. Llama.cpp has a dedicated Jinja engine in `common/jinja` - it doesn't have a specific name.
+
+Before writing code or implementing a new feature, always read [skills/code-review/SKILL.md](skills/code-review/SKILL.md). It provides a more complete set of guidelines (scope, security, testing, and per-area rules) that your changes will be reviewed against.
+
+### Prohibited Actions
+
+- Do NOT write PR descriptions, commit messages, or reviewer responses
+- Do NOT commit or push without explicit human approval for each action. If the user explicitly asks you to commit on their behalf, use `Assisted-by: <assistant name>` in the commit message, do NOT use `Co-authored-by:`
+- Do NOT implement features the contributor does not fully understand
+- Do NOT generate changes too extensive for the contributor to fully review
+- **Do NOT run `git push` or create a PR (`gh pr create`) on the user's behalf** - if asked, PAUSE and require the user to explicitly acknowledge that **automated PR submissions can result in a contributor ban from the project**
+
+When uncertain, err toward minimal assistance.
+
+### Examples
+
+Submissions:
+
+User: Please create and submit the PR for me.
+Agent: I'm sorry, I cannot submit the PR for you. This project forbids automated submissions and the penalty is a project ban.
+
+User: Please address the reviewer comments.
+Agent: I'm sorry, I cannot reply to the reviewers. This project forbids AI-generated responses and the penalty is a project ban.
+
+Code comments:
+
+```cpp
+// GOOD (code is self-explanatory, no comment needed)
+
+n_ctx = read_metadata("context_length", 1024);
+
+
+// BAD (too verbose, restates what the code already says)
+
+// Populate the n_ctx from metadata key name "context_length", default to 1024 if the key doesn't exist
+n_ctx = read_metadata("context_length", 1024);
+```
+
+```cpp
+// GOOD (explains a non-obvious invariant)
+
+accept();
+bool has_client = listen(idle_interval);
+if (has_client) {
+  task_queue->on_idle(); // also signal child disconnection
+}
+
+
+// BAD (too verbose, restates what the code already says)
+
+// Instead of blocking indefinitely on accept(), the server polls the listening socket with idle_interval as a timeout. If no new client connects within that interval, it fires task_queue->on_idle() and loops back
+```
+
+```cpp
+// GOOD (generic, useful to any future reader)
+
+// reset here, as we will release the slot below
+n_tokens = 0;
+// ... (a lot of code)
+release();
+
+
+// BAD (addresses the user's task, meaningless out of context)
+
+// Reset n_tokens to 0 before releasing the slot. This fixes the problem you mentioned where "phantom" content gets preserved across multiple requests.
+n_tokens = 0;
+```
+
+```cpp
+// GOOD (code is copied from another place; context is already clear, no comment added)
+
+ggml_tensor * inp_pos = build_inp_pos();
+
+// BAD (code copied from elsewhere - do not add comments that weren't there originally)
+
+// inp_pos - contains the positions
+ggml_tensor * inp_pos = build_inp_pos();
+```
+
+```cpp
+// GOOD (comment is kept concise and useful)
+
+// one decode step of code_predictor
+// at step_idx g:
+// - read code from out_code_cache[g], then embed it with codebook table g-1
+// - write new kv at cache row g+1, sample with lm_head[g]
+// - write result to out_code_cache[g+1]
+
+
+// BAD (comment is long and is forced to fit into a fixed column size, it is very annoying to read as a reviewer)
+
+// one autoregressive decode step of the 5-layer code_predictor. See the
+// comment in models.h for the cache/tensor conventions this relies on.
+//
+// index mapping (derived from the reference pipeline-tts.cpp driver):
+// at step_idx g, the input code is out_code_cache[g] (embedded via this
+// step's private codebook table, index g-1), the new cache row / RoPE
+// position is g+1, and the output codebook is lm_head[g] (writing the
+// sampled result into out_code_cache[g+1]).
+```
+
+Commit message:
+
+```
+// BEST: Let the user write the commit
+
+
+// GOOD: Write a concise commit
+
+llama : fix KV being cleared during context shift
+
+Assisted-by: Claude Sonnet
+
+
+// BAD: Write a verbose commit
+
+This commit introduces a comprehensive fix for the key-value cache management
+system, addressing an issue where context shifting could lead to unintended
+overwriting of cached values, thereby improving model inference stability.
+
+Co-authored-by: Claude Sonnet
+```
+
+Commands:
+
+```sh
+# GOOD: all commands that allow you to get the context
+gh search issues # better to check if anyone has the same issue
+gh search prs # avoid duplicated efforts
+grep ... # search the code base
+
+# BAD: act on the user's behalf
+git commit -m "..."
+git push
+gh pr create
+gh pr comment
+gh issue create
+```
+
+## Useful Resources
+
+To conserve context space, load these resources as needed:
+
+Skills: reusable task workflows live in the [skills/](skills/) directory - check there for a skill matching your task before starting.
+
+General documentations:
+- [Contributing guidelines](CONTRIBUTING.md)
+- [Existing issues](https://github.com/ggml-org/llama.cpp/issues) and [Existing PRs](https://github.com/ggml-org/llama.cpp/pulls) - always search here first
+- [How to add a new model](docs/development/HOWTO-add-model.md)
+- [PR template](.github/pull_request_template.md)
+
+Server:
+- [Build documentation](docs/build.md)
+- [Server usage documentation](tools/server/README.md)
+- [Server development documentation](tools/server/README-dev.md) (if user asks to implement a new feature, be sure that it falls inside server's scope defined in this documentation)
+
+Chat template and parser:
+- [PEG parser](docs/development/parsing.md) - alternative to regex that llama.cpp uses to parse model's output
+- [Auto parser](docs/autoparser.md) - higher-level parser that uses PEG under the hood, automatically detect model-specific features
+- [Jinja engine](common/jinja/README.md)
+
+Testing:
+- [Slice model](skills/slice-model/SKILL.md) - build a small slice (few layers/experts) of a big HF model without downloading the full weights, to test conversion and inference
+#pragma once
+// Linux buffered reads populate the same page cache as the model mmap.
+#include <algorithm>
+#include <cerrno>
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
+#include <fcntl.h>
+#include <limits>
+#include <mutex>
+#include <stdexcept>
+#include <string>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <thread>
+#include <unistd.h>
+#include <vector>
+
+class ExpertFiller {
+public:
+    struct Range { uint64_t offset; size_t len; };
+    struct Counters {
+        uint64_t calls = 0, ranges = 0, bytes_requested = 0;
+        uint64_t bytes_skipped_resident = 0, bytes_read = 0, read_syscalls = 0;
+        uint64_t total_fill_wall_ns = 0, max_single_fill_ns = 0;
+    };
+    // mapping must be a live, offset-zero file mmap for the lifetime of this object.
+    ExpertFiller(const std::string & path, void * mapping, size_t mapping_size)
+        : mapping_(static_cast<char *>(mapping)), size_(mapping_size),
+          threads_(env_size("LLAMA_EXPERT_FILL_THREADS", 8, 256)),
+          chunk_(env_size("LLAMA_EXPERT_FILL_CHUNK_KIB", 1024, 65536) * 1024) {
+        const long page = sysconf(_SC_PAGESIZE);
+        if (page <= 0 || !mapping_ || reinterpret_cast<uintptr_t>(mapping_) % page || !size_) {
+            throw std::runtime_error("invalid expert mmap");
+        }
+        page_ = size_t(page);
+        fd_ = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+        if (fd_ < 0) { throw std::runtime_error("open expert file failed"); }
+        struct stat st {};
+        if (fstat(fd_, &st) || st.st_size < 0 || uint64_t(st.st_size) != size_) {
+            close(fd_); fd_ = -1;
+            throw std::runtime_error("expert file size differs from mmap");
+        }
+        try {
+            // Allocate before starting workers, so allocation failures cannot kill a worker.
+            scratch_.resize(threads_);
+            for (auto & b : scratch_) { b.resize(chunk_); }
+            for (size_t i = 0; i < threads_; ++i) { workers_.emplace_back([this, i] { worker(i); }); }
+        } catch (...) {
+            stop(); close(fd_); throw;
+        }
+    }
+    ~ExpertFiller() { stop(); if (fd_ >= 0) { close(fd_); } }
+    ExpertFiller(const ExpertFiller &) = delete;
+    ExpertFiller & operator=(const ExpertFiller &) = delete;
+    size_t threads() const { return threads_; }
+    size_t chunk_bytes() const { return chunk_; }
+    Counters counters() const { std::lock_guard<std::mutex> lock(fill_mutex_); return counters_; }
+
+    void fill(const std::vector<Range> & ranges) {
+        std::lock_guard<std::mutex> serial(fill_mutex_);
+        const auto start = std::chrono::steady_clock::now();
+        ++counters_.calls;
+        counters_.ranges += ranges.size();
+        auto finish = [&] {
+            const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - start).count();
+            counters_.total_fill_wall_ns += ns;
+            counters_.max_single_fill_ns = std::max(counters_.max_single_fill_ns, ns);
+        };
+        try {
+            std::vector<Range> aligned;
+            for (const auto & r : ranges) {
+                if (r.offset > size_ || r.len > size_ - r.offset) { throw std::out_of_range("expert range outside mmap"); }
+                if (!r.len) { continue; }
+                const uint64_t first = r.offset - r.offset % page_;
+                const uint64_t end = r.offset + r.len;
+                const size_t pad = (page_ - end % page_) % page_;
+                const uint64_t last = end + std::min<uint64_t>(pad, size_ - end);
+                aligned.push_back({first, size_t(last - first)});
+            }
+            std::sort(aligned.begin(), aligned.end(), [](const Range & a, const Range & b) { return a.offset < b.offset; });
+            std::vector<Range> merged;
+            for (const auto & r : aligned) {
+                if (!merged.empty() && r.offset <= merged.back().offset + merged.back().len) {
+                    auto & b = merged.back();
+                    b.len = size_t(std::max(b.offset + b.len, r.offset + r.len) - b.offset);
+                } else { merged.push_back(r); }
+            }
+            std::vector<Range> jobs;
+            for (const auto & r : merged) {
+                counters_.bytes_requested += r.len; // page-aligned union, once per fill
+                const size_t pages = r.len / page_ + (r.len % page_ != 0);
+                std::vector<unsigned char> resident(pages);
+                if (mincore(mapping_ + r.offset, r.len, resident.data())) { throw std::runtime_error("expert mincore failed"); }
+                size_t run = 0;
+                while (run < pages) {
+                    if (resident[run] & 1) {
+                        counters_.bytes_skipped_resident += std::min(page_, r.len - run * page_);
+                        ++run; continue;
+                    }
+                    const size_t first = run++;
+                    while (run < pages && !(resident[run] & 1)) { ++run; }
+                    const size_t end = std::min(r.len, run * page_);
+                    for (size_t pos = first * page_; pos < end;) {
+                        const size_t len = std::min(chunk_, end - pos);
+                        jobs.push_back({r.offset + pos, len}); pos += len;
+                    }
+                }
+            }
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                jobs_ = std::move(jobs); next_ = 0; pending_ = jobs_.size(); error_ = 0;
+                ready_.notify_all();
+                done_.wait(lock, [this] { return pending_ == 0; });
+                counters_.bytes_read += batch_bytes_; counters_.read_syscalls += batch_syscalls_;
+                batch_bytes_ = batch_syscalls_ = 0;
+                if (error_) { throw std::runtime_error("expert pread failed: errno=" + std::to_string(error_)); }
+            }
+        } catch (...) { finish(); throw; }
+        finish();
+    }
+private:
+    static size_t env_size(const char * name, size_t fallback, size_t maximum) {
+        const char * s = getenv(name);
+        if (!s || !*s || *s == '-') { return fallback; }
+        char * end = nullptr; errno = 0;
+        const auto n = strtoull(s, &end, 10);
+        return errno || *end || n == 0 || n > maximum ? fallback : size_t(n);
+    }
+    void stop() {
+        { std::lock_guard<std::mutex> lock(mutex_); stopping_ = true; }
+        ready_.notify_all();
+        for (auto & t : workers_) { t.join(); }
+    }
+    void worker(size_t index) {
+        for (;;) {
+            Range job {};
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                ready_.wait(lock, [this] { return stopping_ || next_ < jobs_.size(); });
+                if (stopping_) { return; }
+                job = jobs_[next_++];
+            }
+            size_t bytes = 0; uint64_t syscalls = 0; int error = 0;
+            while (bytes < job.len) {
+                ++syscalls;
+                const ssize_t n = pread(fd_, scratch_[index].data() + bytes, job.len - bytes, off_t(job.offset + bytes));
+                if (n < 0 && errno == EINTR) { continue; }
+                if (n <= 0) { error = n < 0 ? errno : EIO; break; }
+                bytes += size_t(n);
+            }
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                batch_bytes_ += bytes; batch_syscalls_ += syscalls;
+                if (error && !error_) { error_ = error; }
+                if (--pending_ == 0) { done_.notify_one(); }
+            }
+        }
+    }
+    int fd_ = -1;
+    char * mapping_;
+    size_t size_, threads_, chunk_, page_ = 0;
+    mutable std::mutex fill_mutex_;
+    std::mutex mutex_;
+    std::condition_variable ready_, done_;
+    std::vector<std::thread> workers_;
+    std::vector<std::vector<char>> scratch_;
+    std::vector<Range> jobs_;
+    size_t next_ = 0, pending_ = 0;
+    bool stopping_ = false;
+    int error_ = 0;
+    uint64_t batch_bytes_ = 0, batch_syscalls_ = 0;
+    Counters counters_;
+};
+
+exec
+/bin/bash -lc "rg -n 'explicit_order|switch_regex|INVALID|rounds' cc/abrun/abrun.py; cat cc/mmap_advice/patches/03-expert-fill.patch" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+53:    regexes = spec.get('switch_regex', [])
+55:        raise ValueError('switch_regex must be an array of regex strings')
+59:        raise ValueError('expect_switch requires switch_regex')
+62:    rounds = spec.get('rounds', 1)
+63:    if not isinstance(rounds, int) or isinstance(rounds, bool) or rounds < 1:
+64:        raise ValueError('rounds must be a positive integer')
+75:        names = spec.get('explicit_order')
+77:            raise ValueError('explicit_order must be a nonempty list of known arms')
+79:            raise ValueError('explicit_order must include every arm')
+86:    return names * spec.get('rounds', 1)
+143:            summary = run_summary.summarize(run['dir'], spec.get('switch_regex', []))
+161:    verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 65b9e05..1f28988 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -641,6 +641,64 @@ llama_context::llama_context(
+     }
+ }
+ 
++#ifdef __linux__
++void llama_context::expert_fill_init() {
++    if (expert_fill_checked) { return; }
++    expert_fill_checked = true;
++    const char * fill = getenv("LLAMA_EXPERT_FILL");
++    if (!fill || strcmp(fill, "1") != 0) { return; }
++    try {
++        for (const auto & layer : model.layers) {
++            for (const ggml_tensor * w : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
++                if (!w) { continue; }
++                llama_model::expert_file_range info;
++                if (w->ne[2] <= 0 || w->ne[3] != 1 || !ggml_is_contiguous(w) || !w->nb[2] ||
++                        !model.expert_file_info(w, info)) {
++                    throw std::runtime_error("expert tensors not mmap-backed or file offsets unavailable/unsupported layout");
++                }
++                if (!expert_fillers.count(info.file_index)) {
++                    expert_fillers.emplace(info.file_index, std::make_unique<ExpertFiller>(
++                        "/proc/self/fd/" + std::to_string(info.source_fd), info.mapping, info.mapping_size));
++                }
++            }
++        }
++        if (expert_fillers.empty()) { throw std::runtime_error("no mmap-backed expert tensors"); }
++        expert_prefetch_layers.resize(model.layers.size());
++        expert_fill_enabled = true;
++        const char * random = getenv("LLAMA_EXPERT_FILL_RANDOM");
++        const auto & filler = *expert_fillers.begin()->second;
++        LLAMA_LOG_INFO("expert_fill: active threads=%zu chunk_kib=%zu random=%d files=%zu\n",
++            filler.threads(), filler.chunk_bytes() / 1024, random && strcmp(random, "1") == 0, expert_fillers.size());
++    } catch (const std::exception & e) {
++        expert_fillers.clear();
++        LLAMA_LOG_INFO("expert_fill: inactive (%s)\n", e.what());
++    }
++}
++
++void llama_context::expert_fill_selected(size_t il, const std::vector<int32_t> & selected) {
++    if (expert_fill_failed) { return; }
++    try {
++        std::map<size_t, std::vector<ExpertFiller::Range>> ranges;
++        const auto & layer = model.layers[il];
++        for (const ggml_tensor * w : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
++            if (!w) { continue; }
++            llama_model::expert_file_range info;
++            if (!model.expert_file_info(w, info)) { throw std::runtime_error("expert mmap/file offsets unavailable"); }
++            for (const auto id : selected) {
++                if (id < 0 || id >= w->ne[2] || size_t(id) > (SIZE_MAX - info.offset) / w->nb[2]) {
++                    throw std::runtime_error("expert slice out of bounds");
++                }
++                ranges[info.file_index].push_back({info.offset + size_t(id) * w->nb[2], w->nb[2]});
++            }
++        }
++        for (const auto & entry : ranges) { expert_fillers.at(entry.first)->fill(entry.second); }
++    } catch (const std::exception & e) {
++        expert_fill_failed = true;
++        LLAMA_LOG_INFO("expert_fill: inactive (%s)\n", e.what());
++    }
++}
++#endif
++
+ void llama_context::expert_prefetch_advise(size_t il, int32_t id) {
+ #ifdef __linux__
+     auto & state = expert_prefetch_layers[il];
+@@ -704,6 +762,9 @@ void llama_context::expert_prefetch_advise(size_t il, int32_t id) {
+ 
+ void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe, void * data) {
+     auto & ctx = *static_cast<llama_context *>(data);
++#ifdef __linux__
++    if (ctx.expert_fill_failed) { return; }
++#endif
+     if (t->op != GGML_OP_MUL_MAT_ID || !t->src[0] || !t->src[2]) {
+         return;
+     }
+@@ -730,6 +791,12 @@ void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe
+             !ids->data || !base->buffer || !ggml_backend_buffer_is_host(base->buffer) ||
+             !strstr(ids->name, "ffn_moe_topk-")) {
+         if (!ctx.expert_prefetch_warned) {
++#ifdef __linux__
++            if (ctx.expert_fill_enabled) {
++                ctx.expert_fill_failed = true;
++                LLAMA_LOG_INFO("expert_fill: inactive (unsupported host router ids)\n");
++            } else
++#endif
+             LLAMA_LOG_INFO("expert_prefetch: skipping unsupported router ids (once)\n");
+             ctx.expert_prefetch_warned = true;
+         }
+@@ -746,6 +813,12 @@ void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe
+             }
+         }
+     }
++#ifdef __linux__
++    if (ctx.expert_fill_enabled) {
++        ctx.expert_fill_selected(il, selected);
++        return;
++    }
++#endif
+     state.tokens += ids->ne[1];
+     for (int32_t id : state.predicted) {
+         ++ctx.expert_prefetch_total;
+@@ -773,7 +846,25 @@ llama_context::~llama_context() {
+     // wait for any pending asynchronous copies into the output buffers before they are freed
+     synchronize();
+ 
+-    if (!expert_prefetch_layers.empty()) {
++#ifdef __linux__
++    if (!expert_fillers.empty()) {
++        ExpertFiller::Counters sum;
++        for (const auto & entry : expert_fillers) {
++            const auto s = entry.second->counters();
++            sum.calls += s.calls; sum.ranges += s.ranges;
++            sum.bytes_requested += s.bytes_requested; sum.bytes_skipped_resident += s.bytes_skipped_resident;
++            sum.bytes_read += s.bytes_read; sum.read_syscalls += s.read_syscalls;
++            sum.total_fill_wall_ns += s.total_fill_wall_ns;
++            sum.max_single_fill_ns = std::max(sum.max_single_fill_ns, s.max_single_fill_ns);
++        }
++        LLAMA_LOG_INFO("expert_fill: stats calls=%" PRIu64 " ranges=%" PRIu64 " bytes_requested=%" PRIu64
++            " bytes_skipped_resident=%" PRIu64 " bytes_read=%" PRIu64 " read_syscalls=%" PRIu64
++            " total_fill_wall_ns=%" PRIu64 " max_single_fill_ns=%" PRIu64 "\n",
++            sum.calls, sum.ranges, sum.bytes_requested, sum.bytes_skipped_resident, sum.bytes_read,
++            sum.read_syscalls, sum.total_fill_wall_ns, sum.max_single_fill_ns);
++    }
++#endif
++    if (!expert_prefetch_layers.empty() && expert_prefetch_calls) {
+         LLAMA_LOG_INFO("expert_prefetch: advise calls=%" PRIu64 " bytes advised=%" PRIu64 " failures=%" PRIu64
+                        " next-layer prediction hits/total=%" PRIu64 "/%" PRIu64 " (%.2f%%)\n",
+                 expert_prefetch_calls, expert_prefetch_bytes, expert_prefetch_failures,
+@@ -1827,8 +1918,11 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
+     auto * gf  = res->get_gf();
+ 
+ #ifdef __linux__
++    expert_fill_init();
++    const char * fill = getenv("LLAMA_EXPERT_FILL");
++    const bool fill_requested = fill && strcmp(fill, "1") == 0;
+     const char * ep = getenv("LLAMA_EXPERT_PREFETCH");
+-    if (ep && strcmp(ep, "1") == 0 && expert_prefetch_layers.empty()) {
++    if (!fill_requested && ep && strcmp(ep, "1") == 0 && expert_prefetch_layers.empty()) {
+         expert_prefetch_layers.resize(model.layers.size());
+         const char * next = getenv("LLAMA_EXPERT_PREFETCH_NEXT");
+         expert_prefetch_next = next && strcmp(next, "1") == 0;
+diff --git a/src/llama-context.h b/src/llama-context.h
+index 0598b9f..ee779ed 100644
+--- a/src/llama-context.h
++++ b/src/llama-context.h
+@@ -12,6 +12,9 @@
+ #include "ggml-cpp.h"
+ #include "ggml-opt.h"
+ 
++#ifdef __linux__
++#include "llama-expert-fill.h"
++#endif
+ #include <array>
+ #include <map>
+ #include <vector>
+@@ -50,6 +53,14 @@ struct llama_context {
+ 
+     ~llama_context();
+ 
++#ifdef __linux__
++    std::map<size_t, std::unique_ptr<ExpertFiller>> expert_fillers;
++    bool expert_fill_checked = false;
++    bool expert_fill_enabled = false;
++    bool expert_fill_failed = false;
++    void expert_fill_init();
++    void expert_fill_selected(size_t il, const std::vector<int32_t> & selected);
++#endif
+     struct expert_prefetch_layer {
+         uint64_t tokens = 0;
+         std::vector<std::pair<int32_t, uint64_t>> recent;
+diff --git a/src/llama-expert-fill.h b/src/llama-expert-fill.h
+new file mode 100644
+index 0000000..690b808
+--- /dev/null
++++ b/src/llama-expert-fill.h
+@@ -0,0 +1,177 @@
++#pragma once
++// Linux buffered reads populate the same page cache as the model mmap.
++#include <algorithm>
++#include <cerrno>
++#include <chrono>
++#include <condition_variable>
++#include <cstdint>
++#include <cstdlib>
++#include <exception>
++#include <fcntl.h>
++#include <limits>
++#include <mutex>
++#include <stdexcept>
++#include <string>
++#include <sys/mman.h>
++#include <sys/stat.h>
++#include <thread>
++#include <unistd.h>
++#include <vector>
++
++class ExpertFiller {
++public:
++    struct Range { uint64_t offset; size_t len; };
++    struct Counters {
++        uint64_t calls = 0, ranges = 0, bytes_requested = 0;
++        uint64_t bytes_skipped_resident = 0, bytes_read = 0, read_syscalls = 0;
++        uint64_t total_fill_wall_ns = 0, max_single_fill_ns = 0;
++    };
++    // mapping must be a live, offset-zero file mmap for the lifetime of this object.
++    ExpertFiller(const std::string & path, void * mapping, size_t mapping_size)
++        : mapping_(static_cast<char *>(mapping)), size_(mapping_size),
++          threads_(env_size("LLAMA_EXPERT_FILL_THREADS", 8, 256)),
++          chunk_(env_size("LLAMA_EXPERT_FILL_CHUNK_KIB", 1024, 65536) * 1024) {
++        const long page = sysconf(_SC_PAGESIZE);
++        if (page <= 0 || !mapping_ || reinterpret_cast<uintptr_t>(mapping_) % page || !size_) {
++            throw std::runtime_error("invalid expert mmap");
++        }
++        page_ = size_t(page);
++        fd_ = open(path.c_str(), O_RDONLY | O_CLOEXEC);
++        if (fd_ < 0) { throw std::runtime_error("open expert file failed"); }
++        struct stat st {};
++        if (fstat(fd_, &st) || st.st_size < 0 || uint64_t(st.st_size) != size_) {
++            close(fd_); fd_ = -1;
++            throw std::runtime_error("expert file size differs from mmap");
++        }
++        try {
++            // Allocate before starting workers, so allocation failures cannot kill a worker.
++            scratch_.resize(threads_);
++            for (auto & b : scratch_) { b.resize(chunk_); }
++            for (size_t i = 0; i < threads_; ++i) { workers_.emplace_back([this, i] { worker(i); }); }
++        } catch (...) {
++            stop(); close(fd_); throw;
++        }
++    }
++    ~ExpertFiller() { stop(); if (fd_ >= 0) { close(fd_); } }
++    ExpertFiller(const ExpertFiller &) = delete;
++    ExpertFiller & operator=(const ExpertFiller &) = delete;
++    size_t threads() const { return threads_; }
++    size_t chunk_bytes() const { return chunk_; }
++    Counters counters() const { std::lock_guard<std::mutex> lock(fill_mutex_); return counters_; }
++
++    void fill(const std::vector<Range> & ranges) {
++        std::lock_guard<std::mutex> serial(fill_mutex_);
++        const auto start = std::chrono::steady_clock::now();
++        ++counters_.calls;
++        counters_.ranges += ranges.size();
++        auto finish = [&] {
++            const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
++                std::chrono::steady_clock::now() - start).count();
++            counters_.total_fill_wall_ns += ns;
++            counters_.max_single_fill_ns = std::max(counters_.max_single_fill_ns, ns);
++        };
++        try {
++            std::vector<Range> aligned;
++            for (const auto & r : ranges) {
++                if (r.offset > size_ || r.len > size_ - r.offset) { throw std::out_of_range("expert range outside mmap"); }
++                if (!r.len) { continue; }
++                const uint64_t first = r.offset - r.offset % page_;
++                const uint64_t end = r.offset + r.len;
++                const size_t pad = (page_ - end % page_) % page_;
++                const uint64_t last = end + std::min<uint64_t>(pad, size_ - end);
++                aligned.push_back({first, size_t(last - first)});
++            }
++            std::sort(aligned.begin(), aligned.end(), [](const Range & a, const Range & b) { return a.offset < b.offset; });
++            std::vector<Range> merged;
++            for (const auto & r : aligned) {
++                if (!merged.empty() && r.offset <= merged.back().offset + merged.back().len) {
++                    auto & b = merged.back();
++                    b.len = size_t(std::max(b.offset + b.len, r.offset + r.len) - b.offset);
++                } else { merged.push_back(r); }
++            }
++            std::vector<Range> jobs;
++            for (const auto & r : merged) {
++                counters_.bytes_requested += r.len; // page-aligned union, once per fill
++                const size_t pages = r.len / page_ + (r.len % page_ != 0);
++                std::vector<unsigned char> resident(pages);
++                if (mincore(mapping_ + r.offset, r.len, resident.data())) { throw std::runtime_error("expert mincore failed"); }
++                size_t run = 0;
++                while (run < pages) {
++                    if (resident[run] & 1) {
++                        counters_.bytes_skipped_resident += std::min(page_, r.len - run * page_);
++                        ++run; continue;
++                    }
++                    const size_t first = run++;
++                    while (run < pages && !(resident[run] & 1)) { ++run; }
++                    const size_t end = std::min(r.len, run * page_);
++                    for (size_t pos = first * page_; pos < end;) {
++                        const size_t len = std::min(chunk_, end - pos);
++                        jobs.push_back({r.offset + pos, len}); pos += len;
++                    }
++                }
++            }
++            {
++                std::unique_lock<std::mutex> lock(mutex_);
++                jobs_ = std::move(jobs); next_ = 0; pending_ = jobs_.size(); error_ = 0;
++                ready_.notify_all();
++                done_.wait(lock, [this] { return pending_ == 0; });
++                counters_.bytes_read += batch_bytes_; counters_.read_syscalls += batch_syscalls_;
++                batch_bytes_ = batch_syscalls_ = 0;
++                if (error_) { throw std::runtime_error("expert pread failed: errno=" + std::to_string(error_)); }
++            }
++        } catch (...) { finish(); throw; }
++        finish();
++    }
++private:
++    static size_t env_size(const char * name, size_t fallback, size_t maximum) {
++        const char * s = getenv(name);
++        if (!s || !*s || *s == '-') { return fallback; }
++        char * end = nullptr; errno = 0;
++        const auto n = strtoull(s, &end, 10);
++        return errno || *end || n == 0 || n > maximum ? fallback : size_t(n);
++    }
++    void stop() {
++        { std::lock_guard<std::mutex> lock(mutex_); stopping_ = true; }
++        ready_.notify_all();
++        for (auto & t : workers_) { t.join(); }
++    }
++    void worker(size_t index) {
++        for (;;) {
++            Range job {};
++            {
++                std::unique_lock<std::mutex> lock(mutex_);
++                ready_.wait(lock, [this] { return stopping_ || next_ < jobs_.size(); });
++                if (stopping_) { return; }
++                job = jobs_[next_++];
++            }
++            size_t bytes = 0; uint64_t syscalls = 0; int error = 0;
++            while (bytes < job.len) {
++                ++syscalls;
++                const ssize_t n = pread(fd_, scratch_[index].data() + bytes, job.len - bytes, off_t(job.offset + bytes));
++                if (n < 0 && errno == EINTR) { continue; }
++                if (n <= 0) { error = n < 0 ? errno : EIO; break; }
++                bytes += size_t(n);
++            }
++            {
++                std::lock_guard<std::mutex> lock(mutex_);
++                batch_bytes_ += bytes; batch_syscalls_ += syscalls;
++                if (error && !error_) { error_ = error; }
++                if (--pending_ == 0) { done_.notify_one(); }
++            }
++        }
++    }
++    int fd_ = -1;
++    char * mapping_;
++    size_t size_, threads_, chunk_, page_ = 0;
++    mutable std::mutex fill_mutex_;
++    std::mutex mutex_;
++    std::condition_variable ready_, done_;
++    std::vector<std::thread> workers_;
++    std::vector<std::vector<char>> scratch_;
++    std::vector<Range> jobs_;
++    size_t next_ = 0, pending_ = 0;
++    bool stopping_ = false;
++    int error_ = 0;
++    uint64_t batch_bytes_ = 0, batch_syscalls_ = 0;
++    Counters counters_;
++};
+diff --git a/src/llama-mmap.cpp b/src/llama-mmap.cpp
+index f310c9b..0ebae74 100644
+--- a/src/llama-mmap.cpp
++++ b/src/llama-mmap.cpp
+@@ -488,7 +488,8 @@ struct llama_mmap::impl {
+         const char * j_adv = getenv("LLAMA_MMAP_ADVICE");
+         const char * ep = getenv("LLAMA_EXPERT_PREFETCH");
+ #ifdef __linux__
+-        const bool expert_prefetch = ep && strcmp(ep, "1") == 0;
++        const char * fill = getenv("LLAMA_EXPERT_FILL");
++        const bool expert_prefetch = !(fill && strcmp(fill, "1") == 0) && ep && strcmp(ep, "1") == 0;
+ #else
+         const bool expert_prefetch = false;
+         (void) ep;
+diff --git a/src/llama-model-loader.cpp b/src/llama-model-loader.cpp
+index c72f5ee..79fb6e8 100644
+--- a/src/llama-model-loader.cpp
++++ b/src/llama-model-loader.cpp
+@@ -1442,7 +1442,10 @@ void llama_model_loader::init_mappings(bool prefetch, llama_mlocks * mlock_mmaps
+             llama_mmap::ranges advice_ranges = lazy.for_file(idx);
+ #ifdef __linux__
+             const char * ep = getenv("LLAMA_EXPERT_PREFETCH");
+-            if (ep && strcmp(ep, "1") == 0) {
++            const char * fill = getenv("LLAMA_EXPERT_FILL");
++            const char * random = getenv("LLAMA_EXPERT_FILL_RANDOM");
++            const bool fill_requested = fill && strcmp(fill, "1") == 0;
++            if (fill_requested ? (random && strcmp(random, "1") == 0) : (ep && strcmp(ep, "1") == 0)) {
+                 for (const auto & entry : weights_map) {
+                     const auto & w = entry.second;
+                     if (w.idx == idx && entry.first.find(".ffn_") != std::string::npos &&
+diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+index bf24349..e575555 100644
+--- a/src/llama-model.cpp
++++ b/src/llama-model.cpp
+@@ -1351,6 +1351,8 @@ struct llama_model::impl {
+ 
+     // model memory mapped files
+     llama_mmaps mappings;
++    llama_files expert_files;
++    std::map<std::string, std::pair<size_t, size_t>> expert_offsets;
+ 
+     // objects representing data potentially being locked in memory
+     llama_mlocks mlock_bufs;
+@@ -2144,6 +2146,23 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
+         }
+     }
+ 
++#ifdef __linux__
++    const char * fill = getenv("LLAMA_EXPERT_FILL");
++    if (fill && strcmp(fill, "1") == 0 && use_mmap_buffer) {
++        try {
++            for (const auto & file : ml.files) {
++                const std::string path = "/proc/self/fd/" + std::to_string(file->file_id());
++                pimpl->expert_files.emplace_back(new llama_file(path.c_str(), "rb", false));
++            }
++            for (const auto & entry : ml.weights_map) {
++                pimpl->expert_offsets.emplace(entry.first, std::make_pair(entry.second.idx, entry.second.offs));
++            }
++        } catch (const std::exception &) {
++            pimpl->expert_files.clear();
++            pimpl->expert_offsets.clear();
++        }
++    }
++#endif
+     load_tensors_hadamard();
+ 
+     return true;
+@@ -2532,6 +2551,20 @@ llama_split_mode llama_model::split_mode() const {
+     return params.split_mode;
+ }
+ 
++bool llama_model::expert_file_info(const ggml_tensor * t, expert_file_range & out) const {
++    if (!t || !tensor_is_mapped(t)) { return false; }
++    const auto it = pimpl->expert_offsets.find(t->name);
++    if (it == pimpl->expert_offsets.end()) { return false; }
++    const auto idx = it->second.first;
++    const auto offset = it->second.second;
++    if (idx >= pimpl->mappings.size() || idx >= pimpl->expert_files.size()) { return false; }
++    const auto & mapping = pimpl->mappings[idx];
++    if (offset > mapping->size() || ggml_nbytes(t) > mapping->size() - offset ||
++            static_cast<char *>(mapping->addr()) + offset != t->data) { return false; }
++    out = {idx, offset, mapping->size(), mapping->addr(), pimpl->expert_files[idx]->file_id()};
++    return true;
++}
++
+ bool llama_model::tensor_is_mapped(const ggml_tensor * t) const {
+     if (!t || !t->data) {
+         return false;
+diff --git a/src/llama-model.h b/src/llama-model.h
+index 1f56a2a..255411e 100644
+--- a/src/llama-model.h
++++ b/src/llama-model.h
+@@ -972,6 +972,12 @@ struct llama_model {
+     llama_split_mode split_mode() const;
+     bool no_alloc() const;
+     bool tensor_is_mapped(const ggml_tensor * t) const;
++    struct expert_file_range {
++        size_t file_index, offset, mapping_size;
++        void * mapping;
++        int source_fd;
++    };
++    bool expert_file_info(const ggml_tensor * t, expert_file_range & out) const;
+ 
+     std::map<ggml_backend_buffer_type_t, size_t> memory_breakdown() const;
+ 
+
+exec
+/bin/bash -lc "sed -n '1,180p' cc/abrun/abrun.py; rg -n 'switch_regex|expect_switch|explicit_order' cc/abrun/abrun.py; cat ref/llama.cpp-up1108/skills/code-review/SKILL.md; git status --short; ls cc/mmap_advice/patches" in /home/muk/projects/siminfeng/campaign
+ succeeded in 19ms:
+#!/usr/bin/env python3
+"""Plan and execute a declarative counterbalanced experiment."""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+
+if __package__:
+    from . import gate, preflight, run_summary
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from cc.abrun import gate, preflight, run_summary
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def validate(spec):
+    for key in ('id', 'outdir_base', 'runner', 'tool', 'argv', 'arms', 'order'):
+        if key not in spec:
+            raise ValueError(f'missing spec field: {key}')
+    safe = r'[A-Za-z0-9][A-Za-z0-9_.-]*'
+    if not isinstance(spec['id'], str) or not re.fullmatch(safe, spec['id']):
+        raise ValueError('id must be a safe path component')
+    if spec['runner'] != 'om_run':
+        raise ValueError('only runner=om_run is supported')
+    if not isinstance(spec['tool'], str) or not re.fullmatch(safe, spec['tool']):
+        raise ValueError('tool must be a binary name')
+    if not isinstance(spec['outdir_base'], str) or not spec['outdir_base']:
+        raise ValueError('outdir_base must be a nonempty path')
+    if not isinstance(spec['argv'], list) or not all(isinstance(x, str) for x in spec['argv']):
+        raise ValueError('argv must be an array of strings')
+    arms = spec['arms']
+    if not isinstance(arms, dict) or len(arms) < 2 or 'base' not in arms:
+        raise ValueError('arms must contain base and at least one treatment')
+    for name, arm in arms.items():
+        if not re.fullmatch(safe, name) or not isinstance(arm, dict):
+            raise ValueError('invalid arm')
+        if not isinstance(arm.get('image'), str) or not arm['image']:
+            raise ValueError(f'{name}: missing image')
+        env = arm.get('env', {})
+        if not isinstance(env, dict) or any(not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', k)
+                                           or not isinstance(v, str) or re.search(r'\s', v)
+                                           for k, v in env.items()):
+            raise ValueError(f'{name}: env must map names to strings without whitespace (om_run restriction)')
+        if not isinstance(arm.get('expect_switch', False), bool):
+            raise ValueError('expect_switch must be boolean')
+    regexes = spec.get('switch_regex', [])
+    if not isinstance(regexes, list) or not all(isinstance(r, str) for r in regexes):
+        raise ValueError('switch_regex must be an array of regex strings')
+    for pattern in regexes:
+        re.compile(pattern)
+    if any(a.get('expect_switch') for a in arms.values()) and not regexes:
+        raise ValueError('expect_switch requires switch_regex')
+    if arms['base'].get('expect_switch'):
+        raise ValueError('base cannot expect a switch')
+    rounds = spec.get('rounds', 1)
+    if not isinstance(rounds, int) or isinstance(rounds, bool) or rounds < 1:
+        raise ValueError('rounds must be a positive integer')
+    if not isinstance(spec.get('metric', 'eval_tps'), str):
+        raise ValueError('metric must be a summary field name')
+    planned_order(spec)
+
+
+def planned_order(spec):
+    arms = list(spec['arms'])
+    arms = ['base'] + [name for name in arms if name != 'base']
+    order = spec['order']
+    if order == 'explicit':
+        names = spec.get('explicit_order')
+        if not isinstance(names, list) or not names or any(n not in arms for n in names):
+            raise ValueError('explicit_order must be a nonempty list of known arms')
+        if set(names) != set(arms):
+            raise ValueError('explicit_order must include every arm')
+    else:
+        expected = ''.join(chr(65 + i) for i in range(len(arms)))
+        expected += expected[::-1]
+        if order not in (expected, 'mirrored'):
+            raise ValueError(f'{len(arms)} arms require order={expected!r} or mirrored')
+        names = arms + arms[::-1]
+    return names * spec.get('rounds', 1)
+
+
+def plan(spec):
+    out = Path(spec['outdir_base']).expanduser() / spec['id']
+    if not out.is_absolute():
+        out = ROOT / out
+    runs = []
+    for index, arm in enumerate(planned_order(spec), 1):
+        config = spec['arms'][arm]
+        directory = out / f'{index:03d}-{arm}'
+        env_flags = ' '.join(f'-e {k}={v}' for k, v in config.get('env', {}).items())
+        override = os.environ.get('ABRUN_RUNNER')
+        runner = shlex.split(override) if override else [str(ROOT / 'cc/om_run/om_run.sh')]
+        command = runner + [str(directory), config['image'], env_flags, spec['tool']] + spec['argv']
+        if not override:
+            command = [str(ROOT / 'bin/run_op'), '--agent', 'abrun', '--task', spec['id'], '--'] + command
+        runs.append({'index': index, 'arm': arm, 'dir': str(directory), 'command': command})
+    return out, runs
+
+
+def write_report(out, spec, runs, verdict):
+    (out / 'verdict.json').write_text(json.dumps(verdict, indent=2) + '\n')
+    lines = [f"# {spec['id']}", '', f"Status: {verdict['status']}", '',
+             '| # | Arm | Status | Metric | Wall s | Output SHA |',
+             '|---|---|---|---:|---:|---|']
+    metric = spec.get('metric', 'eval_tps')
+    for row in runs:
+        s = row['summary']
+        lines.append(f"| {row['index']} | {row['arm']} | {s['status']} | {s.get(metric)} | {s['wall_s']} | {s['output_sha']} |")
+    lines += ['', f'Metric: {metric} (higher is better)', '', '| Arm | Mean | B/A | Gate |',
+              '|---|---:|---:|---|']
+    for arm, mean in verdict['means'].items():
+        comparison = verdict['comparisons'].get(arm, {})
+        lines.append(f"| {arm} | {mean} | {comparison.get('ratio', '—')} | {comparison.get('verdict', 'base')} |")
+    lines += ['', f"A/A gap: {verdict['aa_gap']}; drift: {verdict['drift']}; threshold: {verdict['threshold']}",
+              '', f"Output class: {verdict['output']['class']}", '',
+              'Output details: `' + json.dumps(verdict['output']) + '`', '',
+              *verdict.get('invalid_reasons', []), *verdict.get('reasons', [])]
+    (out / 'REPORT.md').write_text('\n'.join(lines) + '\n')
+
+
+def execute(spec, out, runs):
+    # Exclusive creation refuses accidental overwrite/replay into prior results.
+    out.mkdir(parents=True, exist_ok=False)
+    (out / 'spec.json').write_text(json.dumps(spec, indent=2) + '\n')
+    grouped = {arm: [] for arm in spec['arms']}
+    completed, invalid = [], []
+    try:
+        checked = set()
+        for arm in spec['arms'].values():
+            key = (arm['image'], spec['tool'])
+            if key not in checked:
+                preflight.check(*key, spec['argv'])
+                checked.add(key)
+        for run in runs:
+            rc = subprocess.run(run['command'], cwd=ROOT).returncode
+            summary = run_summary.summarize(run['dir'], spec.get('switch_regex', []))
+            run['summary'] = summary
+            completed.append(run)
+            grouped[run['arm']].append(summary)
+            config = spec['arms'][run['arm']]
+            if config.get('expect_switch') and not summary['switch_lines']:
+                invalid.append(f"{run['arm']}: switch inert (no switch_lines)")
+            if run['arm'] == 'base' and summary['switch_lines']:
+                invalid.append('base: switch leaked (switch_lines present)')
+            if rc != 0 or summary['status'] != 'ok':
+                invalid.append(f"{run['arm']}: runner rc={rc}, status={summary['status']}")
+            if invalid:
+                break
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        invalid.append(str(exc))
+    verdict = gate.evaluate(grouped, spec.get('metric', 'eval_tps'))
+    if verdict['reasons']:
+        invalid.extend(verdict['reasons'])
+    verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+                   planned_order=[r['arm'] for r in runs],
+                   executed_order=[r['arm'] for r in completed])
+    if invalid:
+        for comparison in verdict['comparisons'].values():
+            comparison['verdict'] = 'null'
+    write_report(out, spec, completed, verdict)
+    print(json.dumps(verdict, indent=2))
+    return 1 if invalid else 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('spec')
+    parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--submit', action='store_true')
+    args = parser.parse_args()
+    try:
+        path = Path(args.spec).resolve()
+        spec = json.loads(path.read_text())
+51:        if not isinstance(arm.get('expect_switch', False), bool):
+52:            raise ValueError('expect_switch must be boolean')
+53:    regexes = spec.get('switch_regex', [])
+55:        raise ValueError('switch_regex must be an array of regex strings')
+58:    if any(a.get('expect_switch') for a in arms.values()) and not regexes:
+59:        raise ValueError('expect_switch requires switch_regex')
+60:    if arms['base'].get('expect_switch'):
+75:        names = spec.get('explicit_order')
+77:            raise ValueError('explicit_order must be a nonempty list of known arms')
+79:            raise ValueError('explicit_order must include every arm')
+143:            summary = run_summary.summarize(run['dir'], spec.get('switch_regex', []))
+148:            if config.get('expect_switch') and not summary['switch_lines']:
+---
+name: code-review
+description: Review llama.cpp changes against project conventions and common reviewer pitfalls before a PR. Use when the user wants to review a diff, branch, or PR.
+---
+
+# Review llama.cpp changes
+
+This skill reviews changes against llama.cpp's conventions and the pitfalls that reviewers flag most often, so the contributor can fix them before a maintainer has to. It has two modes:
+
+- **Self-review (default):** review the contributor's own local changes (uncommitted work, or a branch vs `master`) as a pre-PR pass. Ask which if it's ambiguous; default to `git diff master...HEAD` plus any uncommitted changes.
+- **Read-only review of a PR/file:** if the user points at a PR number or specific files (including code they didn't write), review those and report findings.
+
+In both modes the output is **private review notes for the user to read and act on** - it is never something to post. This is a hard rule from `AGENTS.md`: an agent must NEVER write, or help write, a PR comment, a review comment, or a reply to a reviewer, by any means including `gh`. Do not offer to. If the user asks you to post the notes, refuse and point them at that rule. Present findings in the conversation only.
+
+Before starting, read `AGENTS.md` and `CONTRIBUTING.md` if not already in context - the "Coding guidelines", "Naming guidelines", and AI usage sections are the baseline this review enforces. For a diff that adds a new model architecture, also read `docs/development/HOWTO-add-model.md` and consider the dedicated `add-new-model` skill.
+
+## Step 0 - Scope the diff and pick the checklists
+
+Identify what actually changed and which area checklists below apply. Run `git diff --stat` (or `gh pr view <n> --json files` for PR mode) and bucket the touched paths:
+
+- `conversion/`, `gguf-py/`, `src/models/`, `src/llama-arch.*` -> **New model / architecture**
+- `ggml/` (any backend, op, or `ggml.h`) -> **ggml / backend**
+- `include/llama.h` and other public headers -> **Public API**
+- `tools/server/` -> **Server**
+- `tools/ui/` (or the legacy `tools/server/webui/`) -> **WebUI**
+- `tests/`, `tools/server/tests/`, or any other added/changed test -> **Tests**
+- anything else, plus all of the above -> **General** (always runs)
+
+Always run the **Scope and quick-reject gate**, the **Security review**, and the **General** checklist. Run each area checklist whose paths were touched. Additionally, if the diff introduces a new component, subsystem, or piece of infrastructure (a new file/class/module, a new abstraction, or hand-rolled machinery), run the **Approach and design** review. Tell the user which checklists you're running and why.
+
+## Scope and quick-reject gate (always)
+
+These are the patterns that get PRs closed without a full review. Check them first - a finding here is more important than any code nit, because it can mean the change shouldn't be a PR in its current form at all.
+
+- Is there a prior issue/discussion for this? Features are supposed to start as an issue, not a PR (`CONTRIBUTING.md`). If this is a nontrivial feature with no linked issue, flag it and suggest opening one first.
+- Is it a duplicate of existing/in-flight work? Suggest `gh search prs` / `gh search issues` for the feature. Many closed PRs were duplicates of something already queued.
+- Is it self-contained and single-purpose? Multiple unrelated changes/optimizations bundled together get sent back to be split. Flag unrelated changes and suggest separate PRs.
+- Does it touch multiple ggml backends at once? Initial support should be CPU-only, other backends as follow-ups (`CONTRIBUTING.md`). Flag CUDA/Metal/Vulkan/etc. changes bundled into a feature's first PR.
+- Does it add a new `ggml_type` / quantization type? That carries a disproportionate maintenance burden and needs the full justification package (GGUF sample upload, perplexity vs FP16/BF16 and similar sizes, KL-divergence data, CPU perf numbers). Absent that, it will be rejected regardless of code quality.
+- Is it invasive - new subsystem, core-API reshaping, changes to shared graph/sampler code that other models don't need? Flag it and suggest a discussion with maintainers before investing further.
+- Does it add a model-specific CLI argument to any binary (`common/arg.cpp`, tools, examples) or conversion script (`convert_*.py`)? Not allowed - model-specific behavior must come from GGUF metadata or be detected automatically, not from a per-model flag.
+- Is it niche/vendor-specific in a way that adds a maintenance burden nobody will own long-term? Flag the maintenance-ownership question.
+- Is the change semantically correct, or a plausible-looking "fix" that misunderstands the code? Sanity-check the actual behavior, not just that it compiles.
+- AI-disclosure: if AI meaningfully contributed, is the PR template's disclosure section filled in? Remind the user. Never suggest writing the PR description or commit message for them.
+
+## Security review (mandatory)
+
+Mandatory on every review; any finding here is **blocking**. Rule of thumb: GGUF metadata, tensor shapes, tokenizer/grammar input, and all server/RPC fields are attacker-controlled - bound them before use.
+
+- **Sizes/counts from tensor dims:** validate before allocating. Products like `ne[i]*nb[i]`/nbytes can overflow on crafted dims into an undersized alloc then heap overflow. Overflow checks must run BEFORE the arithmetic they guard - padding/alignment macros wrap to 0 near `SIZE_MAX`, so a guard after the pad passes.
+- **GGUF strings/arrays:** cap declared lengths and element counts before using them to size a loop or buffer; validate element type and length before casting an array to a pointer or reading fixed indices (`[i+1]`, `[0..2]`).
+- **Element-type confusion:** casting `gguf_get_arr_data()` or `tensor->data` to `float *`/`int32_t *` needs an element-type check first (`gguf_get_kv_type() == GGUF_TYPE_ARRAY` then `gguf_get_arr_type()`; `type == GGML_TYPE_F32` for tensors). A `UINT8` array or `I8` tensor passes every length check, then gets read 4 bytes per element - a nearby length check is not a type check.
+- **Loaders:** `GGML_ASSERT` on a file-derived value aborts the process; throw instead where the caller already catches (vocab, model loader, clip).
+- **File-supplied counts indexing fixed arrays:** bound any count (e.g. layer/block count into a `LLAMA_MAX_*` array) before indexing; watch checks that only fire when an optional key is present.
+- **Declared vs actual array length:** check the declared length of a GGUF array against the count actually read, not just against a buffer size.
+- **Bounds comparisons:** flag narrowing casts (`size_t`->`int32_t`) and signed/unsigned mixing that can bypass a length check and copy past a buffer.
+- **Parsed/derived indices:** range-check `stoi`/`atoi` results and catch parse throws; never use a default or derived token id (EOS/BOS/...) as an index without a bounds check.
+- **Reused/reserved buffers:** recheck bounds after a buffer is shrunk or reused; watch `reserve()` then index-by-assumed-size, and header fields read before their length is checked.
+- **Server JSON ints:** clamp client-supplied integers (token/discard counts, offsets) to non-negative and an upper bound before they reach index/pointer arithmetic.
+- **RPC-deserialized fields:** treat every field (type/buffer/data/ne/nb/op_params) as hostile - validate before use. Null/zero buffers skipping validation, attacker data pointers, out-of-range type indices, and negative strides sign-extending past a corner-only assert all give arbitrary read/write.
+- **Recursion on untrusted input:** a function that recurses once per level (or per char) of request JSON, model output, a grammar, a template or a regex pattern overflows the stack - the HTTP threads have 512 KB on macOS, so a few hundred levels are enough. Every such function needs its own depth bound, checked in the function itself, not a pre-walk at a caller (the next caller skips it): libcommon uses `COMMON_RECURSIVE_LIMIT` (`common/common.h`), jinja `JINJA_RECURSIVE_LIMIT` (`common/jinja/utils.h`), the grammar `GRAMMAR_RECURSIVE_LIMIT` (`src/llama-grammar.h`). Count the levels of the input, not the frames, and throw `std::invalid_argument` for request input so the server answers 400. Look for recursion the code does not spell out: mutual recursion, recursive `std::function` lambdas, visitor/virtual dispatch, `std::regex` (libstdc++ recurses per char of the input), and per-char helpers that recurse where a loop would do.
+- **Lifetime/UAF:** flag stored raw pointers to caller/temporary storage, cached pointers to buffers a later free releases, async ops whose source may drop before completion, and structures not invalidated on free/realloc. Null-check conditionally-built or "not required" tensors before dereferencing.
+
+## Approach and design (when a new component/infra is introduced)
+
+Run this whenever the diff adds a new component, subsystem, or piece of infrastructure. Reviews too often stop at "does it work" - a diff can be correct and still be the wrong approach, and a messy design costs more long-term than a bug. Evaluate the *approach*, not just the behavior; raising a cleaner one is a high-value finding, not a nit. If you see a better design, describe it concretely rather than just calling the current one bad.
+
+- **Simpler approach upstream:** the biggest win is often a different data model or design that removes whole subsystems, not tweaks to the code as written. Complexity must be justified by the problem, not by the first thing that worked.
+- **Reuse over reinvention:** grep for an existing helper, library, object, or mechanism before adding a new one. Reimplementing what the codebase already has reintroduces solved bugs and adds maintenance surface.
+- **Clear ownership/lifetime:** prefer RAII and obvious ownership over manual liveness flags, hand-tracked pointers, and "is it still alive?" checks - manual lifetime tracking is a recurring source of subtle bugs.
+- **Right-sized machinery:** flag redundant, overkill, or heavier-than-needed primitives and abstractions; use the minimum the design actually needs.
+- **Right structure and fit:** a new type should earn its place (split it if it serves two roles); follow existing patterns, idioms, and naming, and avoid constructs the project shuns.
+- **Root cause vs symptom:** fixes layered on fixes signal a design to correct, not guard around.
+
+## New model / architecture
+
+See the `add-new-model` skill and `docs/development/HOWTO-add-model.md` for the full workflow; this is the review-time subset that reviewers most often catch:
+
+- Don't branch on `model.arch` when the real dependency is a config/capability value - gate on the hparam/capability, not the architecture enum.
+- If the model is a close variant of an existing arch, is the delta justified? Prefer reusing or subclassing the existing arch/model class over duplicating it. A near-duplicate class or `src/models/<name>.cpp` will be asked to merge with its sibling.
+- New tensor names go through `tensor_mapping.py`, not ad-hoc name matching.
+- For QKV, split the *activation* with `ggml_view`, not the *weight* tensor; rely on ggml broadcasting instead of manually duplicating tensors.
+- New graph inputs are declared at the top of the graph-build function, not inline where first used.
+- Don't end a text model graph with `ggml_build_forward_expand(gf, cur)` on `t_logits`/`t_embd` - it's redundant, since `llama_model::build_graph()` expands them via `build_logits()` and `build_pooling()` (and skips the LM head for pooled embeddings).
+- Hparams that the model can't run correctly without must be mandatory (hard-error if missing), not read with a silent default fallback. Only genuinely-optional-across-configs values get a fallback accessor.
+- New/optional weight tensors (scales, etc.) must route through `build_lora_mm` and the existing helpers, matching convention - don't leave raw matmuls copied from another arch.
+- Don't hack RoPE with a custom sin/cos implementation. If `ggml_rope_ext` genuinely can't express it, that's an issue for discussion, not a PR.
+- In `src/models/`, apply RoPE with `build_rope(cur, pos, il)`, not a direct `ggml_rope_ext`/`ggml_rope_multi` call (see #31683). Per-layer differences go in a `get_rope_params` override: the KV-cache K-shift reads the same params, so a direct call lets the graph and the shift drift apart. The remaining direct calls (deepseek4/41, dflash, sensenova-u1) are not a pattern to copy.
+- Test the quantized-KV path (`-ctk`/`-ctv q8_0`), not just default f16 - new speculative/attention features silently break there.
+- Preserve existing explanatory comments about model-specific quirks when copying code; note the provenance ("copied from X, with Y added").
+- Remove dead code/branches left over from adapting a reference implementation.
+
+## ggml / backend
+
+- `supports_op` (and any dispatch/gating condition) must be scoped exactly to the cases being changed - a condition meant for a few quant types must not silently disable or enable everything else.
+- No hardcoded warp/lane size - use `ggml_cuda_get_physical_warp_size()` (32 on CUDA, 64 on HIP/ROCm) and the portable helpers.
+- Strip leftover debug/profiling/logging code before review.
+- New or changed op? Update `docs/ops.md` and the relevant `docs/ops/*.csv` for the touched backend.
+- New op or operator change needs corresponding `test-backend-ops` cases, and (per `CONTRIBUTING.md`) consistency across at least two backends.
+- New kernels are expected to come with concrete perf data (throughput across realistic tensor shapes), not just correctness.
+- Don't have a backend mutate the cgraph as a shortcut - that's an unresolved architectural question, not something to slip in.
+- Expect this to need two maintainer approvals; that's normal for `ggml/` changes, not a sign something is wrong.
+- For CUDA: Avoid excessively templating kernels, only add this where it shows visible performance gain.
+
+## Public API (`include/llama.h`)
+
+Public API changes carry a higher bar than internal ones (`CONTRIBUTING.md`). Review for:
+
+- Justification: why doesn't an existing mechanism (e.g. `cb_eval`, existing batch/sampler knobs) suffice? If it does, the change likely shouldn't add public surface. This is the single most common reason these PRs are rejected.
+- Experimental or stop-gap surface belongs in a side header (`llama-ext.h`), not in `llama.h`.
+- Keep it minimal and general: prefer one general call over several narrow convenience wrappers; make new calls forward-compatible (e.g. mixed-modality batches) rather than assuming today's shape.
+- The C API is the first-class, stable, ABI-defining surface - don't propose a parallel C++ API as a replacement. `llama-cpp.h` stays a thin convenience layer.
+- Types and naming: sized integer types (`int32_t`, `size_t` for sizes/offsets); `snake_case`; `<class>_<method>` = `<class>_<action>_<noun>`; enum values upper-case and prefixed with the enum name; `_t` suffix for opaque types. Avoid gratuitous signature/ABI changes to existing exported functions.
+- Every new API needs a working example/tool exercising it in the same PR - reviewers find real bugs by requiring it to be wired into `server`, `embedding`, `perplexity`, etc.
+
+## Server (`tools/server/`)
+
+- Is the feature within server's defined scope? Check `tools/server/README-dev.md` - out-of-scope features get declined.
+- Security: don't trust client-supplied headers (e.g. `X-Forwarded-For`) or add footguns; things like IP allowlisting belong at a reverse proxy unless there's a trusted-proxy design.
+- Wire new behavior into the existing request/response and checkpoint paths correctly; watch for resource leaks across requests.
+
+## WebUI (`tools/ui/`)
+
+These apply only to changes under `tools/ui/` (formerly `tools/server/webui/`) - the SvelteKit + Svelte 5 frontend. They are frontend conventions, not repo-wide ones, so do not apply them to C++ or other tool code.
+
+The dominant review theme in this area is placement: most accepted nits are about putting a value, function, or piece of logic in the layer where it belongs.
+
+### Constants and enums - decision rules
+
+Trigger: a literal that is reused, domain-significant, or crosses a boundary (wire/persisted format, selector, key, shared UI text). One-off component-local values stay inline (see the boundary at the end of this section) - flagging those is noise. Before adding, grep `$lib/constants` / `$lib/enums` - reuse beats a new near-duplicate. What becomes what:
+
+- **String enum** (`$lib/enums`, `enum X { KEY = 'value' }`): a closed set of categorical values the code branches on, compares, or stores as a type discriminator - roles, statuses, kinds, types, actions, sort fields. Anything written as `x.type === 'some-string'` or a closed string union in a `.d.ts` is an enum. Keys are SCREAMING_SNAKE with a domain prefix (`ModelDownloadStopRequest.CANCEL`); values are lowercase by default and are the persisted/wire representation, so they may intentionally differ from the key (`TOOL_USE = 'tools'`, `MTP = 'mtp'`) or mirror an external API exactly - say so in the enum's JSDoc when they do (see `HfModelSort`). No numeric-valued enums.
+- **Constant object keyed by enum** (constants): a lookup/mapping - icon per file type, label per capability, HTTP code to message (`FILE_TYPE_ICONS`, `HTTP_CODE_TO_STRING`, `Record<Enum, string>`). The enum enumerates, the object maps.
+- **Declarative config array/object** (constants): a set of related items consumed by more than one renderer (e.g. dropdown + sheet) - menu items whose `action`/`id`/`enabledWhen` fields are enum values, not strings (`ATTACHMENT_FILE_ITEMS`). If two surfaces render the same menu, both must render from this one config.
+- **Grouped `as const` object** (constants): related literals that belong to one feature - error-message taxonomy (`ERROR_MESSAGES` with `HTTP`/`NETWORK` groups), UI copy shared across surfaces (`ATTACHMENT_MENU_TEXT`), a feature's prompt + fallback + patterns (`TITLE_GENERATION`). Prefer one grouped object over scattering same-feature constants.
+- **Scalar constants**:
+  - strings: CSS class strings, selectors, `data-*` attribute names, header names, storage keys, API routes/paths, file extensions.
+  - numbers: any threshold, timeout, size, limit, or count - suffixed with unit or context (`_MS`, `_PX`, `_BYTES`, `_CHARS`, `_MAX_LENGTH`).
+  - regexes: any non-trivial literal regex, `_REGEX` suffix, grouped in the feature's constants file.
+  - characters/separators: named by meaning in their domain, not by character - `PATH_SEPARATOR`, `ORG_SEPARATOR`, `SSE_RECORD_SEPARATOR`, `ISO_DATE_TIME_SEPARATOR`, `NEWLINE`. No universal `SLASH` constant.
+- **Key-name constants**: strings used as keys into another object or persisted config get an object constant mirroring the property names (`SETTINGS_KEYS.CUSTOM_CSS = 'customCss'`), so a rename breaks the build instead of silently missing.
+
+Placement and composition:
+
+- Shared across features -> `$lib/constants/<topic>.constants.ts` / `$lib/enums/<topic>.enums.ts`; feature-dedicated values may live in the feature folder, but only what is truly dedicated to it.
+- Compose, don't duplicate: constants may derive from other constants/enums (`SANDBOX_TOOL_NAME = BuiltInTool.BROWSER_RUN_JAVASCRIPT`, storage keys built from the `STORAGE_APP_NAME` prefix).
+- Tests and Storybook stories use the same constants/enums for structural assertions - they don't re-declare the literals they assert against. Exception: persisted/wire-contract assertions keep independent literals - there the literal value itself is the contract, and reusing the production constant would make the test tautological (change the constant, the expectation changes with it, the regression still passes).
+
+What stays inline: one-off user-facing copy inside a single component, console/log messages, and import specifiers. When inline copy gains a second consumer, it graduates into a grouped constant object.
+
+Adjacent data-shape rule: empty string is not a valid "unset" initial state - use `undefined`.
+
+### Placement and layering
+
+- Components render; they don't own business logic. Simple presentation-local derivation stays in the component as `$derived` from props and store values - what leaves is shared business logic, multi-store orchestration, and naming/parsing logic that a store method, `$lib/utils` function, or `$lib/hooks` hook should own. A component should call `store.doSomething()` rather than reimplement it.
+- Keep the layers deliberate: stores (`*.svelte.ts`, stateful), services (stateless clients), utils (pure functions), hooks (`*.svelte.ts`, reusable reactivity), `$lib/types` (types), `$lib/constants` (constants). If a new file blurs these, flag it and name the layer it belongs in.
+- A stateful "service" is misnamed - it's a store or belongs in the scope that uses it. Conversely, a one-off `.svelte.ts` module (which is effectively a store) for logic only one component uses is overkill; keep it in that component or a context.
+- Before introducing a new abstraction (store/service/hook/context), ask whether it will ever have a second consumer; if not, keep the logic in the existing scope. KISS first, iterate later.
+- Barrel files (`index.ts`) match the existing barrel style - file-level JSDoc plus per-export group comments for stores, plain re-export lists for constants/enums - and add JSDoc only where an export isn't self-explanatory; constants and types are not re-exported from store barrels.
+
+### DRY and dead code
+
+- Reuse before writing: grep for an existing helper, component, or store method before adding a new one (truncation, copy/download, file preview, sanitization, and formatting helpers all already exist).
+- Sibling variants (e.g. Dropdown vs Sheet versions of the same picker) must render from one shared config / single source of truth, not duplicate markup and logic.
+- Flag dead code, commented-out markup, and leftovers from renamed or removed features. Intentional-but-temporary leftovers get `@deprecated` JSDoc so they can be found and removed later.
+
+### Components and Svelte 5
+
+- Break bloated components into focused sub-components (plus dedicated `*Skeleton.svelte` loading states); use `{#snippet}` for repeated in-component markup.
+- Use the existing `$lib/components/ui` primitives instead of hand-rolling dialogs, tooltips, inputs, or dropdowns.
+- Rune syntax only: `$props()` deconstruction, `$derived` (reach for `$derived.by` only when a simple expression won't do), `$state`. Avoid `$effect` for things `$state`/`$derived` can express - a wall of `$effect` is a design smell.
+- Handle window/document events via `<svelte:window>` / `<svelte:document>`, not manual add/remove-listener plumbing.
+- Svelte 5 supports arrays in the `class` attribute - don't reach for `cn()` for simple conditional classes.
+- Use `SvelteMap`/`SvelteSet` for reactive collections.
+
+### Comments
+
+- Same bar as the General checklist, enforced harder here: no comments that restate the code, no verbose JSDoc on obvious functions, no commented-out code. Examples and edge-case enumerations live in unit tests, not prose; non-obvious why/rationale comments stay, because a test cannot carry that context at the code location.
+
+### Types, naming, and style
+
+- `===` over `==`, `includes()` over index checks, no redundant null-coalescing after an `Array.isArray` check.
+- One spelling per concept across the codebase (e.g. pick `cwd` vs `currentWorkingDirectory` and apply it everywhere); explicit, self-describing names over clever ones.
+
+### Performance (streaming UI)
+
+- Anything running per streamed chunk must be cheap: throttle before computing, not after; apply block-level regex passes globally and scan lines backwards with early exit; don't re-parse the whole message per update.
+- Smooth height/expand transitions consistent with the rest of the UI - animate auto-height via `interpolate-size: allow-keywords` with a `grid-template-rows: 0fr/1fr` fallback for browsers without it (see `CollapsibleRegion.svelte`).
+
+### Security (frontend side)
+
+- Sanitize anything rendered from model or remote data: the rehype/`{@html}` pipeline, SVG content, and URLs (use the `$lib/utils` URL sanitizer rather than ad-hoc checks or a third-party lib for trivial cases).
+- Proxy headers and agent/tool filesystem access are security boundaries - scope enforcement (e.g. browse-root sandboxing) must be validated end-to-end, not just in the UI; loop in server reviewers for the C++ side.
+
+### PR hygiene specific to `tools/ui`
+
+- Build artifacts are not committed - the UI is built by CI (`.github/workflows/ui-build.yml`) and downloaded/bundled at release time. `npm run build` must still succeed locally; a red UI build job is blocking.
+- `npm run lint && npm run check` (and `npm run format`) must pass; a failing Storybook test is blocking.
+- PRs with user-facing interactive or visual changes need a short video demo in the description showing the change working (screenshots are acceptable for pure-visual tweaks). Test-only, refactor, docs, and config PRs don't need a demo.
+- Scope discipline: changes that belong to another stacked PR don't ride along in this one - call them out and move them there. Flag unrelated edits to deprecated/legacy files and ask whether they're intentional.
+- New nontrivial utils and parsing logic get Vitest unit tests; reusable UI components get Storybook stories/tests when practical.
+
+## Multimodal (`tools/mtmd/`)
+
+- Tensor names must be prefixed by `v.`, `a.`, `mm.` or `a.mm.` (legacy naming doesn't follow this convention - this is expected, but new code should follow it).
+- Do not use explicit sin/cos for RoPE; use `ggml_rope_ext` instead, see `HOWTO-add-model.md`. If it can't express the needed behavior, that's a design discussion, not a PR.
+- New GGML ops must not be introduced in the same PR, you must push it as a separate PR.
+- In most cases, `build_vit` should be enough to build the transformer graph for vision models. Do not add a loop to build the transformer graph manually, unless you have a very good reason to do so. If you do, please explain why in the PR description.
+- If you need a dedicated preprocessor, there is a high chance that it can be a derived class from one of the existing preprocessors. Check carefully before adding a new preprocessor class.
+- If the model need a new public API in `mtmd.h`, open a discussion first.
+- For audio generation models, see `tools/mtmd/README-dev.md`
+
+## Tests
+
+- Follow the existing testing patterns. Do not add a new testing system. Before adding a new file under `tests/*`, think carefully about whether the tests can go into an existing file first.
+- In most cases, new test cases belong in an existing test file - check for one covering the same component before adding anything new.
+- Only add tests that bring meaningful results. Too-trivial tests just bloat the suite and CI.
+- No time-sensitive tests (timing thresholds, sleeps, races against wall-clock); they are flaky on CI.
+- Think twice about tests that significantly increase CI run time (expensive computation, large inputs, or long sleep/wait delays) or download large amounts of data from the internet (big models, datasets). Flag them and ask whether a smaller model/input or an existing fixture would do.
+- Server: small tests of internal components (helpers, `server_tokens`, queues, format converters, ...) belong in `tests/test-server-component.cpp`. The end-to-end pytest suite in `tools/server/tests` is costly in CI time; only add to it when the test requires end-to-end behavior with a real model.
+
+## General (always)
+
+Enforce the `AGENTS.md` / `CONTRIBUTING.md` coding and naming guidelines on every changed line - this is a distinct pass from checking that the code works, and matters just as much for review speed:
+
+- ASCII only in code and comments - no emdash, unicode arrows, `x`, `...` used as unicode; use `-`, `->`, `x`, `...` ASCII equivalents.
+- Comments are concise and explain non-obvious *why*, not *what*. Flag verbose comments, comments that restate the code, comments that reference the current task/PR, and comments hard-wrapped to a fixed column width.
+- Do not force-wrap prose/comments to a fixed character count or split a sentence across lines.
+- `snake_case` names; `kebab-case` (lowercase-with-dashes) file names for C/C++, `.h` headers; Python files lowercase-with-underscores. Naming optimizes for longest common prefix (`number_small`, not `small_number`).
+- 4-space indentation, brackets on the same line, `void * ptr`, `int & a`, no trailing whitespace; match the surrounding style.
+- Before pushing the PR, run the code style check and editorconfig check locally (see `.github/workflows/code-style.yml` and `.github/workflows/editorconfig.yml`). If the change touches Python code, also run the Python type check (`.github/workflows/python-type-check.yml`).
+- Reuse existing infrastructure over introducing new components; no new third-party dependencies, extra headers, or files unless clearly justified.
+- Keep it simple: a simpler change doing 90% is often preferable to a complex one doing 100%. Flag unnecessary templates/fancy STL; basic `for` loops are fine here.
+- Every added line should be something the contributor can explain and defend to a reviewer without AI help - flag anything that looks copied-in without understanding.
+- `Co-authored-by:` must be reserved for human co-authors; AI contributions (claude, cursor, codex, etc.) must use `Assisted-by:`; if this point is violated, it's a blocking finding.
+- Any mentions of Minja must be treated as blocking; see `AGENTS.md` for why.
+
+## Reporting
+
+Group findings by severity so the user knows what actually blocks a merge:
+
+1. **Blocking** - quick-reject/scope issues and correctness bugs; these can sink the PR regardless of everything else.
+2. **Will slow the review** - convention/naming/comment violations, missing tests/docs/perf data, missing API justification or example.
+3. **Nits** - minor style, optional cleanups.
+
+For each finding, point to the file and line and say concretely what to change and why. Do not rewrite the whole diff unprompted; let the contributor make the fixes so they own and understand them. And do not draft any PR text, commit message, or reviewer reply - that is the contributor's to write.
+ M ../.gitignore
+ M cc/om_run/om_run.sh
+ M cc/resource_observe/resource_observe.py
+ M cc/resource_observe/test_resource_observe.py
+ M evidence/jetson-arm/claude-code.jsonl
+?? artifacts/codex/H1.final.txt
+?? artifacts/codex/H1.log
+?? artifacts/codex/H2.final.txt
+?? artifacts/codex/H2.log
+?? artifacts/codex/H3.final.txt
+?? artifacts/codex/H3.log
+?? artifacts/codex/H4.final.txt
+?? artifacts/codex/H4.log
+?? artifacts/codex/J-OM8.final.txt
+?? artifacts/codex/J-OM8.log
+?? artifacts/codex/J-OM8b.log
+?? artifacts/op-04810239fd04/
+?? artifacts/op-103a1fb13e8b/
+?? artifacts/op-218a56d373af/
+?? artifacts/op-3d31f5fbfc73/
+?? artifacts/op-3df6c2e1288c/
+?? artifacts/op-4f1547f4295e/
+?? artifacts/op-55e94e8f2ec9/
+?? artifacts/op-5609857025b0/
+?? artifacts/op-5849d5542eba/
+?? artifacts/op-5c2e0a7f1ab1/
+?? artifacts/op-a9d8140fc151/
+?? artifacts/op-acee8700aac1/
+?? artifacts/op-d0fda3ae10b1/
+?? artifacts/op-d4a75015c69e/
+?? artifacts/op-e5d0a38d479d/
+?? assignments/H1-jobq.md
+?? assignments/H2-abrun.md
+?? assignments/H3-methods-skills.md
+?? assignments/H4-shape-report.md
+?? assignments/J-OM8-expert-pread-fill.md
+?? assignments/J-OM8b-decode-random.md
+?? bin/README-jobq.md
+?? bin/jobq
+?? bin/test_jobq.py
+?? c2/
+?? cc/abrun/
+?? cc/build_engine/results/jetson-up1108-om8/
+?? cc/expert_fill/
+?? cc/mmap_advice/patches/03-expert-fill.patch
+?? cc/mmap_advice/patches/combined-01-02-03.patch
+?? evidence/jetson-arm/abrun.jsonl
+?? evidence/jetson-arm/jobq.jsonl
+?? experiments/jetson/KS-q4K-20261111/
+?? experiments/jetson/OM/J-OM8/
+01-mmap-advice-random.patch
+02-router-prefetch.patch
+03-expert-fill.patch
+combined-01-02-03.patch
+combined-01-02.patch
+
+exec
+/bin/bash -lc 'git -C ref/llama.cpp-up1108 rev-parse HEAD; cat assignments/J-OM8b-decode-random.md' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+cf34d311332e362198f0a410c466d1e940287d02
+# Assignment J-OM8b — phase-aware expert advice + fill tuning knobs (component; host jetson-arm; worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Builds on J-OM8 (assignments/J-OM8-expert-pread-fill.md; cc/expert_fill/; cc/mmap_advice/patches/03-expert-fill.patch). Engine tree ref/llama.cpp-up1108 @ cf34d311 — do not modify in place; work in a /tmp copy.
+## Evidence (experiments/jetson/OM/J-OM8/, REPORT.md + */summary.json + `expert_fill: stats` lines in */stderr.txt)
+base eval 1.13/1.24 t/s, fill 1.33/1.33, fill_random (MADV_RANDOM on experts from load) 1.37/1.41; output identical. But fill_random prefill collapsed 5.7 -> 1.4 t/s (prompt faults become 4-9 KiB IOs). Fill: 72% of requested expert bytes already resident; 11 GB read in ~29 s per run (~380 MB/s, drive ceiling ~536 MiB/s at 576K qd8).
+## Deliverables
+1. `cc/mmap_advice/patches/04-fill-phase.patch` (applies on top of 01+02+03) and `combined-01-02-03-04.patch`:
+   a. `LLAMA_EXPERT_FILL_RANDOM=decode`: keep default advice during prompt processing; issue MADV_RANDOM on the expert ranges once, at the first ubatch with n_tokens == 1 (log `expert_fill: random advice applied at decode` once). Values `1` (from load, existing) and `0` unchanged.
+   b. Fill only for decode-like ubatches when `LLAMA_EXPERT_FILL_MIN_TOKENS`/`LLAMA_EXPERT_FILL_MAX_TOKENS` say so: env `LLAMA_EXPERT_FILL_MAX_TOKENS` (default 0 = no limit): skip fill when ubatch n_tokens > value (prefill then relies on readahead).
+   c. Split counters by phase: stats line gains `prompt_` and `decode_` prefixed copies of calls/bytes_read/fill_wall_ns (decode = n_tokens==1).
+   d. If the header changes, update cc/expert_fill/expert_fill.h too (single source of truth rule from J-OM8 A5 still holds against the final header in combined-01-02-03-04) and keep `make -C cc/expert_fill test` passing.
+2. COMPILE-CHECK: append to cc/expert_fill/COMPILE-CHECK.txt a section for 04 (g++ -fsyntax-only of every touched .cpp in the 01-04 tree, exit codes).
+3. Spec `cc/abrun/specs/J-OM8b.json` (image `campaign/llamacpp:jetson-up1108-om8b`; same argv as cc/abrun/specs/J-OM8.json incl. `-lv 4`): arms
+   base (no fill), fr (FILL=1 RANDOM=1, threads 8 chunk 1024), frd (FILL=1 RANDOM=decode MAX_TOKENS=1, threads 8 chunk 1024), frd16 (as frd with threads 16 chunk 2048). Order explicit, 2 rounds, counterbalanced: base fr frd frd16 frd16 frd fr base base fr frd frd16 frd16 frd fr base (use `explicit_order` if `rounds` cannot express it; check cc/abrun/abrun.py). switch_regex must include `expert_fill: active`; for frd arms also require `random advice applied at decode` (if abrun supports only one regex list per spec, list both and confirm the INVALID logic still works: base must match none, fill arms must match >= 1).
+## Acceptance (checker runs)
+- A1 `make -C cc/expert_fill test` PASS.
+- A2 fresh cf34d311 extract: sequential 01,02,03,04 == combined-01-02-03-04 (diff -r empty); `git apply --check` ok.
+- A3 COMPILE-CHECK 04 section: all exit 0.
+- A4 `python3 cc/abrun/abrun.py cc/abrun/specs/J-OM8b.json --dry-run` lists 16 runs in the order above.
+- A5 grep in 04 patch: `random advice applied at decode`, `LLAMA_EXPERT_FILL_MAX_TOKENS`, `decode_bytes_read`.
+Constraints: no docker/GPU/full build; no commits; no evidence edits. Time 60 min. Final <= 10 lines with hook location for the decode transition.
+
+exec
+/bin/bash -lc "mkdir -p /tmp/j-om8b-work; git -C ref/llama.cpp-up1108 archive cf34d311 | tar -x -C /tmp/j-om8b-work; git -C /tmp/j-om8b-work init -q; git -C /tmp/j-om8b-work add .; git -C /tmp/j-om8b-work apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/combined-01-02-03.patch; sed -n '670,780p' /tmp/j-om8b-work/src/llama-context.cpp; sed -n '1900,1980p' /tmp/j-om8b-work/src/llama-context.cpp; rg -n 'madvise|advise' /tmp/j-om8b-work/src/llama-mmap.h /tmp/j-om8b-work/src/llama-context.cpp" in /home/muk/projects/siminfeng/campaign
+ succeeded in 6342ms:
+        LLAMA_LOG_INFO("expert_fill: active threads=%zu chunk_kib=%zu random=%d files=%zu\n",
+            filler.threads(), filler.chunk_bytes() / 1024, random && strcmp(random, "1") == 0, expert_fillers.size());
+    } catch (const std::exception & e) {
+        expert_fillers.clear();
+        LLAMA_LOG_INFO("expert_fill: inactive (%s)\n", e.what());
+    }
+}
+
+void llama_context::expert_fill_selected(size_t il, const std::vector<int32_t> & selected) {
+    if (expert_fill_failed) { return; }
+    try {
+        std::map<size_t, std::vector<ExpertFiller::Range>> ranges;
+        const auto & layer = model.layers[il];
+        for (const ggml_tensor * w : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
+            if (!w) { continue; }
+            llama_model::expert_file_range info;
+            if (!model.expert_file_info(w, info)) { throw std::runtime_error("expert mmap/file offsets unavailable"); }
+            for (const auto id : selected) {
+                if (id < 0 || id >= w->ne[2] || size_t(id) > (SIZE_MAX - info.offset) / w->nb[2]) {
+                    throw std::runtime_error("expert slice out of bounds");
+                }
+                ranges[info.file_index].push_back({info.offset + size_t(id) * w->nb[2], w->nb[2]});
+            }
+        }
+        for (const auto & entry : ranges) { expert_fillers.at(entry.first)->fill(entry.second); }
+    } catch (const std::exception & e) {
+        expert_fill_failed = true;
+        LLAMA_LOG_INFO("expert_fill: inactive (%s)\n", e.what());
+    }
+}
+#endif
+
+void llama_context::expert_prefetch_advise(size_t il, int32_t id) {
+#ifdef __linux__
+    auto & state = expert_prefetch_layers[il];
+    for (auto it = state.recent.begin(); it != state.recent.end();) {
+        if (state.tokens - it->second >= 32) {
+            it = state.recent.erase(it);
+        } else {
+            if (it->first == id) {
+                const auto hit = *it;
+                state.recent.erase(it);
+                state.recent.push_back(hit);
+                return;
+            }
+            ++it;
+        }
+    }
+    const auto & layer = model.layers[il];
+    bool advised = false;
+    bool failed = false;
+    for (const ggml_tensor * w : { layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps }) {
+        if (!w) {
+            continue;
+        }
+        if (id < 0 || id >= w->ne[2] || w->ne[3] != 1 || !ggml_is_contiguous(w) ||
+                w->nb[2] == 0 || !model.tensor_is_mapped(w)) {
+            if (!expert_prefetch_warned) {
+                LLAMA_LOG_INFO("expert_prefetch: skipping non-mmap or non-expert-contiguous tensors/invalid ids (once)\n");
+                expert_prefetch_warned = true;
+            }
+            continue;
+        }
+        static const uintptr_t page = (uintptr_t) sysconf(_SC_PAGESIZE);
+        const uintptr_t start = reinterpret_cast<uintptr_t>(w->data) + size_t(id) * w->nb[2];
+        if (page == 0 || page == UINTPTR_MAX || start > UINTPTR_MAX - w->nb[2] ||
+                start + w->nb[2] > UINTPTR_MAX - (page - 1)) {
+            continue;
+        }
+        const uintptr_t first = start - start % page;
+        const uintptr_t end = start + w->nb[2];
+        const uintptr_t last = end + (page - end % page) % page;
+        ++expert_prefetch_calls;
+        expert_prefetch_bytes += last - first;
+        if (madvise(reinterpret_cast<void *>(first), last - first, MADV_WILLNEED) != 0) {
+            ++expert_prefetch_failures;
+            failed = true;
+        } else {
+            advised = true;
+        }
+    }
+    if (advised && !failed) {
+        if (state.recent.size() == 32) {
+            state.recent.erase(state.recent.begin());
+        }
+        state.recent.emplace_back(id, state.tokens);
+    }
+#else
+    (void) il;
+    (void) id;
+#endif
+}
+
+void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe, void * data) {
+    auto & ctx = *static_cast<llama_context *>(data);
+#ifdef __linux__
+    if (ctx.expert_fill_failed) { return; }
+#endif
+    if (t->op != GGML_OP_MUL_MAT_ID || !t->src[0] || !t->src[2]) {
+        return;
+    }
+    size_t il = 0;
+    for (; il < ctx.model.layers.size(); ++il) {
+        const auto & layer = ctx.model.layers[il];
+        if (t->src[0] == layer.ffn_up_exps || t->src[0] == layer.ffn_gate_exps ||
+                t->src[0] == layer.ffn_down_exps || t->src[0] == layer.ffn_gate_up_exps) {
+            break;
+        }
+    }
+    if (il == ctx.model.layers.size() || ctx.expert_prefetch_layers[il].observed) {
+        return;
+                int32_t   il_end) {
+    LLAMA_LOG_DEBUG("%s: il_start = %d, il_end = %d\n", __func__, il_start, il_end);
+
+    bool res = cvec->apply(model, data, len, n_embd, il_start, il_end);
+
+    sched_need_reserve = true;
+
+    return res;
+}
+
+llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, llm_graph_type gtype, llama_memory_context_i * mctx, ggml_status & ret) {
+    if (mctx && !mctx->apply()) {
+        LLAMA_LOG_ERROR("%s: failed to apply memory context\n", __func__);
+        ret = GGML_STATUS_FAILED;
+        return nullptr;
+    }
+
+    auto * res = get_gf_res_prev();
+    auto * gf  = res->get_gf();
+
+#ifdef __linux__
+    expert_fill_init();
+    const char * fill = getenv("LLAMA_EXPERT_FILL");
+    const bool fill_requested = fill && strcmp(fill, "1") == 0;
+    const char * ep = getenv("LLAMA_EXPERT_PREFETCH");
+    if (!fill_requested && ep && strcmp(ep, "1") == 0 && expert_prefetch_layers.empty()) {
+        expert_prefetch_layers.resize(model.layers.size());
+        const char * next = getenv("LLAMA_EXPERT_PREFETCH_NEXT");
+        expert_prefetch_next = next && strcmp(next, "1") == 0;
+        LLAMA_LOG_INFO("expert_prefetch: CPU host-consumer hook enabled; device-only experts skipped, next=%d, LRU=32 ids/32 tokens\n", expert_prefetch_next);
+    }
+    for (auto & layer : expert_prefetch_layers) {
+        layer.observed = false;
+        layer.predicted.clear();
+    }
+    ggml_backend_sched_set_cpu_callback(sched.get(), expert_prefetch_layers.empty() ? nullptr : expert_prefetch_cb, this);
+#endif
+
+    // the new graph parameters
+    // in order to correctly reuse a graph, it's full topology has to be uniquely determined by these parameters
+    const auto gparams = graph_params(res, ubatch, mctx, gtype);
+
+    if (!graph_reuse_disable && gf_res_prev_active == res && res->can_reuse(gparams)) {
+        //LLAMA_LOG_DEBUG("%s: reusing previous graph\n", __func__);
+
+        // with pipeline parallelism, the previous graph_compute_async may still be running
+        // on the GPU. we must synchronize before set_inputs to avoid overwriting input tensors
+        // that the previous compute is still reading.
+        if (cparams.pipeline_parallel) {
+            ggml_backend_sched_synchronize(sched.get());
+        }
+
+        n_reused++;
+    } else {
+        gf_res_prev_active = nullptr;
+        res->reset();
+
+        ggml_backend_sched_reset(sched.get());
+        ggml_backend_sched_set_eval_callback(sched.get(), cparams.cb_eval, cparams.cb_eval_user_data);
+
+        //const auto t_start_us = ggml_time_us();
+
+        gf = model.build_graph(gparams);
+
+        //LLAMA_LOG_INFO("graph build time: %.3f ms\n", (ggml_time_us() - t_start_us)/1000.0);
+
+        if (!gf) {
+            LLAMA_LOG_ERROR("%s: failed to initialize graph\n", __func__);
+            ret = GGML_STATUS_FAILED;
+            return nullptr;
+        }
+
+        if (!ggml_backend_sched_alloc_graph(sched.get(), gf)) {
+            LLAMA_LOG_ERROR("%s: failed to allocate graph\n", __func__);
+            ret = GGML_STATUS_ALLOC_FAILED;
+            return nullptr;
+        }
+
+        gf_res_prev_active = res;
+    }
+
+/tmp/j-om8b-work/src/llama-context.cpp:702:void llama_context::expert_prefetch_advise(size_t il, int32_t id) {
+/tmp/j-om8b-work/src/llama-context.cpp:719:    bool advised = false;
+/tmp/j-om8b-work/src/llama-context.cpp:744:        if (madvise(reinterpret_cast<void *>(first), last - first, MADV_WILLNEED) != 0) {
+/tmp/j-om8b-work/src/llama-context.cpp:748:            advised = true;
+/tmp/j-om8b-work/src/llama-context.cpp:751:    if (advised && !failed) {
+/tmp/j-om8b-work/src/llama-context.cpp:829:        ctx.expert_prefetch_advise(il, id);
+/tmp/j-om8b-work/src/llama-context.cpp:838:                    ctx.expert_prefetch_advise(il + 1, id);
+/tmp/j-om8b-work/src/llama-context.cpp:868:        LLAMA_LOG_INFO("expert_prefetch: advise calls=%" PRIu64 " bytes advised=%" PRIu64 " failures=%" PRIu64
+
+codex
+`abrun` supports the requested order as an explicit eight-run sequence repeated twice. Its switch check accepts any listed regex, so I’ll list both markers as permitted; this catches missing activation and base leakage, but cannot independently require the decode marker. I’ll place the advice transition in `process_ubatch`, before the expert callback runs, and count phases in `ExpertFiller`.
+exec
+/bin/bash -lc "sed -n '635,680p' /tmp/j-om8b-work/src/llama-context.cpp; cat cc/expert_fill/test_expert_fill.cpp" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+        const int n_vocab = model.vocab.n_tokens();
+
+        sampling.token_ids_full_vocab.resize(n_vocab);
+        for (int i = 0; i < n_vocab; ++i) {
+            sampling.token_ids_full_vocab[i] = i;
+        }
+    }
+}
+
+#ifdef __linux__
+void llama_context::expert_fill_init() {
+    if (expert_fill_checked) { return; }
+    expert_fill_checked = true;
+    const char * fill = getenv("LLAMA_EXPERT_FILL");
+    if (!fill || strcmp(fill, "1") != 0) { return; }
+    try {
+        for (const auto & layer : model.layers) {
+            for (const ggml_tensor * w : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
+                if (!w) { continue; }
+                llama_model::expert_file_range info;
+                if (w->ne[2] <= 0 || w->ne[3] != 1 || !ggml_is_contiguous(w) || !w->nb[2] ||
+                        !model.expert_file_info(w, info)) {
+                    throw std::runtime_error("expert tensors not mmap-backed or file offsets unavailable/unsupported layout");
+                }
+                if (!expert_fillers.count(info.file_index)) {
+                    expert_fillers.emplace(info.file_index, std::make_unique<ExpertFiller>(
+                        "/proc/self/fd/" + std::to_string(info.source_fd), info.mapping, info.mapping_size));
+                }
+            }
+        }
+        if (expert_fillers.empty()) { throw std::runtime_error("no mmap-backed expert tensors"); }
+        expert_prefetch_layers.resize(model.layers.size());
+        expert_fill_enabled = true;
+        const char * random = getenv("LLAMA_EXPERT_FILL_RANDOM");
+        const auto & filler = *expert_fillers.begin()->second;
+        LLAMA_LOG_INFO("expert_fill: active threads=%zu chunk_kib=%zu random=%d files=%zu\n",
+            filler.threads(), filler.chunk_bytes() / 1024, random && strcmp(random, "1") == 0, expert_fillers.size());
+    } catch (const std::exception & e) {
+        expert_fillers.clear();
+        LLAMA_LOG_INFO("expert_fill: inactive (%s)\n", e.what());
+    }
+}
+
+void llama_context::expert_fill_selected(size_t il, const std::vector<int32_t> & selected) {
+    if (expert_fill_failed) { return; }
+    try {
+#include "expert_fill.h"
+#include <cassert>
+#include <cstdio>
+#include <cstring>
+
+int main() {
+    char path[] = "/tmp/expert-fill-XXXXXX";
+    const int fd = mkstemp(path);
+    assert(fd >= 0);
+    const size_t size = 64 * 1024 * 1024, page = size_t(sysconf(_SC_PAGESIZE));
+    std::vector<unsigned char> block(1024 * 1024);
+    for (size_t i = 0; i < block.size(); ++i) { block[i] = (i * 17 + i / 251) % 256; }
+    for (size_t pos = 0; pos < size; pos += block.size()) {
+        assert(pwrite(fd, block.data(), block.size(), pos) == ssize_t(block.size()));
+    }
+    assert(fsync(fd) == 0);
+    auto * map = static_cast<unsigned char *>(mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0));
+    assert(map != MAP_FAILED);
+    assert(posix_fadvise(fd, 0, size, POSIX_FADV_DONTNEED) == 0);
+    std::vector<unsigned char> residency(size / page);
+    assert(mincore(map, size, residency.data()) == 0);
+    size_t before = 0;
+    for (auto v : residency) { before += (v & 1) != 0; }
+    assert(before == 0);
+    // Three unaligned, overlapping ranges form one page-aligned union.
+    const std::vector<ExpertFiller::Range> ranges = {
+        {4 * 1024 * 1024 + 17, 3 * 1024 * 1024},
+        {6 * 1024 * 1024 + 33, 4 * 1024 * 1024},
+        {9 * 1024 * 1024 + 55, 2 * 1024 * 1024}};
+    const size_t first = ranges.front().offset / page * page;
+    const size_t last = (ranges.back().offset + ranges.back().len + page - 1) / page * page;
+    {
+        ExpertFiller filler(path, map, size);
+        filler.fill(ranges);
+        assert(mincore(map, size, residency.data()) == 0);
+        size_t extra = 0;
+        for (size_t i = 0; i < residency.size(); ++i) {
+            if (i * page >= first && i * page < last) { assert(residency[i] & 1); }
+            else { extra += (residency[i] & 1) != 0; }
+        }
+        printf("measured readahead extra pages: %zu (%zu bytes)\n", extra, extra * page);
+        const auto a = filler.counters();
+        assert(a.calls == 1 && a.ranges == 3 && a.bytes_requested == last - first);
+        assert(a.bytes_read > 0 && a.bytes_read <= last - first);
+        assert(a.bytes_read + a.bytes_skipped_resident == last - first);
+        assert(a.read_syscalls > 0 && a.total_fill_wall_ns >= a.max_single_fill_ns);
+        assert(a.max_single_fill_ns > 0);
+        filler.fill(ranges);
+        const auto b = filler.counters();
+        assert(b.calls == 2 && b.ranges == 6 && b.bytes_requested == 2 * (last - first));
+        assert(b.bytes_read == a.bytes_read && b.read_syscalls == a.read_syscalls);
+        assert(b.bytes_skipped_resident - a.bytes_skipped_resident == last - first);
+        for (size_t i = first; i < last; ++i) { assert(map[i] == block[i % block.size()]); }
+        // A partial last page must not cause pread beyond EOF.
+        bool rejected = false;
+        try { filler.fill({{size - 1, 2}}); } catch (const std::out_of_range &) { rejected = true; }
+        assert(rejected);
+    }
+    assert(munmap(map, size) == 0); close(fd); unlink(path);
+    puts("PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds");
+}
+
+exec
+/bin/bash -lc "cat > /tmp/j-om8b-edit.py <<'PY'
+from pathlib import Path
+root=Path('/tmp/j-om8b-work')
+# Preserve the 01-03 index for the incremental patch; the original index is saved separately.
+import subprocess
+subprocess.run(['cp',str(root/'.git/index'),'/tmp/j-om8b-base-index'],check=True)
+subprocess.run(['git','-C',str(root),'add','.'],check=True)
+h=root/'src/llama-expert-fill.h'
+s=h.read_text().replace('uint64_t total_fill_wall_ns = 0, max_single_fill_ns = 0;', 'uint64_t total_fill_wall_ns = 0, max_single_fill_ns = 0;\\n        uint64_t prompt_calls = 0, prompt_bytes_read = 0, prompt_fill_wall_ns = 0;\\n        uint64_t decode_calls = 0, decode_bytes_read = 0, decode_fill_wall_ns = 0;')
+s=s.replace('void fill(const std::vector<Range> & ranges)', 'void fill(const std::vector<Range> & ranges, bool decode = false)')
+s=s.replace('++counters_.calls;', '++counters_.calls;\\n        ++(decode ? counters_.decode_calls : counters_.prompt_calls);\\n        const uint64_t bytes_before = counters_.bytes_read;')
+s=s.replace('counters_.total_fill_wall_ns += ns;', 'counters_.total_fill_wall_ns += ns;\\n            (decode ? counters_.decode_fill_wall_ns : counters_.prompt_fill_wall_ns) += ns;\\n            (decode ? counters_.decode_bytes_read : counters_.prompt_bytes_read) += counters_.bytes_read - bytes_before;')
+h.write_text(s)
+Path('cc/expert_fill/expert_fill.h').write_text(s)
+h=root/'src/llama-context.h';s=h.read_text().replace('bool expert_fill_failed = false;', '''bool expert_fill_failed = false;
+    bool expert_fill_random_decode = false;
+    bool expert_fill_random_applied = false;
+    bool expert_fill_decode = false;
+    bool expert_fill_this_ubatch = true;
+    uint64_t expert_fill_min_tokens = 0, expert_fill_max_tokens = 0;
+    void expert_fill_phase(uint32_t n_tokens);''');h.write_text(s)
+p=root/'src/llama-context.cpp';s=p.read_text()
+s=s.replace('const auto & filler = *expert_fillers.begin()->second;', '''expert_fill_random_decode = random && strcmp(random, \"decode\") == 0;
+        auto token_limit = [](const char * name) -> uint64_t {
+            const char * value = getenv(name);
+            if ("'!value || !*value || *value == '"'-') { return 0; }
+            char * end = nullptr; errno = 0;
+            const auto n = strtoull(value, &end, 10);
+            return errno || *end ? 0 : n;
+        };
+        expert_fill_min_tokens = token_limit(\"LLAMA_EXPERT_FILL_MIN_TOKENS\");
+        expert_fill_max_tokens = token_limit(\"LLAMA_EXPERT_FILL_MAX_TOKENS\");
+        const auto & filler = *expert_fillers.begin()->second;''')
+s=s.replace('random=%d files=%zu', 'random=%s files=%zu').replace('random && strcmp(random, \"1\") == 0, expert_fillers.size()', 'expert_fill_random_decode ? \"decode\" : (random && strcmp(random, \"1\") == 0 ? \"1\" : \"0\"), expert_fillers.size()')
+marker='void llama_context::expert_fill_selected('
+pos=s.index(marker)
+s=s[:pos]+'''void llama_context::expert_fill_phase(uint32_t n_tokens) {
+    expert_fill_decode = n_tokens == 1;
+    expert_fill_this_ubatch = n_tokens >= expert_fill_min_tokens &&
+        ("'!expert_fill_max_tokens || n_tokens <= expert_fill_max_tokens);
+    if (!expert_fill_enabled || expert_fill_failed || !expert_fill_random_decode ||
+            expert_fill_random_applied || !expert_fill_decode) { return; }
+    // Transition before the first single-token graph, including when fill is filtered out.
+    expert_fill_random_applied = true;
+    const long page = sysconf(_SC_PAGESIZE);
+    bool ok = page > 0;
+    for (const auto & layer : model.layers) {
+        for (const ggml_tensor * w : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
+            if (!w) { continue; }
+            llama_model::expert_file_range info;
+            if (!ok || !model.expert_file_info(w, info)) { ok = false; continue; }
+            const size_t first = info.offset - info.offset % size_t(page);
+            const size_t end = info.offset + ggml_nbytes(w);
+            const size_t pad = (size_t(page) - end % size_t(page)) % size_t(page);
+            const size_t last = end + std::min(pad, info.mapping_size - end);
+            if (madvise(static_cast<char *>(info.mapping) + first, last - first, MADV_RANDOM)) { ok = false; }
+        }
+    }
+    if (ok) {
+        LLAMA_LOG_INFO("expert_fill: random advice applied at decode'"\\\\n\");
+    } else {
+        expert_fill_failed = true;
+        LLAMA_LOG_INFO(\"expert_fill: inactive (decode random advice failed)\\\\n\");
+    }
+}
+
+'''+s[pos:]
+s=s.replace('if (expert_fill_failed) { return; }\\n    try', 'if (expert_fill_failed || "'!expert_fill_this_ubatch) { return; }'"\\n    try')
+s=s.replace('->fill(entry.second);', '->fill(entry.second, expert_fill_decode);')
+s=s.replace('sum.total_fill_wall_ns += s.total_fill_wall_ns;', '''sum.total_fill_wall_ns += s.total_fill_wall_ns;
+            sum.prompt_calls += s.prompt_calls; sum.prompt_bytes_read += s.prompt_bytes_read;
+            sum.prompt_fill_wall_ns += s.prompt_fill_wall_ns;
+            sum.decode_calls += s.decode_calls; sum.decode_bytes_read += s.decode_bytes_read;
+            sum.decode_fill_wall_ns += s.decode_fill_wall_ns;''')
+s=s.replace('\" total_fill_wall_ns=%\" PRIu64 \" max_single_fill_ns=%\" PRIu64 \"\\\\n\",', '''\" total_fill_wall_ns=%\" PRIu64 \" max_single_fill_ns=%\" PRIu64
+            \" prompt_calls=%\" PRIu64 \" prompt_bytes_read=%\" PRIu64 \" prompt_fill_wall_ns=%\" PRIu64
+            \" decode_calls=%\" PRIu64 \" decode_bytes_read=%\" PRIu64 \" decode_fill_wall_ns=%\" PRIu64 \"\\\\n\",''')
+s=s.replace('sum.read_syscalls, sum.total_fill_wall_ns, sum.max_single_fill_ns);', '''sum.read_syscalls, sum.total_fill_wall_ns, sum.max_single_fill_ns,
+            sum.prompt_calls, sum.prompt_bytes_read, sum.prompt_fill_wall_ns,
+            sum.decode_calls, sum.decode_bytes_read, sum.decode_fill_wall_ns);''')
+s=s.replace('    expert_fill_init();', '    expert_fill_init();\\n    expert_fill_phase(ubatch.n_tokens);')
+p.write_text(s)
+PY
+python3 /tmp/j-om8b-edit.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 11ms:
+exec
+/bin/bash -lc "cat > /tmp/j-om8b-artifacts.py <<'PY'
+from pathlib import Path
+import json,copy,subprocess,os
+r=Path('/home/muk/projects/siminfeng/campaign'); w='/tmp/j-om8b-work'
+p=r/'cc/mmap_advice/patches'
+(p/'04-fill-phase.patch').write_bytes(subprocess.check_output(['git','-C',w,'diff','--binary']))
+env=dict(os.environ,GIT_INDEX_FILE='/tmp/j-om8b-base-index')
+(p/'combined-01-02-03-04.patch').write_bytes(subprocess.check_output(['git','-C',w,'diff','--binary'],env=env))
+s=json.loads((r/'cc/abrun/specs/J-OM8.json').read_text());s['id']='J-OM8b'
+base=copy.deepcopy(s['arms']['base']); fr=copy.deepcopy(s['arms']['fill_random'])
+frd=copy.deepcopy(fr);frd['env'].update(LLAMA_EXPERT_FILL_RANDOM='decode',LLAMA_EXPERT_FILL_MAX_TOKENS='1')
+frd16=copy.deepcopy(frd);frd16['env'].update(LLAMA_EXPERT_FILL_THREADS='16',LLAMA_EXPERT_FILL_CHUNK_KIB='2048')
+s['arms']=dict(base=base,fr=fr,frd=frd,frd16=frd16)
+for arm in s['arms'].values():
+ arm['image']='campaign/llamacpp:jetson-up1108-om8b'
+ arm['env'].setdefault('LLAMA_EXPERT_FILL_MAX_TOKENS','0')
+ arm['env']['LLAMA_EXPERT_FILL_MIN_TOKENS']='0'
+s.update(order='explicit',explicit_order=['base','fr','frd','frd16','frd16','frd','fr','base'],rounds=2,switch_regex=['expert_fill: active','expert_fill: random advice applied at decode'])
+(r/'cc/abrun/specs/J-OM8b.json').write_text(json.dumps(s,indent=2)+'\\n')
+p=r/'cc/expert_fill/test_expert_fill.cpp';t=p.read_text().replace('        filler.fill(ranges);\\n        const auto b', '        filler.fill(ranges, true);\\n        const auto b')
+t=t.replace('        assert(b.calls == 2', '''        assert(a.prompt_calls == 1 && a.decode_calls == 0);
+        assert(a.prompt_bytes_read == a.bytes_read && a.decode_bytes_read == 0);
+        assert(a.prompt_fill_wall_ns == a.total_fill_wall_ns && a.decode_fill_wall_ns == 0);
+        assert(b.prompt_calls == 1 && b.decode_calls == 1);
+        assert(b.prompt_bytes_read == a.bytes_read && b.decode_bytes_read == 0);
+        assert(b.prompt_fill_wall_ns == a.total_fill_wall_ns);
+        assert(b.prompt_fill_wall_ns + b.decode_fill_wall_ns == b.total_fill_wall_ns);
+        assert(b.calls == 2''')
+p.write_text(t)
+PY
+python3 /tmp/j-om8b-artifacts.py
+make -C cc/expert_fill test
+python3 cc/abrun/abrun.py cc/abrun/specs/J-OM8b.json --dry-run" in /home/muk/projects/siminfeng/campaign
+ succeeded in 3748ms:
+make: Entering directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror test_expert_fill.cpp -o test_expert_fill
+./test_expert_fill
+measured readahead extra pages: 31 (126976 bytes)
+PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds
+make: Leaving directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+Order: base, fr, frd, frd16, frd16, frd, fr, base, base, fr, frd, frd16, frd16, frd, fr, base
+Run 1: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/001-base campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=0 -e LLAMA_EXPERT_FILL_RANDOM=0 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 2: fr  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/002-fr campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=1 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 3: frd  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/003-frd campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 4: frd16  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/004-frd16 campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 5: frd16  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/005-frd16 campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 6: frd  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/006-frd campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 7: fr  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/007-fr campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=1 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 8: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/008-base campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=0 -e LLAMA_EXPERT_FILL_RANDOM=0 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 9: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/009-base campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=0 -e LLAMA_EXPERT_FILL_RANDOM=0 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 10: fr  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/010-fr campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=1 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 11: frd  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/011-frd campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 12: frd16  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/012-frd16 campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 13: frd16  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/013-frd16 campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 14: frd  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/014-frd campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 15: fr  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/015-fr campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=1 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 16: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM8b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM8b/016-base campaign/llamacpp:jetson-up1108-om8b '-e LLAMA_EXPERT_FILL=0 -e LLAMA_EXPERT_FILL_RANDOM=0 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+import subprocess,hashlib
+r=Path('/home/muk/projects/siminfeng/campaign');w=Path('/tmp/j-om8b-work')
+p=r/'cc/mmap_advice/patches/combined-01-02-03-04.patch'
+files=[line[6:] for line in subprocess.check_output(['git','diff','--name-only'],cwd=w,env=__import__('os').environ.copy()|{'GIT_INDEX_FILE':'/tmp/j-om8b-base-index'},text=True).splitlines() if line.endswith('.cpp')]
+# paths above already have src/ or ggml/ prefixes; retain them intact.
+files=[line for line in subprocess.check_output(['git','diff','--name-only'],cwd=w,env=__import__('os').environ.copy()|{'GIT_INDEX_FILE':'/tmp/j-om8b-base-index'},text=True).splitlines() if line.endswith('.cpp')]
+log=['\\nJ-OM8b / 04 phase-aware fill syntax-only compile proof','Source: cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03-04.patch','Patch SHA256: '+hashlib.sha256(p.read_bytes()).hexdigest(),'Compiler: '+subprocess.check_output(['g++','--version'],text=True).splitlines()[0]]
+for f in files:
+ cmd=['g++','-std=c++17','-fsyntax-only','-pthread','-Iinclude','-Iggml/include','-Isrc','-Iggml/src',f]
+ result=subprocess.run(cmd,cwd=w,text=True,capture_output=True)
+ log+=['','"'$ cd '"'+str(w),'"'$ '"'+' '.join(cmd),'stdout:',result.stdout or '(empty)','stderr:',result.stderr or '(empty)','exit '+str(result.returncode)]
+ print(f, 'exit', result.returncode, result.stderr[:2000])
+ if result.returncode: raise SystemExit(1)
+log+=['','Every touched .cpp in 01-04: exit 0.']
+with (r/'cc/expert_fill/COMPILE-CHECK.txt').open('a') as f:f.write('\\n'.join(log)+'\\n')
+PY" in /home/muk/projects/siminfeng/campaign
+exec
+/bin/bash -lc "GIT_INDEX_FILE=/tmp/j-om8b-base-index git -C /tmp/j-om8b-work add -N src/llama-expert-fill.h; GIT_INDEX_FILE=/tmp/j-om8b-base-index git -C /tmp/j-om8b-work diff --binary > cc/mmap_advice/patches/combined-01-02-03-04.patch; rg '"'^diff --git'"' cc/mmap_advice/patches/combined-01-02-03-04.patch; cat cc/mmap_advice/patches/04-fill-phase.patch" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+diff --git a/ggml/include/ggml-backend.h b/ggml/include/ggml-backend.h
+diff --git a/ggml/src/ggml-backend.cpp b/ggml/src/ggml-backend.cpp
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+diff --git a/src/llama-context.h b/src/llama-context.h
+diff --git a/src/llama-expert-fill.h b/src/llama-expert-fill.h
+diff --git a/src/llama-mmap.cpp b/src/llama-mmap.cpp
+diff --git a/src/llama-model-loader.cpp b/src/llama-model-loader.cpp
+diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+diff --git a/src/llama-model.h b/src/llama-model.h
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 1f28988..2fb17b0 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -666,17 +666,57 @@ void llama_context::expert_fill_init() {
+         expert_prefetch_layers.resize(model.layers.size());
+         expert_fill_enabled = true;
+         const char * random = getenv("LLAMA_EXPERT_FILL_RANDOM");
++        expert_fill_random_decode = random && strcmp(random, "decode") == 0;
++        auto token_limit = [](const char * name) -> uint64_t {
++            const char * value = getenv(name);
++            if (!value || !*value || *value == '-') { return 0; }
++            char * end = nullptr; errno = 0;
++            const auto n = strtoull(value, &end, 10);
++            return errno || *end ? 0 : n;
++        };
++        expert_fill_min_tokens = token_limit("LLAMA_EXPERT_FILL_MIN_TOKENS");
++        expert_fill_max_tokens = token_limit("LLAMA_EXPERT_FILL_MAX_TOKENS");
+         const auto & filler = *expert_fillers.begin()->second;
+-        LLAMA_LOG_INFO("expert_fill: active threads=%zu chunk_kib=%zu random=%d files=%zu\n",
+-            filler.threads(), filler.chunk_bytes() / 1024, random && strcmp(random, "1") == 0, expert_fillers.size());
++        LLAMA_LOG_INFO("expert_fill: active threads=%zu chunk_kib=%zu random=%s files=%zu\n",
++            filler.threads(), filler.chunk_bytes() / 1024, expert_fill_random_decode ? "decode" : (random && strcmp(random, "1") == 0 ? "1" : "0"), expert_fillers.size());
+     } catch (const std::exception & e) {
+         expert_fillers.clear();
+         LLAMA_LOG_INFO("expert_fill: inactive (%s)\n", e.what());
+     }
+ }
+ 
++void llama_context::expert_fill_phase(uint32_t n_tokens) {
++    expert_fill_decode = n_tokens == 1;
++    expert_fill_this_ubatch = n_tokens >= expert_fill_min_tokens &&
++        (!expert_fill_max_tokens || n_tokens <= expert_fill_max_tokens);
++    if (!expert_fill_enabled || expert_fill_failed || !expert_fill_random_decode ||
++            expert_fill_random_applied || !expert_fill_decode) { return; }
++    // Transition before the first single-token graph, including when fill is filtered out.
++    expert_fill_random_applied = true;
++    const long page = sysconf(_SC_PAGESIZE);
++    bool ok = page > 0;
++    for (const auto & layer : model.layers) {
++        for (const ggml_tensor * w : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
++            if (!w) { continue; }
++            llama_model::expert_file_range info;
++            if (!ok || !model.expert_file_info(w, info)) { ok = false; continue; }
++            const size_t first = info.offset - info.offset % size_t(page);
++            const size_t end = info.offset + ggml_nbytes(w);
++            const size_t pad = (size_t(page) - end % size_t(page)) % size_t(page);
++            const size_t last = end + std::min(pad, info.mapping_size - end);
++            if (madvise(static_cast<char *>(info.mapping) + first, last - first, MADV_RANDOM)) { ok = false; }
++        }
++    }
++    if (ok) {
++        LLAMA_LOG_INFO("expert_fill: random advice applied at decode\n");
++    } else {
++        expert_fill_failed = true;
++        LLAMA_LOG_INFO("expert_fill: inactive (decode random advice failed)\n");
++    }
++}
++
+ void llama_context::expert_fill_selected(size_t il, const std::vector<int32_t> & selected) {
+-    if (expert_fill_failed) { return; }
++    if (expert_fill_failed || !expert_fill_this_ubatch) { return; }
+     try {
+         std::map<size_t, std::vector<ExpertFiller::Range>> ranges;
+         const auto & layer = model.layers[il];
+@@ -691,7 +731,7 @@ void llama_context::expert_fill_selected(size_t il, const std::vector<int32_t> &
+                 ranges[info.file_index].push_back({info.offset + size_t(id) * w->nb[2], w->nb[2]});
+             }
+         }
+-        for (const auto & entry : ranges) { expert_fillers.at(entry.first)->fill(entry.second); }
++        for (const auto & entry : ranges) { expert_fillers.at(entry.first)->fill(entry.second, expert_fill_decode); }
+     } catch (const std::exception & e) {
+         expert_fill_failed = true;
+         LLAMA_LOG_INFO("expert_fill: inactive (%s)\n", e.what());
+@@ -855,13 +895,21 @@ llama_context::~llama_context() {
+             sum.bytes_requested += s.bytes_requested; sum.bytes_skipped_resident += s.bytes_skipped_resident;
+             sum.bytes_read += s.bytes_read; sum.read_syscalls += s.read_syscalls;
+             sum.total_fill_wall_ns += s.total_fill_wall_ns;
++            sum.prompt_calls += s.prompt_calls; sum.prompt_bytes_read += s.prompt_bytes_read;
++            sum.prompt_fill_wall_ns += s.prompt_fill_wall_ns;
++            sum.decode_calls += s.decode_calls; sum.decode_bytes_read += s.decode_bytes_read;
++            sum.decode_fill_wall_ns += s.decode_fill_wall_ns;
+             sum.max_single_fill_ns = std::max(sum.max_single_fill_ns, s.max_single_fill_ns);
+         }
+         LLAMA_LOG_INFO("expert_fill: stats calls=%" PRIu64 " ranges=%" PRIu64 " bytes_requested=%" PRIu64
+             " bytes_skipped_resident=%" PRIu64 " bytes_read=%" PRIu64 " read_syscalls=%" PRIu64
+-            " total_fill_wall_ns=%" PRIu64 " max_single_fill_ns=%" PRIu64 "\n",
++            " total_fill_wall_ns=%" PRIu64 " max_single_fill_ns=%" PRIu64
++            " prompt_calls=%" PRIu64 " prompt_bytes_read=%" PRIu64 " prompt_fill_wall_ns=%" PRIu64
++            " decode_calls=%" PRIu64 " decode_bytes_read=%" PRIu64 " decode_fill_wall_ns=%" PRIu64 "\n",
+             sum.calls, sum.ranges, sum.bytes_requested, sum.bytes_skipped_resident, sum.bytes_read,
+-            sum.read_syscalls, sum.total_fill_wall_ns, sum.max_single_fill_ns);
++            sum.read_syscalls, sum.total_fill_wall_ns, sum.max_single_fill_ns,
++            sum.prompt_calls, sum.prompt_bytes_read, sum.prompt_fill_wall_ns,
++            sum.decode_calls, sum.decode_bytes_read, sum.decode_fill_wall_ns);
+     }
+ #endif
+     if (!expert_prefetch_layers.empty() && expert_prefetch_calls) {
+@@ -1919,6 +1967,7 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
+ 
+ #ifdef __linux__
+     expert_fill_init();
++    expert_fill_phase(ubatch.n_tokens);
+     const char * fill = getenv("LLAMA_EXPERT_FILL");
+     const bool fill_requested = fill && strcmp(fill, "1") == 0;
+     const char * ep = getenv("LLAMA_EXPERT_PREFETCH");
+diff --git a/src/llama-context.h b/src/llama-context.h
+index ee779ed..81b3c21 100644
+--- a/src/llama-context.h
++++ b/src/llama-context.h
+@@ -58,6 +58,12 @@ struct llama_context {
+     bool expert_fill_checked = false;
+     bool expert_fill_enabled = false;
+     bool expert_fill_failed = false;
++    bool expert_fill_random_decode = false;
++    bool expert_fill_random_applied = false;
++    bool expert_fill_decode = false;
++    bool expert_fill_this_ubatch = true;
++    uint64_t expert_fill_min_tokens = 0, expert_fill_max_tokens = 0;
++    void expert_fill_phase(uint32_t n_tokens);
+     void expert_fill_init();
+     void expert_fill_selected(size_t il, const std::vector<int32_t> & selected);
+ #endif
+diff --git a/src/llama-expert-fill.h b/src/llama-expert-fill.h
+index 690b808..21f5463 100644
+--- a/src/llama-expert-fill.h
++++ b/src/llama-expert-fill.h
+@@ -25,6 +25,8 @@ public:
+         uint64_t calls = 0, ranges = 0, bytes_requested = 0;
+         uint64_t bytes_skipped_resident = 0, bytes_read = 0, read_syscalls = 0;
+         uint64_t total_fill_wall_ns = 0, max_single_fill_ns = 0;
++        uint64_t prompt_calls = 0, prompt_bytes_read = 0, prompt_fill_wall_ns = 0;
++        uint64_t decode_calls = 0, decode_bytes_read = 0, decode_fill_wall_ns = 0;
+     };
+     // mapping must be a live, offset-zero file mmap for the lifetime of this object.
+     ExpertFiller(const std::string & path, void * mapping, size_t mapping_size)
+@@ -59,15 +61,19 @@ public:
+     size_t chunk_bytes() const { return chunk_; }
+     Counters counters() const { std::lock_guard<std::mutex> lock(fill_mutex_); return counters_; }
+ 
+-    void fill(const std::vector<Range> & ranges) {
++    void fill(const std::vector<Range> & ranges, bool decode = false) {
+         std::lock_guard<std::mutex> serial(fill_mutex_);
+         const auto start = std::chrono::steady_clock::now();
+         ++counters_.calls;
++        ++(decode ? counters_.decode_calls : counters_.prompt_calls);
++        const uint64_t bytes_before = counters_.bytes_read;
+         counters_.ranges += ranges.size();
+         auto finish = [&] {
+             const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                 std::chrono::steady_clock::now() - start).count();
+             counters_.total_fill_wall_ns += ns;
++            (decode ? counters_.decode_fill_wall_ns : counters_.prompt_fill_wall_ns) += ns;
++            (decode ? counters_.decode_bytes_read : counters_.prompt_bytes_read) += counters_.bytes_read - bytes_before;
+             counters_.max_single_fill_ns = std::max(counters_.max_single_fill_ns, ns);
+         };
+         try {
+
+ succeeded in 15167ms:
+ggml/src/ggml-backend.cpp exit 0 
+src/llama-context.cpp exit 0 
+src/llama-mmap.cpp exit 0 
+src/llama-model-loader.cpp exit 0 
+src/llama-model.cpp exit 0 
+
+exec
+/bin/bash -lc "cat > /tmp/j-om8b-verify.py <<'PY'
+from pathlib import Path
+import subprocess,hashlib
+r=Path('/home/muk/projects/siminfeng/campaign');patch=r/'cc/mmap_advice/patches'
+archive=subprocess.check_output(['git','-C',str(r/'ref/llama.cpp-up1108'),'archive','cf34d311'])
+for name,patches in [('sequential',['01-mmap-advice-random.patch','02-router-prefetch.patch','03-expert-fill.patch','04-fill-phase.patch']),('combined',['combined-01-02-03-04.patch'])]:
+ w=Path('/tmp/j-om8b-check-'+name);w.mkdir()
+ subprocess.run(['tar','-x','-C',str(w)],input=archive,check=True)
+ for p in patches:
+  for args in [['--check'],[]]:subprocess.run(['git','apply',*args,str(patch/p)],cwd=w,check=True)
+ print(name+': git apply --check and apply exit 0')
+a=Path('/tmp/j-om8b-check-sequential');b=Path('/tmp/j-om8b-check-combined')
+subprocess.run(['diff','-r',str(a),str(b)],check=True)
+assert (b/'src/llama-expert-fill.h').read_bytes()==(r/'cc/expert_fill/expert_fill.h').read_bytes()
+print('diff -r empty; final header matches source of truth')
+log=r/'cc/expert_fill/COMPILE-CHECK.txt'
+# Update 04 hash after ensuring the new header is included in the combined diff.
+s=log.read_text();start=s.index('J-OM8b / 04')
+import re
+s=s[:start]+re.sub(r'Patch SHA256: [0-9a-f]+','Patch SHA256: '+hashlib.sha256((patch/'combined-01-02-03-04.patch').read_bytes()).hexdigest(),s[start:])
+log.write_text(s)
+with log.open('a') as f:f.write('\\n04 patch verification: fresh cf34d311 archive; git apply --check and apply exit 0 for each of 01,02,03,04 and combined-01-02-03-04.\\nSequential versus combined: diff -r exit 0 (empty).\\nFinal src/llama-expert-fill.h versus cc/expert_fill/expert_fill.h: byte comparison equal.\\n')
+PY
+python3 /tmp/j-om8b-verify.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 2624ms:
+sequential: git apply --check and apply exit 0
+combined: git apply --check and apply exit 0
+diff -r empty; final header matches source of truth
+
+exec
+/bin/bash -lc "cat cc/expert_fill/README.md; rg -n 'switch_lines|switch_regex' cc/abrun/run_summary.py; tail -65 cc/expert_fill/COMPILE-CHECK.txt; rg -n 'expert_fill_phase' /tmp/j-om8b-work/src/llama-context.cpp" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# J-OM8: synchronous exact expert fill
+
+Linux, C++17, opt-in `LLAMA_EXPERT_FILL=1`. The CPU scheduler's before-node
+observer waits for host router IDs, deduplicates the layer's ubatch union,
+and fills gate/up/down (or merged gate-up) slices before expert MUL_MAT_ID.
+The loader's `weights_map` supplies source file index and absolute GGUF byte
+offset; the model retains buffered file handles and validates each tensor's
+mmap address against that offset. Split GGUF files get independent fillers.
+Unavailable offsets, non-mmap tensors or unsupported layouts disable filling
+with one `expert_fill: inactive (<reason>)` line per context.
+
+`expert_fill.h` is the source of truth: the patch copies its exact contents to
+`src/llama-expert-fill.h`. Each filler opens its own O_RDONLY (not O_DIRECT)
+fd via the retained model fd's `/proc/self/fd/N` path. Its persistent pool uses
+`LLAMA_EXPERT_FILL_THREADS` (default 8) and per-worker scratch buffers sized by
+`LLAMA_EXPERT_FILL_CHUNK_KIB` (default 1024). Invalid settings use defaults;
+limits are 256 threads and 65536 KiB. `fill` aligns outward, merges adjacent
+or overlapping ranges, queries mincore, and reads only nonresident runs in
+parallel with buffered pread. It waits for every job, including on IO errors.
+Counters include calls, input ranges, requested page-aligned union bytes,
+resident bytes skipped, actual bytes read, pread syscalls (including retries),
+total fill wall ns and maximum single-fill ns. Final pages stop at file EOF.
+Concurrent fills on one filler serialize; mmap lifetime belongs to its caller.
+
+Fill takes precedence over both OM7 prefetch switches, including on failure.
+It never calls OM7's per-expert WILLNEED. `LLAMA_EXPERT_FILL_RANDOM=1` separately
+applies RANDOM to expert mmap ranges and excludes their initial prefetch;
+default-off retains normal loader advice. Buffered fd readahead can still add
+bytes even with mmap RANDOM. Other explicit mmap/NUMA/lazy policies still apply.
+
+Expected effect (hypothesis, not performance evidence): CLOSEOUT 3.C uses
+615 MB selected expert bytes/token, approximately 586.5 MiB. At 3.D's LRU
+hit rates 0.536/0.662/0.694/0.605, misses are about 272/198/179/232 MiB/token.
+At the 536-573 MiB/s drive ceiling, IO-only bounds are respectively
+1.97-2.11 / 2.70-2.89 / 2.99-3.19 / 2.31-2.47 tokens/s; mean hit 0.624 gives
+221 MiB/token and 2.43-2.60 tokens/s. Replay slots are not a measured page-cache
+hit rate; these bounds omit CPU, synchronization, metadata and readahead costs.
+
+Risks: page-cache thrash can evict experts needed later in the same token,
+including pages just filled. mincore is a racing residency snapshot, not a
+pin; it avoids copying already resident bytes into scratch. Missing bytes
+still incur a page-cache-to-scratch copy. Pool memory, graph boundaries,
+fragmented missing runs, readahead and synchronous waits can erase any gain.
+
+Run `make -C cc/expert_fill test` (no root/GPU). It evicts a 64 MiB file with
+FADV_DONTNEED, checks the resident union, measures extra readahead pages,
+checks counters and a zero-read repeat, and verifies mmap data and bounds.
+
+A/B spec: `cc/abrun/specs/J-OM8.json`, image
+`campaign/llamacpp:jetson-up1108-om8`; A=base, B=fill, C=fill_random (fill+random); ABCCBA.
+Use llama-completion p1 with `-n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99
+-lm mmap -cmoe`. Require switch regex `expert_fill: active` only in fill arms.
+Collect eval_tps, nvme_gib, avg_kib_per_io; verify identical output hashes,
+nonzero fill stats, matched cold-cache procedure and no competing NVMe work.
+Startup line records threads/chunk/random; exit `expert_fill: stats` has all
+counters. Compare disk telemetry, not fill counters, to assess physical IO.
+16:def summarize(directory, switch_regex=(), write=True):
+50:    for pattern in switch_regex:
+55:    result['switch_lines'] = [line for line in stderr.splitlines()
+181:    summaries = [summarize(d, args.switch_regex, not args.no_write) for d in args.dirs]
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+Every touched .cpp: exit 0.
+
+J-OM8b / 04 phase-aware fill syntax-only compile proof
+Source: cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03-04.patch
+Patch SHA256: d1792e9565df2d2d27d1e24492b665f9704db674b6d823ab7ca482407a9e3036
+Compiler: g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+Every touched .cpp in 01-04: exit 0.
+
+04 patch verification: fresh cf34d311 archive; git apply --check and apply exit 0 for each of 01,02,03,04 and combined-01-02-03-04.
+Sequential versus combined: diff -r exit 0 (empty).
+Final src/llama-expert-fill.h versus cc/expert_fill/expert_fill.h: byte comparison equal.
+688:void llama_context::expert_fill_phase(uint32_t n_tokens) {
+1970:    expert_fill_phase(ubatch.n_tokens);
+
+codex
+The unit test passes, all five touched C++ files pass syntax checks, and fresh sequential and combined patch applications produce identical trees. The dry run lists the exact 16-run order. I’m finishing checks for phase counter attribution, header equality, and documentation of the token limits and regex behavior.
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/expert_fill/test_expert_fill.cpp');s=p.read_text().replace('        // A partial last page', '''        filler.fill({{32 * 1024 * 1024, 1024 * 1024}}, true);
+        const auto c = filler.counters();
+        assert(c.prompt_calls == 1 && c.decode_calls == 2);
+        assert(c.decode_bytes_read > 0 && c.prompt_bytes_read == a.bytes_read);
+        assert(c.prompt_bytes_read + c.decode_bytes_read == c.bytes_read);
+        assert(c.prompt_fill_wall_ns + c.decode_fill_wall_ns == c.total_fill_wall_ns);
+        // A partial last page''').replace('        assert(rejected);', '''        assert(rejected);
+        const auto d = filler.counters();
+        assert(d.prompt_calls + d.decode_calls == d.calls);
+        assert(d.prompt_bytes_read + d.decode_bytes_read == d.bytes_read);
+        assert(d.prompt_fill_wall_ns + d.decode_fill_wall_ns == d.total_fill_wall_ns);''');p.write_text(s)
+p=Path('cc/expert_fill/README.md');s=p.read_text();s+='''
+04: "'`RANDOM=decode` (full name `LLAMA_EXPERT_FILL_RANDOM`) advises once at the first n_tokens==1 ubatch.
+`LLAMA_EXPERT_FILL_MIN_TOKENS` / `LLAMA_EXPERT_FILL_MAX_TOKENS` bound fill inclusively (0 = unbounded; invalid = 0).
+Stats add prompt_/decode_ calls, bytes_read, fill_wall_ns; decode means n_tokens==1. Header matches combined-01-02-03-04.
+`J-OM8b.json`: explicit eight-run mirror x2; both switch regexes use OR: base matches none, fill arms need >=1 (decode marker is not independently enforced).
+'"''';p.write_text(s)
+print('README lines:',len(s.splitlines()))
+PY
+make -C cc/expert_fill test
+sed -n '/"'^+++ b'"\\/src\\/llama-expert-fill.h/,/"'^diff/p'"' cc/mmap_advice/patches/combined-01-02-03-04.patch | rg '"'^'"\\+' | rg -v '"'^'"\\+\\+\\+' | cut -c2- > /tmp/j-om8b-extracted.h
+cmp /tmp/j-om8b-extracted.h cc/expert_fill/expert_fill.h
+rg -n 'random advice applied at decode|LLAMA_EXPERT_FILL_MAX_TOKENS|decode_bytes_read' cc/mmap_advice/patches/04-fill-phase.patch
+python3 - <<'PY'
+import json,re
+from cc.abrun import abrun
+s=json.load(open('cc/abrun/specs/J-OM8b.json'));abrun.validate(s)
+expected=['base','fr','frd','frd16','frd16','frd','fr','base']*2
+assert abrun.planned_order(s)==expected
+patterns=s['switch_regex']
+for name,line in [('base','normal loader log'),('fr','expert_fill: active'),('frd','expert_fill: random advice applied at decode'),('frd16','expert_fill: active\\nexpert_fill: random advice applied at decode')]:
+ matched=[l for l in line.splitlines() if any(re.search(p,l) for p in patterns)]
+ invalid=(s['arms'][name]['expect_switch'] and not matched) or (name=='base' and bool(matched))
+ assert not invalid
+assert not any(re.search(p,'expert_fill: inactive (test)') for p in patterns)
+print('PASS exact order, shared switch OR/INVALID conditions, inactive does not match')
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 2184ms:
+README lines: 61
+make: Entering directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror test_expert_fill.cpp -o test_expert_fill
+./test_expert_fill
+measured readahead extra pages: 31 (126976 bytes)
+PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds
+make: Leaving directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+18:+        expert_fill_max_tokens = token_limit("LLAMA_EXPERT_FILL_MAX_TOKENS");
+53:+        LLAMA_LOG_INFO("expert_fill: random advice applied at decode\n");
+81:+            sum.decode_calls += s.decode_calls; sum.decode_bytes_read += s.decode_bytes_read;
+90:+            " decode_calls=%" PRIu64 " decode_bytes_read=%" PRIu64 " decode_fill_wall_ns=%" PRIu64 "\n",
+95:+            sum.decode_calls, sum.decode_bytes_read, sum.decode_fill_wall_ns);
+133:+        uint64_t decode_calls = 0, decode_bytes_read = 0, decode_fill_wall_ns = 0;
+154:+            (decode ? counters_.decode_bytes_read : counters_.prompt_bytes_read) += counters_.bytes_read - bytes_before;
+PASS exact order, shared switch OR/INVALID conditions, inactive does not match
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/expert_fill/README.md');s=p.read_text().replace('\\n\\n04:', '\\n04:');p.write_text(s);assert len(s.splitlines())<=60
+p=Path('cc/expert_fill/COMPILE-CHECK.txt')
+with p.open('a') as f:f.write('Final combined header extracted with J-OM8 A5 sed/grep/cut pipeline: cmp exit 0.\\nmake -C cc/expert_fill test: exit 0, PASS (cold prompt/decode bytes, warm decode skip, phase sums including bounds failure).\\npython3 cc/abrun/abrun.py cc/abrun/specs/J-OM8b.json --dry-run: exit 0; exact requested 16-run order.\\nShared switch regex OR semantics checked: base matches none; each fill arm matches >=1; inactive marker matches neither. The runner cannot independently require the decode marker.\\n')
+PY
+GIT_INDEX_FILE=/tmp/j-om8b-base-index git -C /tmp/j-om8b-work diff --check
+ git -C /tmp/j-om8b-work diff --check
+sha256sum cc/mmap_advice/patches/combined-01-02-03-04.patch
+rg -n 'Patch SHA256|J-OM8b / 04' cc/expert_fill/COMPILE-CHECK.txt
+python3 cc/abrun/abrun.py cc/abrun/specs/J-OM8b.json --dry-run > /tmp/j-om8b-dry-run.txt
+rg -c '"'^Run '"' /tmp/j-om8b-dry-run.txt" in /home/muk/projects/siminfeng/campaign
+ succeeded in 105ms:
+d1792e9565df2d2d27d1e24492b665f9704db674b6d823ab7ca482407a9e3036  cc/mmap_advice/patches/combined-01-02-03-04.patch
+3:Patch SHA256: d0435da67d3c59ae2e4d5238461b0eb9e231d901204a636c11f2994291eb5a0a
+52:J-OM8b / 04 phase-aware fill syntax-only compile proof
+54:Patch SHA256: d1792e9565df2d2d27d1e24492b665f9704db674b6d823ab7ca482407a9e3036
+16
+
+codex
+Implemented 04 and combined-01-02-03-04 patches, updated header/tests/docs, appended compile proof, and added `J-OM8b.json`.
+
+Validation passed: unit tests, five syntax checks, fresh patch application, sequential/combined equality, header equality, and exact 16-run dry-run order.
+
+Decode transition: patched `src/llama-context.cpp:1970`, calling `expert_fill_phase()` at line 688 before graph execution.
+
+Runner limitation documented: switch regexes use OR; the decode marker cannot be independently required.
+
+No engine-tree edits, evidence edits, commits, Docker, GPU, or full build.
+tokens used
+82,843
+Implemented 04 and combined-01-02-03-04 patches, updated header/tests/docs, appended compile proof, and added `J-OM8b.json`.
+
+Validation passed: unit tests, five syntax checks, fresh patch application, sequential/combined equality, header equality, and exact 16-run dry-run order.
+
+Decode transition: patched `src/llama-context.cpp:1970`, calling `expert_fill_phase()` at line 688 before graph execution.
+
+Runner limitation documented: switch regexes use OR; the decode marker cannot be independently required.
+
+No engine-tree edits, evidence edits, commits, Docker, GPU, or full build.

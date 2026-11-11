@@ -1,0 +1,107 @@
+{
+  "id": "J-OM8b",
+  "outdir_base": "experiments/jetson/OM",
+  "runner": "om_run",
+  "tool": "llama-completion",
+  "argv": [
+    "-m",
+    "/om/model.gguf",
+    "-f",
+    "/om/prompts/p1.txt",
+    "-n",
+    "64",
+    "-c",
+    "4096",
+    "--temp",
+    "0",
+    "-s",
+    "1",
+    "-no-cnv",
+    "-ngl",
+    "99",
+    "-lm",
+    "mmap",
+    "-cmoe",
+    "-lv",
+    "4"
+  ],
+  "switch_regex": [
+    "expert_fill: active",
+    "expert_fill: random advice applied at decode"
+  ],
+  "metric": "eval_tps",
+  "arms": {
+    "base": {
+      "image": "campaign/llamacpp:jetson-up1108-om8b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "0",
+        "LLAMA_EXPERT_FILL_RANDOM": "0",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0"
+      },
+      "expect_switch": false
+    },
+    "fr": {
+      "image": "campaign/llamacpp:jetson-up1108-om8b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "1",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0"
+      },
+      "expect_switch": true
+    },
+    "frd": {
+      "image": "campaign/llamacpp:jetson-up1108-om8b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0"
+      },
+      "expect_switch": true
+    },
+    "frd16": {
+      "image": "campaign/llamacpp:jetson-up1108-om8b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0"
+      },
+      "expect_switch": true
+    }
+  },
+  "order": "explicit",
+  "rounds": 2,
+  "explicit_order": [
+    "base",
+    "fr",
+    "frd",
+    "frd16",
+    "frd16",
+    "frd",
+    "fr",
+    "base"
+  ]
+}

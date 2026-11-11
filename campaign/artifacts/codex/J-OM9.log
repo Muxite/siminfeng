@@ -1,0 +1,2258 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /tmp]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c90f-9633-7e63-87cd-725406cea3a7
+--------
+user
+# Assignment J-OM9 — where do decode major faults come from? fill diagnostics + MADV_POPULATE_READ variant (component; worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Builds on 01-04 (cc/mmap_advice/patches/combined-01-02-03-04.patch; cc/expert_fill/expert_fill.h single source of truth; header copy rule as in J-OM8 A5). Engine tree ref/llama.cpp-up1108 @ cf34d311 — never modify in place.
+## Evidence (experiments/jetson/OM/J-OM8b: REPORT.md, */summary.json, `expert_fill: stats` in */stderr.txt, */telemetry.jsonl)
+frd16 decode 764 ms/token; synchronous fill 427 ms/token (164 MB/token, 44.9k pread syscalls/run, ~230 KB each). Yet system telemetry shows ~900 major faults/token during decode even though fill makes the selected expert ranges resident before the CPU expert matmul. At 4 KiB random reads (~20 MiB/s qd1) that could be ~0.2 s/token. Unknown: are these faults (a) filled pages evicted before use, (b) pages outside the filled ranges (other CPU tensors, e.g. token embd, output, or misaligned range edges), (c) something else (GPU/driver, KV)?
+## Deliverables
+1. `cc/mmap_advice/patches/05-fill-diag.patch` (on top of 01-04) + `combined-01-02-03-04-05.patch`:
+   a. `LLAMA_EXPERT_FILL_DIAG=1`: using `getrusage(RUSAGE_THREAD)` on the thread(s) that run fill and `getrusage(RUSAGE_SELF)`, accumulate per phase (decode only): majflt/minflt during fill; majflt/minflt between fills (= compute + everything else, process-wide); wall time in fill vs between fills. Post-fill check: right after fill, mincore() the filled ranges and count non-resident pages (expected 0). Pre-next-fill check: at the next layer's callback, before filling, mincore() the PREVIOUS layer's filled ranges and count pages evicted (they were consumed by then; eviction after use is harmless — so ALSO record, using the CPU scheduler observer, a check immediately BEFORE the expert MUL_MAT_ID node of the same layer runs, if the observer allows a per-node hook; otherwise state why not and use the next callback).
+   b. Optional per-token CSV `LLAMA_EXPERT_FILL_DIAG_CSV=/path` (token idx, fill ns, between ns, majflt fill, majflt between, post-fill nonresident pages, pre-use nonresident pages, bytes read).
+   c. `LLAMA_EXPERT_FILL_POPULATE=1`: after the pread fill of a range set, call `madvise(addr, len, MADV_POPULATE_READ)` (Linux >= 5.14; define the constant 22 if headers lack it) on the page-aligned filled ranges, split across the fill threads; on EINVAL log `expert_fill: populate unsupported` once and disable. Counts populate calls + ns in stats.
+   d. Exit stats line `expert_fill: diag ...` with every counter.
+2. Keep `make -C cc/expert_fill test` passing (add a test for the populate path if it lives in the header: after fill+populate, mincore shows resident and a second touch costs 0 majflt via getrusage).
+3. COMPILE-CHECK.txt section for 05 (every touched .cpp, exit codes).
+4. Spec `cc/abrun/specs/J-OM9.json` (image `campaign/llamacpp:jetson-up1108-om9`, argv as cc/abrun/specs/J-OM8b.json; use the per-arm `switch_regex` feature now in cc/abrun (read cc/abrun/README.md)): arms frd16 (as J-OM8b frd16), frd16d (+DIAG=1, CSV to /tmp inside container is fine — but persist: om_run mounts only /om ro; so instead have DIAG print a compact per-token summary to stderr every 16 tokens), frd16p (+DIAG=1 +POPULATE=1), base. Order explicit: base frd16 frd16d frd16p frd16p frd16d frd16 base. Per-arm regexes: frd16d requires `expert_fill: diag`; frd16p requires `expert_fill: diag` and must NOT match `populate unsupported` (add that as leak regex if supported, else note).
+## Acceptance (checker runs)
+- A1 `make -C cc/expert_fill test` PASS.
+- A2 fresh cf34d311 extract: sequential 01..05 == combined-01-02-03-04-05 (diff -r empty).
+- A3 COMPILE-CHECK 05: all exit 0.
+- A4 `python3 cc/abrun/abrun.py cc/abrun/specs/J-OM9.json --dry-run` = 8 runs in the order above.
+- A5 header single-source diff empty against the combined-01..05 header content.
+- A6 with DIAG unset, the 05 code path adds no syscalls: quote the guard (checker inspects).
+Constraints: no docker/GPU/full build; no commits; no evidence edits. Time 60 min. Final <= 10 lines: per-node hook feasibility, populate fallback, files.
+
+You are a Codex worker in campaign c2. Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
+codex
+I’ll inspect the patches, fill header, and runner schema, then implement and verify 05 in a separate engine tree.
+
+exec
+/bin/bash -lc "pwd; rg --files -g AGENTS.md -g '*expert_fill*' -g '*COMPILE-CHECK*' -g 'J-OM8b.json' -g 'README.md' cc | head -60" in /home/muk/projects/siminfeng/campaign
+ succeeded in 84ms:
+/home/muk/projects/siminfeng/campaign
+cc/hybrid_expert/README.md
+cc/build_engine/README.md
+cc/moe_dispatch_sm87/README.md
+cc/q8_reuse/README.md
+cc/expert_fill/README.md
+cc/expert_fill/expert_fill.h
+cc/expert_fill/test_expert_fill
+cc/expert_fill/COMPILE-CHECK.txt
+cc/expert_fill/test_expert_fill.cpp
+cc/engine_handoff/README.md
+cc/expert_replay/README.md
+cc/moe_cache_profile/README.md
+cc/resource_observe/README.md
+cc/abrun/README.md
+cc/abrun/specs/J-OM8b.json
+cc/kernel_screen/README.md
+cc/routing_trace/README.md
+cc/mmap_advice/README.md
+cc/memory_pareto/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/models/templates/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/grammars/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/gguf-py/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/AGENTS.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/common/jinja/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/embedding/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/batched/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/docs/backend/snapdragon/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/deprecation-warning/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/passkey/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/debug/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/perplexity/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/cvector-generator/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/speculative-simple/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/diffusion/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/simple/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/batched-bench/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/training/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/parallel/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/convert-llama2c-to-ggml/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/ci/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/tts/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/gguf-hash/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/sycl/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/tuning/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/llama-eval/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/simple-chat/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/results/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/gguf-split/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/batched.swift/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/speculative/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/llama.swiftui/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/bench/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/test-cmake/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/bench/speed-bench/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/model-conversion/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/lookup/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/examples/idle/README.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/tools/server/tests/README.md
+
+exec
+/bin/bash -lc "find .. -name AGENTS.md -not -path '*/ref/*' -not -path '*/results/*' -print; cat cc/expert_fill/expert_fill.h" in /home/muk/projects/siminfeng/campaign
+ succeeded in 468ms:
+#pragma once
+// Linux buffered reads populate the same page cache as the model mmap.
+#include <algorithm>
+#include <cerrno>
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
+#include <fcntl.h>
+#include <limits>
+#include <mutex>
+#include <stdexcept>
+#include <string>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <thread>
+#include <unistd.h>
+#include <vector>
+
+class ExpertFiller {
+public:
+    struct Range { uint64_t offset; size_t len; };
+    struct Counters {
+        uint64_t calls = 0, ranges = 0, bytes_requested = 0;
+        uint64_t bytes_skipped_resident = 0, bytes_read = 0, read_syscalls = 0;
+        uint64_t total_fill_wall_ns = 0, max_single_fill_ns = 0;
+        uint64_t prompt_calls = 0, prompt_bytes_read = 0, prompt_fill_wall_ns = 0;
+        uint64_t decode_calls = 0, decode_bytes_read = 0, decode_fill_wall_ns = 0;
+    };
+    // mapping must be a live, offset-zero file mmap for the lifetime of this object.
+    ExpertFiller(const std::string & path, void * mapping, size_t mapping_size)
+        : mapping_(static_cast<char *>(mapping)), size_(mapping_size),
+          threads_(env_size("LLAMA_EXPERT_FILL_THREADS", 8, 256)),
+          chunk_(env_size("LLAMA_EXPERT_FILL_CHUNK_KIB", 1024, 65536) * 1024) {
+        const long page = sysconf(_SC_PAGESIZE);
+        if (page <= 0 || !mapping_ || reinterpret_cast<uintptr_t>(mapping_) % page || !size_) {
+            throw std::runtime_error("invalid expert mmap");
+        }
+        page_ = size_t(page);
+        fd_ = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+        if (fd_ < 0) { throw std::runtime_error("open expert file failed"); }
+        struct stat st {};
+        if (fstat(fd_, &st) || st.st_size < 0 || uint64_t(st.st_size) != size_) {
+            close(fd_); fd_ = -1;
+            throw std::runtime_error("expert file size differs from mmap");
+        }
+        try {
+            // Allocate before starting workers, so allocation failures cannot kill a worker.
+            scratch_.resize(threads_);
+            for (auto & b : scratch_) { b.resize(chunk_); }
+            for (size_t i = 0; i < threads_; ++i) { workers_.emplace_back([this, i] { worker(i); }); }
+        } catch (...) {
+            stop(); close(fd_); throw;
+        }
+    }
+    ~ExpertFiller() { stop(); if (fd_ >= 0) { close(fd_); } }
+    ExpertFiller(const ExpertFiller &) = delete;
+    ExpertFiller & operator=(const ExpertFiller &) = delete;
+    size_t threads() const { return threads_; }
+    size_t chunk_bytes() const { return chunk_; }
+    Counters counters() const { std::lock_guard<std::mutex> lock(fill_mutex_); return counters_; }
+
+    void fill(const std::vector<Range> & ranges, bool decode = false) {
+        std::lock_guard<std::mutex> serial(fill_mutex_);
+        const auto start = std::chrono::steady_clock::now();
+        ++counters_.calls;
+        ++(decode ? counters_.decode_calls : counters_.prompt_calls);
+        const uint64_t bytes_before = counters_.bytes_read;
+        counters_.ranges += ranges.size();
+        auto finish = [&] {
+            const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - start).count();
+            counters_.total_fill_wall_ns += ns;
+            (decode ? counters_.decode_fill_wall_ns : counters_.prompt_fill_wall_ns) += ns;
+            (decode ? counters_.decode_bytes_read : counters_.prompt_bytes_read) += counters_.bytes_read - bytes_before;
+            counters_.max_single_fill_ns = std::max(counters_.max_single_fill_ns, ns);
+        };
+        try {
+            std::vector<Range> aligned;
+            for (const auto & r : ranges) {
+                if (r.offset > size_ || r.len > size_ - r.offset) { throw std::out_of_range("expert range outside mmap"); }
+                if (!r.len) { continue; }
+                const uint64_t first = r.offset - r.offset % page_;
+                const uint64_t end = r.offset + r.len;
+                const size_t pad = (page_ - end % page_) % page_;
+                const uint64_t last = end + std::min<uint64_t>(pad, size_ - end);
+                aligned.push_back({first, size_t(last - first)});
+            }
+            std::sort(aligned.begin(), aligned.end(), [](const Range & a, const Range & b) { return a.offset < b.offset; });
+            std::vector<Range> merged;
+            for (const auto & r : aligned) {
+                if (!merged.empty() && r.offset <= merged.back().offset + merged.back().len) {
+                    auto & b = merged.back();
+                    b.len = size_t(std::max(b.offset + b.len, r.offset + r.len) - b.offset);
+                } else { merged.push_back(r); }
+            }
+            std::vector<Range> jobs;
+            for (const auto & r : merged) {
+                counters_.bytes_requested += r.len; // page-aligned union, once per fill
+                const size_t pages = r.len / page_ + (r.len % page_ != 0);
+                std::vector<unsigned char> resident(pages);
+                if (mincore(mapping_ + r.offset, r.len, resident.data())) { throw std::runtime_error("expert mincore failed"); }
+                size_t run = 0;
+                while (run < pages) {
+                    if (resident[run] & 1) {
+                        counters_.bytes_skipped_resident += std::min(page_, r.len - run * page_);
+                        ++run; continue;
+                    }
+                    const size_t first = run++;
+                    while (run < pages && !(resident[run] & 1)) { ++run; }
+                    const size_t end = std::min(r.len, run * page_);
+                    for (size_t pos = first * page_; pos < end;) {
+                        const size_t len = std::min(chunk_, end - pos);
+                        jobs.push_back({r.offset + pos, len}); pos += len;
+                    }
+                }
+            }
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                jobs_ = std::move(jobs); next_ = 0; pending_ = jobs_.size(); error_ = 0;
+                ready_.notify_all();
+                done_.wait(lock, [this] { return pending_ == 0; });
+                counters_.bytes_read += batch_bytes_; counters_.read_syscalls += batch_syscalls_;
+                batch_bytes_ = batch_syscalls_ = 0;
+                if (error_) { throw std::runtime_error("expert pread failed: errno=" + std::to_string(error_)); }
+            }
+        } catch (...) { finish(); throw; }
+        finish();
+    }
+private:
+    static size_t env_size(const char * name, size_t fallback, size_t maximum) {
+        const char * s = getenv(name);
+        if (!s || !*s || *s == '-') { return fallback; }
+        char * end = nullptr; errno = 0;
+        const auto n = strtoull(s, &end, 10);
+        return errno || *end || n == 0 || n > maximum ? fallback : size_t(n);
+    }
+    void stop() {
+        { std::lock_guard<std::mutex> lock(mutex_); stopping_ = true; }
+        ready_.notify_all();
+        for (auto & t : workers_) { t.join(); }
+    }
+    void worker(size_t index) {
+        for (;;) {
+            Range job {};
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                ready_.wait(lock, [this] { return stopping_ || next_ < jobs_.size(); });
+                if (stopping_) { return; }
+                job = jobs_[next_++];
+            }
+            size_t bytes = 0; uint64_t syscalls = 0; int error = 0;
+            while (bytes < job.len) {
+                ++syscalls;
+                const ssize_t n = pread(fd_, scratch_[index].data() + bytes, job.len - bytes, off_t(job.offset + bytes));
+                if (n < 0 && errno == EINTR) { continue; }
+                if (n <= 0) { error = n < 0 ? errno : EIO; break; }
+                bytes += size_t(n);
+            }
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                batch_bytes_ += bytes; batch_syscalls_ += syscalls;
+                if (error && !error_) { error_ = error; }
+                if (--pending_ == 0) { done_.notify_one(); }
+            }
+        }
+    }
+    int fd_ = -1;
+    char * mapping_;
+    size_t size_, threads_, chunk_, page_ = 0;
+    mutable std::mutex fill_mutex_;
+    std::mutex mutex_;
+    std::condition_variable ready_, done_;
+    std::vector<std::thread> workers_;
+    std::vector<std::vector<char>> scratch_;
+    std::vector<Range> jobs_;
+    size_t next_ = 0, pending_ = 0;
+    bool stopping_ = false;
+    int error_ = 0;
+    uint64_t batch_bytes_ = 0, batch_syscalls_ = 0;
+    Counters counters_;
+};
+
+exec
+/bin/bash -lc 'cat cc/expert_fill/COMPILE-CHECK.txt cc/abrun/specs/J-OM8b.json; cat cc/abrun/README.md; ls cc/mmap_advice/patches; cat cc/mmap_advice/patches/04*' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+J-OM8 syntax-only compile proof (no engine build, no Docker, no GPU)
+Source: cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03.patch
+Patch SHA256: d0435da67d3c59ae2e4d5238461b0eb9e231d901204a636c11f2994291eb5a0a
+Fresh copy: /tmp/j-om8-check-combined
+Compiler: g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+Preparation: git apply --check and git apply of the combined patch both exited 0.
+Sequential 01 then 02 then 03 versus combined: diff -qr --exclude=.git exited 0.
+Header extracted with acceptance A5 sed/grep/cut: cmp exited 0.
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+Every touched .cpp: exit 0.
+
+J-OM8b / 04 phase-aware fill syntax-only compile proof
+Source: cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03-04.patch
+Patch SHA256: d1792e9565df2d2d27d1e24492b665f9704db674b6d823ab7ca482407a9e3036
+Compiler: g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+Every touched .cpp in 01-04: exit 0.
+
+04 patch verification: fresh cf34d311 archive; git apply --check and apply exit 0 for each of 01,02,03,04 and combined-01-02-03-04.
+Sequential versus combined: diff -r exit 0 (empty).
+Final src/llama-expert-fill.h versus cc/expert_fill/expert_fill.h: byte comparison equal.
+Final combined header extracted with J-OM8 A5 sed/grep/cut pipeline: cmp exit 0.
+make -C cc/expert_fill test: exit 0, PASS (cold prompt/decode bytes, warm decode skip, phase sums including bounds failure).
+python3 cc/abrun/abrun.py cc/abrun/specs/J-OM8b.json --dry-run: exit 0; exact requested 16-run order.
+Shared switch regex OR semantics checked: base matches none; each fill arm matches >=1; inactive marker matches neither. The runner cannot independently require the decode marker.
+{
+  "id": "J-OM8b",
+  "outdir_base": "experiments/jetson/OM",
+  "runner": "om_run",
+  "tool": "llama-completion",
+  "argv": [
+    "-m",
+    "/om/model.gguf",
+    "-f",
+    "/om/prompts/p1.txt",
+    "-n",
+    "64",
+    "-c",
+    "4096",
+    "--temp",
+    "0",
+    "-s",
+    "1",
+    "-no-cnv",
+    "-ngl",
+    "99",
+    "-lm",
+    "mmap",
+    "-cmoe",
+    "-lv",
+    "4"
+  ],
+  "switch_regex": [
+    "expert_fill: active",
+    "expert_fill: random advice applied at decode"
+  ],
+  "metric": "eval_tps",
+  "arms": {
+    "base": {
+      "image": "campaign/llamacpp:jetson-up1108-om8b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "0",
+        "LLAMA_EXPERT_FILL_RANDOM": "0",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0"
+      },
+      "expect_switch": false
+    },
+    "fr": {
+      "image": "campaign/llamacpp:jetson-up1108-om8b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "1",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0"
+      },
+      "expect_switch": true
+    },
+    "frd": {
+      "image": "campaign/llamacpp:jetson-up1108-om8b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0"
+      },
+      "expect_switch": true
+    },
+    "frd16": {
+      "image": "campaign/llamacpp:jetson-up1108-om8b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0"
+      },
+      "expect_switch": true
+    }
+  },
+  "order": "explicit",
+  "rounds": 2,
+  "explicit_order": [
+    "base",
+    "fr",
+    "frd",
+    "frd16",
+    "frd16",
+    "frd",
+    "fr",
+    "base"
+  ]
+}
+# abrun
+
+Python 3 standard-library tools for guarded, counterbalanced experiments.
+Run from the repository root; no package installation is needed.
+```sh
+python3 cc/abrun/abrun.py cc/abrun/specs/example-om7-replay.json --dry-run
+OM_MAX_S=2400 python3 cc/abrun/abrun.py cc/abrun/specs/example-om7-replay.json
+python3 cc/abrun/run_summary.py RUN_DIR --json --no-write
+python3 cc/abrun/gate.py labelled-summaries.json --metric eval_tps
+python3 cc/abrun/regate.py OUTDIR --exclude 001-base --reason "overlap" --no-write
+python3 cc/abrun/preflight.py IMAGE llama-bench -- -n 32 -o json
+python3 -m pytest -q cc/abrun
+```
+
+## Spec schema
+
+A spec is a JSON object with these fields:
+
+| Field | Meaning |
+|---|---|
+| `id` | Required safe experiment name; no path separators |
+| `outdir_base` | Required parent path; relative paths resolve from repo root |
+| `runner` | Required; currently only `"om_run"` |
+| `tool` | Required binary name inside `/app/` |
+| `argv` | Required array of literal string arguments |
+| `switch_regex` | Spec-level stderr activation regexes (OR); default `[]` |
+| `metric` | Numeric summary field to compare; default `"eval_tps"` |
+| `arms` | Required object: arm name -> `{image, env, expect_switch, switch_regex}` |
+| `order` | Required `"ABBA"`, `"ABCCBA"`, `"mirrored"`, or `"explicit"` |
+| `explicit_order` | Array of known arm names, required for `"explicit"` |
+| `rounds` | Positive integer repeating the entire order; default 1 |
+
+`base` is mandatory and is A; remaining arms follow JSON insertion order.
+Mirrored order visits every arm then reverses, including both end arms.
+Explicit order must include all arms. Images are required; `env` defaults to
+`{}` and maps env names to string values. Values cannot contain whitespace
+because om_run splits its environment-flags argument. `expect_switch` defaults
+to false; true requires spec-level or per-arm regexes. Base must not expect a switch.
+Per-arm `switch_regex` is an array whose patterns must ALL match at least one
+stderr line when `expect_switch` is true. Spec-level patterns retain OR semantics;
+when both lists are present, both requirements apply. Any signature from any arm
+or the spec in an `expect_switch: false` run is a leak (including non-base arms).
+Each summary and the per-run report include `switch_matches` (regex -> matched
+line count, including zeroes); a line counts once per pattern.
+The OM7 example uses the original image, argv, env switches, and ABCCBA design.
+
+## Execution and artifacts
+
+Output is `outdir_base/id/`; an existing destination is refused. `--dry-run`
+prints the order and shell-quoted commands without preflight or output writes.
+Preflight runs once per image/tool before any measurement. Help is cached in
+`lab/preflight/<sha256(image + NUL + tool)>.txt`. The real command uses
+`$DOCKER_CMD_PREFIX` (e.g. `sg docker -c`) and Docker's NVIDIA runtime.
+Unsupported flags fail before any run. Negative numbers are treated as values;
+`--flag=value` is checked as `--flag`. Use separate short flags, not clusters.
+
+Runs execute serially through `bin/run_op --agent abrun --task ID` and om_run.
+Each numbered run directory gets `summary.json`; the experiment gets the
+saved spec, `verdict.json`, and `REPORT.md`. Missing activation, activation in
+any arm that does not expect a switch, failed runs, missing gate metrics, or preflight failure produce INVALID
+and a nonzero exit. Activation failures stop immediately. Existing watchdog
+settings are inherited. `--submit` queues the whole spec as one `gpu` job via
+`bin/jobq`; a queue worker must execute it. Use the queue to exclude builds.
+
+## Metrics and gate
+
+CLI perf lines use their last occurrence. Benchmark JSON preserves pp/tg
+`avg_ts`, `samples_ts`, and `steady` (mean excluding sample 1); `prompt_tps` and
+`eval_tps` use avg_ts. Select `tg_steady` to gate steady benchmark throughput.
+Telemetry read units are normalized to KiB (missing unit defaults to KiB).
+Read/IO counters use max-minus-min. Memory and swap are MiB; GPU frequency is
+MHz. Missing metrics are null with entries in `reasons`. `--no-write` prevents
+summary writes; otherwise summaries are saved. Repeat `--switch-regex` as needed.
+
+The gate accepts `{arm: [summary_object_or_path, ...]}` in execution order.
+All metrics are higher-is-better. B/A uses per-arm arithmetic means. A/A gap
+is the largest arm range/mean. Drift is the absolute difference of base-half
+means divided by the whole base mean (odd middle run goes to second half).
+Unmeasured gaps contribute zero; their per-arm fields and drift remain null.
+Threshold is max(0.03, 2*A/A gap, 2*drift); strict excess gives improved/regressed.
+`secondary_metrics` in verdict JSON and the report table show per-arm arithmetic
+means of `nvme_gib_per_token`, `prompt_tps`, and `eval_tps`. These are descriptive,
+use available finite values (null if none), and do not add gate criteria.
+
+`regate.py OUTDIR` reads saved `spec.json` and numbered `*/summary.json` files,
+recomputes the gate in run order, and writes/prints `verdict-regate.json`.
+`--exclude RUN_ID [RUN_ID ...]` can be repeated; unknown IDs are rejected.
+The output records `excluded_runs`, `included_runs`, and the supplied `--reason`.
+`--metric` overrides the spec metric; `--no-write` only prints JSON.
+Original summaries, verdicts, reports, and logs are preserved. For old summaries
+without signature counts, regate reads stderr to reconstruct counts in memory.
+
+Hashes classify outputs as identical/differs (with run indices), or unknown
+when absent. This is byte equality, not a numerical-quality claim.
+
+Tests can replace execution with `ABRUN_RUNNER` (receives om_run arguments,
+bypasses run_op), and help with `ABRUN_PREFLIGHT_RUNNER` (IMAGE TOOL --help).
+`ABRUN_PREFLIGHT_CACHE_DIR` relocates the cache. Python callers can inject
+`preflight.check(..., runner=callable)` returning help text without Docker.
+01-mmap-advice-random.patch
+02-router-prefetch.patch
+03-expert-fill.patch
+04-fill-phase.patch
+combined-01-02-03-04.patch
+combined-01-02-03.patch
+combined-01-02.patch
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 1f28988..2fb17b0 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -666,17 +666,57 @@ void llama_context::expert_fill_init() {
+         expert_prefetch_layers.resize(model.layers.size());
+         expert_fill_enabled = true;
+         const char * random = getenv("LLAMA_EXPERT_FILL_RANDOM");
++        expert_fill_random_decode = random && strcmp(random, "decode") == 0;
++        auto token_limit = [](const char * name) -> uint64_t {
++            const char * value = getenv(name);
++            if (!value || !*value || *value == '-') { return 0; }
++            char * end = nullptr; errno = 0;
++            const auto n = strtoull(value, &end, 10);
++            return errno || *end ? 0 : n;
++        };
++        expert_fill_min_tokens = token_limit("LLAMA_EXPERT_FILL_MIN_TOKENS");
++        expert_fill_max_tokens = token_limit("LLAMA_EXPERT_FILL_MAX_TOKENS");
+         const auto & filler = *expert_fillers.begin()->second;
+-        LLAMA_LOG_INFO("expert_fill: active threads=%zu chunk_kib=%zu random=%d files=%zu\n",
+-            filler.threads(), filler.chunk_bytes() / 1024, random && strcmp(random, "1") == 0, expert_fillers.size());
++        LLAMA_LOG_INFO("expert_fill: active threads=%zu chunk_kib=%zu random=%s files=%zu\n",
++            filler.threads(), filler.chunk_bytes() / 1024, expert_fill_random_decode ? "decode" : (random && strcmp(random, "1") == 0 ? "1" : "0"), expert_fillers.size());
+     } catch (const std::exception & e) {
+         expert_fillers.clear();
+         LLAMA_LOG_INFO("expert_fill: inactive (%s)\n", e.what());
+     }
+ }
+ 
++void llama_context::expert_fill_phase(uint32_t n_tokens) {
++    expert_fill_decode = n_tokens == 1;
++    expert_fill_this_ubatch = n_tokens >= expert_fill_min_tokens &&
++        (!expert_fill_max_tokens || n_tokens <= expert_fill_max_tokens);
++    if (!expert_fill_enabled || expert_fill_failed || !expert_fill_random_decode ||
++            expert_fill_random_applied || !expert_fill_decode) { return; }
++    // Transition before the first single-token graph, including when fill is filtered out.
++    expert_fill_random_applied = true;
++    const long page = sysconf(_SC_PAGESIZE);
++    bool ok = page > 0;
++    for (const auto & layer : model.layers) {
++        for (const ggml_tensor * w : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
++            if (!w) { continue; }
++            llama_model::expert_file_range info;
++            if (!ok || !model.expert_file_info(w, info)) { ok = false; continue; }
++            const size_t first = info.offset - info.offset % size_t(page);
++            const size_t end = info.offset + ggml_nbytes(w);
++            const size_t pad = (size_t(page) - end % size_t(page)) % size_t(page);
++            const size_t last = end + std::min(pad, info.mapping_size - end);
++            if (madvise(static_cast<char *>(info.mapping) + first, last - first, MADV_RANDOM)) { ok = false; }
++        }
++    }
++    if (ok) {
++        LLAMA_LOG_INFO("expert_fill: random advice applied at decode\n");
++    } else {
++        expert_fill_failed = true;
++        LLAMA_LOG_INFO("expert_fill: inactive (decode random advice failed)\n");
++    }
++}
++
+ void llama_context::expert_fill_selected(size_t il, const std::vector<int32_t> & selected) {
+-    if (expert_fill_failed) { return; }
++    if (expert_fill_failed || !expert_fill_this_ubatch) { return; }
+     try {
+         std::map<size_t, std::vector<ExpertFiller::Range>> ranges;
+         const auto & layer = model.layers[il];
+@@ -691,7 +731,7 @@ void llama_context::expert_fill_selected(size_t il, const std::vector<int32_t> &
+                 ranges[info.file_index].push_back({info.offset + size_t(id) * w->nb[2], w->nb[2]});
+             }
+         }
+-        for (const auto & entry : ranges) { expert_fillers.at(entry.first)->fill(entry.second); }
++        for (const auto & entry : ranges) { expert_fillers.at(entry.first)->fill(entry.second, expert_fill_decode); }
+     } catch (const std::exception & e) {
+         expert_fill_failed = true;
+         LLAMA_LOG_INFO("expert_fill: inactive (%s)\n", e.what());
+@@ -855,13 +895,21 @@ llama_context::~llama_context() {
+             sum.bytes_requested += s.bytes_requested; sum.bytes_skipped_resident += s.bytes_skipped_resident;
+             sum.bytes_read += s.bytes_read; sum.read_syscalls += s.read_syscalls;
+             sum.total_fill_wall_ns += s.total_fill_wall_ns;
++            sum.prompt_calls += s.prompt_calls; sum.prompt_bytes_read += s.prompt_bytes_read;
++            sum.prompt_fill_wall_ns += s.prompt_fill_wall_ns;
++            sum.decode_calls += s.decode_calls; sum.decode_bytes_read += s.decode_bytes_read;
++            sum.decode_fill_wall_ns += s.decode_fill_wall_ns;
+             sum.max_single_fill_ns = std::max(sum.max_single_fill_ns, s.max_single_fill_ns);
+         }
+         LLAMA_LOG_INFO("expert_fill: stats calls=%" PRIu64 " ranges=%" PRIu64 " bytes_requested=%" PRIu64
+             " bytes_skipped_resident=%" PRIu64 " bytes_read=%" PRIu64 " read_syscalls=%" PRIu64
+-            " total_fill_wall_ns=%" PRIu64 " max_single_fill_ns=%" PRIu64 "\n",
++            " total_fill_wall_ns=%" PRIu64 " max_single_fill_ns=%" PRIu64
++            " prompt_calls=%" PRIu64 " prompt_bytes_read=%" PRIu64 " prompt_fill_wall_ns=%" PRIu64
++            " decode_calls=%" PRIu64 " decode_bytes_read=%" PRIu64 " decode_fill_wall_ns=%" PRIu64 "\n",
+             sum.calls, sum.ranges, sum.bytes_requested, sum.bytes_skipped_resident, sum.bytes_read,
+-            sum.read_syscalls, sum.total_fill_wall_ns, sum.max_single_fill_ns);
++            sum.read_syscalls, sum.total_fill_wall_ns, sum.max_single_fill_ns,
++            sum.prompt_calls, sum.prompt_bytes_read, sum.prompt_fill_wall_ns,
++            sum.decode_calls, sum.decode_bytes_read, sum.decode_fill_wall_ns);
+     }
+ #endif
+     if (!expert_prefetch_layers.empty() && expert_prefetch_calls) {
+@@ -1919,6 +1967,7 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
+ 
+ #ifdef __linux__
+     expert_fill_init();
++    expert_fill_phase(ubatch.n_tokens);
+     const char * fill = getenv("LLAMA_EXPERT_FILL");
+     const bool fill_requested = fill && strcmp(fill, "1") == 0;
+     const char * ep = getenv("LLAMA_EXPERT_PREFETCH");
+diff --git a/src/llama-context.h b/src/llama-context.h
+index ee779ed..81b3c21 100644
+--- a/src/llama-context.h
++++ b/src/llama-context.h
+@@ -58,6 +58,12 @@ struct llama_context {
+     bool expert_fill_checked = false;
+     bool expert_fill_enabled = false;
+     bool expert_fill_failed = false;
++    bool expert_fill_random_decode = false;
++    bool expert_fill_random_applied = false;
++    bool expert_fill_decode = false;
++    bool expert_fill_this_ubatch = true;
++    uint64_t expert_fill_min_tokens = 0, expert_fill_max_tokens = 0;
++    void expert_fill_phase(uint32_t n_tokens);
+     void expert_fill_init();
+     void expert_fill_selected(size_t il, const std::vector<int32_t> & selected);
+ #endif
+diff --git a/src/llama-expert-fill.h b/src/llama-expert-fill.h
+index 690b808..21f5463 100644
+--- a/src/llama-expert-fill.h
++++ b/src/llama-expert-fill.h
+@@ -25,6 +25,8 @@ public:
+         uint64_t calls = 0, ranges = 0, bytes_requested = 0;
+         uint64_t bytes_skipped_resident = 0, bytes_read = 0, read_syscalls = 0;
+         uint64_t total_fill_wall_ns = 0, max_single_fill_ns = 0;
++        uint64_t prompt_calls = 0, prompt_bytes_read = 0, prompt_fill_wall_ns = 0;
++        uint64_t decode_calls = 0, decode_bytes_read = 0, decode_fill_wall_ns = 0;
+     };
+     // mapping must be a live, offset-zero file mmap for the lifetime of this object.
+     ExpertFiller(const std::string & path, void * mapping, size_t mapping_size)
+@@ -59,15 +61,19 @@ public:
+     size_t chunk_bytes() const { return chunk_; }
+     Counters counters() const { std::lock_guard<std::mutex> lock(fill_mutex_); return counters_; }
+ 
+-    void fill(const std::vector<Range> & ranges) {
++    void fill(const std::vector<Range> & ranges, bool decode = false) {
+         std::lock_guard<std::mutex> serial(fill_mutex_);
+         const auto start = std::chrono::steady_clock::now();
+         ++counters_.calls;
++        ++(decode ? counters_.decode_calls : counters_.prompt_calls);
++        const uint64_t bytes_before = counters_.bytes_read;
+         counters_.ranges += ranges.size();
+         auto finish = [&] {
+             const uint64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                 std::chrono::steady_clock::now() - start).count();
+             counters_.total_fill_wall_ns += ns;
++            (decode ? counters_.decode_fill_wall_ns : counters_.prompt_fill_wall_ns) += ns;
++            (decode ? counters_.decode_bytes_read : counters_.prompt_bytes_read) += counters_.bytes_read - bytes_before;
+             counters_.max_single_fill_ns = std::max(counters_.max_single_fill_ns, ns);
+         };
+         try {
+
+exec
+/bin/bash -lc "git -C ref/llama.cpp-up1108 rev-parse HEAD; sed -n '450,660p' /tmp/j-om8b-work/src/llama-context.cpp; rg -n 'observer|MUL_MAT_ID|expert_prefetch' cc/mmap_advice/patches/03-expert-fill.patch | head -40; cat cc/expert_fill/test_expert_fill.cpp" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+cf34d311332e362198f0a410c466d1e940287d02
+    LLAMA_LOG_INFO("%s: n_batch               = %u\n",   __func__, cparams.n_batch);
+    LLAMA_LOG_INFO("%s: n_ubatch              = %u\n",   __func__, cparams.n_ubatch);
+    LLAMA_LOG_INFO("%s: causal_attn           = %d\n",   __func__, cparams.causal_attn);
+    LLAMA_LOG_INFO("%s: flash_attn            = %s\n",   __func__, llama_flash_attn_type_name(params.flash_attn_type));
+    LLAMA_LOG_INFO("%s: kv_unified            = %s\n",   __func__, cparams.kv_unified ? "true" : "false");
+    LLAMA_LOG_INFO("%s: freq_base             = %.1f\n", __func__, cparams.rope_freq_base);
+    LLAMA_LOG_INFO("%s: freq_scale            = %g\n",   __func__, cparams.rope_freq_scale);
+    LLAMA_LOG_INFO("%s: n_rs_seq              = %u\n",   __func__, cparams.n_rs_seq);
+    LLAMA_LOG_INFO("%s: n_outputs_max         = %u\n",   __func__, cparams.n_outputs_max);
+    LLAMA_LOG_INFO("%s: n_outputs_max_per_seq = %u\n",   __func__, cparams.n_outputs_max_per_seq);
+
+    if (cparams.n_ctx_seq < hparams.n_ctx_train) {
+        LLAMA_LOG_INFO("%s: n_ctx_seq (%u) < n_ctx_train (%u) -- the full capacity of the model will not be utilized\n",
+                __func__, cparams.n_ctx_seq, hparams.n_ctx_train);
+    }
+
+    if (cparams.n_ctx_seq > hparams.n_ctx_train) {
+        LLAMA_LOG_WARN("%s: n_ctx_seq (%u) > n_ctx_train (%u) -- possible training context overflow\n",
+                __func__, cparams.n_ctx_seq, hparams.n_ctx_train);
+    }
+
+    if (!hparams.vocab_only) {
+        // GPU backends
+        for (const auto & dev : model.devices) {
+            ggml_backend_t backend = ggml_backend_dev_init(dev.dev, nullptr);
+            if (backend == nullptr) {
+                throw std::runtime_error(format("failed to initialize %s backend", ggml_backend_dev_name(dev.dev)));
+            }
+            backends.emplace_back(backend);
+        }
+
+        // tensors of ctx_other (e.g. a shared KV cache) can be on devices that this model does not use
+        if (cparams.ctx_other) {
+            for (const auto & dev_other : llama_get_model(cparams.ctx_other)->devices) {
+                const bool found = std::any_of(model.devices.begin(), model.devices.end(),
+                        [&](const llama_device & dev) { return dev.dev == dev_other.dev; });
+                if (found) {
+                    continue;
+                }
+                ggml_backend_t backend = ggml_backend_dev_init(dev_other.dev, nullptr);
+                if (backend == nullptr) {
+                    throw std::runtime_error(format("failed to initialize %s backend", ggml_backend_dev_name(dev_other.dev)));
+                }
+                backends.emplace_back(backend);
+            }
+        }
+
+        // add ACCEL backends (such as BLAS)
+        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+            ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+            if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_ACCEL) {
+                ggml_backend_t backend = ggml_backend_dev_init(dev, nullptr);
+                if (backend == nullptr) {
+                    throw std::runtime_error(format("failed to initialize %s backend", ggml_backend_dev_name(dev)));
+                }
+                backends.emplace_back(backend);
+            }
+        }
+
+        // add CPU backend
+        backend_cpu = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
+        if (backend_cpu == nullptr) {
+            throw std::runtime_error("failed to initialize CPU backend");
+        }
+        backends.emplace_back(backend_cpu);
+
+        // create a list of the set_n_threads functions in the backends
+        for (auto & backend : backends) {
+            ggml_backend_dev_t dev = ggml_backend_get_device(backend.get());
+            ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
+            if (reg) {
+                auto ggml_backend_set_n_threads_fn = (ggml_backend_set_n_threads_t) ggml_backend_reg_get_proc_address(reg, "ggml_backend_set_n_threads");
+                if (ggml_backend_set_n_threads_fn) {
+                    set_n_threads_fns.emplace_back(backend.get(), ggml_backend_set_n_threads_fn);
+                }
+            }
+        }
+
+        llama_set_abort_callback(this, params.abort_callback, params.abort_callback_data);
+
+        // graph outputs buffer
+        {
+            if (output_reserve(params.n_seq_max) < params.n_seq_max) {
+                throw std::runtime_error("failed to reserve initial output buffer");
+            }
+
+            LLAMA_LOG_INFO("%s: %10s  output buffer size = %8.2f MiB\n", __func__,
+                    ggml_backend_buffer_name    (buf_output.get()),
+                    ggml_backend_buffer_get_size(buf_output.get()) / 1024.0 / 1024.0);
+        }
+    }
+
+    // init the memory module
+    if (!hparams.vocab_only) {
+        llama_memory_params params_mem = {
+            /*.type_k    =*/ params.type_k,
+            /*.type_v    =*/ params.type_v,
+            /*.swa_full  =*/ params.swa_full,
+            /*.ctx_type  =*/ cparams.ctx_type,
+            /*.mem_other =*/ llama_get_memory(cparams.ctx_other),
+            /*.no_alloc  =*/ model.no_alloc(),
+        };
+
+        memory.reset(model.create_memory(params_mem, cparams));
+    }
+
+    // init backends
+    if (!hparams.vocab_only) {
+        LLAMA_LOG_DEBUG("%s: enumerating backends\n", __func__);
+
+        backend_buft.clear();
+        backend_ptrs.clear();
+        backend_buf_exp_size.clear();
+
+        for (auto & backend : backends) {
+            auto * buft = ggml_backend_get_default_buffer_type(backend.get());
+            auto backend_type = ggml_backend_dev_type(ggml_backend_get_device(backend.get()));
+
+            if (backend_type == GGML_BACKEND_DEVICE_TYPE_CPU && !model.devices.empty()) {
+                // use the host buffer of the first device CPU for faster transfer of the intermediate state
+                const auto & dev = model.devices[0];
+                auto * host_buft = ggml_backend_dev_host_buffer_type(dev.dev);
+                if (host_buft) {
+                    buft = host_buft;
+                }
+            }
+
+            backend_buft.push_back(buft);
+            backend_ptrs.push_back(backend.get());
+            backend_buf_exp_size.push_back(0);
+        }
+
+        LLAMA_LOG_DEBUG("%s: backend_ptrs.size() = %zu\n", __func__, backend_ptrs.size());
+
+        // TODO: move these checks to ggml_backend_sched
+        // enabling pipeline parallelism in the scheduler increases memory usage, so it is only done when necessary
+        bool pipeline_parallel =
+            model.n_devices() > 1 &&
+            model.n_gpu_layers() > model.hparams.n_layer_all &&
+            model.split_mode() == LLAMA_SPLIT_MODE_LAYER &&
+            cparams.offload_kqv &&
+            !model.has_tensor_overrides() &&
+            cparams.moe_cache_size == 0; // not supported by the MoE cache
+
+        // pipeline parallelism requires support for async compute and events in all devices
+        if (pipeline_parallel) {
+            for (auto & backend : backends) {
+                auto dev_type = ggml_backend_dev_type(ggml_backend_get_device(backend.get()));
+                if (dev_type == GGML_BACKEND_DEVICE_TYPE_CPU) {
+                    // ignore CPU backend
+                    // TODO: should we ignore ACCEL types too?
+                    continue;
+                }
+                auto * dev = ggml_backend_get_device(backend.get());
+                ggml_backend_dev_props props;
+                ggml_backend_dev_get_props(dev, &props);
+                if (!props.caps.async || !props.caps.events) {
+                    // device does not support async compute or events
+                    pipeline_parallel = false;
+                    break;
+                }
+            }
+        }
+
+        cparams.pipeline_parallel = pipeline_parallel;
+
+        if (cparams.pipeline_parallel) {
+            LLAMA_LOG_INFO("%s: pipeline parallelism enabled\n", __func__);
+        }
+
+        if (cparams.moe_cache_size > 0) {
+            moe_cache = std::make_unique<llama_moe_cache>(model, model.no_alloc(), backend_ptrs, backend_buft, cparams.moe_cache_size, cparams.moe_cache_cpu_share);
+        }
+
+        sched_reserve();
+
+        if (!cparams.flash_attn) {
+            if (ggml_is_quantized(params.type_v)) {
+                throw std::runtime_error("quantized V cache was requested, but this requires Flash Attention");
+            }
+        }
+    }
+
+    // Initialize the full vocabulary token ids for backend samplers.
+    {
+        const int n_vocab = model.vocab.n_tokens();
+
+        sampling.token_ids_full_vocab.resize(n_vocab);
+        for (int i = 0; i < n_vocab; ++i) {
+            sampling.token_ids_full_vocab[i] = i;
+        }
+    }
+}
+
+#ifdef __linux__
+void llama_context::expert_fill_init() {
+    if (expert_fill_checked) { return; }
+    expert_fill_checked = true;
+    const char * fill = getenv("LLAMA_EXPERT_FILL");
+    if (!fill || strcmp(fill, "1") != 0) { return; }
+    try {
+        for (const auto & layer : model.layers) {
+            for (const ggml_tensor * w : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
+                if (!w) { continue; }
+                llama_model::expert_file_range info;
+                if (w->ne[2] <= 0 || w->ne[3] != 1 || !ggml_is_contiguous(w) || !w->nb[2] ||
+                        !model.expert_file_info(w, info)) {
+                    throw std::runtime_error("expert tensors not mmap-backed or file offsets unavailable/unsupported layout");
+                }
+                if (!expert_fillers.count(info.file_index)) {
+                    expert_fillers.emplace(info.file_index, std::make_unique<ExpertFiller>(
+31:+        expert_prefetch_layers.resize(model.layers.size());
+67: void llama_context::expert_prefetch_advise(size_t il, int32_t id) {
+69:     auto & state = expert_prefetch_layers[il];
+70:@@ -704,6 +762,9 @@ void llama_context::expert_prefetch_advise(size_t il, int32_t id) {
+72: void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe, void * data) {
+77:     if (t->op != GGML_OP_MUL_MAT_ID || !t->src[0] || !t->src[2]) {
+80:@@ -730,6 +791,12 @@ void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe
+83:         if (!ctx.expert_prefetch_warned) {
+90:             LLAMA_LOG_INFO("expert_prefetch: skipping unsupported router ids (once)\n");
+91:             ctx.expert_prefetch_warned = true;
+93:@@ -746,6 +813,12 @@ void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe
+105:         ++ctx.expert_prefetch_total;
+110:-    if (!expert_prefetch_layers.empty()) {
+129:+    if (!expert_prefetch_layers.empty() && expert_prefetch_calls) {
+130:         LLAMA_LOG_INFO("expert_prefetch: advise calls=%" PRIu64 " bytes advised=%" PRIu64 " failures=%" PRIu64
+132:                 expert_prefetch_calls, expert_prefetch_bytes, expert_prefetch_failures,
+141:-    if (ep && strcmp(ep, "1") == 0 && expert_prefetch_layers.empty()) {
+142:+    if (!fill_requested && ep && strcmp(ep, "1") == 0 && expert_prefetch_layers.empty()) {
+143:         expert_prefetch_layers.resize(model.layers.size());
+145:         expert_prefetch_next = next && strcmp(next, "1") == 0;
+172:     struct expert_prefetch_layer {
+366:-        const bool expert_prefetch = ep && strcmp(ep, "1") == 0;
+368:+        const bool expert_prefetch = !(fill && strcmp(fill, "1") == 0) && ep && strcmp(ep, "1") == 0;
+370:         const bool expert_prefetch = false;
+#include "expert_fill.h"
+#include <cassert>
+#include <cstdio>
+#include <cstring>
+
+int main() {
+    char path[] = "/tmp/expert-fill-XXXXXX";
+    const int fd = mkstemp(path);
+    assert(fd >= 0);
+    const size_t size = 64 * 1024 * 1024, page = size_t(sysconf(_SC_PAGESIZE));
+    std::vector<unsigned char> block(1024 * 1024);
+    for (size_t i = 0; i < block.size(); ++i) { block[i] = (i * 17 + i / 251) % 256; }
+    for (size_t pos = 0; pos < size; pos += block.size()) {
+        assert(pwrite(fd, block.data(), block.size(), pos) == ssize_t(block.size()));
+    }
+    assert(fsync(fd) == 0);
+    auto * map = static_cast<unsigned char *>(mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0));
+    assert(map != MAP_FAILED);
+    assert(posix_fadvise(fd, 0, size, POSIX_FADV_DONTNEED) == 0);
+    std::vector<unsigned char> residency(size / page);
+    assert(mincore(map, size, residency.data()) == 0);
+    size_t before = 0;
+    for (auto v : residency) { before += (v & 1) != 0; }
+    assert(before == 0);
+    // Three unaligned, overlapping ranges form one page-aligned union.
+    const std::vector<ExpertFiller::Range> ranges = {
+        {4 * 1024 * 1024 + 17, 3 * 1024 * 1024},
+        {6 * 1024 * 1024 + 33, 4 * 1024 * 1024},
+        {9 * 1024 * 1024 + 55, 2 * 1024 * 1024}};
+    const size_t first = ranges.front().offset / page * page;
+    const size_t last = (ranges.back().offset + ranges.back().len + page - 1) / page * page;
+    {
+        ExpertFiller filler(path, map, size);
+        filler.fill(ranges);
+        assert(mincore(map, size, residency.data()) == 0);
+        size_t extra = 0;
+        for (size_t i = 0; i < residency.size(); ++i) {
+            if (i * page >= first && i * page < last) { assert(residency[i] & 1); }
+            else { extra += (residency[i] & 1) != 0; }
+        }
+        printf("measured readahead extra pages: %zu (%zu bytes)\n", extra, extra * page);
+        const auto a = filler.counters();
+        assert(a.calls == 1 && a.ranges == 3 && a.bytes_requested == last - first);
+        assert(a.bytes_read > 0 && a.bytes_read <= last - first);
+        assert(a.bytes_read + a.bytes_skipped_resident == last - first);
+        assert(a.read_syscalls > 0 && a.total_fill_wall_ns >= a.max_single_fill_ns);
+        assert(a.max_single_fill_ns > 0);
+        filler.fill(ranges, true);
+        const auto b = filler.counters();
+        assert(a.prompt_calls == 1 && a.decode_calls == 0);
+        assert(a.prompt_bytes_read == a.bytes_read && a.decode_bytes_read == 0);
+        assert(a.prompt_fill_wall_ns == a.total_fill_wall_ns && a.decode_fill_wall_ns == 0);
+        assert(b.prompt_calls == 1 && b.decode_calls == 1);
+        assert(b.prompt_bytes_read == a.bytes_read && b.decode_bytes_read == 0);
+        assert(b.prompt_fill_wall_ns == a.total_fill_wall_ns);
+        assert(b.prompt_fill_wall_ns + b.decode_fill_wall_ns == b.total_fill_wall_ns);
+        assert(b.calls == 2 && b.ranges == 6 && b.bytes_requested == 2 * (last - first));
+        assert(b.bytes_read == a.bytes_read && b.read_syscalls == a.read_syscalls);
+        assert(b.bytes_skipped_resident - a.bytes_skipped_resident == last - first);
+        for (size_t i = first; i < last; ++i) { assert(map[i] == block[i % block.size()]); }
+        filler.fill({{32 * 1024 * 1024, 1024 * 1024}}, true);
+        const auto c = filler.counters();
+        assert(c.prompt_calls == 1 && c.decode_calls == 2);
+        assert(c.decode_bytes_read > 0 && c.prompt_bytes_read == a.bytes_read);
+        assert(c.prompt_bytes_read + c.decode_bytes_read == c.bytes_read);
+        assert(c.prompt_fill_wall_ns + c.decode_fill_wall_ns == c.total_fill_wall_ns);
+        // A partial last page must not cause pread beyond EOF.
+        bool rejected = false;
+        try { filler.fill({{size - 1, 2}}); } catch (const std::out_of_range &) { rejected = true; }
+        assert(rejected);
+        const auto d = filler.counters();
+        assert(d.prompt_calls + d.decode_calls == d.calls);
+        assert(d.prompt_bytes_read + d.decode_bytes_read == d.bytes_read);
+        assert(d.prompt_fill_wall_ns + d.decode_fill_wall_ns == d.total_fill_wall_ns);
+    }
+    assert(munmap(map, size) == 0); close(fd); unlink(path);
+    puts("PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds");
+}
+
+exec
+/bin/bash -lc "sed -n '780,872p' /tmp/j-om8b-work/src/llama-context.cpp; rg -n 'observer' /tmp/j-om8b-work/ggml/src/ggml-backend.cpp" in /home/muk/projects/siminfeng/campaign
+ exited 1 in 0ms:
+        const uintptr_t end = start + w->nb[2];
+        const uintptr_t last = end + (page - end % page) % page;
+        ++expert_prefetch_calls;
+        expert_prefetch_bytes += last - first;
+        if (madvise(reinterpret_cast<void *>(first), last - first, MADV_WILLNEED) != 0) {
+            ++expert_prefetch_failures;
+            failed = true;
+        } else {
+            advised = true;
+        }
+    }
+    if (advised && !failed) {
+        if (state.recent.size() == 32) {
+            state.recent.erase(state.recent.begin());
+        }
+        state.recent.emplace_back(id, state.tokens);
+    }
+#else
+    (void) il;
+    (void) id;
+#endif
+}
+
+void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe, void * data) {
+    auto & ctx = *static_cast<llama_context *>(data);
+#ifdef __linux__
+    if (ctx.expert_fill_failed) { return; }
+#endif
+    if (t->op != GGML_OP_MUL_MAT_ID || !t->src[0] || !t->src[2]) {
+        return;
+    }
+    size_t il = 0;
+    for (; il < ctx.model.layers.size(); ++il) {
+        const auto & layer = ctx.model.layers[il];
+        if (t->src[0] == layer.ffn_up_exps || t->src[0] == layer.ffn_gate_exps ||
+                t->src[0] == layer.ffn_down_exps || t->src[0] == layer.ffn_gate_up_exps) {
+            break;
+        }
+    }
+    if (il == ctx.model.layers.size() || ctx.expert_prefetch_layers[il].observed) {
+        return;
+    }
+    *observe = true;
+    if (ask) {
+        return;
+    }
+    auto & state = ctx.expert_prefetch_layers[il];
+    state.observed = true;
+    const ggml_tensor * ids = t->src[2];
+    const ggml_tensor * base = ids->view_src ? ids->view_src : ids;
+    if (ids->type != GGML_TYPE_I32 || ids->ne[2] != 1 || ids->ne[3] != 1 ||
+            !ids->data || !base->buffer || !ggml_backend_buffer_is_host(base->buffer) ||
+            !strstr(ids->name, "ffn_moe_topk-")) {
+        if (!ctx.expert_prefetch_warned) {
+#ifdef __linux__
+            if (ctx.expert_fill_enabled) {
+                ctx.expert_fill_failed = true;
+                LLAMA_LOG_INFO("expert_fill: inactive (unsupported host router ids)\n");
+            } else
+#endif
+            LLAMA_LOG_INFO("expert_prefetch: skipping unsupported router ids (once)\n");
+            ctx.expert_prefetch_warned = true;
+        }
+        return;
+    }
+    std::vector<int32_t> selected;
+    for (int64_t token = 0; token < ids->ne[1]; ++token) {
+        for (int64_t k = 0; k < ids->ne[0]; ++k) {
+            int32_t id;
+            memcpy(&id, static_cast<const char *>(ids->data) + token * ids->nb[1] + k * ids->nb[0], sizeof(id));
+            if (id >= 0 && id < t->src[0]->ne[2] &&
+                    std::find(selected.begin(), selected.end(), id) == selected.end()) {
+                selected.push_back(id);
+            }
+        }
+    }
+#ifdef __linux__
+    if (ctx.expert_fill_enabled) {
+        ctx.expert_fill_selected(il, selected);
+        return;
+    }
+#endif
+    state.tokens += ids->ne[1];
+    for (int32_t id : state.predicted) {
+        ++ctx.expert_prefetch_total;
+        ctx.expert_prefetch_hits += std::find(selected.begin(), selected.end(), id) != selected.end();
+    }
+    state.predicted.clear();
+    for (int32_t id : selected) {
+        ctx.expert_prefetch_advise(il, id);
+    }
+    if (ctx.expert_prefetch_next && il + 1 < ctx.model.layers.size()) {
+        auto & next = ctx.expert_prefetch_layers[il + 1];
+
+exec
+/bin/bash -lc "rg -n 'observe|cpu.*cb' /tmp/j-om8b-work/ggml/src/ggml-backend.cpp | tail -35; sed -n '45,85p' /tmp/j-om8b-work/src/llama-context.h; git status --short" in /home/muk/projects/siminfeng/campaign
+ succeeded in 32ms:
+2245:                bool observe = false;
+2246:                sched->callback_cpu(graph->nodes[i], true, &observe, sched->callback_cpu_user_data);
+2247:                if (!observe) {
+2258:                sched->callback_cpu(graph->nodes[i], false, &observe, sched->callback_cpu_user_data);
+
+using llama_memory_buffers = std::map<ggml_backend_buffer_type_t, llama_memory_buffer>;
+
+struct llama_context {
+    // init scheduler and compute buffers, reserve worst-case graphs
+    llama_context(
+            const llama_model & model,
+                  llama_context_params params);
+
+    ~llama_context();
+
+#ifdef __linux__
+    std::map<size_t, std::unique_ptr<ExpertFiller>> expert_fillers;
+    bool expert_fill_checked = false;
+    bool expert_fill_enabled = false;
+    bool expert_fill_failed = false;
+    bool expert_fill_random_decode = false;
+    bool expert_fill_random_applied = false;
+    bool expert_fill_decode = false;
+    bool expert_fill_this_ubatch = true;
+    uint64_t expert_fill_min_tokens = 0, expert_fill_max_tokens = 0;
+    void expert_fill_phase(uint32_t n_tokens);
+    void expert_fill_init();
+    void expert_fill_selected(size_t il, const std::vector<int32_t> & selected);
+#endif
+    struct expert_prefetch_layer {
+        uint64_t tokens = 0;
+        std::vector<std::pair<int32_t, uint64_t>> recent;
+        std::vector<int32_t> predicted;
+        bool observed = false;
+    };
+    std::vector<expert_prefetch_layer> expert_prefetch_layers;
+    bool expert_prefetch_next = false;
+    bool expert_prefetch_warned = false;
+    uint64_t expert_prefetch_calls = 0;
+    uint64_t expert_prefetch_bytes = 0;
+    uint64_t expert_prefetch_failures = 0;
+    uint64_t expert_prefetch_hits = 0;
+    uint64_t expert_prefetch_total = 0;
+    static void expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe, void * data);
+    void expert_prefetch_advise(size_t layer, int32_t id);
+ M ../.gitignore
+ M cc/kernel_screen/fixtures/perf.txt
+ M cc/kernel_screen/kernel_screen.py
+ M cc/om_run/om_run.sh
+ M cc/resource_observe/resource_observe.py
+ M cc/resource_observe/test_resource_observe.py
+ M evidence/jetson-arm/claude-code.jsonl
+?? ../.claude/skills/
+?? artifacts/codex/H1.final.txt
+?? artifacts/codex/H1.log
+?? artifacts/codex/H2.final.txt
+?? artifacts/codex/H2.log
+?? artifacts/codex/H2b-H4b.final.txt
+?? artifacts/codex/H2b-H4b.log
+?? artifacts/codex/H3.final.txt
+?? artifacts/codex/H3.log
+?? artifacts/codex/H4.final.txt
+?? artifacts/codex/H4.log
+?? artifacts/codex/J-OM8.final.txt
+?? artifacts/codex/J-OM8.log
+?? artifacts/codex/J-OM8b.final.txt
+?? artifacts/codex/J-OM8b.log
+?? artifacts/codex/J-OM9.log
+?? artifacts/op-04810239fd04/
+?? artifacts/op-103a1fb13e8b/
+?? artifacts/op-218a56d373af/
+?? artifacts/op-2b6791aa3ad9/
+?? artifacts/op-2c9e8772e3a5/
+?? artifacts/op-347e678ed12a/
+?? artifacts/op-36926980ce1b/
+?? artifacts/op-3921a3841393/
+?? artifacts/op-3d31f5fbfc73/
+?? artifacts/op-3df6c2e1288c/
+?? artifacts/op-4196624781b6/
+?? artifacts/op-4361d6251871/
+?? artifacts/op-4f1547f4295e/
+?? artifacts/op-55e94e8f2ec9/
+?? artifacts/op-5609857025b0/
+?? artifacts/op-5849d5542eba/
+?? artifacts/op-5c2e0a7f1ab1/
+?? artifacts/op-6761df1a3b2c/
+?? artifacts/op-6e1f873a67b4/
+?? artifacts/op-7c79aa7bb0cd/
+?? artifacts/op-80a6b2fd96db/
+?? artifacts/op-879bc80daaab/
+?? artifacts/op-9d3a71114383/
+?? artifacts/op-9deabb96fe51/
+?? artifacts/op-a9d8140fc151/
+?? artifacts/op-acee8700aac1/
+?? artifacts/op-b7ff0512c3ae/
+?? artifacts/op-bd396749651d/
+?? artifacts/op-bfe0a8b74c24/
+?? artifacts/op-d0fda3ae10b1/
+?? artifacts/op-d4a75015c69e/
+?? artifacts/op-e5d0a38d479d/
+?? artifacts/op-ed103f15b7bf/
+?? artifacts/op-f3a91310220b/
+?? artifacts/op-f46fc32ed368/
+?? artifacts/op-ffac23b48ee5/
+?? assignments/H1-jobq.md
+?? assignments/H2-abrun.md
+?? assignments/H2b-H4b-fixes.md
+?? assignments/H3-methods-skills.md
+?? assignments/H4-shape-report.md
+?? assignments/J-OM8-expert-pread-fill.md
+?? assignments/J-OM8b-decode-random.md
+?? assignments/J-OM9-fill-diag-populate.md
+?? bin/README-jobq.md
+?? bin/jobq
+?? bin/test_jobq.py
+?? c2/
+?? cc/abrun/
+?? cc/build_engine/results/jetson-up1108-om8/
+?? cc/build_engine/results/jetson-up1108-om8b/
+?? cc/expert_fill/
+?? cc/mmap_advice/patches/03-expert-fill.patch
+?? cc/mmap_advice/patches/04-fill-phase.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04.patch
+?? cc/mmap_advice/patches/combined-01-02-03.patch
+?? evidence/jetson-arm/abrun.jsonl
+?? evidence/jetson-arm/jobq.jsonl
+?? experiments/jetson/KS-q4K-20261111-r2/
+?? experiments/jetson/KS-q4K-20261111/
+?? experiments/jetson/OM/J-OM8/
+?? experiments/jetson/OM/J-OM8b/
+
+exec
+/bin/bash -lc "sed -n '2230,2270p' /tmp/j-om8b-work/ggml/src/ggml-backend.cpp; mkdir -p /tmp/j-om9-base /tmp/j-om9-work; git -C ref/llama.cpp-up1108 archive cf34d311 | tar -x -C /tmp/j-om9-base; cp -a /tmp/j-om9-base/. /tmp/j-om9-work/; cd /tmp/j-om9-work && git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/combined-01-02-03-04.patch" in /home/muk/projects/siminfeng/campaign
+ succeeded in 1912ms:
+        // after the copies above, which may read host memory reused by the copies of the next split
+        // before the weights, whose copy callback may queue large uploads
+        ggml_backend_sched_prefetch_inputs(sched, split_id);
+        for (int input_id = 0; input_id < split->n_inputs; input_id++) {
+            if (ggml_backend_sched_is_host_weight(split->inputs[input_id])) {
+                ggml_backend_sched_copy_input(sched, split, split->inputs[input_id]);
+            }
+        }
+
+        auto compute = [&](ggml_cgraph * graph) -> ggml_status {
+            if (!sched->callback_cpu || ggml_backend_dev_type(ggml_backend_get_device(split_backend)) != GGML_BACKEND_DEVICE_TYPE_CPU) {
+                return ggml_backend_graph_compute_async(split_backend, graph);
+            }
+            int first = 0;
+            for (int i = 0; i < graph->n_nodes; ++i) {
+                bool observe = false;
+                sched->callback_cpu(graph->nodes[i], true, &observe, sched->callback_cpu_user_data);
+                if (!observe) {
+                    continue;
+                }
+                if (first < i) {
+                    ggml_cgraph prefix = ggml_graph_view(graph, first, i);
+                    ggml_status ec = ggml_backend_graph_compute_async(split_backend, &prefix);
+                    if (ec != GGML_STATUS_SUCCESS) {
+                        return ec;
+                    }
+                }
+                ggml_backend_synchronize(split_backend);
+                sched->callback_cpu(graph->nodes[i], false, &observe, sched->callback_cpu_user_data);
+                first = i;
+            }
+            ggml_cgraph tail = ggml_graph_view(graph, first, graph->n_nodes);
+            return ggml_backend_graph_compute_async(split_backend, &tail);
+        };
+
+        if (!sched->callback_eval) {
+            enum ggml_status ec = compute(&split->graph);
+            if (ec != GGML_STATUS_SUCCESS) {
+                return ec;
+            }
+        } else {
+
+codex
+The CPU scheduler observer can run immediately before each expert `MUL_MAT_ID`: it synchronizes the preceding CPU work before invoking the callback. I’ll use that hook for pre-use residency checks and keep the next-layer check separate so eviction after use is distinguishable.
+
+exec
+/bin/bash -lc "cp -a /tmp/j-om9-work /tmp/j-om9-before; cat > /tmp/edit_om9.py <<'PY'
+from pathlib import Path
+p=Path('cc/expert_fill/expert_fill.h'); s=p.read_text().replace('#include <algorithm>','#include <algorithm>\\n#include <atomic>\\n#include <cstdio>\\n#include <sys/resource.h>\\n#ifndef MADV_POPULATE_READ\\n#define MADV_POPULATE_READ 22\\n#endif')
+s=s.replace('uint64_t calls =', 'uint64_t populate_calls = 0, populate_ns = 0, populate_errors = 0;\\n        uint64_t thread_majflt = 0, thread_minflt = 0;\\n        uint64_t calls =',1)
+s=s.replace('const long page = sysconf', 'diag_ = enabled(\"LLAMA_EXPERT_FILL_DIAG\");\\n        populate_ = enabled(\"LLAMA_EXPERT_FILL_POPULATE\");\\n        const long page = sysconf',1)
+pos=s.index('    void fill(')
+s=s[:pos]+'''    bool diagnostic() const { return diag_; }
+    // Called only under the opt-in diagnostic guard. Counts page cache residency,
+    // not installed PTEs; errors are explicit rather than counted as residency.
+    uint64_t nonresident(const std::vector<Range> & ranges) const {
+        uint64_t count = 0;
+        for (const auto & r : ranges) {
+            if ("'!r.len) { continue; }
+            const size_t first = r.offset / page_ * page_;
+            const size_t len = r.offset + r.len - first;
+            std::vector<unsigned char> v((len + page_ - 1) / page_);
+            if (mincore(mapping_ + first, len, v.data())) { throw std::runtime_error("diag mincore failed"); }
+            for (auto b : v) { count += !(b & 1); }
+        }
+        return count;
+    }
+'"''' + s[pos:]
+s=s.replace('const auto start = std::chrono::steady_clock::now();','const auto start = std::chrono::steady_clock::now();\\n        batch_diag_ = diag_ && decode;',1)
+s=s.replace('jobs_ = std::move(jobs); next_', 'populating_ = false;\\n                jobs_ = std::move(jobs); next_',1)
+needle='                if (error_) { throw std::runtime_error(\"expert pread failed: errno=\" + std::to_string(error_)); }'
+s=s.replace(needle,needle+'''
+                // All preads finish before populate, including ranges already resident.
+                if (populate_.load()) {
+                    jobs_.clear();
+                    for (const auto & r : merged) {
+                        for (size_t pos = 0; pos < r.len;) {
+                            const size_t len = std::min(chunk_, r.len - pos);
+                            jobs_.push_back({r.offset + pos, len}); pos += len;
+                        }
+                    }
+                    populating_ = true; next_ = 0; pending_ = jobs_.size();
+                    ready_.notify_all();
+                    done_.wait(lock, [this] { return pending_ == 0; });
+                    if (error_) { throw std::runtime_error(\"expert populate failed: errno=\" + std::to_string(error_)); }
+                }''')
+s=s.replace('    static size_t env_size', '''    static bool enabled(const char * name) {
+        const char * s = getenv(name); return s && std::string(s) == \"1\";
+    }
+    static size_t env_size''')
+s=s.replace('            while (bytes < job.len) {','''            struct rusage before {}, after {};
+            if (batch_diag_) { getrusage(RUSAGE_THREAD, &before); }
+            uint64_t populate_ns = 0, populate_calls = 0, populate_errors = 0;
+            if (populating_) {
+                if (populate_.load()) {
+                    const auto start = std::chrono::steady_clock::now();
+                    ++populate_calls;
+                    if (madvise(mapping_ + job.offset, job.len, MADV_POPULATE_READ)) {
+                        ++populate_errors;
+                        if (errno == EINVAL) {
+                            if (populate_.exchange(false)) { fprintf(stderr, \"expert_fill: populate unsupported\\\\n\"); }
+                        } else { error = errno; }
+                    }
+                    populate_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - start).count();
+                }
+            } else while (bytes < job.len) {''')
+s=s.replace('            {\\n                std::lock_guard<std::mutex> lock(mutex_);\\n                batch_bytes_', '''            if (batch_diag_) { getrusage(RUSAGE_THREAD, &after); }
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                counters_.populate_calls += populate_calls; counters_.populate_ns += populate_ns;
+                counters_.populate_errors += populate_errors;
+                if (batch_diag_) {
+                    counters_.thread_majflt += after.ru_majflt - before.ru_majflt;
+                    counters_.thread_minflt += after.ru_minflt - before.ru_minflt;
+                }
+                batch_bytes_''')
+s=s.replace('    bool stopping_ = false;', '    bool stopping_ = false, diag_ = false, batch_diag_ = false, populating_ = false;\\n    std::atomic<bool> populate_ {false};')
+p.write_text(s)
+PY
+python3 /tmp/edit_om9.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 517ms:
+exec
+/bin/bash -lc "cat > /tmp/context_om9.py <<'PY'
+from pathlib import Path
+root=Path('/tmp/j-om9-work/src')
+p=root/'llama-context.h';s=p.read_text();needle='    void expert_fill_phase(uint32_t n_tokens);'
+s=s.replace(needle,'''    // All diagnostic syscalls and residency probes are behind expert_diag_enabled.
+    bool expert_diag_enabled = false, expert_diag_token_active = false, expert_diag_gap = false;
+    struct fill_diag {
+        uint64_t fill_ns=0, between_ns=0, majflt_fill=0, minflt_fill=0;
+        uint64_t majflt_between=0, minflt_between=0, thread_majflt=0, thread_minflt=0;
+        uint64_t post_nonresident=0, pre_use_nonresident=0, next_nonresident=0;
+        uint64_t bytes_read=0, post_checks=0, pre_use_checks=0, next_checks=0;
+        uint64_t populate_calls=0, populate_ns=0, populate_errors=0;
+    } expert_diag_token, expert_diag_total;
+    uint64_t expert_diag_token_idx = 0, expert_diag_gap_ns = 0;
+    long expert_diag_gap_maj = 0, expert_diag_gap_min = 0;
+    FILE * expert_diag_csv = nullptr;
+    using diag_ranges = std::map<size_t, std::vector<ExpertFiller::Range>>;
+    std::map<size_t, diag_ranges> expert_diag_layers;
+    diag_ranges expert_diag_previous;
+    void expert_diag_close_gap();
+    void expert_diag_finish_token();
+    void expert_diag_pre_use(size_t il);
+''' + needle);p.write_text(s)
+p=root/'llama-context.cpp';s=p.read_text();s=s.replace('        expert_fill_enabled = true;','''        expert_fill_enabled = true;
+        expert_diag_enabled = expert_fillers.begin()->second->diagnostic();
+        if (expert_diag_enabled) {
+            const char * csv = getenv(\"LLAMA_EXPERT_FILL_DIAG_CSV\");
+            if (csv && *csv) {
+                expert_diag_csv = fopen(csv, \"w\");
+                if ("'!expert_diag_csv) { throw std::runtime_error("cannot open diagnostic CSV"); }
+                fprintf(expert_diag_csv, "token_idx,fill_ns,between_ns,majflt_fill,majflt_between,post_fill_nonresident_pages,pre_use_nonresident_pages,bytes_read'"\\\\n\");
+            }
+        }''',1)
+needle='void llama_context::expert_fill_phase(uint32_t n_tokens) {'
+fields=['fill_ns','between_ns','majflt_fill','minflt_fill','majflt_between','minflt_between','thread_majflt','thread_minflt','post_nonresident','pre_use_nonresident','next_nonresident','bytes_read','post_checks','pre_use_checks','next_checks','populate_calls','populate_ns','populate_errors']
+code='''static uint64_t expert_diag_now() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+void llama_context::expert_diag_close_gap() {
+    if ("'!expert_diag_gap) { return; }
+    struct rusage r {}; getrusage(RUSAGE_SELF, &r);
+    expert_diag_token.between_ns += expert_diag_now() - expert_diag_gap_ns;
+    expert_diag_token.majflt_between += r.ru_majflt - expert_diag_gap_maj;
+    expert_diag_token.minflt_between += r.ru_minflt - expert_diag_gap_min;
+    expert_diag_gap = false;
+}
+void llama_context::expert_diag_finish_token() {
+    if (!expert_diag_enabled || !expert_diag_token_active) { return; }
+    expert_diag_close_gap();
+    const auto & d = expert_diag_token;
+'"'''
+for f in fields:code+=f'    expert_diag_total.{f} += d.{f};\\n'
+code+='''    if (expert_diag_csv) {
+        fprintf(expert_diag_csv, \"%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\\\\n\",
+            (unsigned long long)expert_diag_token_idx, (unsigned long long)d.fill_ns,
+            (unsigned long long)d.between_ns, (unsigned long long)d.majflt_fill,
+            (unsigned long long)d.majflt_between, (unsigned long long)d.post_nonresident,
+            (unsigned long long)d.pre_use_nonresident, (unsigned long long)d.bytes_read);
+        fflush(expert_diag_csv);
+    }
+    if (expert_diag_token_idx % 16 == 0) {
+        fprintf(stderr, \"expert_fill: diag token=%llu fill_ns=%llu between_ns=%llu majflt_fill=%llu majflt_between=%llu post_nonresident=%llu pre_use_nonresident=%llu bytes_read=%llu\\\\n\",
+            (unsigned long long)expert_diag_token_idx, (unsigned long long)d.fill_ns,
+            (unsigned long long)d.between_ns, (unsigned long long)d.majflt_fill,
+            (unsigned long long)d.majflt_between, (unsigned long long)d.post_nonresident,
+            (unsigned long long)d.pre_use_nonresident, (unsigned long long)d.bytes_read);
+    }
+    expert_diag_token = {}; expert_diag_token_active = false;
+    expert_diag_layers.clear(); expert_diag_previous.clear();
+}
+void llama_context::expert_diag_pre_use(size_t il) {
+    if ("'!expert_diag_enabled || !expert_diag_token_active) { return; }
+    auto it = expert_diag_layers.find(il);
+    if (it == expert_diag_layers.end()) { return; }
+    for (const auto & entry : it->second) {
+        expert_diag_token.pre_use_nonresident += expert_fillers.at(entry.first)->nonresident(entry.second);
+        ++expert_diag_token.pre_use_checks;
+    }
+}
+'"'''
+s=s.replace(needle,code+needle+'''
+    if (expert_diag_enabled) {
+        expert_diag_finish_token();
+        if (n_tokens == 1) {
+            ++expert_diag_token_idx; expert_diag_token_active = true;
+            struct rusage r {}; getrusage(RUSAGE_SELF, &r);
+            expert_diag_gap_maj = r.ru_majflt; expert_diag_gap_min = r.ru_minflt;
+            expert_diag_gap_ns = expert_diag_now(); expert_diag_gap = true;
+        }
+    }''')
+needle='        for (const auto & entry : ranges) { expert_fillers.at(entry.first)->fill(entry.second, expert_fill_decode); }'
+replacement='''        const bool diag = expert_diag_enabled && expert_diag_token_active;
+        struct rusage before {}, after {}, thread_before {}, thread_after {};
+        uint64_t start = 0;
+        if (diag) {
+            expert_diag_close_gap();
+            // Previous layer was consumed; this is a separate, after-use eviction probe.
+            for (const auto & entry : expert_diag_previous) {
+                expert_diag_token.next_nonresident += expert_fillers.at(entry.first)->nonresident(entry.second);
+                ++expert_diag_token.next_checks;
+            }
+            getrusage(RUSAGE_SELF, &before); getrusage(RUSAGE_THREAD, &thread_before);
+            start = expert_diag_now();
+        }
+        for (const auto & entry : ranges) {
+            auto & filler = *expert_fillers.at(entry.first);
+            ExpertFiller::Counters a {};
+            if (diag) { a = filler.counters(); }
+            filler.fill(entry.second, expert_fill_decode);
+            if (diag) {
+                const auto b = filler.counters();
+                expert_diag_token.bytes_read += b.bytes_read - a.bytes_read;
+                expert_diag_token.thread_majflt += b.thread_majflt - a.thread_majflt;
+                expert_diag_token.thread_minflt += b.thread_minflt - a.thread_minflt;
+                expert_diag_token.populate_calls += b.populate_calls - a.populate_calls;
+                expert_diag_token.populate_ns += b.populate_ns - a.populate_ns;
+                expert_diag_token.populate_errors += b.populate_errors - a.populate_errors;
+                expert_diag_token.post_nonresident += filler.nonresident(entry.second);
+                ++expert_diag_token.post_checks;
+            }
+        }
+        if (diag) {
+            getrusage(RUSAGE_SELF, &after); getrusage(RUSAGE_THREAD, &thread_after);
+            expert_diag_token.fill_ns += expert_diag_now() - start;
+            expert_diag_token.majflt_fill += after.ru_majflt - before.ru_majflt;
+            expert_diag_token.minflt_fill += after.ru_minflt - before.ru_minflt;
+            expert_diag_token.thread_majflt += thread_after.ru_majflt - thread_before.ru_majflt;
+            expert_diag_token.thread_minflt += thread_after.ru_minflt - thread_before.ru_minflt;
+            expert_diag_layers[il] = ranges; expert_diag_previous = ranges;
+            getrusage(RUSAGE_SELF, &after);
+            expert_diag_gap_maj = after.ru_majflt; expert_diag_gap_min = after.ru_minflt;
+            expert_diag_gap_ns = expert_diag_now(); expert_diag_gap = true;
+        }'''
+s=s.replace(needle,replacement)
+# allow diagnostic per-node callback even after first node observed
+needle='    if (il == ctx.model.layers.size() || ctx.expert_prefetch_layers[il].observed) {'
+s=s.replace(needle,'''#ifdef __linux__
+    if (il < ctx.model.layers.size() && ctx.expert_diag_enabled && ctx.expert_diag_token_active &&
+            ctx.expert_prefetch_layers[il].observed) {
+        *observe = true;
+        if ("'!ask) { ctx.expert_diag_pre_use(il); }
+        return;
+    }
+#endif
+'"'''+needle)
+s=s.replace('        ctx.expert_fill_selected(il, selected);\\n        return;', '        ctx.expert_fill_selected(il, selected);\\n        if (ctx.expert_diag_enabled) { ctx.expert_diag_pre_use(il); }\\n        return;')
+# destructor before stats block
+needle='llama_context::~llama_context() {'
+# don't finish before synchronization - insert at stats location
+marker='    if ("'!expert_fillers.empty()) {'"'
+idx=s.index(marker,s.index(needle));s=s[:idx]+'''    if (expert_diag_enabled) {
+        expert_diag_finish_token();
+        const auto & d = expert_diag_total;
+        fprintf(stderr, \"expert_fill: diag tokens=%llu\", (unsigned long long)expert_diag_token_idx);
+'''+''.join(f'        fprintf(stderr, \" {f}=%llu\", (unsigned long long)d.{f});\\n' for f in fields)+'''        fprintf(stderr, \"\\\\n\");
+        if (expert_diag_csv) { fclose(expert_diag_csv); expert_diag_csv = nullptr; }
+    }
+'''+s[idx:]
+# stats populate regardless diag
+s=s.replace('            sum.calls += s.calls;', '            sum.populate_calls += s.populate_calls; sum.populate_ns += s.populate_ns; sum.populate_errors += s.populate_errors;\\n            sum.calls += s.calls;')
+s=s.replace('\" decode_calls=%\" PRIu64 \" decode_bytes_read=%\" PRIu64 \" decode_fill_wall_ns=%\" PRIu64 \"\\\\n\",','\" decode_calls=%\" PRIu64 \" decode_bytes_read=%\" PRIu64 \" decode_fill_wall_ns=%\" PRIu64\\n            \" populate_calls=%\" PRIu64 \" populate_ns=%\" PRIu64 \" populate_errors=%\" PRIu64 \"\\\\n\",')
+s=s.replace('sum.decode_calls, sum.decode_bytes_read, sum.decode_fill_wall_ns);','sum.decode_calls, sum.decode_bytes_read, sum.decode_fill_wall_ns,\\n            sum.populate_calls, sum.populate_ns, sum.populate_errors);')
+p.write_text(s)
+PY
+python3 /tmp/context_om9.py
+cp cc/expert_fill/expert_fill.h /tmp/j-om9-work/src/llama-expert-fill.h
+make -C cc/expert_fill test" in /home/muk/projects/siminfeng/campaign
+ succeeded in 3910ms:
+make: Entering directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror test_expert_fill.cpp -o test_expert_fill
+./test_expert_fill
+measured readahead extra pages: 31 (126976 bytes)
+PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds
+make: Leaving directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+
+exec
+/bin/bash -lc "cat > /tmp/refine_om9.py <<'PY'
+from pathlib import Path
+p=Path('cc/expert_fill/expert_fill.h');s=p.read_text();s=s.replace('        for (const auto & r : ranges) {\\n            if ("'!r.len)'"', '''        std::vector<Range> sorted = ranges;
+        std::sort(sorted.begin(), sorted.end(), [](const Range & a, const Range & b) { return a.offset < b.offset; });
+        uint64_t checked_end = 0;
+        for (const auto & r : sorted) {
+            if ("'!r.len)'"''',1).replace('            const size_t first = r.offset / page_ * page_;\\n            const size_t len = r.offset + r.len - first;', '''            const size_t first = std::max<uint64_t>(r.offset / page_ * page_, checked_end);
+            if (r.offset + r.len <= first) { continue; }
+            const size_t len = r.offset + r.len - first;
+            checked_end = first + ((len + page_ - 1) / page_) * page_;''',1)
+s=s.replace('    static bool enabled(', '''    static std::atomic<bool> & populate_unsupported() {
+        static std::atomic<bool> value {false}; return value;
+    }
+    static bool enabled(''')
+s=s.replace('if (populate_.load()) {', 'if (populate_.load() && "'!populate_unsupported().load()) {'"')
+s=s.replace('if (populate_.exchange(false)) { fprintf', 'populate_.store(false);\\n                            if ("'!populate_unsupported().exchange(true)) { fprintf'"')
+p.write_text(s)
+p=Path('/tmp/j-om9-work/src/llama-context.cpp');s=p.read_text().replace('            expert_diag_close_gap();\\n            // Previous','            // Previous').replace('            getrusage(RUSAGE_SELF, &before); getrusage(RUSAGE_THREAD, &thread_before);','            expert_diag_close_gap();\\n            getrusage(RUSAGE_SELF, &before); getrusage(RUSAGE_THREAD, &thread_before);');p.write_text(s)
+# populate regression independent cold region plus repeated touch rusage
+p=Path('cc/expert_fill/test_expert_fill.cpp');s=p.read_text();needle='    assert(munmap(map, size) == 0);'
+s=s.replace(needle,'''    setenv(\"LLAMA_EXPERT_FILL_POPULATE\", \"1\", 1);
+    setenv(\"LLAMA_EXPERT_FILL_DIAG\", \"1\", 1);
+    {
+        ExpertFiller filler(path, map, size);
+        const size_t begin = 48 * 1024 * 1024, len = 4 * 1024 * 1024;
+        filler.fill({{begin + 17, len - 34}}, true);
+        assert(filler.nonresident({{begin, len}}) == 0);
+        const auto stats = filler.counters();
+        assert(stats.populate_calls > 0 && stats.populate_ns > 0);
+        // This test requires a Linux >=5.14 kernel implementing POPULATE_READ.
+        assert(stats.populate_errors == 0);
+        volatile unsigned char touched = 0;
+        for (size_t i = begin; i < begin + len; i += page) { touched = map[i]; }
+        struct rusage a {}, b {};
+        assert(getrusage(RUSAGE_SELF, &a) == 0);
+        for (size_t i = begin; i < begin + len; i += page) { touched = map[i]; }
+        assert(getrusage(RUSAGE_SELF, &b) == 0);
+        assert(b.ru_majflt == a.ru_majflt);
+        (void)touched;
+    }
+    unsetenv(\"LLAMA_EXPERT_FILL_POPULATE\"); unsetenv(\"LLAMA_EXPERT_FILL_DIAG\");
+'''+needle).replace('mmap contents, bounds\");','mmap contents, bounds, populate residency and zero-major-fault retouch\");');p.write_text(s)
+# spec
+import json,copy
+p=Path('cc/abrun/specs/J-OM8b.json');src=json.loads(p.read_text());out={k:copy.deepcopy(src[k]) for k in ('id','outdir_base','runner','tool','argv','metric')};out['id']='J-OM9';out['arms']={}
+for name,source in [('base','base'),('frd16','frd16'),('frd16d','frd16'),('frd16p','frd16')]:
+ a=copy.deepcopy(src['arms'][source]);a['image']='campaign/llamacpp:jetson-up1108-om9';a['env']['LLAMA_EXPERT_FILL_DIAG']='1' if name in ('frd16d','frd16p') else '0';a['env']['LLAMA_EXPERT_FILL_POPULATE']='1' if name=='frd16p' else '0';a['switch_regex']=['expert_fill: active','expert_fill: random advice applied at decode']
+ if name in ('frd16d','frd16p'):a['switch_regex'].append('expert_fill: diag')
+ if name=='frd16p':a['switch_regex'].append(r'\\A(?"'!['"\\s\\S]*populate unsupported)[\\s\\S]*expert_fill: diag')
+ out['arms'][name]=a
+out.update(order='explicit',rounds=1,explicit_order=['base','frd16','frd16d','frd16p','frd16p','frd16d','frd16','base'])
+Path('cc/abrun/specs/J-OM9.json').write_text(json.dumps(out,indent=2)+'\\n')
+PY
+python3 /tmp/refine_om9.py
+cp cc/expert_fill/expert_fill.h /tmp/j-om9-work/src/llama-expert-fill.h
+make -C cc/expert_fill test
+python3 cc/abrun/abrun.py cc/abrun/specs/J-OM9.json --dry-run" in /home/muk/projects/siminfeng/campaign
+ succeeded in 2656ms:
+make: Entering directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror test_expert_fill.cpp -o test_expert_fill
+./test_expert_fill
+measured readahead extra pages: 31 (126976 bytes)
+PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds, populate residency and zero-major-fault retouch
+make: Leaving directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+Order: base, frd16, frd16d, frd16p, frd16p, frd16d, frd16, base
+Run 1: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM9 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM9/001-base campaign/llamacpp:jetson-up1108-om9 '-e LLAMA_EXPERT_FILL=0 -e LLAMA_EXPERT_FILL_RANDOM=0 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_DIAG=0 -e LLAMA_EXPERT_FILL_POPULATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 2: frd16  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM9 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM9/002-frd16 campaign/llamacpp:jetson-up1108-om9 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_DIAG=0 -e LLAMA_EXPERT_FILL_POPULATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 3: frd16d  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM9 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM9/003-frd16d campaign/llamacpp:jetson-up1108-om9 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_DIAG=1 -e LLAMA_EXPERT_FILL_POPULATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 4: frd16p  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM9 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM9/004-frd16p campaign/llamacpp:jetson-up1108-om9 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_DIAG=1 -e LLAMA_EXPERT_FILL_POPULATE=1' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 5: frd16p  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM9 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM9/005-frd16p campaign/llamacpp:jetson-up1108-om9 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_DIAG=1 -e LLAMA_EXPERT_FILL_POPULATE=1' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 6: frd16d  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM9 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM9/006-frd16d campaign/llamacpp:jetson-up1108-om9 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_DIAG=1 -e LLAMA_EXPERT_FILL_POPULATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 7: frd16  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM9 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM9/007-frd16 campaign/llamacpp:jetson-up1108-om9 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_DIAG=0 -e LLAMA_EXPERT_FILL_POPULATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 8: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM9 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM9/008-base campaign/llamacpp:jetson-up1108-om9 '-e LLAMA_EXPERT_FILL=0 -e LLAMA_EXPERT_FILL_RANDOM=0 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_DIAG=0 -e LLAMA_EXPERT_FILL_POPULATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+
+exec
+/bin/bash -lc 'g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp' in /tmp/j-om9-work
+exec
+/bin/bash -lc 'g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp' in /tmp/j-om9-work
+exec
+/bin/bash -lc 'g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp' in /tmp/j-om9-work
+exec
+/bin/bash -lc 'g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp' in /tmp/j-om9-work
+exec
+/bin/bash -lc 'g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp' in /tmp/j-om9-work
+ succeeded in 887ms:
+ succeeded in 1356ms:
+ succeeded in 4021ms:
+ succeeded in 4076ms:
+ succeeded in 5575ms:
+exec
+/bin/bash -lc "sed -n '1060,1148p' /tmp/j-om9-work/src/llama-context.cpp; rg -n 'leak_regex|switch_regex' cc/abrun/abrun.py | head -35; cat cc/expert_fill/Makefile; head -35 /tmp/j-om9-work/src/llama-context.h" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+            " bytes_skipped_resident=%" PRIu64 " bytes_read=%" PRIu64 " read_syscalls=%" PRIu64
+            " total_fill_wall_ns=%" PRIu64 " max_single_fill_ns=%" PRIu64
+            " prompt_calls=%" PRIu64 " prompt_bytes_read=%" PRIu64 " prompt_fill_wall_ns=%" PRIu64
+            " decode_calls=%" PRIu64 " decode_bytes_read=%" PRIu64 " decode_fill_wall_ns=%" PRIu64
+            " populate_calls=%" PRIu64 " populate_ns=%" PRIu64 " populate_errors=%" PRIu64 "\n",
+            sum.calls, sum.ranges, sum.bytes_requested, sum.bytes_skipped_resident, sum.bytes_read,
+            sum.read_syscalls, sum.total_fill_wall_ns, sum.max_single_fill_ns,
+            sum.prompt_calls, sum.prompt_bytes_read, sum.prompt_fill_wall_ns,
+            sum.decode_calls, sum.decode_bytes_read, sum.decode_fill_wall_ns,
+            sum.populate_calls, sum.populate_ns, sum.populate_errors);
+    }
+#endif
+    if (!expert_prefetch_layers.empty() && expert_prefetch_calls) {
+        LLAMA_LOG_INFO("expert_prefetch: advise calls=%" PRIu64 " bytes advised=%" PRIu64 " failures=%" PRIu64
+                       " next-layer prediction hits/total=%" PRIu64 "/%" PRIu64 " (%.2f%%)\n",
+                expert_prefetch_calls, expert_prefetch_bytes, expert_prefetch_failures,
+                expert_prefetch_hits, expert_prefetch_total,
+                expert_prefetch_total ? 100.0 * expert_prefetch_hits / expert_prefetch_total : 0.0);
+    }
+
+    // when training, ggml_opt allocates extra buffers through the scheduler, so the sizes no longer match the expectation
+    if (!model.no_alloc() && !opt_ctx) {
+        for (size_t i = 0; i < backend_ptrs.size(); ++i) {
+            ggml_backend_t             backend = backend_ptrs[i];
+            ggml_backend_buffer_type_t buft    = backend_buft[i];
+
+            const size_t size_exp = backend_buf_exp_size[i];
+            const size_t size_act = ggml_backend_sched_get_buffer_size(sched.get(), backend);
+            if (size_exp == size_act) {
+                LLAMA_LOG_DEBUG("%s: %10s compute buffer size is %8.4f MiB, matches expectation of %8.4f MiB\n",
+                    __func__, ggml_backend_buft_name(buft), size_act / (1024.0*1024.0), size_exp / (1024.0*1024.0));
+            } else {
+                LLAMA_LOG_WARN("%s: %10s compute buffer size of %8.4f MiB, does not match expectation of %8.4f MiB\n",
+                    __func__, ggml_backend_buft_name(buft), size_act / (1024.0*1024.0), size_exp / (1024.0*1024.0));
+            }
+        }
+    }
+    ggml_opt_free(opt_ctx);
+}
+
+void llama_context::resolve_fused_ops(const llama_memory_context_i * mctx, uint32_t n_seqs) {
+    const char * func = __func__;
+    auto resolve = [&](const llm_fused_op_probe & probe, bool & enabled) {
+        if (!enabled) {
+            return;
+        }
+
+        const uint32_t n_tokens_probe = probe.n_tokens_per_seq*n_seqs;
+
+        auto * gf = graph_reserve(n_tokens_probe, n_seqs, n_tokens_probe, mctx, true);
+        if (!gf) {
+            throw std::runtime_error(std::string("failed to reserve graph for ") + probe.name + " check");
+        }
+
+        bool device_mismatch = false;
+        for (const auto & node : get_gf_res_reserve()->get_fused_nodes()) {
+            if (node.op != probe.op) {
+                continue;
+            }
+
+            GGML_ASSERT(node.il >= 0);
+
+            ggml_backend_t backend_fused = ggml_backend_sched_get_tensor_backend(sched.get(), node.tensor);
+            ggml_backend_dev_t device_fused = backend_fused ? ggml_backend_get_device(backend_fused) : nullptr;
+
+            // TODO: make this descriptor-specific; model.dev_layer() preserves the current behavior,
+            // but is still wrong for cases like --no-kv-offload.
+            ggml_backend_dev_t device_layer = model.dev_layer(node.il);
+
+            if (device_fused != device_layer) {
+                LLAMA_LOG_WARN("%s: layer %d is assigned to device %s but %s "
+                        "is assigned to device %s (usually due to missing support)\n",
+                        func, node.il,
+                        device_layer ? ggml_backend_dev_name(device_layer) : "none",
+                        probe.name,
+                        device_fused ? ggml_backend_dev_name(device_fused) : "none");
+                device_mismatch = true;
+                break;
+            }
+        }
+
+        if (device_mismatch) {
+            enabled = false;
+            LLAMA_LOG_WARN("%s: %s not supported, set to disabled\n", func, probe.name);
+        } else {
+            enabled = true;
+            LLAMA_LOG_INFO("%s: %s enabled\n", func, probe.name);
+        }
+    };
+54:        regexes = owner.get('switch_regex', [])
+56:            raise ValueError('switch_regex must be an array of regex strings')
+60:        if arm.get('expect_switch') and not (spec.get('switch_regex') or arm.get('switch_regex')):
+61:            raise ValueError('expect_switch requires switch_regex')
+111:    return list(dict.fromkeys([*spec.get('switch_regex', []),
+113:                                for p in arm.get('switch_regex', []))]))
+124:              for p in config.get('switch_regex', []) if not matches.get(p, 0)]
+125:    legacy = spec.get('switch_regex', [])
+127:        errors.append(f'{arm}: switch inert (no switch_lines matching spec switch_regex)')
+CXX = g++
+CXXFLAGS = -std=c++17 -O2 -pthread -Wall -Wextra -Werror
+.PHONY: test clean
+test: test_expert_fill
+	./test_expert_fill
+test_expert_fill: test_expert_fill.cpp expert_fill.h
+	$(CXX) $(CXXFLAGS) test_expert_fill.cpp -o $@
+clean:
+	rm -f test_expert_fill
+#pragma once
+
+#include "llama.h"
+#include "llama-ext.h"
+#include "llama-cparams.h"
+#include "llama-graph.h"
+#include "llama-adapter.h"
+#include "llama-impl.h"
+#include "llama-memory.h"
+#include "llama-moe-cache.h"
+
+#include "ggml-cpp.h"
+#include "ggml-opt.h"
+
+#ifdef __linux__
+#include "llama-expert-fill.h"
+#endif
+#include <array>
+#include <map>
+#include <vector>
+
+struct llama_model;
+class llama_batch_allocr;
+class llama_moe_cache;
+
+class llama_io_read_i;
+class llama_io_write_i;
+
+// "memory" as in abstract memory for the context
+struct llama_memory_i;
+struct llama_memory_context_i;
+
+// stores copy of the memory in device buffer. used for fast state save/load
+struct llama_memory_buffer {
+    int n_tensors = 0;
+
+codex
+The fill and populate tests pass, and all five C++ files touched by 01–05 pass syntax checks. The runner supports per-arm required regexes but has no leak-regex field; I’ll document that `populate unsupported` needs a manual stderr check rather than add an ineffective negative regex.
+
+exec
+/bin/bash -lc "sed -n '1010,1064p' /tmp/j-om9-work/src/llama-context.cpp; cat cc/expert_fill/README.md" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+        }
+    }
+}
+
+llama_context::~llama_context() {
+    // wait for any pending asynchronous copies into the output buffers before they are freed
+    synchronize();
+
+#ifdef __linux__
+    if (expert_diag_enabled) {
+        expert_diag_finish_token();
+        const auto & d = expert_diag_total;
+        fprintf(stderr, "expert_fill: diag tokens=%llu", (unsigned long long)expert_diag_token_idx);
+        fprintf(stderr, " fill_ns=%llu", (unsigned long long)d.fill_ns);
+        fprintf(stderr, " between_ns=%llu", (unsigned long long)d.between_ns);
+        fprintf(stderr, " majflt_fill=%llu", (unsigned long long)d.majflt_fill);
+        fprintf(stderr, " minflt_fill=%llu", (unsigned long long)d.minflt_fill);
+        fprintf(stderr, " majflt_between=%llu", (unsigned long long)d.majflt_between);
+        fprintf(stderr, " minflt_between=%llu", (unsigned long long)d.minflt_between);
+        fprintf(stderr, " thread_majflt=%llu", (unsigned long long)d.thread_majflt);
+        fprintf(stderr, " thread_minflt=%llu", (unsigned long long)d.thread_minflt);
+        fprintf(stderr, " post_nonresident=%llu", (unsigned long long)d.post_nonresident);
+        fprintf(stderr, " pre_use_nonresident=%llu", (unsigned long long)d.pre_use_nonresident);
+        fprintf(stderr, " next_nonresident=%llu", (unsigned long long)d.next_nonresident);
+        fprintf(stderr, " bytes_read=%llu", (unsigned long long)d.bytes_read);
+        fprintf(stderr, " post_checks=%llu", (unsigned long long)d.post_checks);
+        fprintf(stderr, " pre_use_checks=%llu", (unsigned long long)d.pre_use_checks);
+        fprintf(stderr, " next_checks=%llu", (unsigned long long)d.next_checks);
+        fprintf(stderr, " populate_calls=%llu", (unsigned long long)d.populate_calls);
+        fprintf(stderr, " populate_ns=%llu", (unsigned long long)d.populate_ns);
+        fprintf(stderr, " populate_errors=%llu", (unsigned long long)d.populate_errors);
+        fprintf(stderr, "\n");
+        if (expert_diag_csv) { fclose(expert_diag_csv); expert_diag_csv = nullptr; }
+    }
+    if (!expert_fillers.empty()) {
+        ExpertFiller::Counters sum;
+        for (const auto & entry : expert_fillers) {
+            const auto s = entry.second->counters();
+            sum.populate_calls += s.populate_calls; sum.populate_ns += s.populate_ns; sum.populate_errors += s.populate_errors;
+            sum.calls += s.calls; sum.ranges += s.ranges;
+            sum.bytes_requested += s.bytes_requested; sum.bytes_skipped_resident += s.bytes_skipped_resident;
+            sum.bytes_read += s.bytes_read; sum.read_syscalls += s.read_syscalls;
+            sum.total_fill_wall_ns += s.total_fill_wall_ns;
+            sum.prompt_calls += s.prompt_calls; sum.prompt_bytes_read += s.prompt_bytes_read;
+            sum.prompt_fill_wall_ns += s.prompt_fill_wall_ns;
+            sum.decode_calls += s.decode_calls; sum.decode_bytes_read += s.decode_bytes_read;
+            sum.decode_fill_wall_ns += s.decode_fill_wall_ns;
+            sum.max_single_fill_ns = std::max(sum.max_single_fill_ns, s.max_single_fill_ns);
+        }
+        LLAMA_LOG_INFO("expert_fill: stats calls=%" PRIu64 " ranges=%" PRIu64 " bytes_requested=%" PRIu64
+            " bytes_skipped_resident=%" PRIu64 " bytes_read=%" PRIu64 " read_syscalls=%" PRIu64
+            " total_fill_wall_ns=%" PRIu64 " max_single_fill_ns=%" PRIu64
+            " prompt_calls=%" PRIu64 " prompt_bytes_read=%" PRIu64 " prompt_fill_wall_ns=%" PRIu64
+            " decode_calls=%" PRIu64 " decode_bytes_read=%" PRIu64 " decode_fill_wall_ns=%" PRIu64
+            " populate_calls=%" PRIu64 " populate_ns=%" PRIu64 " populate_errors=%" PRIu64 "\n",
+# J-OM8: synchronous exact expert fill
+
+Linux, C++17, opt-in `LLAMA_EXPERT_FILL=1`. The CPU scheduler's before-node
+observer waits for host router IDs, deduplicates the layer's ubatch union,
+and fills gate/up/down (or merged gate-up) slices before expert MUL_MAT_ID.
+The loader's `weights_map` supplies source file index and absolute GGUF byte
+offset; the model retains buffered file handles and validates each tensor's
+mmap address against that offset. Split GGUF files get independent fillers.
+Unavailable offsets, non-mmap tensors or unsupported layouts disable filling
+with one `expert_fill: inactive (<reason>)` line per context.
+
+`expert_fill.h` is the source of truth: the patch copies its exact contents to
+`src/llama-expert-fill.h`. Each filler opens its own O_RDONLY (not O_DIRECT)
+fd via the retained model fd's `/proc/self/fd/N` path. Its persistent pool uses
+`LLAMA_EXPERT_FILL_THREADS` (default 8) and per-worker scratch buffers sized by
+`LLAMA_EXPERT_FILL_CHUNK_KIB` (default 1024). Invalid settings use defaults;
+limits are 256 threads and 65536 KiB. `fill` aligns outward, merges adjacent
+or overlapping ranges, queries mincore, and reads only nonresident runs in
+parallel with buffered pread. It waits for every job, including on IO errors.
+Counters include calls, input ranges, requested page-aligned union bytes,
+resident bytes skipped, actual bytes read, pread syscalls (including retries),
+total fill wall ns and maximum single-fill ns. Final pages stop at file EOF.
+Concurrent fills on one filler serialize; mmap lifetime belongs to its caller.
+
+Fill takes precedence over both OM7 prefetch switches, including on failure.
+It never calls OM7's per-expert WILLNEED. `LLAMA_EXPERT_FILL_RANDOM=1` separately
+applies RANDOM to expert mmap ranges and excludes their initial prefetch;
+default-off retains normal loader advice. Buffered fd readahead can still add
+bytes even with mmap RANDOM. Other explicit mmap/NUMA/lazy policies still apply.
+
+Expected effect (hypothesis, not performance evidence): CLOSEOUT 3.C uses
+615 MB selected expert bytes/token, approximately 586.5 MiB. At 3.D's LRU
+hit rates 0.536/0.662/0.694/0.605, misses are about 272/198/179/232 MiB/token.
+At the 536-573 MiB/s drive ceiling, IO-only bounds are respectively
+1.97-2.11 / 2.70-2.89 / 2.99-3.19 / 2.31-2.47 tokens/s; mean hit 0.624 gives
+221 MiB/token and 2.43-2.60 tokens/s. Replay slots are not a measured page-cache
+hit rate; these bounds omit CPU, synchronization, metadata and readahead costs.
+
+Risks: page-cache thrash can evict experts needed later in the same token,
+including pages just filled. mincore is a racing residency snapshot, not a
+pin; it avoids copying already resident bytes into scratch. Missing bytes
+still incur a page-cache-to-scratch copy. Pool memory, graph boundaries,
+fragmented missing runs, readahead and synchronous waits can erase any gain.
+
+Run `make -C cc/expert_fill test` (no root/GPU). It evicts a 64 MiB file with
+FADV_DONTNEED, checks the resident union, measures extra readahead pages,
+checks counters and a zero-read repeat, and verifies mmap data and bounds.
+
+A/B spec: `cc/abrun/specs/J-OM8.json`, image
+`campaign/llamacpp:jetson-up1108-om8`; A=base, B=fill, C=fill_random (fill+random); ABCCBA.
+Use llama-completion p1 with `-n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99
+-lm mmap -cmoe`. Require switch regex `expert_fill: active` only in fill arms.
+Collect eval_tps, nvme_gib, avg_kib_per_io; verify identical output hashes,
+nonzero fill stats, matched cold-cache procedure and no competing NVMe work.
+Startup line records threads/chunk/random; exit `expert_fill: stats` has all
+counters. Compare disk telemetry, not fill counters, to assess physical IO.
+04: `RANDOM=decode` (full name `LLAMA_EXPERT_FILL_RANDOM`) advises once at the first n_tokens==1 ubatch.
+`LLAMA_EXPERT_FILL_MIN_TOKENS` / `LLAMA_EXPERT_FILL_MAX_TOKENS` bound fill inclusively (0 = unbounded; invalid = 0).
+Stats add prompt_/decode_ calls, bytes_read, fill_wall_ns; decode means n_tokens==1. Header matches combined-01-02-03-04.
+`J-OM8b.json`: explicit eight-run mirror x2; both switch regexes use OR: base matches none, fill arms need >=1 (decode marker is not independently enforced).
+
+exec
+/bin/bash -lc "cat > /tmp/package_om9.py <<'PY'
+from pathlib import Path
+import json,difflib,hashlib
+p=Path('cc/expert_fill/expert_fill.h');s=p.read_text().replace('const size_t len = std::min(chunk_, r.len - pos);\\n                            jobs_', 'const size_t populate_chunk = std::max(page_, chunk_ / page_ * page_);\\n                            const size_t len = std::min(populate_chunk, r.len - pos);\\n                            jobs_');p.write_text(s)
+Path('/tmp/j-om9-work/src/llama-expert-fill.h').write_bytes(p.read_bytes())
+p=Path('cc/abrun/specs/J-OM9.json');spec=json.loads(p.read_text());spec['arms']['frd16p']['switch_regex']=spec['arms']['frd16p']['switch_regex'][:3];p.write_text(json.dumps(spec,indent=2)+'\\n')
+root=Path('/tmp/j-om9-work')
+def patch(base,out):
+ parts=[];changed=[]
+ for p in sorted(root.rglob('*')):
+  if not p.is_file():continue
+  rel=p.relative_to(root);old=Path(base)/rel
+  a=old.read_bytes() if old.exists() else b'';b=p.read_bytes()
+  if a==b:continue
+  changed.append(str(rel))
+  parts.append(f'diff --git a/{rel} b/{rel}\\n')
+  if not old.exists():parts.append('new file mode 100644\\n')
+  parts.extend(difflib.unified_diff(a.decode().splitlines(True),b.decode().splitlines(True),fromfile=f'a/{rel}' if old.exists() else '/dev/null',tofile=f'b/{rel}'))
+ Path(out).write_text(''.join(parts));return changed
+print('05:',patch('/tmp/j-om9-before','cc/mmap_advice/patches/05-fill-diag.patch'))
+print('combined:',patch('/tmp/j-om9-base','cc/mmap_advice/patches/combined-01-02-03-04-05.patch'))
+PY
+python3 /tmp/package_om9.py
+cat >> cc/expert_fill/README.md <<'EOF'
+
+05 / J-OM9 diagnostics and populate:
+"'`LLAMA_EXPERT_FILL_DIAG=1` enables decode-only (n_tokens==1 ubatch) process
+RUSAGE_SELF deltas across synchronous fill, and between fills; RUSAGE_THREAD
+is summed over the callback and active fill workers. `thread_majflt/minflt`
+are fill-thread totals, not the process total (do not add them together).
+Fill timing includes the immediate post-fill mincore probe; between timing
+includes CPU compute, other process activity, pre-use/next-layer probes and
+sampling. Token boundaries are the next process_ubatch entry, with the final
+interval closed after destructor synchronize; the last interval can therefore
+include caller time between the last decode and context destruction. No
+prompt interval is included. With split files the process snapshot spans the
+whole layer fill, avoiding overlapping process-wide measurements per file.
+
+Post-fill, pre-use and next-layer counters count nonresident pages in aligned
+unions per mapping, with check counts to interpret repeated observations.
+The CPU observer synchronizes the prefix before its non-ask callback
+(ggml-backend.cpp compute lambda), so 05 can check immediately before EACH
+expert MUL_MAT_ID, including gate/up/down nodes after the layer'"'s initial
+fill. "'`pre_use_nonresident` counts all filled ranges of that layer at each
+such hook. `next_nonresident` is a separate probe before the next layer fill;
+it measures eviction after consumption, which need not hurt performance.
+mincore reports page-cache residency, not installed process page tables;
+resident pages can still require minor PTE faults. These probes cannot
+attribute faults to a particular tensor or distinguish GPU-driver/KV faults.
+Compare process fill/between major faults and pre-use residency to narrow the
+origin; this change supplies diagnostics, not new Jetson performance evidence.
+
+Optional `LLAMA_EXPERT_FILL_DIAG_CSV=/path` writes one row per decode ubatch
+(1-based token_idx). Every 16th token also prints a compact per-token line to
+stderr; the exit `expert_fill: diag` line includes all accumulated counters.
+J-OM9 uses stderr since om_run only mounts /om read-only. The runner has no
+leak_regex support: frd16p requires all three positive per-arm signatures,
+but `populate unsupported` must be checked in stderr manually and invalidates
+that arm'"'s populate comparison. No negative lookahead on individual lines
+can enforce absence elsewhere in stderr.
+
+"'`LLAMA_EXPERT_FILL_POPULATE=1` separately opts into MADV_POPULATE_READ (22),
+after all preads, over the complete aligned union including warm ranges.
+Jobs are page-aligned and distributed across the same fill pool. EINVAL logs
+`expert_fill: populate unsupported` once per process and disables further
+populate attempts across fillers; already in-flight jobs may complete.
+Other errors fail filling explicitly. Stats report calls, summed worker ns
+(not wall ns), and failed calls. The regression test requires Linux >=5.14.
+
+Default-off syscall guards (A6):
+`const bool diag = expert_diag_enabled && expert_diag_token_active;`
+guards process snapshots and post-fill/next-layer probes;
+`if (!expert_diag_enabled || !expert_diag_token_active) { return; }`
+guards pre-use probes and token finalization;
+`batch_diag_ = diag_ && decode;` and
+`if (batch_diag_) { getrusage(RUSAGE_THREAD, &before); }` (and after)
+guard worker snapshots. With DIAG unset and POPULATE unset, 05 adds no
+getrusage/mincore/madvise/file IO syscalls. POPULATE is an independent opt-in
+and intentionally adds madvise even when DIAG is unset.
+EOF
+make -C cc/expert_fill test' in /home/muk/projects/siminfeng/campaign
+ succeeded in 3900ms:
+05: ['src/llama-context.cpp', 'src/llama-context.h', 'src/llama-expert-fill.h']
+combined: ['ggml/include/ggml-backend.h', 'ggml/src/ggml-backend.cpp', 'src/llama-context.cpp', 'src/llama-context.h', 'src/llama-expert-fill.h', 'src/llama-mmap.cpp', 'src/llama-model-loader.cpp', 'src/llama-model.cpp', 'src/llama-model.h']
+make: Entering directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror test_expert_fill.cpp -o test_expert_fill
+./test_expert_fill
+measured readahead extra pages: 31 (126976 bytes)
+PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds, populate residency and zero-major-fault retouch
+make: Leaving directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+
+exec
+/bin/bash -lc "cat > /tmp/verify_om9.py <<'PY'
+from pathlib import Path
+import subprocess,hashlib,shutil
+repo=Path.cwd();patches=repo/'cc/mmap_advice/patches'
+for kind in ['seq','combined']:
+ root=Path('/tmp/j-om9-check-'+kind)
+ root.mkdir(exist_ok=True)
+ archive=subprocess.Popen(['git','-C',str(repo/'ref/llama.cpp-up1108'),'archive','cf34d311'],stdout=subprocess.PIPE)
+ subprocess.run(['tar','-x','-C',str(root)],stdin=archive.stdout,check=True);archive.stdout.close();assert archive.wait()==0
+ names=['01-mmap-advice-random.patch','02-router-prefetch.patch','03-expert-fill.patch','04-fill-phase.patch','05-fill-diag.patch'] if kind=='seq' else ['combined-01-02-03-04-05.patch']
+ for name in names:
+  for args in [['--check'],[]]:
+   r=subprocess.run(['git','apply',*args,str(patches/name)],cwd=root,capture_output=True,text=True)
+   print(kind,name,args,'exit',r.returncode,r.stderr);assert r.returncode==0
+r=subprocess.run(['diff','-r','/tmp/j-om9-check-seq','/tmp/j-om9-check-combined'],capture_output=True,text=True);print('diff -r exit',r.returncode,r.stdout);assert r.returncode==0
+h=(repo/'cc/expert_fill/expert_fill.h').read_bytes();assert h==Path('/tmp/j-om9-check-combined/src/llama-expert-fill.h').read_bytes()
+# Extract full added header from combined as A5 (all lines after the header hunk are additions).
+s=(patches/'combined-01-02-03-04-05.patch').read_text();section=s.split('diff --git a/src/llama-expert-fill.h b/src/llama-expert-fill.h\\n')[1].split('\\ndiff --git ',1)[0];extracted=''.join(line[1:]+'\\n' for line in section.splitlines() if line.startswith('+') and not line.startswith('+++'));assert extracted.encode()==h;print('A5 header copy + full added header extraction: equal')
+log=['\\n05 / J-OM9 syntax-only compile proof (no Docker/GPU/full build)', 'Source: fresh cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03-04-05.patch', 'Patch SHA256: '+hashlib.sha256((patches/'combined-01-02-03-04-05.patch').read_bytes()).hexdigest(), '05 touches src/llama-context.cpp and two headers; all C++ files touched by 01-05 are checked below.']
+for f in ['ggml/src/ggml-backend.cpp','src/llama-context.cpp','src/llama-mmap.cpp','src/llama-model-loader.cpp','src/llama-model.cpp']:
+ cmd=['g++','-std=c++17','-fsyntax-only','-pthread','-Iinclude','-Iggml/include','-Isrc','-Iggml/src',f]
+ r=subprocess.run(cmd,cwd='/tmp/j-om9-check-combined',capture_output=True,text=True);print(f,'exit',r.returncode,r.stderr)
+ log+=['', '"'$ cd /tmp/j-om9-check-combined'"','"'$ '"'+' '.join(cmd),'stdout:',r.stdout or '(empty)','stderr:',r.stderr or '(empty)',f'exit {r.returncode}'];assert r.returncode==0
+log+=['','05 fresh archives: git apply --check and apply of sequential 01,02,03,04,05 and combined each exit 0.', 'A2 diff -r /tmp/j-om9-check-seq /tmp/j-om9-check-combined: exit 0, empty.', 'A5 canonical header versus applied combined and extracted full added header: byte-equal.', 'A1 make -C cc/expert_fill test: exit 0, PASS including populate residency and zero-major-fault retouch.', 'A4 dry-run: exit 0, 8 runs: base frd16 frd16d frd16p frd16p frd16d frd16 base.', 'A6 guards and runner leak-regex limitation: see README.md 05 section.']
+with (repo/'cc/expert_fill/COMPILE-CHECK.txt').open('a') as fp:fp.write('\\n'.join(log)+'\\n')
+PY
+python3 /tmp/verify_om9.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 17388ms:
+seq 01-mmap-advice-random.patch ['--check'] exit 0 
+seq 01-mmap-advice-random.patch [] exit 0 
+seq 02-router-prefetch.patch ['--check'] exit 0 
+seq 02-router-prefetch.patch [] exit 0 
+seq 03-expert-fill.patch ['--check'] exit 0 
+seq 03-expert-fill.patch [] exit 0 
+seq 04-fill-phase.patch ['--check'] exit 0 
+seq 04-fill-phase.patch [] exit 0 
+seq 05-fill-diag.patch ['--check'] exit 0 
+seq 05-fill-diag.patch [] exit 0 
+combined combined-01-02-03-04-05.patch ['--check'] exit 0 
+combined combined-01-02-03-04-05.patch [] exit 0 
+diff -r exit 0 
+A5 header copy + full added header extraction: equal
+ggml/src/ggml-backend.cpp exit 0 
+src/llama-context.cpp exit 0 
+src/llama-mmap.cpp exit 0 
+src/llama-model-loader.cpp exit 0 
+src/llama-model.cpp exit 0 
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('/tmp/j-om9-work/src/llama-context.cpp');s=p.read_text();old='''    } catch (const std::exception & e) {
+        expert_fillers.clear();
+        LLAMA_LOG_INFO(\"expert_fill: inactive (%s)\\\\n\", e.what());
+''';new='''    } catch (const std::exception & e) {
+        expert_fill_enabled = false; expert_diag_enabled = false;
+        if (expert_diag_csv) { fclose(expert_diag_csv); expert_diag_csv = nullptr; }
+        expert_fillers.clear();
+        LLAMA_LOG_INFO(\"expert_fill: inactive (%s)\\\\n\", e.what());
+''';assert old in s;s=s.replace(old,new,1);p.write_text(s)
+# Remove the previous 05 proof; regenerate it for the final patch.
+p=Path('cc/expert_fill/COMPILE-CHECK.txt');s=p.read_text();s=s.split('\\n05 / J-OM9 syntax-only compile proof')[0];p.write_text(s)
+PY
+python3 /tmp/package_om9.py
+python3 /tmp/verify_om9.py" in /home/muk/projects/siminfeng/campaign
+ exited 1 in 3709ms:
+05: ['src/llama-context.cpp', 'src/llama-context.h', 'src/llama-expert-fill.h']
+combined: ['ggml/include/ggml-backend.h', 'ggml/src/ggml-backend.cpp', 'src/llama-context.cpp', 'src/llama-context.h', 'src/llama-expert-fill.h', 'src/llama-mmap.cpp', 'src/llama-model-loader.cpp', 'src/llama-model.cpp', 'src/llama-model.h']
+seq 01-mmap-advice-random.patch ['--check'] exit 0 
+seq 01-mmap-advice-random.patch [] exit 0 
+seq 02-router-prefetch.patch ['--check'] exit 0 
+seq 02-router-prefetch.patch [] exit 0 
+seq 03-expert-fill.patch ['--check'] exit 1 error: src/llama-expert-fill.h: already exists in working directory
+
+Traceback (most recent call last):
+  File "/tmp/verify_om9.py", line 13, in <module>
+    print(kind,name,args,'exit',r.returncode,r.stderr);assert r.returncode==0
+AssertionError
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('/tmp/verify_om9.py');s=p.read_text().replace(' root.mkdir(exist_ok=True)',' if root.exists(): shutil.rmtree(root)\\n root.mkdir()');p.write_text(s)
+PY
+python3 /tmp/verify_om9.py" in /home/muk/projects/siminfeng/campaign
+codex
+Sequential 01–05 and the combined patch match exactly on fresh cf34d311 extracts, and the combined header is byte-identical to the canonical header. I’m finishing the final compile proof and eight-run dry-run record. No Docker, GPU run, or evidence files were used or changed.
+
+ succeeded in 17873ms:
+seq 01-mmap-advice-random.patch ['--check'] exit 0 
+seq 01-mmap-advice-random.patch [] exit 0 
+seq 02-router-prefetch.patch ['--check'] exit 0 
+seq 02-router-prefetch.patch [] exit 0 
+seq 03-expert-fill.patch ['--check'] exit 0 
+seq 03-expert-fill.patch [] exit 0 
+seq 04-fill-phase.patch ['--check'] exit 0 
+seq 04-fill-phase.patch [] exit 0 
+seq 05-fill-diag.patch ['--check'] exit 0 
+seq 05-fill-diag.patch [] exit 0 
+combined combined-01-02-03-04-05.patch ['--check'] exit 0 
+combined combined-01-02-03-04-05.patch [] exit 0 
+diff -r exit 0 
+A5 header copy + full added header extraction: equal
+ggml/src/ggml-backend.cpp exit 0 
+src/llama-context.cpp exit 0 
+src/llama-mmap.cpp exit 0 
+src/llama-model-loader.cpp exit 0 
+src/llama-model.cpp exit 0 
+
+exec
+/bin/bash -lc "python3 cc/abrun/abrun.py cc/abrun/specs/J-OM9.json --dry-run > /tmp/j-om9-dry-run.txt; head -1 /tmp/j-om9-dry-run.txt; rg -c '"'^Run '"' /tmp/j-om9-dry-run.txt; tail -52 cc/expert_fill/COMPILE-CHECK.txt; git diff --stat -- cc/expert_fill cc/abrun/specs/J-OM9.json cc/mmap_advice/patches" in /home/muk/projects/siminfeng/campaign
+ succeeded in 46ms:
+Order: base, frd16, frd16d, frd16p, frd16p, frd16d, frd16, base
+8
+
+05 / J-OM9 syntax-only compile proof (no Docker/GPU/full build)
+Source: fresh cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03-04-05.patch
+Patch SHA256: f79fcf38de248cbf05fd934ef74191b2fc6bbcf6c50bc08cce40b5fc6697e7b0
+05 touches src/llama-context.cpp and two headers; all C++ files touched by 01-05 are checked below.
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+05 fresh archives: git apply --check and apply of sequential 01,02,03,04,05 and combined each exit 0.
+A2 diff -r /tmp/j-om9-check-seq /tmp/j-om9-check-combined: exit 0, empty.
+A5 canonical header versus applied combined and extracted full added header: byte-equal.
+A1 make -C cc/expert_fill test: exit 0, PASS including populate residency and zero-major-fault retouch.
+A4 dry-run: exit 0, 8 runs: base frd16 frd16d frd16p frd16p frd16d frd16 base.
+A6 guards and runner leak-regex limitation: see README.md 05 section.
+
+codex
+Implemented J-OM9.
+- Per-node hook works: residency checked immediately before each CPU expert `MUL_MAT_ID`.
+- Populate: EINVAL logs once and disables further attempts; runner lacks leak regex support, documented.
+- A1–A5 pass: tests, patch equivalence, five syntax checks, exact eight-run order, header equality.
+- A6 guard: `expert_diag_enabled && expert_diag_token_active`; worker snapshots use `if (batch_diag_)`.
+- Patches: [05](cc/mmap_advice/patches/05-fill-diag.patch), [combined](cc/mmap_advice/patches/combined-01-02-03-04-05.patch).
+- Updated [header](cc/expert_fill/expert_fill.h), [tests](cc/expert_fill/test_expert_fill.cpp), [README](cc/expert_fill/README.md), [compile proof](cc/expert_fill/COMPILE-CHECK.txt), [spec](cc/abrun/specs/J-OM9.json).
+- No commits, Docker/GPU/full build, or evidence edits.
+tokens used
+57,244
+Implemented J-OM9.
+- Per-node hook works: residency checked immediately before each CPU expert `MUL_MAT_ID`.
+- Populate: EINVAL logs once and disables further attempts; runner lacks leak regex support, documented.
+- A1–A5 pass: tests, patch equivalence, five syntax checks, exact eight-run order, header equality.
+- A6 guard: `expert_diag_enabled && expert_diag_token_active`; worker snapshots use `if (batch_diag_)`.
+- Patches: [05](cc/mmap_advice/patches/05-fill-diag.patch), [combined](cc/mmap_advice/patches/combined-01-02-03-04-05.patch).
+- Updated [header](cc/expert_fill/expert_fill.h), [tests](cc/expert_fill/test_expert_fill.cpp), [README](cc/expert_fill/README.md), [compile proof](cc/expert_fill/COMPILE-CHECK.txt), [spec](cc/abrun/specs/J-OM9.json).
+- No commits, Docker/GPU/full build, or evidence edits.

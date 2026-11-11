@@ -1,0 +1,3346 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /tmp]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1cbdb-fc98-7881-b88c-7095db47fcf0
+--------
+user
+# Assignment ACC1b — accuracy harness + jobq robustness fixes (worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Checker findings on ACC1 (c2/worklog.jsonl ACC1 checkin). Files: cc/acc/*, bin/jobq, bin/test_jobq.py, bin/README-jobq.md. Do not touch cc/ladder/ (another worker).
+1. datasets.py: retry with exponential backoff + jitter on HTTP 429/5xx/URLError (max 8 tries, honour Retry-After), polite delay between pages (configurable, default 0.5 s); per-row `source` = the URL of the page the row came from.
+2. Subset selection: `--per-category N` mode = exactly N per category (seeded), and keep proportional mode as `--proportional`. Default for MMLU-Pro: per-category. meta records mode, seed, category counts.
+3. jobq: configurable grace between SIGTERM and SIGKILL (`--grace` per job, default 20 s) for timeout/cancel. Test with a child that traps TERM and sleeps 2 s before exiting (must exit cleanly, not be SIGKILLed).
+4. Orphan reaper: cc/acc/server.py labels containers `acc=1` + `jobq_job=$JOBQ_JOB_ID` (if set); on start it removes any exited/running container with label acc=1 whose jobq job is not running (ask bin/jobq show) or, if no jobq id, older than 6 h; also `cc/acc/server.py reap --dry-run`. Also provide `bin/jobq reap-containers` that removes containers labelled om=1 or acc=1 belonging to jobs that are not running (dry-run default, --yes to act).
+5. Remove redundant `argmax_letter_found` field (keep `no_letter`).
+Acceptance: A1 pytest cc/acc + bin/test_jobq.py pass (counts); A2 test that per-category selection with a captured-shape sample yields exactly N per category; A3 grace test passes; A4 reap dry-run prints docker commands only (mock). No docker/network/GPU; no commits. Time 40 min. Final <= 8 lines.
+
+You are a Codex worker in campaign c2. Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
+2026-11-11T18:25:59.234950Z ERROR codex_models_manager::manager: failed to refresh available models: request timed out
+codex
+I’ll inspect the accuracy harness and jobq code, implement the fixes, then run the tests with Docker, network, and GPU calls mocked.
+
+exec
+/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g '*jobq*' -g '*' cc/acc bin .agents | head -100" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+/home/muk/projects/siminfeng/campaign
+bin/lab
+bin/README-jobq.md
+bin/cuda_compile_check
+bin/ledger_appendix.py
+bin/cost_report
+bin/cc_hook
+bin/run_op
+bin/__pycache__/test_jobq.cpython-310-pytest-9.2.0.pyc
+bin/__pycache__/labcpython-310.pyc
+bin/test_jobq.py
+bin/jobq
+bin/index_evidence
+bin/lab_run
+bin/perf_summary
+cc/acc/fixtures/server-completion-nprobs.granite.json
+cc/acc/fixtures/server-props.granite.json
+cc/acc/fixtures/server-chat-logprobs.granite.json
+cc/acc/fixtures/perplexity-kld.granite-Q8_0.txt
+cc/acc/fixtures/server-chat-gen.granite.json
+cc/acc/kld.py
+cc/acc/compare.py
+cc/acc/server.py
+cc/acc/README.md
+cc/acc/gen.py
+cc/acc/common.py
+cc/acc/test_acc.py
+cc/acc/__init__.py
+cc/acc/datasets.py
+cc/acc/__pycache__/common.cpython-310.pyc
+cc/acc/evaluate.py
+cc/acc/mcq.py
+cc/acc/__pycache__/server.cpython-310.pyc
+cc/acc/__pycache__/test_acc.cpython-310-pytest-9.2.0.pyc
+cc/acc/__pycache__/datasets.cpython-310.pyc
+cc/acc/__pycache__/compare.cpython-310.pyc
+cc/acc/__pycache__/__init__.cpython-310.pyc
+cc/acc/__pycache__/gen.cpython-310.pyc
+cc/acc/__pycache__/mcq.cpython-310.pyc
+cc/acc/__pycache__/evaluate.cpython-310.pyc
+cc/acc/__pycache__/kld.cpython-310.pyc
+
+exec
+/bin/bash -lc 'find .. -name AGENTS.md -print; git status --short; cat cc/acc/datasets.py; cat cc/acc/server.py' in /home/muk/projects/siminfeng/campaign
+ succeeded in 277ms:
+../campaign/ref/Strata/AGENTS.md
+../campaign/ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/merge-windows/AGENTS.md
+../campaign/ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/refactor-orders/AGENTS.md
+../campaign/ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/reservation-workflow/AGENTS.md
+../campaign/ref/llama.cpp-up1108/AGENTS.md
+../campaign/ref/llama.cpp/AGENTS.md
+../campaign/ref/llama.cpp-pr31469/AGENTS.md
+../campaign/cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/AGENTS.md
+ M ../.gitignore
+ M CLOSEOUT.md
+ M cc/kernel_screen/fixtures/perf.txt
+ M cc/kernel_screen/kernel_screen.py
+ M cc/om_run/om_run.sh
+ M cc/resource_observe/README.md
+ M cc/resource_observe/resource_observe.py
+ M cc/resource_observe/test_resource_observe.py
+ M evidence/jetson-arm/claude-code.jsonl
+?? ../.claude/skills/
+?? artifacts/codex/ACC1.final.txt
+?? artifacts/codex/ACC1.log
+?? artifacts/codex/ACC1b.log
+?? artifacts/codex/D-c2-ledger.final.txt
+?? artifacts/codex/D-c2-ledger.log
+?? artifacts/codex/H1.final.txt
+?? artifacts/codex/H1.log
+?? artifacts/codex/H2.final.txt
+?? artifacts/codex/H2.log
+?? artifacts/codex/H2b-H4b.final.txt
+?? artifacts/codex/H2b-H4b.log
+?? artifacts/codex/H3.final.txt
+?? artifacts/codex/H3.log
+?? artifacts/codex/H4.final.txt
+?? artifacts/codex/H4.log
+?? artifacts/codex/H5.final.txt
+?? artifacts/codex/H5.log
+?? artifacts/codex/J-OM10.final.txt
+?? artifacts/codex/J-OM10.log
+?? artifacts/codex/J-OM10b.final.txt
+?? artifacts/codex/J-OM10b.log
+?? artifacts/codex/J-OM11.final.txt
+?? artifacts/codex/J-OM11.log
+?? artifacts/codex/J-OM8.final.txt
+?? artifacts/codex/J-OM8.log
+?? artifacts/codex/J-OM8b.final.txt
+?? artifacts/codex/J-OM8b.log
+?? artifacts/codex/J-OM9.final.txt
+?? artifacts/codex/J-OM9.log
+?? artifacts/codex/M1.log
+?? artifacts/op-04810239fd04/
+?? artifacts/op-0491ab7d9b64/
+?? artifacts/op-05c759dfdb1f/
+?? artifacts/op-09cd2f12a9a5/
+?? artifacts/op-0b66cc1ebd7c/
+?? artifacts/op-0c94b8514514/
+?? artifacts/op-103a1fb13e8b/
+?? artifacts/op-1252946c2dd9/
+?? artifacts/op-1263a4f7fb41/
+?? artifacts/op-166f77d6f13e/
+?? artifacts/op-191fa19edd9b/
+?? artifacts/op-1aeded39e879/
+?? artifacts/op-1cb21767dbaf/
+?? artifacts/op-1ce2d671913a/
+?? artifacts/op-1e0844fa4f46/
+?? artifacts/op-218a56d373af/
+?? artifacts/op-23c099229e1d/
+?? artifacts/op-26ab3d78735f/
+?? artifacts/op-2b6791aa3ad9/
+?? artifacts/op-2c9e8772e3a5/
+?? artifacts/op-2eae0e6564ef/
+?? artifacts/op-347e678ed12a/
+?? artifacts/op-36926980ce1b/
+?? artifacts/op-39141c29107a/
+?? artifacts/op-3921a3841393/
+?? artifacts/op-3d31f5fbfc73/
+?? artifacts/op-3df6c2e1288c/
+?? artifacts/op-40f18da591f8/
+?? artifacts/op-4196624781b6/
+?? artifacts/op-4361d6251871/
+?? artifacts/op-4875a91ebe9e/
+?? artifacts/op-4967902d2acc/
+?? artifacts/op-4c92db73ea1c/
+?? artifacts/op-4d1fd9b32011/
+?? artifacts/op-4f1547f4295e/
+?? artifacts/op-4f3619cd9fb8/
+?? artifacts/op-55af713c70a4/
+?? artifacts/op-55e94e8f2ec9/
+?? artifacts/op-5609857025b0/
+?? artifacts/op-5759ddb8786c/
+?? artifacts/op-5849d5542eba/
+?? artifacts/op-5a247cd981ec/
+?? artifacts/op-5c2e0a7f1ab1/
+?? artifacts/op-5cec65699fce/
+?? artifacts/op-65ecd7bf6823/
+?? artifacts/op-6761df1a3b2c/
+?? artifacts/op-6e1f873a67b4/
+?? artifacts/op-773f9d85b381/
+?? artifacts/op-78aa30258ca4/
+?? artifacts/op-7a590a93f7d9/
+?? artifacts/op-7c79aa7bb0cd/
+?? artifacts/op-80a6b2fd96db/
+?? artifacts/op-82ad2b8c4330/
+?? artifacts/op-879bc80daaab/
+?? artifacts/op-8ee9ad760af0/
+?? artifacts/op-90ff6bd2ec26/
+?? artifacts/op-9347a535f6e0/
+?? artifacts/op-9a375b4cdeb0/
+?? artifacts/op-9c4f29713977/
+?? artifacts/op-9d3a71114383/
+?? artifacts/op-9deabb96fe51/
+?? artifacts/op-a878cc4ec198/
+?? artifacts/op-a9d8140fc151/
+?? artifacts/op-ab2efde81bf5/
+?? artifacts/op-acee8700aac1/
+?? artifacts/op-b7250c184f56/
+?? artifacts/op-b7ff0512c3ae/
+?? artifacts/op-b823058ff03a/
+?? artifacts/op-b9d77c464caf/
+?? artifacts/op-bb8eee8a430b/
+?? artifacts/op-bd396749651d/
+?? artifacts/op-bfe0a8b74c24/
+?? artifacts/op-c55b5b317906/
+?? artifacts/op-c8070da6cf62/
+?? artifacts/op-cadfede37e48/
+?? artifacts/op-d0fda3ae10b1/
+?? artifacts/op-d4a75015c69e/
+?? artifacts/op-d520c3e63f2b/
+?? artifacts/op-db1c6773ca7c/
+?? artifacts/op-dd91c84c9197/
+?? artifacts/op-e0f4aa3068cf/
+?? artifacts/op-e5d0a38d479d/
+?? artifacts/op-eb80b5651d94/
+?? artifacts/op-ed103f15b7bf/
+?? artifacts/op-f3a91310220b/
+?? artifacts/op-f46fc32ed368/
+?? artifacts/op-fe2e1c1dc8c2/
+?? artifacts/op-ffac23b48ee5/
+?? assignments/ACC1-accuracy-harness.md
+?? assignments/ACC1b-fixes.md
+?? assignments/D-c2-ledger.md
+?? assignments/H1-jobq.md
+?? assignments/H2-abrun.md
+?? assignments/H2b-H4b-fixes.md
+?? assignments/H3-methods-skills.md
+?? assignments/H4-shape-report.md
+?? assignments/H5-measure.md
+?? assignments/J-OM10-pregate-prefetch.md
+?? assignments/J-OM10b-pregate-scheduling.md
+?? assignments/J-OM11-pregate-observe.md
+?? assignments/J-OM8-expert-pread-fill.md
+?? assignments/J-OM8b-decode-random.md
+?? assignments/J-OM9-fill-diag-populate.md
+?? assignments/M1-model-ladder.md
+?? bin/README-jobq.md
+?? bin/jobq
+?? bin/test_jobq.py
+?? c2/
+?? cc/abrun/
+?? cc/acc/
+?? cc/build_engine/TARBALLS-PRUNED.md
+?? cc/build_engine/results/jetson-up1108-om10/
+?? cc/build_engine/results/jetson-up1108-om10b/
+?? cc/build_engine/results/jetson-up1108-om11/
+?? cc/build_engine/results/jetson-up1108-om8/
+?? cc/build_engine/results/jetson-up1108-om8b/
+?? cc/build_engine/results/jetson-up1108-om9/
+?? cc/expert_fill/
+?? cc/ladder/
+?? cc/mmap_advice/patches/03-expert-fill.patch
+?? cc/mmap_advice/patches/04-fill-phase.patch
+?? cc/mmap_advice/patches/05-fill-diag.patch
+?? cc/mmap_advice/patches/06-pregate.patch
+?? cc/mmap_advice/patches/07-pregate-sched.patch
+?? cc/mmap_advice/patches/08-pregate-observe.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04-05-06-07-08.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04-05-06-07.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04-05-06.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04-05.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04.patch
+?? cc/mmap_advice/patches/combined-01-02-03.patch
+?? cc/resource_observe/tests/
+?? decisions/D034-expert-pread-fill.md
+?? decisions/D035-pregate-prefetch.md
+?? decisions/D036-ks-q4k-and-screen-bug.md
+?? evidence/jetson-arm/abrun.jsonl
+?? evidence/jetson-arm/jobq.jsonl
+?? experiments/jetson/KS-q4K-20261111-r2/
+?? experiments/jetson/KS-q4K-20261111-r3/
+?? experiments/jetson/KS-q4K-20261111/
+?? experiments/jetson/OM/J-OM10/
+?? experiments/jetson/OM/J-OM10b/
+?? experiments/jetson/OM/J-OM10c/
+?? experiments/jetson/OM/J-OM8/
+?? experiments/jetson/OM/J-OM8b/
+?? experiments/jetson/OM/J-OM9/
+?? research/model-candidates-20261111.md
+?? research/strata-update-20261111.md
+"""Fetch reproducible subsets through the public HF datasets-server rows API."""
+import argparse
+from collections import Counter, defaultdict
+import hashlib
+import json
+from pathlib import Path
+import random
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+try:
+    from .common import sha256, write_json
+except ImportError:
+    from common import sha256, write_json
+
+API = "https://datasets-server.huggingface.co/rows"
+SOURCES = {
+    "mmlu-pro": ("TIGER-Lab/MMLU-Pro", "default", "test"),
+    "arc-challenge": ("allenai/ai2_arc", "ARC-Challenge", "test"),
+    "gsm8k": ("openai/gsm8k", "main", "test"),
+}
+# Probe at fetch time; no claim that an unverified mirror is available or canonical.
+GPQA_MIRRORS = [("fingertap/GPQA-Diamond", "default", "test"),
+                ("fingertap/GPQA-Diamond", "default", "train")]
+
+
+def rows_url(dataset, config, split, offset=0, length=100):
+    if not 1 <= length <= 100:
+        raise ValueError("rows length must be 1..100")
+    return API + "?" + urllib.parse.urlencode(dict(dataset=dataset, config=config,
+                                                 split=split, offset=offset, length=length))
+
+
+def parse_page(payload):
+    """The documented envelope is {rows: [{row_idx, row, ...}], num_rows_total}."""
+    rows = [(int(entry["row_idx"]), entry["row"]) for entry in payload["rows"]]
+    return rows, int(payload["num_rows_total"])
+
+
+def fetch_rows(dataset, config, split, opener=urllib.request.urlopen):
+    offset, total = 0, None
+    result, pages = [], []
+    while total is None or offset < total:
+        url = rows_url(dataset, config, split, offset)
+        with opener(url, timeout=60) as response:
+            raw = response.read()
+        rows, count = parse_page(json.loads(raw))
+        if total is not None and count != total:
+            raise ValueError("dataset size changed while fetching")
+        total = count
+        if not rows or [i for i, _ in rows] != list(range(offset, offset + len(rows))):
+            raise ValueError("empty or noncontiguous datasets-server page")
+        result.extend(rows)
+        pages.append(dict(url=url, offset=offset, length=len(rows), sha256=hashlib.sha256(raw).hexdigest()))
+        offset += len(rows)
+    if len(result) != total:
+        raise ValueError("incomplete dataset")
+    return result, pages
+
+
+def normalize(name, index, row, source, seed=42):
+    meta = {"row_offset": index, "category": row.get("category", row.get("domain", "all"))}
+    if name == "mmlu-pro":
+        question, choices = row["question"], row["options"]
+        answer = row.get("answer")
+        if answer is None:
+            answer = chr(65 + int(row["answer_index"]))
+        meta["question_id"] = row.get("question_id")
+    elif name == "arc-challenge":
+        question = row["question"]
+        choices = row["choices"]["text"]
+        labels = [str(label) for label in row["choices"]["label"]]
+        answer = chr(65 + labels.index(str(row["answerKey"])))
+        meta["original_id"] = row.get("id")
+    elif name == "gsm8k":
+        question, choices, answer = row["question"], None, row["answer"]
+    elif name == "gpqa-diamond":
+        question = row["Question"]
+        original = [row["Correct Answer"], *[row[f"Incorrect Answer {i}"] for i in (1, 2, 3)]]
+        order = list(range(4))
+        random.Random(f"{seed}:{source}:{index}").shuffle(order)
+        choices = [original[i] for i in order]
+        answer = chr(65 + order.index(0))
+        meta["choice_permutation"] = order
+        meta["category"] = row.get("Subdomain", row.get("High-level domain", "all"))
+    else:
+        raise ValueError(name)
+    if choices is not None:
+        if not 2 <= len(choices) <= 26 or answer not in [chr(65 + i) for i in range(len(choices))]:
+            raise ValueError(f"invalid MCQ at row {index}")
+    return dict(id=f"{name}:{index}", source=source, question=question,
+                choices=choices, answer=answer, meta=meta)
+
+
+def subset(rows, n, seed):
+    """Proportional category allocation, largest remainders, seeded tie breaking."""
+    if not 1 <= n <= len(rows):
+        raise ValueError(f"n must be 1..{len(rows)}")
+    rng = random.Random(seed)
+    groups = defaultdict(list)
+    for row in rows:
+        groups[str(row["meta"].get("category", "all"))].append(row)
+    keys = sorted(groups)
+    rng.shuffle(keys)
+    quotas = {key: n * len(groups[key]) // len(rows) for key in keys}
+    ranked = sorted(keys, key=lambda key: n * len(groups[key]) % len(rows), reverse=True)
+    for key in ranked[:n - sum(quotas.values())]:
+        quotas[key] += 1
+    selected = []
+    for key in sorted(keys):
+        group = sorted(groups[key], key=lambda row: row["id"])
+        rng.shuffle(group)
+        selected.extend(group[:quotas[key]])
+    rng.shuffle(selected)
+    return selected
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("name", choices=[*SOURCES, "gpqa-diamond"])
+    parser.add_argument("-n", type=int, required=True)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--outdir", type=Path, default=Path("~/models/campaign/data/acc").expanduser())
+    parser.add_argument("--gpqa-dataset", help="Public Diamond mirror with original GPQA columns")
+    parser.add_argument("--config", help="Override source config")
+    parser.add_argument("--split", help="Override split (GPQA mirrors may use train)")
+    args = parser.parse_args()
+    if args.n < 1:
+        parser.error("n must be positive")
+    if args.name == "gpqa-diamond":
+        sources = [(args.gpqa_dataset, args.config or "default", args.split or "train")] if args.gpqa_dataset else [
+            (dataset, args.config or config, args.split or split) for dataset, config, split in GPQA_MIRRORS]
+    else:
+        dataset, config, split = SOURCES[args.name]
+        sources = [(dataset, args.config or config, args.split or split)]
+    failures = []
+    for dataset, config, split in sources:
+        try:
+            raw, pages = fetch_rows(dataset, config, split)
+            break
+        except urllib.error.HTTPError as exc:
+            if args.name != "gpqa-diamond" or exc.code not in (401, 403, 404, 422):
+                raise
+            failures.append(f"{dataset}/{config}/{split}: HTTP {exc.code}")
+    else:
+        print("SKIP GPQA-Diamond: no accessible public mirror; " + "; ".join(failures), file=sys.stderr)
+        return
+    source = rows_url(dataset, config, split)
+    normalized = [normalize(args.name, i, row, source, args.seed) for i, row in raw]
+    selected = subset(normalized, args.n, args.seed)
+    args.outdir.mkdir(parents=True, exist_ok=True)
+    path = args.outdir / f"{args.name}-{args.n}-s{args.seed}.jsonl"
+    metadata = path.with_suffix(".meta.json")
+    if path.exists() or metadata.exists():
+        raise FileExistsError(f"refusing to overwrite {path} or {metadata}")
+    path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in selected))
+    write_json(metadata, dict(dataset=dataset, config=config, split=split, source_url=source,
+               seed=args.seed, n=args.n, total_rows=len(raw), pages=pages,
+               row_offsets=[r["meta"]["row_offset"] for r in selected], sha256=sha256(path),
+               selection="proportional category / largest remainders / seeded shuffle",
+               categories=dict(Counter(str(r["meta"]["category"]) for r in selected)),
+               gpqa_mirror_unverified=args.name == "gpqa-diamond"))
+    print(path)
+
+
+if __name__ == "__main__":
+    main()
+"""Owned NVIDIA containers, watchdog/telemetry and localhost llama-server."""
+import argparse
+import atexit
+import os
+from pathlib import Path
+import shlex
+import signal
+import socket
+import subprocess
+import sys
+import time
+import uuid
+
+try:
+    from .common import request_json, write_json
+except ImportError:
+    from common import request_json, write_json
+
+ROOT = Path(__file__).resolve().parents[2]
+OBSERVER = ROOT / "cc/resource_observe/resource_observe.py"
+
+
+def docker_command(argv, prefix=None):
+    prefix = os.environ.get("DOCKER_CMD_PREFIX", "") if prefix is None else prefix
+    command = ["docker", *map(str, argv)]
+    return shlex.split(prefix) + [shlex.join(command)] if prefix else command
+
+
+def parse_env(values):
+    result = {}
+    for value in values:
+        key, sep, val = value.partition("=")
+        if not sep or not key or not all(c.isalnum() or c == "_" for c in key):
+            raise ValueError("--env must be NAME=VALUE")
+        result[key] = val
+    return result
+
+
+def free_port():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+class OwnedContainer:
+    def __init__(self, image, model, outdir, tool, argv, env=None, mounts=()):
+        self.image = image
+        self.model = Path(model).expanduser().resolve()
+        self.outdir = Path(outdir)
+        self.tool = tool
+        self.argv = list(argv)
+        self.env = dict(env or {})
+        self.mounts = list(mounts)
+        self.name = "acc-" + uuid.uuid4().hex
+        self.children = []
+        self.started = False
+        self.closed = False
+        self.signals = {}
+        self.start_time = None
+
+    def command(self):
+        args = ["run", "-d", "--name", self.name, "--runtime", "nvidia",
+                "--network", "host", "--label", "campaign=c2", "--label", "acc=1"]
+        env = {**self.env, "NVIDIA_VISIBLE_DEVICES": "all",
+               "NVIDIA_DRIVER_CAPABILITIES": "compute,utility"}
+        for key, value in sorted(env.items()):
+            args += ["-e", f"{key}={value}"]
+        args += ["-v", f"{self.model.parent}:/om:ro"]
+        for host, target, readonly in self.mounts:
+            args += ["-v", f"{Path(host).expanduser().resolve()}:{target}" + (":ro" if readonly else ":rw")]
+        return docker_command(args + [self.image, "/app/" + self.tool, *self.argv])
+
+    def kill_command(self):
+        return docker_command(["kill", self.name])
+
+    def dry_run(self):
+        return "\n".join([shlex.join(self.command()),
+                          "# finally / atexit / SIGTERM cleanup:",
+                          shlex.join(self.kill_command()),
+                          shlex.join(docker_command(["rm", "-f", self.name]))])
+
+    def _signal(self, signum, frame):
+        raise SystemExit(128 + signum)
+
+    def __enter__(self):
+        self.outdir.mkdir(parents=True, exist_ok=True)
+        self.start_time = time.monotonic()
+        atexit.register(self.close)
+        try:
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                self.signals[sig] = signal.signal(sig, self._signal)
+            (self.outdir / "cmd.txt").write_text(self.dry_run() + "\n")
+            write_json(self.outdir / "invocation.json", dict(image=self.image, model=str(self.model),
+                       argv=self.argv, env=self.env, name=self.name))
+            # Mark before launch: cleanup also covers a launch that succeeds but loses its reply.
+            self.started = True
+            result = subprocess.run(self.command(), check=True, capture_output=True, text=True, timeout=120)
+            (self.outdir / "container.id").write_text(result.stdout)
+            watchdog = [sys.executable, str(OBSERVER), "watchdog",
+                "--min-available-mib", os.getenv("OM_MIN_AVAIL_MIB", "600"),
+                "--max-swap-used-mib", os.getenv("OM_MAX_SWAP_MIB", "2560"),
+                "--max-swap-rate-mibs", os.getenv("OM_MAX_SWAP_RATE", "1000"),
+                "--interval-ms", "250", "--kill-cmd", shlex.join(self.kill_command()),
+                "--out", str(self.outdir / "watchdog.jsonl")]
+            sampler = [sys.executable, str(OBSERVER), "sample", "--backends", "io,proc,tegrastats",
+                "--path", str(self.model.parent), "--interval-ms", "500", "--duration-s",
+                os.getenv("OM_MAX_S", "1800"), "--out", str(self.outdir / "telemetry.jsonl")]
+            for cmd in (watchdog, sampler):
+                self.children.append(subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+            return self
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        errors = []
+        state = image = None
+        def save(path, value):
+            try:
+                path.write_text(value)
+            except OSError as exc:
+                errors.append(str(exc))
+        # Kill the owned container first: an observer shutdown failure must never
+        # prevent the GPU workload from being stopped.
+        if self.started:
+            def run(args):
+                try:
+                    return subprocess.run(args, capture_output=True, text=True, timeout=30)
+                except (OSError, subprocess.SubprocessError) as exc:
+                    errors.append(str(exc))
+                    return None
+            run(self.kill_command())
+            logs = run(docker_command(["logs", self.name]))
+            if logs is not None:
+                save(self.outdir / "stdout.txt", logs.stdout)
+                save(self.outdir / "stderr.txt", logs.stderr)
+            state = run(docker_command(["inspect", self.name, "--format", "{{json .State}}",]))
+            image = run(docker_command(["inspect", self.name, "--format", "{{.Image}}",]))
+            run(docker_command(["rm", "-f", self.name]))
+        for child in self.children:
+            try:
+                child.terminate()
+                try:
+                    child.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait(timeout=5)
+            except (OSError, subprocess.SubprocessError) as exc:
+                errors.append(str(exc))
+        for sig, previous in self.signals.items():
+            signal.signal(sig, previous)
+        atexit.unregister(self.close)
+        if self.started:
+            try:
+                write_json(self.outdir / "result.json", dict(wall_s=time.monotonic() - self.start_time,
+                           container_state=state.stdout.strip() if state else None,
+                           image_id=image.stdout.strip() if image else None, cleanup_errors=errors))
+            except OSError:
+                pass  # Cleanup must still finish when the output filesystem is full.
+
+    def __exit__(self, exc_type, exc, traceback):
+        self.close()
+
+
+class Server(OwnedContainer):
+    def __init__(self, image, model, outdir, engine_argv=(), env=None, port=None, health_timeout=600):
+        self.port = port or free_port()
+        self.health_timeout = health_timeout
+        self.url = f"http://127.0.0.1:{self.port}"
+        argv = [*engine_argv, "-m", "/om/" + Path(model).name, "--host", "127.0.0.1",
+                "--port", str(self.port), "--jinja"]
+        super().__init__(image, model, outdir, "llama-server", argv, env)
+
+    def __enter__(self):
+        super().__enter__()
+        try:
+            deadline = time.monotonic() + self.health_timeout
+            while time.monotonic() < deadline:
+                try:
+                    if request_json(self.url + "/health", timeout=2).get("status") == "ok":
+                        self.props = request_json(self.url + "/props", timeout=10)
+                        write_json(self.outdir / "props.json", self.props)
+                        return self
+                except (OSError, ValueError):
+                    pass
+                state = subprocess.run(docker_command(["inspect", self.name, "--format", "{{.State.Running}}"]),
+                                       capture_output=True, text=True, timeout=15)
+                if state.returncode or state.stdout.strip() != "true":
+                    raise RuntimeError("llama-server exited during startup; inspect session logs")
+                time.sleep(.5)
+            raise TimeoutError("llama-server health timeout")
+        except BaseException:
+            self.close()
+            raise
+
+
+def add_arguments(parser):
+    parser.add_argument("--image", required=True)
+    parser.add_argument("--model", required=True, help="Host GGUF; parent mounted read-only as /om")
+    parser.add_argument("--outdir", required=True)
+    parser.add_argument("--env", action="append", default=[], metavar="NAME=VALUE")
+    parser.add_argument("--engine-arg", action="append", default=[], help="Repeat; use --engine-arg=-ngl for flags")
+    parser.add_argument("--health-timeout", type=float, default=600)
+    parser.add_argument("--dry-run", action="store_true", help="Print Docker start and cleanup, execute nothing")
+
+
+def from_args(args, outdir=None):
+    return Server(args.image, args.model, outdir or args.outdir, args.engine_arg,
+                  parse_env(args.env), health_timeout=args.health_timeout,
+                  port=18080 if args.dry_run else None)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_arguments(parser)
+    parser.add_argument("--duration", type=float, default=1800, help="Seconds to serve after health succeeds")
+    args = parser.parse_args()
+    server = from_args(args)
+    if args.dry_run:
+        print(server.dry_run())
+        return
+    with server:
+        print(server.url, flush=True)
+        time.sleep(args.duration)
+
+
+if __name__ == "__main__":
+    main()
+
+exec
+/bin/bash -lc 'cat bin/jobq; cat bin/test_jobq.py' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+#!/usr/bin/env python3
+"""Local, flock-serialized job queue. All state changes happen under lock."""
+import re, argparse
+from contextlib import contextmanager
+import fcntl
+import json
+import math
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+import uuid
+
+ROOT = Path(__file__).resolve().parent.parent
+SELF = str(Path(__file__).resolve())
+DIR = Path(os.environ.get('JOBQ_DIR', ROOT / 'lab/jobq')).resolve()
+TERMINAL = {'succeeded', 'failed', 'cancelled', 'skipped_dep_failed', 'timeout'}
+
+
+@contextmanager
+def locked():
+    DIR.mkdir(parents=True, exist_ok=True)
+    with (DIR / 'lock').open('a') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+
+
+def jobs():
+    return sorted((json.loads(p.read_text()) for p in DIR.glob('job-*.json')),
+                  key=lambda j: (j['submitted'], j['id']))
+
+
+def get(jid):
+    if not jid.startswith('job-') or any(c not in 'job-0123456789abcdef' for c in jid):
+        raise ValueError('invalid job id')
+    try:
+        return json.loads((DIR / (jid + '.json')).read_text())
+    except FileNotFoundError:
+        raise ValueError('unknown job: ' + jid)
+
+
+def save(j, event):
+    path = DIR / (j['id'] + '.json')
+    tmp = path.with_suffix('.tmp')
+    tmp.write_text(json.dumps(j, indent=2) + '\n')
+    os.replace(tmp, path)
+    with (DIR / 'events.jsonl').open('a') as f:
+        f.write(json.dumps(dict(time=time.time(), job=j['id'], event=event,
+                               state=j['state'])) + '\n')
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def alive(pid):
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+        # A dead supervisor may remain a zombie until its parent reaps it.
+        stat = Path('/proc/%s/stat' % pid)
+        if stat.exists() and stat.read_text().rsplit(')', 1)[1].split()[0] == 'Z':
+            return False
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def kill_groups(j, sig):
+    # Let run_op reap the command and record its outcome during the TERM grace.
+    groups = {j.get('pgid')}
+    if sig == signal.SIGKILL:
+        groups.add(j.get('wrapper_pgid'))
+    for pgid in groups - {None}:
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            pass
+
+
+def finish(j, state, rc):
+    j.update(state=state, rc=rc, end=time.time())
+    save(j, state)
+
+
+def reconcile():
+    for j in jobs():
+        if j['state'] == 'running' and not alive(j.get('runner_pid')):
+            kill_groups(j, signal.SIGKILL)
+            finish(j, j.get('stop_reason') or 'failed', None)
+
+
+def compatible(j, running):
+    for other in running:
+        if j['class'] in ('gpu', 'build') and other['class'] in ('gpu', 'build'):
+            return False
+        if j['class'] == 'gpu' and other['class'] == 'cpu' and not other['allow_during_gpu']:
+            return False
+        if j['class'] == 'cpu' and other['class'] == 'gpu' and not j['allow_during_gpu']:
+            return False
+    return True
+
+
+def worker(once):
+    children = []
+    try:
+        while True:
+            children[:] = [p for p in children if p.poll() is None]
+            with locked():
+                reconcile()
+                alljobs = jobs()
+                byid = {j['id']: j for j in alljobs}
+                running = [j for j in alljobs if j['state'] == 'running']
+                for j in alljobs:
+                    if j['state'] != 'queued':
+                        continue
+                    deps = [byid[d] for d in j['deps']]
+                    if any(d['state'] in TERMINAL - {'succeeded'} for d in deps):
+                        finish(j, 'skipped_dep_failed', None)
+                        continue
+                    if any(d['state'] != 'succeeded' for d in deps) or not compatible(j, running):
+                        continue
+                    j.update(state='running', start=time.time())
+                    for other in running:
+                        other['concurrent_jobs'].append(j['id'])
+                        j['concurrent_jobs'].append(other['id'])
+                        save(other, 'overlap')
+                    with (DIR / (j['id'] + '.log')).open('ab') as log:
+                        p = subprocess.Popen([sys.executable, SELF, '_run', j['id']],
+                                             stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                                             start_new_session=True)
+                    children.append(p)
+                    j['runner_pid'] = p.pid
+                    save(j, 'started')
+                    running.append(j)
+                pending = any(j['state'] in ('queued', 'running') for j in alljobs)
+            if once and not pending:
+                return 0
+            time.sleep(.05)
+    finally:
+        for p in children:
+            p.poll()
+
+
+def run_job(jid):
+    p = None
+    try:
+        with locked():
+            j = get(jid)
+            if j.get('stop_reason'):
+                finish(j, j['stop_reason'], None)
+                return 0
+            runop = os.environ.get('JOBQ_RUN_OP', str(ROOT / 'bin/run_op'))
+            p = subprocess.Popen([runop, '--agent', 'jobq', '--task', j['name'], '--',
+                                  sys.executable, SELF, '_exec', jid],
+                                 cwd=j['cwd'], env=json.load(open(j['env_file'])) if j.get('env_file') else j.get('env', dict(os.environ)), start_new_session=True)
+            j['wrapper_pgid'] = p.pid
+            save(j, 'wrapper_started')
+        stopped_at = None
+        while True:
+            with locked():
+                j = get(jid)
+                if not j.get('stop_reason') and j['timeout'] is not None and time.time() - j['start'] >= j['timeout']:
+                    j['stop_reason'] = 'timeout'
+                    save(j, 'timeout_requested')
+                if j.get('stop_reason'):
+                    kill_groups(j, signal.SIGTERM)
+                    stopped_at = stopped_at or time.monotonic()
+                    if time.monotonic() - stopped_at >= .5:
+                        kill_groups(j, signal.SIGKILL)
+                        rc = p.wait()
+                        finish(j, j['stop_reason'], rc)
+                        return 0
+                elif p.poll() is not None:
+                    # Do not leave command descendants behind after wrapper exit.
+                    kill_groups(j, signal.SIGKILL)
+                    finish(j, 'succeeded' if p.returncode == 0 else 'failed', p.returncode)
+                    return 0
+            time.sleep(.025)
+    except Exception as exc:
+        with locked():
+            j = get(jid)
+            kill_groups(j, signal.SIGKILL)
+            j['error'] = str(exc)
+            finish(j, 'failed', None)
+        if p:
+            p.wait()
+        return 1
+
+
+def exec_job(jid):
+    with locked():
+        j = get(jid)
+        if j.get('stop_reason') or j['state'] != 'running':
+            return 1
+        j.update(pid=os.getpid(), pgid=os.getpgrp())
+        save(j, 'command_started')
+    os.execvpe(j['argv'][0], j['argv'], os.environ)
+
+
+def seconds(value):
+    n = float(value)
+    if not math.isfinite(n) or n < 0:
+        raise argparse.ArgumentTypeError('seconds must be finite and nonnegative')
+    return n
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    sp = ap.add_subparsers(dest='command', required=True)
+    s = sp.add_parser('submit')
+    s.add_argument('--class', dest='cls', choices=['gpu', 'build', 'cpu'], required=True)
+    s.add_argument('--after', nargs='+', action='extend', default=[])
+    s.add_argument('--name')
+    s.add_argument('--timeout', type=seconds)
+    s.add_argument('--allow-during-gpu', action='store_true')
+    s.add_argument('argv', nargs=argparse.REMAINDER)
+    w = sp.add_parser('worker'); w.add_argument('--once', action='store_true')
+    sp.add_parser('list')
+    for cmd in ('show', 'wait', 'cancel', '_run', '_exec'):
+        p = sp.add_parser(cmd); p.add_argument('jobid')
+        if cmd == 'wait':
+            p.add_argument('--timeout', type=seconds)
+    a = ap.parse_args()
+    if a.command == '_run':
+        return run_job(a.jobid)
+    if a.command == '_exec':
+        return exec_job(a.jobid)
+    if a.command == 'worker':
+        return worker(a.once)
+    if a.command == 'wait':
+        deadline = None if a.timeout is None else time.monotonic() + a.timeout
+        while True:
+            with locked():
+                reconcile(); j = get(a.jobid)
+            if j['state'] in TERMINAL:
+                return 0 if j['state'] == 'succeeded' else 1
+            if deadline is not None and time.monotonic() >= deadline:
+                return 2
+            time.sleep(.05)
+    with locked():
+        reconcile()
+        if a.command == 'submit':
+            argv = a.argv[1:] if a.argv[:1] == ['--'] else a.argv
+            if not argv:
+                ap.error('command required after --')
+            for dep in a.after:
+                get(dep)
+            jid = 'job-' + uuid.uuid4().hex
+            j = dict(id=jid, argv=argv, **{'class': a.cls}, deps=a.after,
+                     name=a.name or argv[0], timeout=a.timeout,
+                     allow_during_gpu=a.allow_during_gpu, state='queued', pid=None,
+                     pgid=None, runner_pid=None, start=None, end=None, rc=None,
+                     concurrent_jobs=[], submitted=time.time_ns(), cwd=os.getcwd(),
+                     env_file=None, env_public=None)
+            env = dict(os.environ, JOBQ_DIR=str(DIR))
+            ed = DIR / 'env'; ed.mkdir(parents=True, exist_ok=True); os.chmod(ed, 0o700)
+            ef = ed / f'{jid}.json'
+            fd = os.open(ef, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w') as fh: json.dump(env, fh)
+            j['env_file'] = str(ef)
+            # never persist secrets in the job record (check-in H1 found tokens in job JSON)
+            secret = re.compile(r'TOKEN|KEY|SECRET|PASS|AUTH|SESSION|COOKIE|CREDENTIAL', re.I)
+            j['env_public'] = {k: v for k, v in env.items() if not secret.search(k)
+                               and k in ('PATH', 'DOCKER_CMD_PREFIX', 'BUILD_JOBS', 'LD_LIBRARY_PATH', 'JOBQ_DIR', 'OM_MAX_S', 'OM_MODELDIR') }
+            save(j, 'submitted'); print(jid)
+        elif a.command == 'list':
+            for j in jobs():
+                print(j['id'], j['state'], j['class'], j['name'])
+        elif a.command == 'show':
+            print(json.dumps(get(a.jobid), indent=2))
+        elif a.command == 'cancel':
+            j = get(a.jobid)
+            if j['state'] == 'queued':
+                finish(j, 'cancelled', None)
+            elif j['state'] == 'running':
+                j['stop_reason'] = 'cancelled'
+                save(j, 'cancel_requested')
+                kill_groups(j, signal.SIGTERM)
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (ValueError, OSError) as exc:
+        print('jobq: ' + str(exc), file=sys.stderr)
+        sys.exit(1)
+"""Queue integration tests: no evidence, containers, builds, or device access."""
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+import pytest
+
+JOBQ = Path(__file__).with_name('jobq')
+
+
+@pytest.fixture
+def q(tmp_path):
+    fake = tmp_path / 'run_op'
+    fake.write_text('#!/usr/bin/env python3\nimport subprocess,sys\na=sys.argv[sys.argv.index("--")+1:]\np=subprocess.Popen(a,start_new_session=True)\nsys.exit(p.wait())\n')
+    fake.chmod(0o755)
+    env = dict(os.environ, JOBQ_DIR=str(tmp_path / 'state'), JOBQ_RUN_OP=str(fake))
+    workers = []
+
+    class Queue:
+        def call(self, *args, check=True):
+            return subprocess.run([str(JOBQ), *map(str, args)], env=env,
+                                  capture_output=True, text=True, check=check, timeout=15)
+
+        def submit(self, cls='cpu', cmd=None, options=()):
+            return self.call('submit', '--class', cls, *options, '--',
+                             *(cmd or ['true'])).stdout.strip()
+
+        def show(self, jid):
+            return json.loads(self.call('show', jid).stdout)
+
+        def worker(self):
+            p = subprocess.Popen([str(JOBQ), 'worker', '--once'], env=env,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            workers.append(p)
+            return p
+
+        def drain(self):
+            self.call('worker', '--once')
+
+        def until(self, jid, predicate):
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                j = self.show(jid)
+                if predicate(j):
+                    return j
+                time.sleep(.02)
+            pytest.fail('job did not reach expected state: ' + str(j))
+
+    queue = Queue()
+    queue.state = tmp_path / "state"
+    yield queue
+    state = tmp_path / 'state'
+    for path in state.glob('job-*.json'):
+        j = json.loads(path.read_text())
+        for key in ('pgid', 'wrapper_pgid'):
+            if j.get(key):
+                try:
+                    os.killpg(j[key], signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+    for p in workers:
+        if p.poll() is None:
+            p.terminate()
+        p.communicate(timeout=5)
+
+
+def test_fifo_and_metadata(q):
+    ids = [q.submit('build', ['sleep', '.1'], ['--name', 'ordered']) for _ in range(3)]
+    q.drain()
+    records = [q.show(i) for i in ids]
+    assert all(j['state'] == 'succeeded' and j['rc'] == 0 for j in records)
+    assert all(a['end'] <= b['start'] for a, b in zip(records, records[1:]))
+    for j in records:
+        assert j['argv'] == ['sleep', '.1']
+        assert j['pid'] == j['pgid'] and j['pid'] > 0
+        assert j['deps'] == [] and j['concurrent_jobs'] == []
+        assert j['allow_during_gpu'] is False
+    assert ids[0] in q.call('list').stdout
+    events = [json.loads(line) for line in (q.state / 'events.jsonl').read_text().splitlines()]
+    assert [e['job'] for e in events if e['event'] == 'submitted'] == ids
+    assert [e['job'] for e in events if e['event'] == 'succeeded'] == ids
+
+
+def test_dependencies_success_failure_and_transitive_skip(q):
+    good = q.submit()
+    bad = q.submit(cmd=['false'])
+    child = q.submit(options=['--after', good])
+    skipped = q.submit(options=['--after', good, bad])
+    grandchild = q.submit(options=['--after', skipped])
+    q.drain()
+    assert q.show(child)['state'] == 'succeeded'
+    assert q.show(child)['start'] >= q.show(good)['end']
+    assert q.show(bad)['state'] == 'failed'
+    for jid in (skipped, grandchild):
+        assert q.show(jid)['state'] == 'skipped_dep_failed'
+        assert q.show(jid)['pid'] is None
+    assert q.call('submit', '--class', 'cpu', '--after', 'job-abc', '--', 'true', check=False).returncode == 1
+
+
+def test_gpu_build_exclusion_multiple_workers(q):
+    ids = [q.submit(cls, ['sleep', '1']) for cls in ('gpu', 'build')]
+    p, other = q.worker(), q.worker()
+    assert p.wait(timeout=10) == other.wait(timeout=10) == 0
+    a, b = [q.show(i) for i in ids]
+    assert a['end'] <= b['start']
+    assert a['concurrent_jobs'] == b['concurrent_jobs'] == []
+
+
+def test_cpu_during_build(q):
+    build = q.submit('build', ['sleep', '.6'])
+    cpu = q.submit('cpu', ['sleep', '.3'])
+    q.drain()
+    a, b = q.show(build), q.show(cpu)
+    assert a['start'] < b['end'] and b['start'] < a['end']
+    assert a['concurrent_jobs'] == [cpu] and b['concurrent_jobs'] == [build]
+
+
+@pytest.mark.parametrize('cpu_first', [False, True])
+def test_cpu_gpu_exclusion_both_directions(q, cpu_first):
+    ids = [q.submit(c, ['sleep', '.2']) for c in (('cpu', 'gpu') if cpu_first else ('gpu', 'cpu'))]
+    q.drain()
+    a, b = [q.show(i) for i in ids]
+    assert a['end'] <= b['start']
+
+
+def test_cpu_opt_in_during_gpu(q):
+    gpu = q.submit('gpu', ['sleep', '.5'])
+    cpu = q.submit('cpu', ['sleep', '.3'], ['--allow-during-gpu'])
+    q.drain()
+    assert q.show(cpu)['allow_during_gpu'] is True
+    assert q.show(gpu)['concurrent_jobs'] == [cpu]
+    assert q.show(cpu)['concurrent_jobs'] == [gpu]
+
+
+def test_cancel_child_process_group(q, tmp_path):
+    child_pid = tmp_path / 'child.pid'
+    # Parent reaps its child on TERM, so the assertion checks death, not zombies.
+    code = '''import os,signal,subprocess,sys,time
+p=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"])
+def stop(*args):
+    p.wait(timeout=3)
+    sys.exit(0)
+signal.signal(signal.SIGTERM,stop)
+open(sys.argv[1],"w").write(str(p.pid))
+time.sleep(30)
+'''
+    jid = q.submit(cmd=[sys.executable, '-c', code, str(child_pid)])
+    p = q.worker()
+    q.until(jid, lambda j: j['pid'] is not None and child_pid.exists())
+    pid = int(child_pid.read_text())
+    q.call('cancel', jid)
+    assert q.call('wait', jid, '--timeout', '5', check=False).returncode == 1
+    assert q.show(jid)['state'] == 'cancelled'
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+    assert p.wait(timeout=5) == 0
+
+
+def test_queued_cancel_and_wait_codes(q):
+    queued = q.submit()
+    assert q.call('wait', queued, '--timeout', '.05', check=False).returncode == 2
+    q.call('cancel', queued)
+    assert q.call('wait', queued, check=False).returncode == 1
+    good, bad = q.submit(), q.submit(cmd=['false'])
+    q.drain()
+    assert q.call('wait', good).returncode == 0
+    assert q.call('wait', bad, check=False).returncode == 1
+    assert q.show(queued)['state'] == 'cancelled'
+
+
+def test_job_timeout(q):
+    jid = q.submit(cmd=['sleep', '30'], options=['--timeout', '.2'])
+    next_job = q.submit('gpu')
+    q.drain()
+    j = q.show(jid)
+    assert j['state'] == 'timeout'
+    assert j['end'] - j['start'] < 3
+    assert q.show(next_job)['start'] >= j['end']
+    assert q.call('wait', jid, check=False).returncode == 1
+
+exec
+/bin/bash -lc "cat cc/acc/test_acc.py; cat cc/acc/server.py; rg -n 'argmax_letter_found|no_letter|datasets|proportional|per-category' cc/acc bin/README-jobq.md; cat bin/README-jobq.md" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+"""Offline tests. Engine response expectations come from captured fixtures.
+
+Only dataset API envelopes are synthetic, explicitly labelled SHAPE_ONLY.
+No tests launch Docker, contact HTTP, import numpy, or touch a GPU.
+"""
+import argparse
+from contextlib import redirect_stdout
+import io
+import json
+import math
+from pathlib import Path
+import re
+import shlex
+import signal
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import MagicMock, patch
+
+from cc.acc import common, compare, datasets, evaluate, gen, kld, mcq, server
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def fixture(name):
+    return json.loads((FIXTURES / name).read_text())
+
+
+def chat():
+    return fixture("server-chat-logprobs.granite.json")
+
+
+class CapturedParsers(unittest.TestCase):
+    def test_chat_logprobs(self):
+        raw = chat()
+        entries = raw["choices"][0]["logprobs"]["content"][0]["top_logprobs"]
+        self.assertEqual(mcq.top_logprobs(raw), entries)
+        prediction, scores = mcq.letter_argmax(entries, 4)
+        self.assertEqual(prediction, raw["choices"][0]["message"]["content"])
+        self.assertEqual(scores[prediction], entries[0]["logprob"])
+
+    def test_completion_logprobs(self):
+        raw = fixture("server-completion-nprobs.granite.json")
+        entries = raw["completion_probabilities"][0]["top_logprobs"]
+        self.assertEqual(mcq.top_logprobs(raw), entries)
+        prediction, _ = mcq.letter_argmax(entries, 4)
+        self.assertEqual(prediction, raw["content"].strip())
+        self.assertEqual(common.response_metrics(raw)["prompt_tokens"], raw["tokens_evaluated"])
+
+    def test_generation_fixture(self):
+        raw = fixture("server-chat-gen.granite.json")
+        text = raw["choices"][0]["message"]["content"]
+        self.assertEqual(gen.extract_number(text), re.findall(r"\d+", text)[-1])
+        metrics = common.response_metrics(raw)
+        self.assertEqual(metrics["decode_tps"], raw["timings"]["predicted_per_second"])
+        self.assertEqual(metrics["prompt_tokens"], raw["usage"]["prompt_tokens"])
+
+    def test_props_fixture_non_thinking(self):
+        props = fixture("server-props.granite.json")
+        self.assertNotIn("enable_thinking", props["chat_template"])
+        self.assertEqual(common.thinking_settings(props), {})
+        self.assertIn("chat_template_caps", props)
+
+    def test_kl_fixture_statistics(self):
+        text = (FIXTURES / "perplexity-kld.granite-Q8_0.txt").read_text()
+        parsed = kld.parse(text)
+        labels = {"ppl": r"Mean PPL\(Q\)", "mean_kld": "Mean    KLD",
+                  "kld_p99": "99.0%   KLD", "same_top_p": "Same top p", "rms_dp": "RMS Δp"}
+        for key, label in labels.items():
+            expected = float(re.search(label + r"\s*:\s*([\d.]+)", text).group(1))
+            self.assertEqual(parsed[key], expected)
+        header = re.search(r"computing over (\d+) chunks, n_ctx=(\d+)", text)
+        self.assertEqual(parsed["n_chunks"], int(header[1]))
+        self.assertEqual(parsed["n_ctx"], int(header[2]))
+        self.assertEqual(parsed["probability_units"], "percent")
+
+    def test_kl_incomplete_rejected(self):
+        text = (FIXTURES / "perplexity-kld.granite-Q8_0.txt").read_text()
+        with self.assertRaises(ValueError):
+            kld.parse(text.split("====== KL divergence statistics")[0])
+
+
+class LettersAndNumbers(unittest.TestCase):
+    def setUp(self):
+        self.entries = mcq.top_logprobs(chat())
+
+    def test_leading_space_variants(self):
+        entries = [{**entry, "token": " " + entry["token"]} for entry in self.entries]
+        self.assertEqual(mcq.letter_argmax(entries, 4)[0], mcq.letter_argmax(self.entries, 4)[0])
+
+    def test_variant_uses_max_not_sum(self):
+        entries = self.entries + [{**self.entries[0], "token": " " + self.entries[0]["token"]}]
+        self.assertEqual(mcq.letter_argmax(entries, 4), mcq.letter_argmax(self.entries, 4))
+
+    def test_no_letter(self):
+        entries = [e for e in self.entries if len(e["token"]) > 1]
+        self.assertEqual(mcq.letter_argmax(entries, 4), (None, {}))
+
+    def test_outside_choices_ignored(self):
+        expected = max((e for e in self.entries if e["token"] == "A"), key=lambda e: e["logprob"])
+        self.assertEqual(mcq.letter_argmax(self.entries, ["A"]), ("A", {"A": expected["logprob"]}))
+
+    def test_prefix_and_newline_not_letters(self):
+        entries = [{**self.entries[0], "token": token} for token in ("\nB", "B.", " B:", "BB")]
+        self.assertEqual(mcq.letter_argmax(entries, 4), (None, {}))
+
+    def test_bytes_fallback(self):
+        entries = [{k: v for k, v in e.items() if k != "token"} for e in self.entries]
+        self.assertEqual(mcq.letter_argmax(entries, 4), mcq.letter_argmax(self.entries, 4))
+
+    def test_tie_breaking(self):
+        score = self.entries[0]["logprob"]
+        self.assertEqual(mcq.letter_argmax([dict(token=l, logprob=score) for l in ("B", "A")], 4)[0], "A")
+
+    def test_nonfinite_ignored(self):
+        self.assertEqual(mcq.letter_argmax([dict(token="A", logprob=-math.inf)], 4), (None, {}))
+
+    def test_numeric_markers(self):
+        self.assertEqual(gen.extract_number("12 steps. The answer is $1,234.50. Check 8"), "1234.50")
+        self.assertEqual(gen.extract_number("work 9\n#### -2.50"), "-2.50")
+        self.assertEqual(gen.extract_number("3 then .5"), "0.5")
+        self.assertIsNone(gen.extract_number("The answer is unknown"))
+
+    def test_numeric_exact_score(self):
+        raw = fixture("server-chat-gen.granite.json")
+        answer = gen.extract_number(raw["choices"][0]["message"]["content"])
+        result = gen.score(dict(id="fixture", answer="#### " + answer + ".0"), raw)
+        self.assertTrue(result["correct"])
+
+    def test_payload_settings(self):
+        props = fixture("server-props.granite.json")
+        item = dict(question="fixture question", choices=["one", "two"], answer="A")
+        payload = mcq.payload(item, props)
+        self.assertEqual(payload["max_tokens"], 1)
+        self.assertEqual(payload["temperature"], 0)
+        self.assertEqual(payload["top_logprobs"], 20)
+        self.assertEqual(payload["messages"][-1]["content"], mcq.format_prompt(item))
+        props["chat_template"] += "{{ enable_thinking }}"
+        self.assertEqual(mcq.payload(item, props)["chat_template_kwargs"], {"enable_thinking": False})
+
+    def test_system_role_omitted_when_template_forbids_it(self):
+        props = fixture("server-props.granite.json")
+        props["chat_template_caps"]["supports_system_role"] = False
+        item = dict(question="fixture question", choices=["one", "two"], answer="A")
+        self.assertEqual([m["role"] for m in mcq.payload(item, props)["messages"]], ["user"])
+
+
+class Statistics(unittest.TestCase):
+    def test_wilson_empty(self):
+        self.assertEqual(common.wilson(0, 0), (None, None))
+
+    def test_wilson_edges(self):
+        z = 1.959963984540054
+        self.assertAlmostEqual(common.wilson(0, 10)[1], z*z / (10 + z*z))
+        self.assertAlmostEqual(common.wilson(10, 10)[0], 10 / (10 + z*z))
+        self.assertAlmostEqual(sum(common.wilson(5, 10)), 1)
+        with self.assertRaises(ValueError):
+            common.wilson(11, 10)
+
+    def test_mcnemar_hand_tables(self):
+        for b, c, expected in [(0, 0, 1), (1, 1, 1), (0, 3, .25), (1, 9, .021484375),
+                               (9, 1, .021484375), (0, 1, 1)]:
+            self.assertEqual(compare.mcnemar_exact(b, c), expected)
+
+    def test_mcnemar_large_and_invalid(self):
+        self.assertEqual(compare.mcnemar_exact(1000, 1000), 1)
+        with self.assertRaises(ValueError):
+            compare.mcnemar_exact(-1, 3)
+
+    def test_pairing_uses_ids(self):
+        base = {str(i): dict(correct=i == 0) for i in range(10)}
+        candidate = {str(i): dict(correct=i != 0) for i in reversed(range(10))}
+        result = compare.compare(base, candidate)
+        self.assertEqual((result["b"], result["c"]), (1, 9))
+        self.assertEqual(result["mcnemar_exact_p"], .021484375)
+        self.assertAlmostEqual(result["delta_acc"], .8)
+        self.assertIn("Wilson", compare.markdown(result))
+        with self.assertRaises(ValueError):
+            compare.compare(base, {"extra": dict(correct=True)})
+
+
+class DatasetShapeOnly(unittest.TestCase):
+    # SHAPE-ONLY: constructed from the documented rows API response envelope.
+    def test_SHAPE_ONLY_api_envelope_and_mmlu(self):
+        payload = dict(rows=[dict(row_idx=0, row=dict(question="toy?", options=["x", "y"],
+                       answer="B", category="toy"), truncated_cells=[])], num_rows_total=1)
+        rows, total = datasets.parse_page(payload)
+        self.assertEqual(total, len(rows))
+        row = datasets.normalize("mmlu-pro", *rows[0], "shape-only")
+        self.assertEqual(row["answer"], "B")
+        self.assertEqual(row["meta"]["category"], "toy")
+
+    def test_SHAPE_ONLY_arc_numeric_labels(self):
+        row = datasets.normalize("arc-challenge", 0, dict(question="toy?",
+              choices=dict(label=["1", "2"], text=["x", "y"]), answerKey="2"), "shape-only")
+        self.assertEqual(row["answer"], "B")
+
+    def test_SHAPE_ONLY_gsm(self):
+        row = datasets.normalize("gsm8k", 0, dict(question="toy?", answer="#### 1"), "shape-only")
+        self.assertIsNone(row["choices"])
+        self.assertEqual(row["answer"], "#### 1")
+
+    def test_SHAPE_ONLY_gpqa_shuffle(self):
+        raw = {"Question": "toy?", "Correct Answer": "right",
+               **{f"Incorrect Answer {i}": f"wrong{i}" for i in range(1, 4)}}
+        row = datasets.normalize("gpqa-diamond", 0, raw, "shape-only", 42)
+        self.assertEqual(row, datasets.normalize("gpqa-diamond", 0, raw, "shape-only", 42))
+        self.assertEqual(row["choices"][ord(row["answer"]) - 65], raw["Correct Answer"])
+
+    def test_SHAPE_ONLY_fetch_pagination(self):
+        def opener(url, timeout):
+            offset = int(dict(__import__("urllib.parse", fromlist=["parse_qs"]).parse_qsl(url.split("?")[1]))["offset"])
+            count = min(100, 101 - offset)
+            return io.BytesIO(json.dumps(dict(rows=[dict(row_idx=i, row=dict(question="toy"))
+                       for i in range(offset, offset + count)], num_rows_total=101)).encode())
+        rows, pages = datasets.fetch_rows("shape-only", "default", "test", opener=opener)
+        self.assertEqual(len(rows), 101)
+        self.assertEqual([p["offset"] for p in pages], [0, 100])
+        self.assertTrue(all(len(p["sha256"]) == 64 for p in pages))
+        self.assertIn("length=100", datasets.rows_url("toy/a b", "default", "test"))
+        with self.assertRaises(ValueError):
+            datasets.rows_url("toy", "default", "test", length=101)
+
+    def test_SHAPE_ONLY_stratified_subset(self):
+        rows = [dict(id=str(i), meta=dict(category="small" if i < 2 else "large")) for i in range(10)]
+        selected = datasets.subset(rows, 5, 42)
+        self.assertEqual(selected, datasets.subset(rows, 5, 42))
+        self.assertEqual(sum(r["meta"]["category"] == "small" for r in selected), 1)
+        self.assertEqual(len({r["id"] for r in selected}), 5)
+        with self.assertRaises(ValueError):
+            datasets.subset(rows, 11, 42)
+
+
+class Resume(unittest.TestCase):
+    def test_skip_completed_ids_and_duplicate_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "items.jsonl"
+            items = [dict(id="a"), dict(id="b")]
+            self.assertEqual(common.pending_items(items, path), items)
+            path.write_text(json.dumps(dict(id="a")) + "\n")
+            self.assertEqual(common.pending_items(items, path), items[1:])
+            path.write_text(path.read_text() * 2)
+            with self.assertRaises(ValueError):
+                common.pending_items(items, path)
+
+    def test_broken_line_fails_without_silent_loss(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "items.jsonl"
+            path.write_text('{"id":')
+            with self.assertRaisesRegex(ValueError, "repair interrupted line"):
+                common.pending_items([], path)
+
+    def test_evaluator_resume_does_not_request_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data, model = root / "data.jsonl", root / "model.gguf"
+            response = chat()
+            answer = response["choices"][0]["message"]["content"]
+            item = dict(id="fixture", source="captured", question="fixture?", choices=list("ABCD"), answer=answer)
+            data.write_text(json.dumps(item) + "\n")
+            model.write_bytes(b"test identity only")
+            args = argparse.Namespace(image="fixture-image", model=str(model), outdir=str(root / "run"),
+                data=str(data), env=[], engine_arg=[], dry_run=False, request_timeout=10)
+            running = MagicMock()
+            running.__enter__.return_value = running
+            running.props = fixture("server-props.granite.json")
+            running.url = "http://fixture.invalid"
+            with patch.object(server, "from_args", return_value=running) as start, \
+                 patch.object(common, "request_json", return_value=response) as request, redirect_stdout(io.StringIO()):
+                for _ in range(2):
+                    evaluate.run(args, "mcq", dict(max_tokens=1), mcq.payload, mcq.score, mcq.format_prompt)
+                self.assertEqual(request.call_count, 1)
+                self.assertEqual(start.call_count, 1)
+                args.engine_arg = ["changed"]
+                with self.assertRaisesRegex(ValueError, "resume settings differ"):
+                    evaluate.run(args, "mcq", dict(max_tokens=1), mcq.payload, mcq.score, mcq.format_prompt)
+            result = json.loads((root / "run/summary.json").read_text())
+            self.assertTrue(result["complete"])
+            self.assertEqual(result["n"], 1)
+            self.assertEqual(result["correct"], 1)
+
+    def test_partial_failure_resume_preserves_items_without_final_newline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data, model = root / "data.jsonl", root / "model.gguf"
+            response = chat()
+            answer = response["choices"][0]["message"]["content"]
+            items = [dict(id=key, source="captured", question="fixture?", choices=list("ABCD"),
+                          answer=answer) for key in ("first", "second")]
+            data.write_text("".join(json.dumps(item) + "\n" for item in items))
+            model.write_bytes(b"test identity only")
+            args = argparse.Namespace(image="fixture-image", model=str(model), outdir=str(root / "run"),
+                data=str(data), env=[], engine_arg=[], dry_run=False, request_timeout=10)
+            running = MagicMock()
+            running.__enter__.return_value = running
+            running.props = fixture("server-props.granite.json")
+            running.url = "http://fixture.invalid"
+            with patch.object(server, "from_args", return_value=running), \
+                 patch.object(common, "request_json", side_effect=[response, OSError("interrupted"), response]) as request, \
+                 redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(OSError, "interrupted"):
+                    evaluate.run(args, "mcq", dict(max_tokens=1), mcq.payload, mcq.score, mcq.format_prompt)
+                summary_path = root / "run/summary.json"
+                self.assertFalse(json.loads(summary_path.read_text())["complete"])
+                output = root / "run/items.jsonl"
+                output.write_text(output.read_text().rstrip("\n"))
+                evaluate.run(args, "mcq", dict(max_tokens=1), mcq.payload, mcq.score, mcq.format_prompt)
+                self.assertEqual(request.call_count, 3)
+                self.assertEqual([r["id"] for r in common.read_jsonl(output)], ["first", "second"])
+                self.assertTrue(json.loads(summary_path.read_text())["complete"])
+
+
+class DockerOffline(unittest.TestCase):
+    def test_dry_run_never_reserves_socket_or_launches_process(self):
+        args = argparse.Namespace(image="image", model="/tmp/model.gguf", outdir="/tmp/unused",
+            engine_arg=[], env=[], health_timeout=600, dry_run=True)
+        with patch.object(server, "free_port", side_effect=AssertionError("socket forbidden")), \
+             patch.object(subprocess, "run", side_effect=AssertionError("process forbidden")):
+            self.assertIn("--runtime nvidia", server.from_args(args).dry_run())
+
+    def test_docker_prefix_is_one_shell_command(self):
+        command = server.docker_command(["kill", "acc-test"], prefix="sg docker -c")
+        self.assertEqual(command, ["sg", "docker", "-c", "docker kill acc-test"])
+
+    def test_argv_and_env(self):
+        with patch.dict("os.environ", {}, clear=True):
+            running = server.Server("image", "/tmp/model dir/model.gguf", "/tmp/unused", ["-ngl", "99"],
+                                    dict(EXPERT_FILL="1", VALUE="a b"), port=18080)
+            cmd = running.command()
+            self.assertEqual(cmd[cmd.index("--runtime") + 1], "nvidia")
+            self.assertEqual(cmd[cmd.index("--network") + 1], "host")
+            self.assertIn("NVIDIA_VISIBLE_DEVICES=all", cmd)
+            self.assertIn("/tmp/model dir:/om:ro", cmd)
+            self.assertIn("VALUE=a b", cmd)
+            self.assertIn("127.0.0.1", cmd)
+            self.assertIn("/om/model.gguf", cmd)
+            self.assertIn("docker kill", running.dry_run())
+            self.assertIn("docker rm -f", running.dry_run())
+            self.assertNotEqual(running.name, server.Server("image", "/tmp/m", "/tmp/o", port=18080).name)
+
+    def fake_run(self, argv, **kwargs):
+        return subprocess.CompletedProcess(argv, 0, stdout="0\n", stderr="")
+
+    def test_kill_in_finally_and_telemetry(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict("os.environ", {}, clear=True), \
+             patch.object(subprocess, "run", side_effect=self.fake_run) as run, \
+             patch.object(subprocess, "Popen") as popen:
+            running = server.OwnedContainer("image", "/tmp/model.gguf", tmp, "test", [])
+            with self.assertRaisesRegex(RuntimeError, "item failed"):
+                with running:
+                    raise RuntimeError("item failed")
+            commands = [call.args[0] for call in run.call_args_list]
+            self.assertIn(["docker", "kill", running.name], commands)
+            self.assertIn(["docker", "rm", "-f", running.name], commands)
+            self.assertEqual(popen.call_count, 2)
+            watchdog = popen.call_args_list[0].args[0]
+            self.assertEqual(watchdog[watchdog.index("--min-available-mib") + 1], "600")
+            self.assertEqual(watchdog[watchdog.index("--max-swap-used-mib") + 1], "2560")
+            self.assertEqual(shlex.split(watchdog[watchdog.index("--kill-cmd") + 1]), ["docker", "kill", running.name])
+            for call in popen.call_args_list:
+                self.assertIn("--out", call.args[0])
+            running.close()
+            self.assertEqual(sum(cmd == ["docker", "kill", running.name] for cmd in commands), 1)
+
+    def test_launch_failure_still_cleans_up(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict("os.environ", {}, clear=True):
+            running = server.OwnedContainer("image", "/tmp/model.gguf", tmp, "test", [])
+            def fail_launch(argv, **kwargs):
+                if "run" in argv:
+                    raise subprocess.CalledProcessError(1, argv)
+                return self.fake_run(argv, **kwargs)
+            with patch.object(subprocess, "run", side_effect=fail_launch) as run:
+                with self.assertRaises(subprocess.CalledProcessError):
+                    with running:
+                        pass
+                self.assertIn(["docker", "kill", running.name], [call.args[0] for call in run.call_args_list])
+
+    def test_health_failure_still_cleans_up(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict("os.environ", {}, clear=True), \
+             patch.object(subprocess, "run", side_effect=self.fake_run) as run, \
+             patch.object(subprocess, "Popen"), patch.object(server, "request_json", side_effect=OSError("offline")):
+            running = server.Server("image", "/tmp/model.gguf", tmp, port=18080)
+            with self.assertRaises(RuntimeError):
+                with running:
+                    pass
+            self.assertIn(["docker", "kill", running.name], [call.args[0] for call in run.call_args_list])
+
+    def test_sigterm_unwinds_context(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict("os.environ", {}, clear=True), \
+             patch.object(subprocess, "run", side_effect=self.fake_run) as run, patch.object(subprocess, "Popen"):
+            running = server.OwnedContainer("image", "/tmp/model.gguf", tmp, "test", [])
+            with self.assertRaises(SystemExit):
+                with running:
+                    running._signal(signal.SIGTERM, None)
+            self.assertIn(["docker", "kill", running.name], [call.args[0] for call in run.call_args_list])
+
+    def test_kld_argv_fixed_context_and_readonly_inputs(self):
+        args = argparse.Namespace(image="image", model="/tmp/model.gguf", outdir="/tmp/out",
+            text="/tmp/data/wiki.test.raw", logits="/tmp/logits/ref.bin", engine_arg=["-ngl", "99"],
+            env=["EXPERT_FILL=1"], chunks=8, action="candidate")
+        with patch.dict("os.environ", {}, clear=True):
+            cmd = kld.build_runner(args).command()
+            self.assertEqual(cmd[cmd.index("-c") + 1], "512")
+            self.assertIn("--kl-divergence", cmd)
+            self.assertIn("--kl-divergence-base", cmd)
+            self.assertIn("/tmp/logits:/kl:ro", cmd)
+            self.assertIn("/tmp/data:/d:ro", cmd)
+            args.action = "reference"
+            cmd = kld.build_runner(args).command()
+            self.assertNotIn("--kl-divergence", cmd)
+            self.assertIn("/tmp/logits:/kl:rw", cmd)
+
+
+if __name__ == "__main__":
+    unittest.main()
+"""Owned NVIDIA containers, watchdog/telemetry and localhost llama-server."""
+import argparse
+import atexit
+import os
+from pathlib import Path
+import shlex
+import signal
+import socket
+import subprocess
+import sys
+import time
+import uuid
+
+try:
+    from .common import request_json, write_json
+except ImportError:
+    from common import request_json, write_json
+
+ROOT = Path(__file__).resolve().parents[2]
+OBSERVER = ROOT / "cc/resource_observe/resource_observe.py"
+
+
+def docker_command(argv, prefix=None):
+    prefix = os.environ.get("DOCKER_CMD_PREFIX", "") if prefix is None else prefix
+    command = ["docker", *map(str, argv)]
+    return shlex.split(prefix) + [shlex.join(command)] if prefix else command
+
+
+def parse_env(values):
+    result = {}
+    for value in values:
+        key, sep, val = value.partition("=")
+        if not sep or not key or not all(c.isalnum() or c == "_" for c in key):
+            raise ValueError("--env must be NAME=VALUE")
+        result[key] = val
+    return result
+
+
+def free_port():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+class OwnedContainer:
+    def __init__(self, image, model, outdir, tool, argv, env=None, mounts=()):
+        self.image = image
+        self.model = Path(model).expanduser().resolve()
+        self.outdir = Path(outdir)
+        self.tool = tool
+        self.argv = list(argv)
+        self.env = dict(env or {})
+        self.mounts = list(mounts)
+        self.name = "acc-" + uuid.uuid4().hex
+        self.children = []
+        self.started = False
+        self.closed = False
+        self.signals = {}
+        self.start_time = None
+
+    def command(self):
+        args = ["run", "-d", "--name", self.name, "--runtime", "nvidia",
+                "--network", "host", "--label", "campaign=c2", "--label", "acc=1"]
+        env = {**self.env, "NVIDIA_VISIBLE_DEVICES": "all",
+               "NVIDIA_DRIVER_CAPABILITIES": "compute,utility"}
+        for key, value in sorted(env.items()):
+            args += ["-e", f"{key}={value}"]
+        args += ["-v", f"{self.model.parent}:/om:ro"]
+        for host, target, readonly in self.mounts:
+            args += ["-v", f"{Path(host).expanduser().resolve()}:{target}" + (":ro" if readonly else ":rw")]
+        return docker_command(args + [self.image, "/app/" + self.tool, *self.argv])
+
+    def kill_command(self):
+        return docker_command(["kill", self.name])
+
+    def dry_run(self):
+        return "\n".join([shlex.join(self.command()),
+                          "# finally / atexit / SIGTERM cleanup:",
+                          shlex.join(self.kill_command()),
+                          shlex.join(docker_command(["rm", "-f", self.name]))])
+
+    def _signal(self, signum, frame):
+        raise SystemExit(128 + signum)
+
+    def __enter__(self):
+        self.outdir.mkdir(parents=True, exist_ok=True)
+        self.start_time = time.monotonic()
+        atexit.register(self.close)
+        try:
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                self.signals[sig] = signal.signal(sig, self._signal)
+            (self.outdir / "cmd.txt").write_text(self.dry_run() + "\n")
+            write_json(self.outdir / "invocation.json", dict(image=self.image, model=str(self.model),
+                       argv=self.argv, env=self.env, name=self.name))
+            # Mark before launch: cleanup also covers a launch that succeeds but loses its reply.
+            self.started = True
+            result = subprocess.run(self.command(), check=True, capture_output=True, text=True, timeout=120)
+            (self.outdir / "container.id").write_text(result.stdout)
+            watchdog = [sys.executable, str(OBSERVER), "watchdog",
+                "--min-available-mib", os.getenv("OM_MIN_AVAIL_MIB", "600"),
+                "--max-swap-used-mib", os.getenv("OM_MAX_SWAP_MIB", "2560"),
+                "--max-swap-rate-mibs", os.getenv("OM_MAX_SWAP_RATE", "1000"),
+                "--interval-ms", "250", "--kill-cmd", shlex.join(self.kill_command()),
+                "--out", str(self.outdir / "watchdog.jsonl")]
+            sampler = [sys.executable, str(OBSERVER), "sample", "--backends", "io,proc,tegrastats",
+                "--path", str(self.model.parent), "--interval-ms", "500", "--duration-s",
+                os.getenv("OM_MAX_S", "1800"), "--out", str(self.outdir / "telemetry.jsonl")]
+            for cmd in (watchdog, sampler):
+                self.children.append(subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+            return self
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        errors = []
+        state = image = None
+        def save(path, value):
+            try:
+                path.write_text(value)
+            except OSError as exc:
+                errors.append(str(exc))
+        # Kill the owned container first: an observer shutdown failure must never
+        # prevent the GPU workload from being stopped.
+        if self.started:
+            def run(args):
+                try:
+                    return subprocess.run(args, capture_output=True, text=True, timeout=30)
+                except (OSError, subprocess.SubprocessError) as exc:
+                    errors.append(str(exc))
+                    return None
+            run(self.kill_command())
+            logs = run(docker_command(["logs", self.name]))
+            if logs is not None:
+                save(self.outdir / "stdout.txt", logs.stdout)
+                save(self.outdir / "stderr.txt", logs.stderr)
+            state = run(docker_command(["inspect", self.name, "--format", "{{json .State}}",]))
+            image = run(docker_command(["inspect", self.name, "--format", "{{.Image}}",]))
+            run(docker_command(["rm", "-f", self.name]))
+        for child in self.children:
+            try:
+                child.terminate()
+                try:
+                    child.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait(timeout=5)
+            except (OSError, subprocess.SubprocessError) as exc:
+                errors.append(str(exc))
+        for sig, previous in self.signals.items():
+            signal.signal(sig, previous)
+        atexit.unregister(self.close)
+        if self.started:
+            try:
+                write_json(self.outdir / "result.json", dict(wall_s=time.monotonic() - self.start_time,
+                           container_state=state.stdout.strip() if state else None,
+                           image_id=image.stdout.strip() if image else None, cleanup_errors=errors))
+            except OSError:
+                pass  # Cleanup must still finish when the output filesystem is full.
+
+    def __exit__(self, exc_type, exc, traceback):
+        self.close()
+
+
+class Server(OwnedContainer):
+    def __init__(self, image, model, outdir, engine_argv=(), env=None, port=None, health_timeout=600):
+        self.port = port or free_port()
+        self.health_timeout = health_timeout
+        self.url = f"http://127.0.0.1:{self.port}"
+        argv = [*engine_argv, "-m", "/om/" + Path(model).name, "--host", "127.0.0.1",
+                "--port", str(self.port), "--jinja"]
+        super().__init__(image, model, outdir, "llama-server", argv, env)
+
+    def __enter__(self):
+        super().__enter__()
+        try:
+            deadline = time.monotonic() + self.health_timeout
+            while time.monotonic() < deadline:
+                try:
+                    if request_json(self.url + "/health", timeout=2).get("status") == "ok":
+                        self.props = request_json(self.url + "/props", timeout=10)
+                        write_json(self.outdir / "props.json", self.props)
+                        return self
+                except (OSError, ValueError):
+                    pass
+                state = subprocess.run(docker_command(["inspect", self.name, "--format", "{{.State.Running}}"]),
+                                       capture_output=True, text=True, timeout=15)
+                if state.returncode or state.stdout.strip() != "true":
+                    raise RuntimeError("llama-server exited during startup; inspect session logs")
+                time.sleep(.5)
+            raise TimeoutError("llama-server health timeout")
+        except BaseException:
+            self.close()
+            raise
+
+
+def add_arguments(parser):
+    parser.add_argument("--image", required=True)
+    parser.add_argument("--model", required=True, help="Host GGUF; parent mounted read-only as /om")
+    parser.add_argument("--outdir", required=True)
+    parser.add_argument("--env", action="append", default=[], metavar="NAME=VALUE")
+    parser.add_argument("--engine-arg", action="append", default=[], help="Repeat; use --engine-arg=-ngl for flags")
+    parser.add_argument("--health-timeout", type=float, default=600)
+    parser.add_argument("--dry-run", action="store_true", help="Print Docker start and cleanup, execute nothing")
+
+
+def from_args(args, outdir=None):
+    return Server(args.image, args.model, outdir or args.outdir, args.engine_arg,
+                  parse_env(args.env), health_timeout=args.health_timeout,
+                  port=18080 if args.dry_run else None)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_arguments(parser)
+    parser.add_argument("--duration", type=float, default=1800, help="Seconds to serve after health succeeds")
+    args = parser.parse_args()
+    server = from_args(args)
+    if args.dry_run:
+        print(server.dry_run())
+        return
+    with server:
+        print(server.url, flush=True)
+        time.sleep(args.duration)
+
+
+if __name__ == "__main__":
+    main()
+cc/acc/README.md:3:Python 3 standard library only. No numpy, datasets package, pip, or model
+cc/acc/README.md:12:only `urllib` and the HF datasets-server `/rows` endpoint, in pages of at most
+cc/acc/README.md:13:100. The entire split is fetched before proportional category stratification,
+cc/acc/README.md:18:python3 cc/acc/datasets.py mmlu-pro -n 100 --seed 42
+cc/acc/README.md:19:python3 cc/acc/datasets.py arc-challenge -n 100 --seed 42
+cc/acc/README.md:20:python3 cc/acc/datasets.py gsm8k -n 100 --seed 42
+cc/acc/README.md:21:python3 cc/acc/datasets.py gpqa-diamond -n 50 --seed 42
+cc/acc/README.md:121:io/proc/tegrastats at 500 ms and `OM_MAX_S=1800` seconds. For long datasets set
+cc/acc/README.md:149:`no_letter=true`, and the item counts incorrect. This is a truncated-logprob
+cc/acc/README.md:150:estimator, not full sequence likelihood. Inspect `no_letter` before interpreting
+cc/acc/README.md:172:CI, no_letter, mean wall ms/item, total prompt tokens, and mean per-item decode
+cc/acc/README.md:234:splits, answer extraction, chat templates, caps and full datasets. Record those
+cc/acc/README.md:238:context, template and extraction before comparing. Report n, errors/no_letter,
+cc/acc/README.md:253:python3 cc/acc/datasets.py --help
+cc/acc/common.py:81:                no_letter=sum(bool(r.get("no_letter", False)) for r in rows),
+cc/acc/mcq.py:60:                no_letter=prediction is None, argmax_letter_found=prediction is not None,
+cc/acc/test_acc.py:20:from cc.acc import common, compare, datasets, evaluate, gen, kld, mcq, server
+cc/acc/test_acc.py:95:    def test_no_letter(self):
+cc/acc/test_acc.py:187:        rows, total = datasets.parse_page(payload)
+cc/acc/test_acc.py:189:        row = datasets.normalize("mmlu-pro", *rows[0], "shape-only")
+cc/acc/test_acc.py:194:        row = datasets.normalize("arc-challenge", 0, dict(question="toy?",
+cc/acc/test_acc.py:199:        row = datasets.normalize("gsm8k", 0, dict(question="toy?", answer="#### 1"), "shape-only")
+cc/acc/test_acc.py:206:        row = datasets.normalize("gpqa-diamond", 0, raw, "shape-only", 42)
+cc/acc/test_acc.py:207:        self.assertEqual(row, datasets.normalize("gpqa-diamond", 0, raw, "shape-only", 42))
+cc/acc/test_acc.py:216:        rows, pages = datasets.fetch_rows("shape-only", "default", "test", opener=opener)
+cc/acc/test_acc.py:220:        self.assertIn("length=100", datasets.rows_url("toy/a b", "default", "test"))
+cc/acc/test_acc.py:222:            datasets.rows_url("toy", "default", "test", length=101)
+cc/acc/test_acc.py:226:        selected = datasets.subset(rows, 5, 42)
+cc/acc/test_acc.py:227:        self.assertEqual(selected, datasets.subset(rows, 5, 42))
+cc/acc/test_acc.py:231:            datasets.subset(rows, 11, 42)
+cc/acc/datasets.py:1:"""Fetch reproducible subsets through the public HF datasets-server rows API."""
+cc/acc/datasets.py:18:API = "https://datasets-server.huggingface.co/rows"
+cc/acc/datasets.py:54:            raise ValueError("empty or noncontiguous datasets-server page")
+cc/acc/datasets.py:162:               selection="proportional category / largest remainders / seeded shuffle",
+# Local job queue
+
+Run from the campaign root. Python 3 standard library only; jobs use `bin/run_op`
+with agent `jobq` and the submitted name as task. No worker starts automatically.
+
+```sh
+build=$(bin/jobq submit --class build --name engine --timeout 7200 -- python3 cc/build_engine/build_engine.py ...)
+run=$(bin/jobq submit --class gpu --after "$build" --name timing --timeout 5400 -- python3 cc/om_spec/om_spec.py ...)
+bin/jobq worker --once
+bin/jobq wait "$run" --timeout 600
+bin/jobq list
+bin/jobq show "$run"
+bin/jobq cancel "$run"
+```
+
+`worker` polls continuously; `worker --once` drains the queue until idle, including
+jobs made ready by dependencies. Multiple workers share the same admission lock.
+Eligible jobs are admitted FIFO; blocked jobs do not prevent compatible work.
+A failed, cancelled, timed out, or skipped dependency causes `skipped_dep_failed`.
+`wait` returns 0 for success, 1 for any other terminal state, 2 for wait timeout.
+Wait timeout does not cancel work. Job timeout terminates its process groups.
+Cancellation sends TERM, then KILL after a short grace period if needed.
+
+At most one GPU or build job runs at once. CPU jobs can overlap builds; CPU jobs
+exclude GPU jobs unless submitted with `--allow-during-gpu`. This prevents the
+build/timing contamination seen in D029/D031. The rule works in both directions.
+Only commands admitted through this queue are covered by its exclusivity rules.
+
+State defaults to `lab/jobq/`: one JSON per job, append-only `events.jsonl`, a
+`lock`, and per-job logs. JSON records command PID/group, wrapper group, times,
+exit status, dependencies, and symmetric `concurrent_jobs` overlap history.
+A worker restart detects a dead job supervisor and fails the abandoned job.
+`JOBQ_DIR` overrides state storage; `JOBQ_RUN_OP` selects a test wrapper.
+Submit preserves the working directory and environment for execution.
+
+Migration of `cc/om_run/pipeline6.sh` (run after the preceding pipeline's job):
+
+```sh
+O=experiments/jetson/SPEC2-$(date +%Y%m%d-%H%M)
+IMG=campaign/llamacpp:jetson-up1108
+prev=$pipeline5_job_id
+for arm in 'base 1' 'ngram-mod 1' 'ngram-mod 2' 'base 2'; do
+  set -- $arm
+  prev=$(bin/jobq submit --class gpu --after "$prev" \
+    --name "J-SPEC2-$1-r$2" --timeout 5400 -- \
+    python3 cc/om_spec/om_spec.py "$O/$1-r$2" "$IMG" "$1" "$2")
+done
+bin/jobq worker --once
+bin/jobq wait "$prev"
+```
+
+codex
+The queue currently sends TERM repeatedly during a fixed half-second grace period, which can interrupt cleanup handlers. I’ll send it once and wait up to the per-job grace. The harness already adds `acc=1`; I’ll add job ownership labels and shared reaping logic, with removal commands printed in dry-run mode.
+
+exec
+/bin/bash -lc "sed -n '1,55p' cc/acc/README.md; rg -n 'jobq_job|--label' cc/om_run/om_run.sh; cat assignments/ACC1b-fixes.md" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# acc: small on-device accuracy experiments
+
+Python 3 standard library only. No numpy, datasets package, pip, or model
+conversion is needed. Run from the campaign root. This harness has offline
+fixture/mocked-process validation; **no live model accuracy or cost has been
+measured yet**. The captured Granite files are protocol examples, not benchmark
+scores. Costs per item and total startup time must be measured by the lead.
+
+## Prepare a frozen dataset
+
+These commands require Internet access and are for the lead to run. They use
+only `urllib` and the HF datasets-server `/rows` endpoint, in pages of at most
+100. The entire split is fetched before proportional category stratification,
+so small subsets still require downloading all rows. No dataset execution or
+HF authentication is used.
+
+```sh
+python3 cc/acc/datasets.py mmlu-pro -n 100 --seed 42
+python3 cc/acc/datasets.py arc-challenge -n 100 --seed 42
+python3 cc/acc/datasets.py gsm8k -n 100 --seed 42
+python3 cc/acc/datasets.py gpqa-diamond -n 50 --seed 42
+```
+
+Default output is `~/models/campaign/data/acc/<name>-<n>-s<seed>.jsonl` and
+`<name>-<n>-s<seed>.meta.json`. Files are never overwritten. Each line has
+`{id, source, question, choices, answer, meta}`. MCQ choices are ordered strings
+with an uppercase letter answer; GSM8K choices are null and its answer retains
+the original reasoning and `####` target. IDs use the source row offset.
+Metadata records the seed, source URL, config/split, requested and actual page
+offsets, selected row offsets, category allocation, every response hash, and
+the output SHA256. Largest-remainder allocation preserves category proportions;
+categories smaller than the sample resolution may receive no items.
+
+Sources: `TIGER-Lab/MMLU-Pro/default/test`,
+`allenai/ai2_arc/ARC-Challenge/test`, `openai/gsm8k/main/test`.
+GPQA probes an **unverified** public `fingertap/GPQA-Diamond` mirror, test then
+train. If both are unavailable/gated it prints `SKIP GPQA-Diamond` and exits 0
+without writing a dataset. Other network failures remain errors. A lead can
+select another public Diamond mirror with `--gpqa-dataset OWNER/REPO --config
+default --split train`. Mirrors must expose the original `Question`, `Correct
+Answer`, `Incorrect Answer 1/2/3` columns; verify Diamond membership and source
+provenance before publishing. Choice order is deterministically shuffled per
+row and seed; the correct answer is not always placed first. GPQA availability
+was not checked online during implementation. API shape tests are explicitly
+labelled `SHAPE_ONLY`; they are not captured dataset evidence.
+
+## Queue every on-device inference run
+
+GPU and build classes exclude each other. Submit the entire evaluator as a
+single GPU job; it loads one server and evaluates items serially. Do not run
+an evaluator directly alongside another job. All examples below are exact
+shell command lines; adjust image/model paths to the intended immutable build
+and GGUF. Inspect that image's supported flags before an expensive run, using
+the lab preflight workflow inside a queued GPU job as appropriate.
+
+16:dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
+# Assignment ACC1b — accuracy harness + jobq robustness fixes (worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Checker findings on ACC1 (c2/worklog.jsonl ACC1 checkin). Files: cc/acc/*, bin/jobq, bin/test_jobq.py, bin/README-jobq.md. Do not touch cc/ladder/ (another worker).
+1. datasets.py: retry with exponential backoff + jitter on HTTP 429/5xx/URLError (max 8 tries, honour Retry-After), polite delay between pages (configurable, default 0.5 s); per-row `source` = the URL of the page the row came from.
+2. Subset selection: `--per-category N` mode = exactly N per category (seeded), and keep proportional mode as `--proportional`. Default for MMLU-Pro: per-category. meta records mode, seed, category counts.
+3. jobq: configurable grace between SIGTERM and SIGKILL (`--grace` per job, default 20 s) for timeout/cancel. Test with a child that traps TERM and sleeps 2 s before exiting (must exit cleanly, not be SIGKILLed).
+4. Orphan reaper: cc/acc/server.py labels containers `acc=1` + `jobq_job=$JOBQ_JOB_ID` (if set); on start it removes any exited/running container with label acc=1 whose jobq job is not running (ask bin/jobq show) or, if no jobq id, older than 6 h; also `cc/acc/server.py reap --dry-run`. Also provide `bin/jobq reap-containers` that removes containers labelled om=1 or acc=1 belonging to jobs that are not running (dry-run default, --yes to act).
+5. Remove redundant `argmax_letter_found` field (keep `no_letter`).
+Acceptance: A1 pytest cc/acc + bin/test_jobq.py pass (counts); A2 test that per-category selection with a captured-shape sample yields exactly N per category; A3 grace test passes; A4 reap dry-run prints docker commands only (mock). No docker/network/GPU; no commits. Time 40 min. Final <= 8 lines.
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/acc/datasets.py')
+s=p.read_text().replace('import hashlib\\n','import hashlib\\nfrom email.utils import parsedate_to_datetime\\nimport math\\n').replace('import sys\\n','import sys\\nimport time\\n')
+s=s.replace('def fetch_rows(dataset, config, split, opener=urllib.request.urlopen):','''def retry_after(headers):
+    value = headers.get(\"Retry-After\") if headers else None
+    if value is None:
+        return 0
+    try:
+        delay = float(value)
+    except ValueError:
+        try:
+            delay = parsedate_to_datetime(value).timestamp() - time.time()
+        except (TypeError, ValueError, OverflowError):
+            return 0
+    return max(0, delay) if math.isfinite(delay) else 0
+
+
+def fetch_page(url, opener):
+    for attempt in range(8):
+        try:
+            with opener(url, timeout=60) as response:
+                return response.read()
+        except urllib.error.URLError as exc:
+            if isinstance(exc, urllib.error.HTTPError) and exc.code "'!= 429 and not 500 <= exc.code < 600:
+                raise
+            if attempt == 7:
+                raise
+            delay = max(2 ** attempt + random.uniform(0, 1),
+                        retry_after(getattr(exc, "headers", None)))
+            if isinstance(exc, urllib.error.HTTPError):
+                exc.close()
+            time.sleep(delay)
+
+
+def fetch_rows(dataset, config, split, opener=urllib.request.urlopen, page_delay=0.5):'"''')
+s=s.replace('    offset, total = 0, None\\n','    if not math.isfinite(page_delay) or page_delay < 0:\\n        raise ValueError(\"page delay must be finite and nonnegative\")\\n    offset, total = 0, None\\n',1)
+s=s.replace('        with opener(url, timeout=60) as response:\\n            raw = response.read()','        if pages:\\n            time.sleep(page_delay)\\n        raw = fetch_page(url, opener)')
+s=s.replace('def subset(rows, n, seed):','def subset(rows, n, seed, mode=\"proportional\"):')
+s=s.replace('    if not 1 <= n <= len(rows):','    if mode not in (\"proportional\", \"per-category\"):\\n        raise ValueError(\"unknown selection mode: \" + mode)\\n    if not 1 <= n <= len(rows):',1)
+s=s.replace('    quotas = {key: n * len(groups[key]) // len(rows) for key in keys}\\n    ranked = sorted(keys, key=lambda key: n * len(groups[key]) % len(rows), reverse=True)\\n    for key in ranked[:n - sum(quotas.values())]:\\n        quotas[key] += 1','''    if mode == \"per-category\":
+        for key in keys:
+            if len(groups[key]) < n:
+                raise ValueError(f\"category {key"'!r} has {len(groups[key])} rows; need {n}")
+        quotas = {key: n for key in keys}
+    else:
+        quotas = {key: n * len(groups[key]) // len(rows) for key in keys}
+        ranked = sorted(keys, key=lambda key: n * len(groups[key]) % len(rows), reverse=True)
+        for key in ranked[:n - sum(quotas.values())]:
+            quotas[key] += 1'"''')
+s=s.replace('    parser.add_argument(\"-n\", type=int, required=True)','''    parser.add_argument(\"-n\", type=int, help=\"Sample size (per category for MMLU-Pro by default)\")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument(\"--per-category\", type=int, metavar=\"N\", help=\"Select exactly N rows per category\")
+    modes.add_argument(\"--proportional\", action=\"store_true\", help=\"Allocate -n rows proportionally\")
+    parser.add_argument(\"--page-delay\", type=float, default=0.5, help=\"Delay between pages in seconds\")''')
+s=s.replace('    if args.n < 1:\\n        parser.error(\"n must be positive\")','''    if args.per_category is not None and args.n is not None:
+        parser.error(\"use --per-category N or -n, not both\")
+    n = args.per_category if args.per_category is not None else args.n
+    if n is None or n < 1:
+        parser.error(\"provide a positive -n or --per-category N\")
+    mode = \"per-category\" if args.per_category is not None or (args.name == \"mmlu-pro\" and not args.proportional) else \"proportional\"''')
+s=s.replace('fetch_rows(dataset, config, split)','fetch_rows(dataset, config, split, page_delay=args.page_delay)')
+s=s.replace('    normalized = [normalize(args.name, i, row, source, args.seed) for i, row in raw]\\n    selected = subset(normalized, args.n, args.seed)','''    page_sources = {i: page[\"url\"] for page in pages
+                    for i in range(page[\"offset\"], page[\"offset\"] + page[\"length\"])}
+    normalized = [normalize(args.name, i, row, page_sources[i], args.seed) for i, row in raw]
+    selected = subset(normalized, n, args.seed, mode)''')
+s=s.replace('f\"{args.name}-{args.n}-s{args.seed}.jsonl\"','f\"{args.name}-{mode}-{n}-s{args.seed}.jsonl\"').replace('seed=args.seed, n=args.n,','seed=args.seed, n=len(selected), requested_n=n, mode=mode,').replace('selection=\"proportional category / largest remainders / seeded shuffle\",','selection=mode,')
+p.write_text(s)
+p=Path('cc/acc/mcq.py'); p.write_text(p.read_text().replace('no_letter=prediction is None, argmax_letter_found=prediction is not None,','no_letter=prediction is None,'))
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/acc/server.py'); s=p.read_text().replace('import atexit\\n','import atexit\\nfrom datetime import datetime, timezone\\nimport json\\n')
+pos=s.index('\\ndef parse_env')
+s=s[:pos]+'''
+def reap_containers(dry_run=True, labels=(\"acc=1\",), unowned_max_age=6 * 3600):
+    \"\"\"Inspect only labelled containers; unknown jobs are stale, lookup errors fail closed.
+
+    Dry runs perform read-only discovery and print only proposed Docker removals.
+    Set unowned_max_age=None to retain containers without a job label.
+    \"\"\"
+    ids = set()
+    for label in labels:
+        result = subprocess.run(docker_command([\"ps\", \"-aq\", \"--filter\", \"label=\" + label]),
+                                check=True, capture_output=True, text=True, timeout=30)
+        ids.update(result.stdout.split())
+    commands = []
+    states = {}
+    for cid in sorted(ids):
+        result = subprocess.run(docker_command([\"inspect\", cid]), check=True,
+                                capture_output=True, text=True, timeout=30)
+        container = json.loads(result.stdout)[0]
+        if container[\"State\"][\"Status\"] not in (\"running\", \"exited\"):
+            continue
+        job = (container[\"Config\"].get(\"Labels\") or {}).get(\"jobq_job\")
+        if job:
+            if job not in states:
+                status = subprocess.run([str(ROOT / \"bin/jobq\"), \"show\", job],
+                                        capture_output=True, text=True, timeout=30)
+                if status.returncode:
+                    if \"unknown job:\" not in status.stderr and \"invalid job id\" not in status.stderr:
+                        raise RuntimeError(\"jobq lookup failed: \" + status.stderr)
+                    states[job] = \"unknown\"
+                else:
+                    states[job] = json.loads(status.stdout)[\"state\"]
+            stale = states[job] "'!= "running"
+        elif unowned_max_age is not None:
+            created = datetime.fromisoformat(container["Created"].replace("Z", "+00:00"))
+            stale = (datetime.now(timezone.utc) - created).total_seconds() > unowned_max_age
+        else:
+            stale = False
+        if stale:
+            command = docker_command(["rm", "-f", cid])
+            commands.append(command)
+            if dry_run:
+                print(shlex.join(command))
+            else:
+                subprocess.run(command, check=True, capture_output=True, text=True, timeout=30)
+    return commands
+
+'"''' + s[pos:]
+s=s.replace('        env = {**self.env,','        if os.environ.get(\"JOBQ_JOB_ID\"):\\n            args += [\"--label\", \"jobq_job=\" + os.environ[\"JOBQ_JOB_ID\"]]\\n        env = {**self.env,',1)
+s=s.replace('    def __enter__(self):\\n        self.outdir.mkdir','    def __enter__(self):\\n        reap_containers(dry_run=False)\\n        self.outdir.mkdir',1)
+s=s.replace('    parser = argparse.ArgumentParser(description=__doc__)\\n    add_arguments(parser)','''    parser = argparse.ArgumentParser(description=__doc__)
+    if sys.argv[1:2] == [\"reap\"]:
+        parser.add_argument(\"action\", choices=[\"reap\"])
+        parser.add_argument(\"--dry-run\", action=\"store_true\")
+        args = parser.parse_args()
+        reap_containers(dry_run=args.dry_run)
+        return
+    add_arguments(parser)''')
+p.write_text(s)
+p=Path('bin/jobq'); s=p.read_text()
+s=s.replace('        stopped_at = None','        stopped_at = None')
+a=s.index(\"                if j.get('stop_reason'):\\n                    kill_groups(j, signal.SIGTERM)\", s.index('def run_job'))
+b=s.index('                elif p.poll()',a)
+s=s[:a]+'''                if j.get('stop_reason'):
+                    if stopped_at is None:
+                        # One TERM lets cleanup handlers finish without interruption.
+                        kill_groups(j, signal.SIGTERM)
+                        stopped_at = time.monotonic()
+                    if p.poll() is not None:
+                        kill_groups(j, signal.SIGKILL)  # any remaining descendants
+                        finish(j, j['stop_reason'], p.returncode)
+                        return 0
+                    if time.monotonic() - stopped_at >= j.get('grace', 20):
+                        kill_groups(j, signal.SIGKILL)
+                        rc = p.wait()
+                        finish(j, j['stop_reason'], rc)
+                        return 0
+''' + s[b:]
+s=s.replace(\"cwd=j['cwd'], env=json.load(open(j['env_file'])) if j.get('env_file') else j.get('env', dict(os.environ)), start_new_session=True)\",\"cwd=j['cwd'], env=dict(json.loads(Path(j['env_file']).read_text()) if j.get('env_file') else j.get('env', dict(os.environ)), JOBQ_JOB_ID=jid), start_new_session=True)\")
+s=s.replace(\"    s.add_argument('--timeout', type=seconds)\",\"    s.add_argument('--timeout', type=seconds)\\n    s.add_argument('--grace', type=seconds, default=20, help='TERM to KILL grace in seconds')\")
+s=s.replace(\"    sp.add_parser('list')\",\"    sp.add_parser('list')\\n    r = sp.add_parser('reap-containers')\\n    r.add_argument('--yes', action='store_true', help='Remove stale containers; default prints commands')\\n    r.add_argument('--dry-run', action='store_true', help='Print commands only (the default)')\")
+s=s.replace(\"    if a.command == '_run':\",\"    if a.command == 'reap-containers':\\n        sys.path.insert(0, str(ROOT))\\n        from cc.acc.server import reap_containers\\n        reap_containers(dry_run=not a.yes or a.dry_run, labels=('om=1', 'acc=1'), unowned_max_age=None)\\n        return 0\\n    if a.command == '_run':\",1)
+s=s.replace(\"name=a.name or argv[0], timeout=a.timeout,\",\"name=a.name or argv[0], timeout=a.timeout, grace=a.grace,\")
+s=s.replace(\"                kill_groups(j, signal.SIGTERM)\\n    return 0\",\"    return 0\")
+p.write_text(s)
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/acc/test_acc.py'); s=p.read_text().replace('stdout=\"0\\\\n\", stderr=\"\")','stdout=\"\" if \"ps\" in argv else \"0\\\\n\", stderr=\"\")'); p.write_text(s)
+PY
+cat > cc/acc/test_robustness.py <<'PY'
+\"\"\"Offline regression tests for fetching, selection and container ownership.\"\"\"
+from collections import Counter
+from contextlib import redirect_stdout
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
+import importlib.machinery
+import importlib.util
+import io
+import json
+from pathlib import Path
+import subprocess
+import sys
+import urllib.error
+from unittest.mock import patch
+
+import pytest
+
+from cc.acc import datasets, mcq, server
+
+
+def envelope(offset=0, count=1, total=1):
+    # SHAPE_ONLY: documented HF rows envelope and MMLU-Pro columns, no benchmark data.
+    return dict(rows=[dict(row_idx=i, row=dict(question=f\"question {i}\",
+                options=[\"one\", \"two\"], answer=\"A\", category=\"small\" if i < 3 else \"large\"))
+                for i in range(offset, offset + count)], num_rows_total=total)
+
+
+@pytest.mark.parametrize('mode_flags,mode,n,counts', [
+    (['--per-category', '2'], 'per-category', 2, {'small': 2, 'large': 2}),
+    (['-n', '2'], 'per-category', 2, {'small': 2, 'large': 2}),
+    (['--proportional', '-n', '5'], 'proportional', 5, {'small': 1, 'large': 4}),
+])
+def test_selection_cli_and_page_provenance(tmp_path, mode_flags, mode, n, counts):
+    calls = []
+    def opener(url, timeout):
+        calls.append(url)
+        offset = 100 if len(calls) == 2 else 0
+        return io.BytesIO(json.dumps(envelope(offset, 100 if offset == 0 else 1, 101)).encode())
+    with patch.object(datasets.urllib.request, 'urlopen', opener):
+        # fetch_rows' injectable opener is bound at definition time; use it explicitly.
+        raw, pages = datasets.fetch_rows('test', 'default', 'test', opener=opener, page_delay=0)
+    with patch.object(sys, 'argv', ['datasets', 'mmlu-pro', *mode_flags, '--outdir', str(tmp_path)]), \\
+         patch.object(datasets, 'fetch_rows', return_value=(raw, pages)):
+        datasets.main()
+    output = next(tmp_path.glob('*.jsonl'))
+    rows = [json.loads(line) for line in output.read_text().splitlines()]
+    assert Counter(r['meta']['category'] for r in rows) == counts
+    meta = json.loads(output.with_suffix('.meta.json').read_text())
+    assert meta['mode'] == mode and meta['seed'] == 42
+    assert meta['categories'] == counts and meta['n'] == len(rows) and meta['requested_n'] == n
+    for row in rows:
+        assert row['source'] == pages[row['meta']['row_offset'] // 100]['url']
+    # Every row, including page two, must retain its own page URL.
+    all_rows = [datasets.normalize('mmlu-pro', i, r, pages[i // 100]['url']) for i, r in raw]
+    assert all_rows[-1]['source'] == calls[1]
+    assert datasets.subset(all_rows, 2, 42, 'per-category') == datasets.subset(all_rows, 2, 42, 'per-category')
+    with pytest.raises(ValueError, match='category'):
+        datasets.subset(all_rows, 4, 42, 'per-category')
+
+
+@pytest.mark.parametrize('error', [
+    urllib.error.HTTPError('url', 429, 'limited', {'Retry-After': '9'}, None),
+    urllib.error.HTTPError('url', 503, 'unavailable', {}, None),
+    urllib.error.URLError('offline'),
+])
+def test_fetch_retry_backoff(error):
+    with patch.object(datasets.time, 'sleep') as sleep, \\
+         patch.object(datasets.random, 'uniform', return_value=.25):
+        opener = __import__('unittest.mock', fromlist=['Mock']).Mock(
+            side_effect=[error, urllib.error.URLError('again'), io.BytesIO(b'ok')])
+        assert datasets.fetch_page('url', opener) == b'ok'
+    assert opener.call_count == 3
+    assert [c.args[0] for c in sleep.call_args_list] == [9 if getattr(error, 'code', None) == 429 else 1.25, 2.25]
+
+
+def test_retry_limits_permanent_errors_and_retry_after_date():
+    with patch.object(datasets.time, 'sleep') as sleep:
+        def fail(*args, **kwargs):
+            raise urllib.error.URLError('offline')
+        with pytest.raises(urllib.error.URLError):
+            datasets.fetch_page('url', fail)
+        assert sleep.call_count == 7
+        sleep.reset_mock()
+        def forbidden(*args, **kwargs):
+            raise urllib.error.HTTPError('url', 403, 'forbidden', {}, None)
+        with pytest.raises(urllib.error.HTTPError):
+            datasets.fetch_page('url', forbidden)
+        sleep.assert_not_called()
+    with patch.object(datasets.time, 'time', return_value=100):
+        assert datasets.retry_after({'Retry-After': format_datetime(datetime.fromtimestamp(120, timezone.utc))}) == 20
+    assert datasets.retry_after({'Retry-After': 'invalid'}) == 0
+
+
+def test_polite_page_delay():
+    def opener(url, timeout):
+        offset = 100 if 'offset=100' in url else 0
+        return io.BytesIO(json.dumps(envelope(offset, 100 if offset == 0 else 1, 101)).encode())
+    with patch.object(datasets.time, 'sleep') as sleep:
+        datasets.fetch_rows('test', 'default', 'test', opener=opener)
+        sleep.assert_called_once_with(.5)
+
+
+def container(cid, job=None, age=7, state='running'):
+    return dict(Id=cid, State=dict(Status=state), Config=dict(Labels={'jobq_job': job} if job else {}),
+                Created=(datetime.now(timezone.utc) - timedelta(hours=age)).isoformat())
+
+
+def docker_mock(containers, jobs):
+    def run(command, **kwargs):
+        if command[0] == str(server.ROOT / 'bin/jobq'):
+            state = jobs[command[-1]]
+            return subprocess.CompletedProcess(command, 1 if state is None else 0,
+                stdout=json.dumps({'state': state}), stderr='jobq: unknown job: missing' if state is None else '')
+        assert command[0] == 'docker'
+        if command[1] == 'ps':
+            stdout = '\\n'.join(containers)
+        elif command[1] == 'inspect':
+            stdout = json.dumps([containers[command[2]]])
+        else:
+            assert command[1:3] == ['rm', '-f']
+            stdout = ''
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr='')
+    return run
+
+
+def test_reap_dry_run_commands_only_and_actual_removal():
+    containers = {c['Id']: c for c in [container('active', 'a'), container('done', 'd'),
+        container('unknown', 'u', state='exited'), container('old'), container('new', age=1),
+        container('created', 'd', state='created')]}
+    fake = docker_mock(containers, dict(a='running', d='succeeded', u=None))
+    output = io.StringIO()
+    with patch.dict('os.environ', {}, clear=True), patch.object(subprocess, 'run', side_effect=fake) as run, redirect_stdout(output):
+        commands = server.reap_containers()
+        assert output.getvalue().splitlines() == ['docker rm -f done', 'docker rm -f old', 'docker rm -f unknown']
+        assert not any(c.args[0][1:3] == ['rm', '-f'] for c in run.call_args_list)
+        assert len(commands) == 3
+        server.reap_containers(dry_run=False)
+        assert sum(c.args[0][1:3] == ['rm', '-f'] for c in run.call_args_list) == 3
+
+
+def test_reap_cli_and_jobq_reap_defaults():
+    containers = {c['Id']: c for c in [container('done', 'd'), container('old')]}
+    fake = docker_mock(containers, dict(d='cancelled'))
+    loader = importlib.machinery.SourceFileLoader('jobq_reap_test', str(server.ROOT / 'bin/jobq'))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    jobq = importlib.util.module_from_spec(spec)
+    loader.exec_module(jobq)
+    for argv, main, expected in [(['server', 'reap', '--dry-run'], server.main, ['done', 'old']),
+                                 (['jobq', 'reap-containers'], jobq.main, ['done'])]:
+        output = io.StringIO()
+        with patch.dict('os.environ', {}, clear=True), patch.object(sys, 'argv', argv), \\
+             patch.object(subprocess, 'run', side_effect=fake) as run, redirect_stdout(output):
+            main()
+        assert output.getvalue().splitlines() == ['docker rm -f ' + cid for cid in expected]
+        assert not any(c.args[0][1:3] == ['rm', '-f'] for c in run.call_args_list)
+        if main == jobq.main:
+            assert {c.args[0][-1] for c in run.call_args_list if c.args[0][1:2] == ['ps']} == {'label=om=1', 'label=acc=1'}
+    with patch.dict('os.environ', {}, clear=True), patch.object(sys, 'argv', ['jobq', 'reap-containers', '--yes']), \\
+         patch.object(subprocess, 'run', side_effect=fake) as run:
+        jobq.main()
+    assert [c.args[0] for c in run.call_args_list if c.args[0][1:3] == ['rm', '-f']] == [['docker', 'rm', '-f', 'done']]
+
+
+def test_container_job_label_and_reap_before_start(tmp_path):
+    with patch.dict('os.environ', {'JOBQ_JOB_ID': 'job-abc'}):
+        owned = server.OwnedContainer('image', '/tmp/model', tmp_path, 'test', [])
+        assert 'jobq_job=job-abc' in owned.command() and 'acc=1' in owned.command()
+    with patch.object(server, 'reap_containers', side_effect=RuntimeError('reap first')), \\
+         patch.object(subprocess, 'run') as run:
+        with pytest.raises(RuntimeError, match='reap first'):
+            owned.__enter__()
+        run.assert_not_called()
+
+
+def test_mcq_retains_only_no_letter():
+    result = mcq.score(dict(id='test', answer='A', choices=['a', 'b']),
+                       {'choices': [{'logprobs': {'content': [{'top_logprobs': []}]}}]})
+    assert result['no_letter'] is True
+    assert 'argmax_letter_found' not in result
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc "cat >> bin/test_jobq.py <<'PY'
+
+
+@pytest.mark.parametrize('reason', ['cancel', 'timeout'])
+def test_term_grace_allows_two_second_cleanup(q, tmp_path, reason):
+    ready, cleaned = tmp_path / 'ready', tmp_path / 'cleaned'
+    code = '''import os,signal,sys,time
+from pathlib import Path
+def stop(*args):
+    time.sleep(2)
+    Path(sys.argv[2]).write_text(os.environ['JOBQ_JOB_ID'])
+    sys.exit(0)
+signal.signal(signal.SIGTERM, stop)
+Path(sys.argv[1]).write_text('ready')
+time.sleep(30)
+'''
+    options = ['--timeout', '1', '--grace', '3'] if reason == 'timeout' else []
+    jid = q.submit(cmd=[sys.executable, '-c', code, str(ready), str(cleaned)], options=options)
+    worker = q.worker()
+    q.until(jid, lambda j: ready.exists())
+    assert q.show(jid)['grace'] == (3 if reason == 'timeout' else 20)
+    if reason == 'cancel':
+        q.call('cancel', jid)
+    assert q.call('wait', jid, '--timeout', '7', check=False).returncode == 1
+    job = q.show(jid)
+    assert job['state'] == ('cancelled' if reason == 'cancel' else 'timeout')
+    assert job['rc'] == 0
+    assert cleaned.read_text() == jid
+    assert worker.wait(timeout=5) == 0
+
+
+def test_custom_grace_kills_unresponsive_command(q, tmp_path):
+    ready = tmp_path / 'ready'
+    code = \"import signal,sys,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); open(sys.argv[1], 'w').close(); time.sleep(30)\"
+    jid = q.submit(cmd=[sys.executable, '-c', code, str(ready)], options=['--grace', '.15'])
+    worker = q.worker()
+    q.until(jid, lambda j: ready.exists())
+    start = time.monotonic()
+    q.call('cancel', jid)
+    assert q.call('wait', jid, '--timeout', '3', check=False).returncode == 1
+    assert .15 <= time.monotonic() - start < 3
+    assert q.show(jid)['rc'] "'!= 0
+    assert worker.wait(timeout=5) == 0
+PY
+pytest -q cc/acc bin/test_jobq.py' in /home/muk/projects/siminfeng/campaign
+ exited 2 in 786ms:
+
+==================================== ERRORS ====================================
+_____________________ ERROR collecting cc/acc/test_acc.py ______________________
+ImportError while importing test module '/home/muk/projects/siminfeng/campaign/cc/acc/test_acc.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.10/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+cc/acc/test_acc.py:20: in <module>
+    from cc.acc import common, compare, datasets, evaluate, gen, kld, mcq, server
+E   ModuleNotFoundError: No module named 'cc'
+__________________ ERROR collecting cc/acc/test_robustness.py __________________
+ImportError while importing test module '/home/muk/projects/siminfeng/campaign/cc/acc/test_robustness.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.10/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+cc/acc/test_robustness.py:18: in <module>
+    from cc.acc import datasets, mcq, server
+E   ModuleNotFoundError: No module named 'cc'
+=========================== short test summary info ============================
+ERROR cc/acc/test_acc.py
+ERROR cc/acc/test_robustness.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+2 errors in 0.33s
+
+codex
+The fixes and regression tests are in place. The first test run failed during collection because the `pytest` executable doesn’t put this repository on the import path. I’ll add a test-path setup scoped to `cc/acc`, then rerun the acceptance command.
+
+exec
+/bin/bash -lc "cat > cc/acc/conftest.py <<'PY'
+\"\"\"Allow both pytest and python -m pytest from the campaign root.\"\"\"
+from pathlib import Path
+import sys
+
+ROOT = str(Path(__file__).resolve().parents[2])
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+PY
+pytest -q cc/acc bin/test_jobq.py" in /home/muk/projects/siminfeng/campaign
+exec
+/bin/bash -lc "sed -n '1,275p' cc/acc/datasets.py; sed -n '145,310p' bin/jobq" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+"""Fetch reproducible subsets through the public HF datasets-server rows API."""
+import argparse
+from collections import Counter, defaultdict
+import hashlib
+from email.utils import parsedate_to_datetime
+import math
+import json
+from pathlib import Path
+import random
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+try:
+    from .common import sha256, write_json
+except ImportError:
+    from common import sha256, write_json
+
+API = "https://datasets-server.huggingface.co/rows"
+SOURCES = {
+    "mmlu-pro": ("TIGER-Lab/MMLU-Pro", "default", "test"),
+    "arc-challenge": ("allenai/ai2_arc", "ARC-Challenge", "test"),
+    "gsm8k": ("openai/gsm8k", "main", "test"),
+}
+# Probe at fetch time; no claim that an unverified mirror is available or canonical.
+GPQA_MIRRORS = [("fingertap/GPQA-Diamond", "default", "test"),
+                ("fingertap/GPQA-Diamond", "default", "train")]
+
+
+def rows_url(dataset, config, split, offset=0, length=100):
+    if not 1 <= length <= 100:
+        raise ValueError("rows length must be 1..100")
+    return API + "?" + urllib.parse.urlencode(dict(dataset=dataset, config=config,
+                                                 split=split, offset=offset, length=length))
+
+
+def parse_page(payload):
+    """The documented envelope is {rows: [{row_idx, row, ...}], num_rows_total}."""
+    rows = [(int(entry["row_idx"]), entry["row"]) for entry in payload["rows"]]
+    return rows, int(payload["num_rows_total"])
+
+
+def retry_after(headers):
+    value = headers.get("Retry-After") if headers else None
+    if value is None:
+        return 0
+    try:
+        delay = float(value)
+    except ValueError:
+        try:
+            delay = parsedate_to_datetime(value).timestamp() - time.time()
+        except (TypeError, ValueError, OverflowError):
+            return 0
+    return max(0, delay) if math.isfinite(delay) else 0
+
+
+def fetch_page(url, opener):
+    for attempt in range(8):
+        try:
+            with opener(url, timeout=60) as response:
+                return response.read()
+        except urllib.error.URLError as exc:
+            if isinstance(exc, urllib.error.HTTPError) and exc.code != 429 and not 500 <= exc.code < 600:
+                raise
+            if attempt == 7:
+                raise
+            delay = max(2 ** attempt + random.uniform(0, 1),
+                        retry_after(getattr(exc, "headers", None)))
+            if isinstance(exc, urllib.error.HTTPError):
+                exc.close()
+            time.sleep(delay)
+
+
+def fetch_rows(dataset, config, split, opener=urllib.request.urlopen, page_delay=0.5):
+    if not math.isfinite(page_delay) or page_delay < 0:
+        raise ValueError("page delay must be finite and nonnegative")
+    offset, total = 0, None
+    result, pages = [], []
+    while total is None or offset < total:
+        url = rows_url(dataset, config, split, offset)
+        if pages:
+            time.sleep(page_delay)
+        raw = fetch_page(url, opener)
+        rows, count = parse_page(json.loads(raw))
+        if total is not None and count != total:
+            raise ValueError("dataset size changed while fetching")
+        total = count
+        if not rows or [i for i, _ in rows] != list(range(offset, offset + len(rows))):
+            raise ValueError("empty or noncontiguous datasets-server page")
+        result.extend(rows)
+        pages.append(dict(url=url, offset=offset, length=len(rows), sha256=hashlib.sha256(raw).hexdigest()))
+        offset += len(rows)
+    if len(result) != total:
+        raise ValueError("incomplete dataset")
+    return result, pages
+
+
+def normalize(name, index, row, source, seed=42):
+    meta = {"row_offset": index, "category": row.get("category", row.get("domain", "all"))}
+    if name == "mmlu-pro":
+        question, choices = row["question"], row["options"]
+        answer = row.get("answer")
+        if answer is None:
+            answer = chr(65 + int(row["answer_index"]))
+        meta["question_id"] = row.get("question_id")
+    elif name == "arc-challenge":
+        question = row["question"]
+        choices = row["choices"]["text"]
+        labels = [str(label) for label in row["choices"]["label"]]
+        answer = chr(65 + labels.index(str(row["answerKey"])))
+        meta["original_id"] = row.get("id")
+    elif name == "gsm8k":
+        question, choices, answer = row["question"], None, row["answer"]
+    elif name == "gpqa-diamond":
+        question = row["Question"]
+        original = [row["Correct Answer"], *[row[f"Incorrect Answer {i}"] for i in (1, 2, 3)]]
+        order = list(range(4))
+        random.Random(f"{seed}:{source}:{index}").shuffle(order)
+        choices = [original[i] for i in order]
+        answer = chr(65 + order.index(0))
+        meta["choice_permutation"] = order
+        meta["category"] = row.get("Subdomain", row.get("High-level domain", "all"))
+    else:
+        raise ValueError(name)
+    if choices is not None:
+        if not 2 <= len(choices) <= 26 or answer not in [chr(65 + i) for i in range(len(choices))]:
+            raise ValueError(f"invalid MCQ at row {index}")
+    return dict(id=f"{name}:{index}", source=source, question=question,
+                choices=choices, answer=answer, meta=meta)
+
+
+def subset(rows, n, seed, mode="proportional"):
+    """Proportional category allocation, largest remainders, seeded tie breaking."""
+    if mode not in ("proportional", "per-category"):
+        raise ValueError("unknown selection mode: " + mode)
+    if not 1 <= n <= len(rows):
+        raise ValueError(f"n must be 1..{len(rows)}")
+    rng = random.Random(seed)
+    groups = defaultdict(list)
+    for row in rows:
+        groups[str(row["meta"].get("category", "all"))].append(row)
+    keys = sorted(groups)
+    rng.shuffle(keys)
+    if mode == "per-category":
+        for key in keys:
+            if len(groups[key]) < n:
+                raise ValueError(f"category {key!r} has {len(groups[key])} rows; need {n}")
+        quotas = {key: n for key in keys}
+    else:
+        quotas = {key: n * len(groups[key]) // len(rows) for key in keys}
+        ranked = sorted(keys, key=lambda key: n * len(groups[key]) % len(rows), reverse=True)
+        for key in ranked[:n - sum(quotas.values())]:
+            quotas[key] += 1
+    selected = []
+    for key in sorted(keys):
+        group = sorted(groups[key], key=lambda row: row["id"])
+        rng.shuffle(group)
+        selected.extend(group[:quotas[key]])
+    rng.shuffle(selected)
+    return selected
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("name", choices=[*SOURCES, "gpqa-diamond"])
+    parser.add_argument("-n", type=int, help="Sample size (per category for MMLU-Pro by default)")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--per-category", type=int, metavar="N", help="Select exactly N rows per category")
+    modes.add_argument("--proportional", action="store_true", help="Allocate -n rows proportionally")
+    parser.add_argument("--page-delay", type=float, default=0.5, help="Delay between pages in seconds")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--outdir", type=Path, default=Path("~/models/campaign/data/acc").expanduser())
+    parser.add_argument("--gpqa-dataset", help="Public Diamond mirror with original GPQA columns")
+    parser.add_argument("--config", help="Override source config")
+    parser.add_argument("--split", help="Override split (GPQA mirrors may use train)")
+    args = parser.parse_args()
+    if args.per_category is not None and args.n is not None:
+        parser.error("use --per-category N or -n, not both")
+    n = args.per_category if args.per_category is not None else args.n
+    if n is None or n < 1:
+        parser.error("provide a positive -n or --per-category N")
+    mode = "per-category" if args.per_category is not None or (args.name == "mmlu-pro" and not args.proportional) else "proportional"
+    if args.name == "gpqa-diamond":
+        sources = [(args.gpqa_dataset, args.config or "default", args.split or "train")] if args.gpqa_dataset else [
+            (dataset, args.config or config, args.split or split) for dataset, config, split in GPQA_MIRRORS]
+    else:
+        dataset, config, split = SOURCES[args.name]
+        sources = [(dataset, args.config or config, args.split or split)]
+    failures = []
+    for dataset, config, split in sources:
+        try:
+            raw, pages = fetch_rows(dataset, config, split, page_delay=args.page_delay)
+            break
+        except urllib.error.HTTPError as exc:
+            if args.name != "gpqa-diamond" or exc.code not in (401, 403, 404, 422):
+                raise
+            failures.append(f"{dataset}/{config}/{split}: HTTP {exc.code}")
+    else:
+        print("SKIP GPQA-Diamond: no accessible public mirror; " + "; ".join(failures), file=sys.stderr)
+        return
+    source = rows_url(dataset, config, split)
+    page_sources = {i: page["url"] for page in pages
+                    for i in range(page["offset"], page["offset"] + page["length"])}
+    normalized = [normalize(args.name, i, row, page_sources[i], args.seed) for i, row in raw]
+    selected = subset(normalized, n, args.seed, mode)
+    args.outdir.mkdir(parents=True, exist_ok=True)
+    path = args.outdir / f"{args.name}-{mode}-{n}-s{args.seed}.jsonl"
+    metadata = path.with_suffix(".meta.json")
+    if path.exists() or metadata.exists():
+        raise FileExistsError(f"refusing to overwrite {path} or {metadata}")
+    path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in selected))
+    write_json(metadata, dict(dataset=dataset, config=config, split=split, source_url=source,
+               seed=args.seed, n=len(selected), requested_n=n, mode=mode, total_rows=len(raw), pages=pages,
+               row_offsets=[r["meta"]["row_offset"] for r in selected], sha256=sha256(path),
+               selection=mode,
+               categories=dict(Counter(str(r["meta"]["category"]) for r in selected)),
+               gpqa_mirror_unverified=args.name == "gpqa-diamond"))
+    print(path)
+
+
+if __name__ == "__main__":
+    main()
+            p.poll()
+
+
+def run_job(jid):
+    p = None
+    try:
+        with locked():
+            j = get(jid)
+            if j.get('stop_reason'):
+                finish(j, j['stop_reason'], None)
+                return 0
+            runop = os.environ.get('JOBQ_RUN_OP', str(ROOT / 'bin/run_op'))
+            p = subprocess.Popen([runop, '--agent', 'jobq', '--task', j['name'], '--',
+                                  sys.executable, SELF, '_exec', jid],
+                                 cwd=j['cwd'], env=dict(json.loads(Path(j['env_file']).read_text()) if j.get('env_file') else j.get('env', dict(os.environ)), JOBQ_JOB_ID=jid), start_new_session=True)
+            j['wrapper_pgid'] = p.pid
+            save(j, 'wrapper_started')
+        stopped_at = None
+        while True:
+            with locked():
+                j = get(jid)
+                if not j.get('stop_reason') and j['timeout'] is not None and time.time() - j['start'] >= j['timeout']:
+                    j['stop_reason'] = 'timeout'
+                    save(j, 'timeout_requested')
+                if j.get('stop_reason'):
+                    if stopped_at is None:
+                        # One TERM lets cleanup handlers finish without interruption.
+                        kill_groups(j, signal.SIGTERM)
+                        stopped_at = time.monotonic()
+                    if p.poll() is not None:
+                        kill_groups(j, signal.SIGKILL)  # any remaining descendants
+                        finish(j, j['stop_reason'], p.returncode)
+                        return 0
+                    if time.monotonic() - stopped_at >= j.get('grace', 20):
+                        kill_groups(j, signal.SIGKILL)
+                        rc = p.wait()
+                        finish(j, j['stop_reason'], rc)
+                        return 0
+                elif p.poll() is not None:
+                    # Do not leave command descendants behind after wrapper exit.
+                    kill_groups(j, signal.SIGKILL)
+                    finish(j, 'succeeded' if p.returncode == 0 else 'failed', p.returncode)
+                    return 0
+            time.sleep(.025)
+    except Exception as exc:
+        with locked():
+            j = get(jid)
+            kill_groups(j, signal.SIGKILL)
+            j['error'] = str(exc)
+            finish(j, 'failed', None)
+        if p:
+            p.wait()
+        return 1
+
+
+def exec_job(jid):
+    with locked():
+        j = get(jid)
+        if j.get('stop_reason') or j['state'] != 'running':
+            return 1
+        j.update(pid=os.getpid(), pgid=os.getpgrp())
+        save(j, 'command_started')
+    os.execvpe(j['argv'][0], j['argv'], os.environ)
+
+
+def seconds(value):
+    n = float(value)
+    if not math.isfinite(n) or n < 0:
+        raise argparse.ArgumentTypeError('seconds must be finite and nonnegative')
+    return n
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    sp = ap.add_subparsers(dest='command', required=True)
+    s = sp.add_parser('submit')
+    s.add_argument('--class', dest='cls', choices=['gpu', 'build', 'cpu'], required=True)
+    s.add_argument('--after', nargs='+', action='extend', default=[])
+    s.add_argument('--name')
+    s.add_argument('--timeout', type=seconds)
+    s.add_argument('--grace', type=seconds, default=20, help='TERM to KILL grace in seconds')
+    s.add_argument('--allow-during-gpu', action='store_true')
+    s.add_argument('argv', nargs=argparse.REMAINDER)
+    w = sp.add_parser('worker'); w.add_argument('--once', action='store_true')
+    sp.add_parser('list')
+    r = sp.add_parser('reap-containers')
+    r.add_argument('--yes', action='store_true', help='Remove stale containers; default prints commands')
+    r.add_argument('--dry-run', action='store_true', help='Print commands only (the default)')
+    for cmd in ('show', 'wait', 'cancel', '_run', '_exec'):
+        p = sp.add_parser(cmd); p.add_argument('jobid')
+        if cmd == 'wait':
+            p.add_argument('--timeout', type=seconds)
+    a = ap.parse_args()
+    if a.command == 'reap-containers':
+        sys.path.insert(0, str(ROOT))
+        from cc.acc.server import reap_containers
+        reap_containers(dry_run=not a.yes or a.dry_run, labels=('om=1', 'acc=1'), unowned_max_age=None)
+        return 0
+    if a.command == '_run':
+        return run_job(a.jobid)
+    if a.command == '_exec':
+        return exec_job(a.jobid)
+    if a.command == 'worker':
+        return worker(a.once)
+    if a.command == 'wait':
+        deadline = None if a.timeout is None else time.monotonic() + a.timeout
+        while True:
+            with locked():
+                reconcile(); j = get(a.jobid)
+            if j['state'] in TERMINAL:
+                return 0 if j['state'] == 'succeeded' else 1
+            if deadline is not None and time.monotonic() >= deadline:
+                return 2
+            time.sleep(.05)
+    with locked():
+        reconcile()
+        if a.command == 'submit':
+            argv = a.argv[1:] if a.argv[:1] == ['--'] else a.argv
+            if not argv:
+                ap.error('command required after --')
+            for dep in a.after:
+                get(dep)
+            jid = 'job-' + uuid.uuid4().hex
+            j = dict(id=jid, argv=argv, **{'class': a.cls}, deps=a.after,
+                     name=a.name or argv[0], timeout=a.timeout, grace=a.grace,
+                     allow_during_gpu=a.allow_during_gpu, state='queued', pid=None,
+                     pgid=None, runner_pid=None, start=None, end=None, rc=None,
+                     concurrent_jobs=[], submitted=time.time_ns(), cwd=os.getcwd(),
+                     env_file=None, env_public=None)
+            env = dict(os.environ, JOBQ_DIR=str(DIR))
+            ed = DIR / 'env'; ed.mkdir(parents=True, exist_ok=True); os.chmod(ed, 0o700)
+            ef = ed / f'{jid}.json'
+            fd = os.open(ef, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w') as fh: json.dump(env, fh)
+            j['env_file'] = str(ef)
+            # never persist secrets in the job record (check-in H1 found tokens in job JSON)
+            secret = re.compile(r'TOKEN|KEY|SECRET|PASS|AUTH|SESSION|COOKIE|CREDENTIAL', re.I)
+            j['env_public'] = {k: v for k, v in env.items() if not secret.search(k)
+                               and k in ('PATH', 'DOCKER_CMD_PREFIX', 'BUILD_JOBS', 'LD_LIBRARY_PATH', 'JOBQ_DIR', 'OM_MAX_S', 'OM_MODELDIR') }
+            save(j, 'submitted'); print(jid)
+        elif a.command == 'list':
+            for j in jobs():
+                print(j['id'], j['state'], j['class'], j['name'])
+        elif a.command == 'show':
+            print(json.dumps(get(a.jobid), indent=2))
+        elif a.command == 'cancel':
+            j = get(a.jobid)
+            if j['state'] == 'queued':
+                finish(j, 'cancelled', None)
+            elif j['state'] == 'running':
+                j['stop_reason'] = 'cancelled'
+                save(j, 'cancel_requested')
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (ValueError, OSError) as exc:
+        print('jobq: ' + str(exc), file=sys.stderr)
+        sys.exit(1)
+
+ exited 1 in 32872ms:
+...........................................F......................       [100%]
+=================================== FAILURES ===================================
+__ test_selection_cli_and_page_provenance[mode_flags2-proportional-5-counts2] __
+
+tmp_path = PosixPath('/tmp/pytest-of-muk/pytest-59/test_selection_cli_and_page_pr2')
+mode_flags = ['--proportional', '-n', '5'], mode = 'proportional', n = 5
+counts = {'small': 1, 'large': 4}
+
+    @pytest.mark.parametrize('mode_flags,mode,n,counts', [
+        (['--per-category', '2'], 'per-category', 2, {'small': 2, 'large': 2}),
+        (['-n', '2'], 'per-category', 2, {'small': 2, 'large': 2}),
+        (['--proportional', '-n', '5'], 'proportional', 5, {'small': 1, 'large': 4}),
+    ])
+    def test_selection_cli_and_page_provenance(tmp_path, mode_flags, mode, n, counts):
+        calls = []
+        def opener(url, timeout):
+            calls.append(url)
+            offset = 100 if len(calls) == 2 else 0
+            return io.BytesIO(json.dumps(envelope(offset, 100 if offset == 0 else 1, 101)).encode())
+        with patch.object(datasets.urllib.request, 'urlopen', opener):
+            # fetch_rows' injectable opener is bound at definition time; use it explicitly.
+            raw, pages = datasets.fetch_rows('test', 'default', 'test', opener=opener, page_delay=0)
+        with patch.object(sys, 'argv', ['datasets', 'mmlu-pro', *mode_flags, '--outdir', str(tmp_path)]), \
+             patch.object(datasets, 'fetch_rows', return_value=(raw, pages)):
+            datasets.main()
+        output = next(tmp_path.glob('*.jsonl'))
+        rows = [json.loads(line) for line in output.read_text().splitlines()]
+>       assert Counter(r['meta']['category'] for r in rows) == counts
+E       AssertionError: assert Counter({'large': 5}) == {'small': 1, 'large': 4}
+E         
+E         Differing items:
+E         {'large': 5} != {'large': 4}
+E         Right contains 1 more item:
+E         {'small': 1}
+E         Use -v to get more diff
+
+cc/acc/test_robustness.py:47: AssertionError
+----------------------------- Captured stdout call -----------------------------
+/tmp/pytest-of-muk/pytest-59/test_selection_cli_and_page_pr2/mmlu-pro-proportional-5-s42.jsonl
+=========================== short test summary info ============================
+FAILED cc/acc/test_robustness.py::test_selection_cli_and_page_provenance[mode_flags2-proportional-5-counts2]
+1 failed, 65 passed in 32.39s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/acc/test_robustness.py'); s=p.read_text().replace('from unittest.mock import patch','from unittest.mock import Mock, patch').replace(\"(['--proportional', '-n', '5'], 'proportional', 5, {'small': 1, 'large': 4}),\",\"(['--proportional', '-n', '5'], 'proportional', 5, {'large': 5}),\\n    (['--proportional', '-n', '101'], 'proportional', 101, {'small': 3, 'large': 98}),\")
+s=s.replace(\"    with patch.object(datasets.urllib.request, 'urlopen', opener):\\n        # fetch_rows' injectable opener is bound at definition time; use it explicitly.\\n        raw, pages = datasets.fetch_rows('test', 'default', 'test', opener=opener, page_delay=0)\",\"    raw, pages = datasets.fetch_rows('test', 'default', 'test', opener=opener, page_delay=0)\")
+s=s.replace(\"opener = __import__('unittest.mock', fromlist=['Mock']).Mock(\",\"opener = Mock(\")
+s=s.replace('    assert datasets.subset(all_rows, 2, 42, \\'per-category\\') == datasets.subset(all_rows, 2, 42, \\'per-category\\')','    assert datasets.subset(all_rows, 2, 42, \\'per-category\\') == datasets.subset(all_rows, 2, 42, \\'per-category\\')\\n    assert datasets.subset(all_rows, 2, 42, \\'per-category\\') "'!= datasets.subset(all_rows, 2, 43, '"\\'per-category\\')')
+p.write_text(s)
+p=Path('cc/acc/README.md'); s=p.read_text().replace('The entire split is fetched before proportional category stratification,','The entire split is fetched before seeded category selection,').replace('python3 cc/acc/datasets.py mmlu-pro -n 100 --seed 42','python3 cc/acc/datasets.py mmlu-pro --per-category 100 --seed 42\\npython3 cc/acc/datasets.py mmlu-pro --proportional -n 100 --seed 42',1)
+s=s.replace('Default output is "'`~/models/campaign/data/acc/<name>-<n>-s<seed>.jsonl` and'"\\n"'`<name>-<n>-s<seed>.meta.json`.'"','''MMLU-Pro defaults to exactly N items per category ("'`-n N` or `--per-category N`).
+Selection fails if any category has fewer than N rows. Other datasets default to
+proportional allocation of `-n N` total items; `--proportional` explicitly selects
+this mode. Both modes use `--seed` and record mode, seed and category counts.
+Fetching retries HTTP 429/5xx and URL errors up to eight attempts with exponential
+backoff and jitter, honoring numeric or HTTP-date Retry-After. `--page-delay`
+sets the delay between successful pages (default 0.5 seconds).
+
+Default output is `~/models/campaign/data/acc/<name>-<mode>-<n>-s<seed>.jsonl` and
+`<name>-<mode>-<n>-s<seed>.meta.json`.'"''')
+s=s.replace('"'`{id, source, question, choices, answer, meta}`. MCQ choices'"','"'`{id, source, question, choices, answer, meta}`; source is the exact page URL'"\\nthat supplied the row. MCQ choices')
+s=s.replace('the output SHA256. Largest-remainder allocation preserves category proportions;','the output SHA256. In proportional mode, largest-remainder allocation preserves category proportions;')
+s += '''
+## Orphan containers
+
+Every accuracy container has "'`acc=1` and, when queued, `jobq_job=$JOBQ_JOB_ID`.
+Before starting a container the harness inspects existing accuracy containers
+and asks `bin/jobq show` about their owners. Running or exited containers are
+removed if their job is absent or no longer running. Containers without a job
+label are removed only after six hours. Job lookup failures other than unknown
+jobs abort reaping. Preview removals with read-only Docker discovery:
+
+```sh
+python3 cc/acc/server.py reap --dry-run
+bin/jobq reap-containers
+bin/jobq reap-containers --yes
+```
+
+The queue command considers both `acc=1` and `om=1` and retains containers
+without a job label. Both dry-run commands print only proposed Docker removal
+commands. `DOCKER_CMD_PREFIX` applies to discovery and removals alike.
+'"'''
+p.write_text(s)
+p=Path('bin/README-jobq.md'); s=p.read_text().replace('Cancellation sends TERM, then KILL after a short grace period if needed.','''Timeout and cancellation send TERM once, then wait for the command to exit.
+"'`submit --grace SECONDS` sets the per-job delay before KILL (default 20 seconds).
+A command that exits during grace retains its actual exit code; the job state
+still records `timeout` or `cancelled`.'"''').replace('Submit preserves the working directory and environment for execution.','''Submit preserves the working directory and environment for execution, adding
+"'`JOBQ_JOB_ID` for container ownership labels.
+
+`bin/jobq reap-containers` inspects running/exited containers labelled `om=1`
+or `acc=1`, asks `jobq show` about `jobq_job` owners, and prints Docker removal
+commands for jobs that are absent or not running. Dry-run is the default;
+`--yes` executes removals. Containers without a job label are retained.
+`--dry-run` explicitly previews commands even if `--yes` is also present.
+Docker discovery is read-only during a dry run and respects `DOCKER_CMD_PREFIX`.'"''')
+p.write_text(s)
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc "rg -n 'mmlu-pro-|gsm8k-|arc-challenge-|gpqa-diamond-' cc/acc/README.md; pytest -q cc/acc bin/test_jobq.py" in /home/muk/projects/siminfeng/campaign
+codex
+The grace tests pass: both timeout and cancellation let the TERM handler finish its two-second cleanup and exit with code 0. The mock reaper tests also confirm dry runs print removal commands without executing them. One new test had an incorrect expected proportional allocation; I corrected it and the full suite is rerunning.
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/acc/README.md'); s=p.read_text()
+for old,new in [('mmlu-pro-100-s42','mmlu-pro-per-category-100-s42'),('arc-challenge-100-s42','arc-challenge-proportional-100-s42'),('gpqa-diamond-50-s42','gpqa-diamond-proportional-50-s42'),('gsm8k-100-s42','gsm8k-proportional-100-s42')]:
+    s=s.replace(old,new)
+p.write_text(s)
+p=Path('bin/jobq'); s=p.read_text().replace(\"            p = subprocess.Popen([runop, '--agent', 'jobq', '--task', j['name'], '--',\",\"            job_env = (json.loads(Path(j['env_file']).read_text()) if j.get('env_file')\\n                       else j.get('env', dict(os.environ)))\\n            job_env['JOBQ_JOB_ID'] = jid\\n            p = subprocess.Popen([runop, '--agent', 'jobq', '--task', j['name'], '--',\",1).replace(\"cwd=j['cwd'], env=dict(json.loads(Path(j['env_file']).read_text()) if j.get('env_file') else j.get('env', dict(os.environ)), JOBQ_JOB_ID=jid), start_new_session=True)\",\"cwd=j['cwd'], env=job_env, start_new_session=True)\")
+p.write_text(s)
+p=Path('cc/acc/datasets.py'); s=p.read_text().replace('    \"\"\"Proportional category allocation, largest remainders, seeded tie breaking.\"\"\"','    \"\"\"Seeded sampling with equal category counts or proportional largest remainders.\"\"\"')
+s=s.replace('    mode = \"per-category\" if args.per_category is not None or (args.name == \"mmlu-pro\" and not args.proportional) else \"proportional\"','    equal_categories = args.per_category is not None or (args.name == \"mmlu-pro\" and not args.proportional)\\n    mode = \"per-category\" if equal_categories else \"proportional\"')
+p.write_text(s)
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+ succeeded in 31601ms:
+77:bin/jobq submit --class gpu --name acc-mmlu-base --timeout 14400 -- python3 cc/acc/mcq.py --image "$IMG" --model "$MODEL" --data "$DATA/mmlu-pro-100-s42.jsonl" --outdir "$OUT/mmlu-base" --engine-arg=-ngl --engine-arg=99 --engine-arg=-np --engine-arg=1 --engine-arg=-c --engine-arg=4096
+78:bin/jobq submit --class gpu --name acc-arc-base --timeout 14400 -- python3 cc/acc/mcq.py --image "$IMG" --model "$MODEL" --data "$DATA/arc-challenge-100-s42.jsonl" --outdir "$OUT/arc-base" --engine-arg=-ngl --engine-arg=99 --engine-arg=-np --engine-arg=1 --engine-arg=-c --engine-arg=4096
+79:bin/jobq submit --class gpu --name acc-gpqa-base --timeout 14400 -- python3 cc/acc/mcq.py --image "$IMG" --model "$MODEL" --data "$DATA/gpqa-diamond-50-s42.jsonl" --outdir "$OUT/gpqa-base" --engine-arg=-ngl --engine-arg=99 --engine-arg=-np --engine-arg=1 --engine-arg=-c --engine-arg=4096
+85:bin/jobq submit --class gpu --name acc-gsm-base --timeout 86400 -- python3 cc/acc/gen.py --image "$IMG" --model "$MODEL" --data "$DATA/gsm8k-100-s42.jsonl" --outdir "$OUT/gsm-base" --max-tokens 384 --engine-arg=-ngl --engine-arg=99 --engine-arg=-np --engine-arg=1 --engine-arg=-c --engine-arg=4096
+116:python3 cc/acc/mcq.py --image "$IMG" --model "$MODEL" --data "$DATA/mmlu-pro-100-s42.jsonl" --outdir "$OUT/dry" --dry-run
+...................................................................      [100%]
+67 passed in 31.12s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from datetime import datetime
+print(datetime.fromisoformat('2026-11-11T12:38:03.124888186+00:00'))
+PY" in /home/muk/projects/siminfeng/campaign
+ exited 1 in 100ms:
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ValueError: Invalid isoformat string: '2026-11-11T12:38:03.124888186+00:00'
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/acc/server.py'); s=p.read_text().replace('from pathlib import Path\\n','from pathlib import Path\\nimport re\\n')
+s=s.replace('            created = datetime.fromisoformat(container[\"Created\"].replace(\"Z\", \"+00:00\"))','''            # Docker emits nanoseconds; Python 3.10 accepts microseconds only.
+            timestamp = re.sub(r\"\\\\.(\\\\d+)\", lambda m: \".\" + (m[1] + \"000000\")[:6],
+                               container[\"Created\"])
+            created = datetime.fromisoformat(timestamp.replace(\"Z\", \"+00:00\"))''')
+p.write_text(s)
+p=Path('cc/acc/datasets.py'); s=p.read_text().replace('def fetch_rows(dataset, config, split, opener=urllib.request.urlopen, page_delay=0.5):\\n','def fetch_rows(dataset, config, split, opener=None, page_delay=0.5):\\n    opener = opener or urllib.request.urlopen\\n'); p.write_text(s)
+p=Path('cc/acc/test_robustness.py'); s=p.read_text().replace(\"    fake = docker_mock(containers, dict(a='running', d='succeeded', u=None))\",\"    containers['old']['Created'] = '2000-01-01T00:00:00.123456789Z'\\n    fake = docker_mock(containers, dict(a='running', d='succeeded', u=None))\")
+s += '''
+
+def test_reap_preserves_container_on_job_lookup_failure():
+    owned = container('owned', 'job-abc')
+    fake = docker_mock({'owned': owned}, {})
+    def run(command, **kwargs):
+        if command[0] == str(server.ROOT / 'bin/jobq'):
+            return subprocess.CompletedProcess(command, 1, stdout='', stderr='state unreadable')
+        return fake(command, **kwargs)
+    with patch.dict('os.environ', {}, clear=True), patch.object(subprocess, 'run', side_effect=run) as calls:
+        with pytest.raises(RuntimeError, match='jobq lookup failed'):
+            server.reap_containers(dry_run=False)
+    assert not any(c.args[0][1:3] == ['rm', '-f'] for c in calls.call_args_list)
+'''
+p.write_text(s)
+PY
+pytest -q cc/acc bin/test_jobq.py" in /home/muk/projects/siminfeng/campaign
+exec
+/bin/bash -lc "sed -n '1,180p' cc/acc/server.py; sed -n '1,180p' cc/acc/test_robustness.py; git diff --stat -- cc/acc bin/jobq bin/test_jobq.py bin/README-jobq.md; rg -n 'argmax_letter_found|proportional|per-category|reap|grace' cc/acc/README.md bin/README-jobq.md" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+"""Owned NVIDIA containers, watchdog/telemetry and localhost llama-server."""
+import argparse
+import atexit
+from datetime import datetime, timezone
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import signal
+import socket
+import subprocess
+import sys
+import time
+import uuid
+
+try:
+    from .common import request_json, write_json
+except ImportError:
+    from common import request_json, write_json
+
+ROOT = Path(__file__).resolve().parents[2]
+OBSERVER = ROOT / "cc/resource_observe/resource_observe.py"
+
+
+def docker_command(argv, prefix=None):
+    prefix = os.environ.get("DOCKER_CMD_PREFIX", "") if prefix is None else prefix
+    command = ["docker", *map(str, argv)]
+    return shlex.split(prefix) + [shlex.join(command)] if prefix else command
+
+
+def reap_containers(dry_run=True, labels=("acc=1",), unowned_max_age=6 * 3600):
+    """Inspect only labelled containers; unknown jobs are stale, lookup errors fail closed.
+
+    Dry runs perform read-only discovery and print only proposed Docker removals.
+    Set unowned_max_age=None to retain containers without a job label.
+    """
+    ids = set()
+    for label in labels:
+        result = subprocess.run(docker_command(["ps", "-aq", "--filter", "label=" + label]),
+                                check=True, capture_output=True, text=True, timeout=30)
+        ids.update(result.stdout.split())
+    commands = []
+    states = {}
+    for cid in sorted(ids):
+        result = subprocess.run(docker_command(["inspect", cid]), check=True,
+                                capture_output=True, text=True, timeout=30)
+        container = json.loads(result.stdout)[0]
+        if container["State"]["Status"] not in ("running", "exited"):
+            continue
+        job = (container["Config"].get("Labels") or {}).get("jobq_job")
+        if job:
+            if job not in states:
+                status = subprocess.run([str(ROOT / "bin/jobq"), "show", job],
+                                        capture_output=True, text=True, timeout=30)
+                if status.returncode:
+                    if "unknown job:" not in status.stderr and "invalid job id" not in status.stderr:
+                        raise RuntimeError("jobq lookup failed: " + status.stderr)
+                    states[job] = "unknown"
+                else:
+                    states[job] = json.loads(status.stdout)["state"]
+            stale = states[job] != "running"
+        elif unowned_max_age is not None:
+            # Docker emits nanoseconds; Python 3.10 accepts microseconds only.
+            timestamp = re.sub(r"\.(\d+)", lambda m: "." + (m[1] + "000000")[:6],
+                               container["Created"])
+            created = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            stale = (datetime.now(timezone.utc) - created).total_seconds() > unowned_max_age
+        else:
+            stale = False
+        if stale:
+            command = docker_command(["rm", "-f", cid])
+            commands.append(command)
+            if dry_run:
+                print(shlex.join(command))
+            else:
+                subprocess.run(command, check=True, capture_output=True, text=True, timeout=30)
+    return commands
+
+
+def parse_env(values):
+    result = {}
+    for value in values:
+        key, sep, val = value.partition("=")
+        if not sep or not key or not all(c.isalnum() or c == "_" for c in key):
+            raise ValueError("--env must be NAME=VALUE")
+        result[key] = val
+    return result
+
+
+def free_port():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+class OwnedContainer:
+    def __init__(self, image, model, outdir, tool, argv, env=None, mounts=()):
+        self.image = image
+        self.model = Path(model).expanduser().resolve()
+        self.outdir = Path(outdir)
+        self.tool = tool
+        self.argv = list(argv)
+        self.env = dict(env or {})
+        self.mounts = list(mounts)
+        self.name = "acc-" + uuid.uuid4().hex
+        self.children = []
+        self.started = False
+        self.closed = False
+        self.signals = {}
+        self.start_time = None
+
+    def command(self):
+        args = ["run", "-d", "--name", self.name, "--runtime", "nvidia",
+                "--network", "host", "--label", "campaign=c2", "--label", "acc=1"]
+        if os.environ.get("JOBQ_JOB_ID"):
+            args += ["--label", "jobq_job=" + os.environ["JOBQ_JOB_ID"]]
+        env = {**self.env, "NVIDIA_VISIBLE_DEVICES": "all",
+               "NVIDIA_DRIVER_CAPABILITIES": "compute,utility"}
+        for key, value in sorted(env.items()):
+            args += ["-e", f"{key}={value}"]
+        args += ["-v", f"{self.model.parent}:/om:ro"]
+        for host, target, readonly in self.mounts:
+            args += ["-v", f"{Path(host).expanduser().resolve()}:{target}" + (":ro" if readonly else ":rw")]
+        return docker_command(args + [self.image, "/app/" + self.tool, *self.argv])
+
+    def kill_command(self):
+        return docker_command(["kill", self.name])
+
+    def dry_run(self):
+        return "\n".join([shlex.join(self.command()),
+                          "# finally / atexit / SIGTERM cleanup:",
+                          shlex.join(self.kill_command()),
+                          shlex.join(docker_command(["rm", "-f", self.name]))])
+
+    def _signal(self, signum, frame):
+        raise SystemExit(128 + signum)
+
+    def __enter__(self):
+        reap_containers(dry_run=False)
+        self.outdir.mkdir(parents=True, exist_ok=True)
+        self.start_time = time.monotonic()
+        atexit.register(self.close)
+        try:
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                self.signals[sig] = signal.signal(sig, self._signal)
+            (self.outdir / "cmd.txt").write_text(self.dry_run() + "\n")
+            write_json(self.outdir / "invocation.json", dict(image=self.image, model=str(self.model),
+                       argv=self.argv, env=self.env, name=self.name))
+            # Mark before launch: cleanup also covers a launch that succeeds but loses its reply.
+            self.started = True
+            result = subprocess.run(self.command(), check=True, capture_output=True, text=True, timeout=120)
+            (self.outdir / "container.id").write_text(result.stdout)
+            watchdog = [sys.executable, str(OBSERVER), "watchdog",
+                "--min-available-mib", os.getenv("OM_MIN_AVAIL_MIB", "600"),
+                "--max-swap-used-mib", os.getenv("OM_MAX_SWAP_MIB", "2560"),
+                "--max-swap-rate-mibs", os.getenv("OM_MAX_SWAP_RATE", "1000"),
+                "--interval-ms", "250", "--kill-cmd", shlex.join(self.kill_command()),
+                "--out", str(self.outdir / "watchdog.jsonl")]
+            sampler = [sys.executable, str(OBSERVER), "sample", "--backends", "io,proc,tegrastats",
+                "--path", str(self.model.parent), "--interval-ms", "500", "--duration-s",
+                os.getenv("OM_MAX_S", "1800"), "--out", str(self.outdir / "telemetry.jsonl")]
+            for cmd in (watchdog, sampler):
+                self.children.append(subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+            return self
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        errors = []
+        state = image = None
+        def save(path, value):
+            try:
+                path.write_text(value)
+            except OSError as exc:
+                errors.append(str(exc))
+"""Offline regression tests for fetching, selection and container ownership."""
+from collections import Counter
+from contextlib import redirect_stdout
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
+import importlib.machinery
+import importlib.util
+import io
+import json
+from pathlib import Path
+import subprocess
+import sys
+import urllib.error
+from unittest.mock import Mock, patch
+
+import pytest
+
+from cc.acc import datasets, mcq, server
+
+
+def envelope(offset=0, count=1, total=1):
+    # SHAPE_ONLY: documented HF rows envelope and MMLU-Pro columns, no benchmark data.
+    return dict(rows=[dict(row_idx=i, row=dict(question=f"question {i}",
+                options=["one", "two"], answer="A", category="small" if i < 3 else "large"))
+                for i in range(offset, offset + count)], num_rows_total=total)
+
+
+@pytest.mark.parametrize('mode_flags,mode,n,counts', [
+    (['--per-category', '2'], 'per-category', 2, {'small': 2, 'large': 2}),
+    (['-n', '2'], 'per-category', 2, {'small': 2, 'large': 2}),
+    (['--proportional', '-n', '5'], 'proportional', 5, {'large': 5}),
+    (['--proportional', '-n', '101'], 'proportional', 101, {'small': 3, 'large': 98}),
+])
+def test_selection_cli_and_page_provenance(tmp_path, mode_flags, mode, n, counts):
+    calls = []
+    def opener(url, timeout):
+        calls.append(url)
+        offset = 100 if len(calls) == 2 else 0
+        return io.BytesIO(json.dumps(envelope(offset, 100 if offset == 0 else 1, 101)).encode())
+    raw, pages = datasets.fetch_rows('test', 'default', 'test', opener=opener, page_delay=0)
+    with patch.object(sys, 'argv', ['datasets', 'mmlu-pro', *mode_flags, '--outdir', str(tmp_path)]), \
+         patch.object(datasets, 'fetch_rows', return_value=(raw, pages)):
+        datasets.main()
+    output = next(tmp_path.glob('*.jsonl'))
+    rows = [json.loads(line) for line in output.read_text().splitlines()]
+    assert Counter(r['meta']['category'] for r in rows) == counts
+    meta = json.loads(output.with_suffix('.meta.json').read_text())
+    assert meta['mode'] == mode and meta['seed'] == 42
+    assert meta['categories'] == counts and meta['n'] == len(rows) and meta['requested_n'] == n
+    for row in rows:
+        assert row['source'] == pages[row['meta']['row_offset'] // 100]['url']
+    # Every row, including page two, must retain its own page URL.
+    all_rows = [datasets.normalize('mmlu-pro', i, r, pages[i // 100]['url']) for i, r in raw]
+    assert all_rows[-1]['source'] == calls[1]
+    assert datasets.subset(all_rows, 2, 42, 'per-category') == datasets.subset(all_rows, 2, 42, 'per-category')
+    assert datasets.subset(all_rows, 2, 42, 'per-category') != datasets.subset(all_rows, 2, 43, 'per-category')
+    with pytest.raises(ValueError, match='category'):
+        datasets.subset(all_rows, 4, 42, 'per-category')
+
+
+@pytest.mark.parametrize('error', [
+    urllib.error.HTTPError('url', 429, 'limited', {'Retry-After': '9'}, None),
+    urllib.error.HTTPError('url', 503, 'unavailable', {}, None),
+    urllib.error.URLError('offline'),
+])
+def test_fetch_retry_backoff(error):
+    with patch.object(datasets.time, 'sleep') as sleep, \
+         patch.object(datasets.random, 'uniform', return_value=.25):
+        opener = Mock(
+            side_effect=[error, urllib.error.URLError('again'), io.BytesIO(b'ok')])
+        assert datasets.fetch_page('url', opener) == b'ok'
+    assert opener.call_count == 3
+    assert [c.args[0] for c in sleep.call_args_list] == [9 if getattr(error, 'code', None) == 429 else 1.25, 2.25]
+
+
+def test_retry_limits_permanent_errors_and_retry_after_date():
+    with patch.object(datasets.time, 'sleep') as sleep:
+        def fail(*args, **kwargs):
+            raise urllib.error.URLError('offline')
+        with pytest.raises(urllib.error.URLError):
+            datasets.fetch_page('url', fail)
+        assert sleep.call_count == 7
+        sleep.reset_mock()
+        def forbidden(*args, **kwargs):
+            raise urllib.error.HTTPError('url', 403, 'forbidden', {}, None)
+        with pytest.raises(urllib.error.HTTPError):
+            datasets.fetch_page('url', forbidden)
+        sleep.assert_not_called()
+    with patch.object(datasets.time, 'time', return_value=100):
+        assert datasets.retry_after({'Retry-After': format_datetime(datetime.fromtimestamp(120, timezone.utc))}) == 20
+    assert datasets.retry_after({'Retry-After': 'invalid'}) == 0
+
+
+def test_polite_page_delay():
+    def opener(url, timeout):
+        offset = 100 if 'offset=100' in url else 0
+        return io.BytesIO(json.dumps(envelope(offset, 100 if offset == 0 else 1, 101)).encode())
+    with patch.object(datasets.time, 'sleep') as sleep:
+        datasets.fetch_rows('test', 'default', 'test', opener=opener)
+        sleep.assert_called_once_with(.5)
+
+
+def container(cid, job=None, age=7, state='running'):
+    return dict(Id=cid, State=dict(Status=state), Config=dict(Labels={'jobq_job': job} if job else {}),
+                Created=(datetime.now(timezone.utc) - timedelta(hours=age)).isoformat())
+
+
+def docker_mock(containers, jobs):
+    def run(command, **kwargs):
+        if command[0] == str(server.ROOT / 'bin/jobq'):
+            state = jobs[command[-1]]
+            return subprocess.CompletedProcess(command, 1 if state is None else 0,
+                stdout=json.dumps({'state': state}), stderr='jobq: unknown job: missing' if state is None else '')
+        assert command[0] == 'docker'
+        if command[1] == 'ps':
+            stdout = '\n'.join(containers)
+        elif command[1] == 'inspect':
+            stdout = json.dumps([containers[command[2]]])
+        else:
+            assert command[1:3] == ['rm', '-f']
+            stdout = ''
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr='')
+    return run
+
+
+def test_reap_dry_run_commands_only_and_actual_removal():
+    containers = {c['Id']: c for c in [container('active', 'a'), container('done', 'd'),
+        container('unknown', 'u', state='exited'), container('old'), container('new', age=1),
+        container('created', 'd', state='created')]}
+    containers['old']['Created'] = '2000-01-01T00:00:00.123456789Z'
+    fake = docker_mock(containers, dict(a='running', d='succeeded', u=None))
+    output = io.StringIO()
+    with patch.dict('os.environ', {}, clear=True), patch.object(subprocess, 'run', side_effect=fake) as run, redirect_stdout(output):
+        commands = server.reap_containers()
+        assert output.getvalue().splitlines() == ['docker rm -f done', 'docker rm -f old', 'docker rm -f unknown']
+        assert not any(c.args[0][1:3] == ['rm', '-f'] for c in run.call_args_list)
+        assert len(commands) == 3
+        server.reap_containers(dry_run=False)
+        assert sum(c.args[0][1:3] == ['rm', '-f'] for c in run.call_args_list) == 3
+
+
+def test_reap_cli_and_jobq_reap_defaults():
+    containers = {c['Id']: c for c in [container('done', 'd'), container('old')]}
+    fake = docker_mock(containers, dict(d='cancelled'))
+    loader = importlib.machinery.SourceFileLoader('jobq_reap_test', str(server.ROOT / 'bin/jobq'))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    jobq = importlib.util.module_from_spec(spec)
+    loader.exec_module(jobq)
+    for argv, main, expected in [(['server', 'reap', '--dry-run'], server.main, ['done', 'old']),
+                                 (['jobq', 'reap-containers'], jobq.main, ['done'])]:
+        output = io.StringIO()
+        with patch.dict('os.environ', {}, clear=True), patch.object(sys, 'argv', argv), \
+             patch.object(subprocess, 'run', side_effect=fake) as run, redirect_stdout(output):
+            main()
+        assert output.getvalue().splitlines() == ['docker rm -f ' + cid for cid in expected]
+        assert not any(c.args[0][1:3] == ['rm', '-f'] for c in run.call_args_list)
+        if main == jobq.main:
+            assert {c.args[0][-1] for c in run.call_args_list if c.args[0][1:2] == ['ps']} == {'label=om=1', 'label=acc=1'}
+    with patch.dict('os.environ', {}, clear=True), patch.object(sys, 'argv', ['jobq', 'reap-containers', '--yes']), \
+         patch.object(subprocess, 'run', side_effect=fake) as run:
+        jobq.main()
+    assert [c.args[0] for c in run.call_args_list if c.args[0][1:3] == ['rm', '-f']] == [['docker', 'rm', '-f', 'done']]
+
+
+def test_container_job_label_and_reap_before_start(tmp_path):
+    with patch.dict('os.environ', {'JOBQ_JOB_ID': 'job-abc'}):
+        owned = server.OwnedContainer('image', '/tmp/model', tmp_path, 'test', [])
+        assert 'jobq_job=job-abc' in owned.command() and 'acc=1' in owned.command()
+    with patch.object(server, 'reap_containers', side_effect=RuntimeError('reap first')), \
+         patch.object(subprocess, 'run') as run:
+        with pytest.raises(RuntimeError, match='reap first'):
+            owned.__enter__()
+        run.assert_not_called()
+
+
+def test_mcq_retains_only_no_letter():
+    result = mcq.score(dict(id='test', answer='A', choices=['a', 'b']),
+                       {'choices': [{'logprobs': {'content': [{'top_logprobs': []}]}}]})
+    assert result['no_letter'] is True
+    assert 'argmax_letter_found' not in result
+bin/README-jobq.md:23:`submit --grace SECONDS` sets the per-job delay before KILL (default 20 seconds).
+bin/README-jobq.md:24:A command that exits during grace retains its actual exit code; the job state
+bin/README-jobq.md:40:`bin/jobq reap-containers` inspects running/exited containers labelled `om=1`
+cc/acc/README.md:18:python3 cc/acc/datasets.py mmlu-pro --per-category 100 --seed 42
+cc/acc/README.md:19:python3 cc/acc/datasets.py mmlu-pro --proportional -n 100 --seed 42
+cc/acc/README.md:25:MMLU-Pro defaults to exactly N items per category (`-n N` or `--per-category N`).
+cc/acc/README.md:27:proportional allocation of `-n N` total items; `--proportional` explicitly selects
+cc/acc/README.md:41:the output SHA256. In proportional mode, largest-remainder allocation preserves category proportions;
+cc/acc/README.md:77:bin/jobq submit --class gpu --name acc-mmlu-base --timeout 14400 -- python3 cc/acc/mcq.py --image "$IMG" --model "$MODEL" --data "$DATA/mmlu-pro-per-category-100-s42.jsonl" --outdir "$OUT/mmlu-base" --engine-arg=-ngl --engine-arg=99 --engine-arg=-np --engine-arg=1 --engine-arg=-c --engine-arg=4096
+cc/acc/README.md:78:bin/jobq submit --class gpu --name acc-arc-base --timeout 14400 -- python3 cc/acc/mcq.py --image "$IMG" --model "$MODEL" --data "$DATA/arc-challenge-proportional-100-s42.jsonl" --outdir "$OUT/arc-base" --engine-arg=-ngl --engine-arg=99 --engine-arg=-np --engine-arg=1 --engine-arg=-c --engine-arg=4096
+cc/acc/README.md:79:bin/jobq submit --class gpu --name acc-gpqa-base --timeout 14400 -- python3 cc/acc/mcq.py --image "$IMG" --model "$MODEL" --data "$DATA/gpqa-diamond-proportional-50-s42.jsonl" --outdir "$OUT/gpqa-base" --engine-arg=-ngl --engine-arg=99 --engine-arg=-np --engine-arg=1 --engine-arg=-c --engine-arg=4096
+cc/acc/README.md:85:bin/jobq submit --class gpu --name acc-gsm-base --timeout 86400 -- python3 cc/acc/gen.py --image "$IMG" --model "$MODEL" --data "$DATA/gsm8k-proportional-100-s42.jsonl" --outdir "$OUT/gsm-base" --max-tokens 384 --engine-arg=-ngl --engine-arg=99 --engine-arg=-np --engine-arg=1 --engine-arg=-c --engine-arg=4096
+cc/acc/README.md:116:python3 cc/acc/mcq.py --image "$IMG" --model "$MODEL" --data "$DATA/mmlu-pro-per-category-100-s42.jsonl" --outdir "$OUT/dry" --dry-run
+cc/acc/README.md:276:jobs abort reaping. Preview removals with read-only Docker discovery:
+cc/acc/README.md:279:python3 cc/acc/server.py reap --dry-run
+cc/acc/README.md:280:bin/jobq reap-containers
+cc/acc/README.md:281:bin/jobq reap-containers --yes
+
+ succeeded in 25085ms:
+....................................................................     [100%]
+68 passed in 24.48s
+
+codex
+Implemented ACC1b: retries/backoff, page provenance, seeded selection modes, configurable TERM grace, ownership labels, and both orphan reapers.
+Removed `argmax_letter_found`; retained `no_letter`. Updated documentation.
+`pytest -q cc/acc bin/test_jobq.py`: **68 passed**.
+Verified exact per-category counts, two-second TERM cleanup, and mocked dry-run removal commands.
+No Docker/network/GPU access, no commits, and no changes to `cc/ladder/`.
+tokens used
+55,550
+Implemented ACC1b: retries/backoff, page provenance, seeded selection modes, configurable TERM grace, ownership labels, and both orphan reapers.
+Removed `argmax_letter_found`; retained `no_letter`. Updated documentation.
+`pytest -q cc/acc bin/test_jobq.py`: **68 passed**.
+Verified exact per-category counts, two-second TERM cleanup, and mocked dry-run removal commands.
+No Docker/network/GPU access, no commits, and no changes to `cc/ladder/`.

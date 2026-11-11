@@ -158,6 +158,7 @@ job-ecf12fd41a accepted+ran; job-0ec3b98dbb rejected (platform linux/amd64 x2, c
 | om7-20261110-1555 | base/pf/pfn ABCCBA with router-informed prefetch (`LLAMA_EXPERT_PREFETCH[_NEXT]`) | jetson-up1108-om7 | ok x6, ABCCBA (om7-20261110-1555): base 1.18/1.22 t/s (prompt 5.69, NVMe 57.2/55.1 GiB, 95 KiB/IO); prefetch 0.72/0.76 (prompt 1.38/1.44, 24.4/23.7 GiB, 5 KiB/IO; 20,823 advise calls, 13.5 GB advised, 0 failures); prefetch+next 0.64/0.65 (29.1 GiB, 6 KiB/IO; 50,343 calls, next-layer precision 614/20263 = 3.0%); output identical in all 6 (7a1541...). **Negative: -38% vs base**, +30% vs whole-file RANDOM (0.57). WILLNEED issued at the first CPU consumer has ~zero lead time, so faults still read 4 KiB pages; next-layer reuse of the current union is useless (3%). | |
 | SPEC2-20261110-1634 | n-gram self-speculation ABBA on Qwen3.6 (cc/om_spec/om_spec.py) | jetson-up1108 | ok x4 servers (SPEC2-20261110-1634: llama-server, `-ngl 99 -cmoe -lm mmap -c 4096 -np 1`, n_predict 96, temp 0, seed 1, ABBA base/ngram-mod. rewrite: base 0.932/0.890 t/s -> ngram-mod 1.455/1.518 (**+63%**), draft 67/67 accepted; repeat: base 0.800/0.787 -> 1.534/1.590 (**+97%**), draft 72/72; text sha identical across arms (3f4bcde6..., 8377001f...); NVMe per request 54.9/58.1 -> 43.1/43.0 GiB (rewrite), 61.4/63.1 -> 40.0/40.6 GiB (repeat), IO size kept 81-101 KiB. chat arm INVALID: raw chat.txt prompt ends generation after 1 token in all arms (needs chat template). Server base decode (0.79-0.93) is below llama-completion's 1.2 (different harness/prompts); compare only within this run.) | first attempt SPEC2-20261110-1634-FAILED-pscheck-bug: my container-alive check used `docker ps -q` (IDs, not names) and aborted every arm before the health check |
 | KS-20261110-1620 | kernel screen bf16/q4_K/q8_0 on test-backend-ops | jetson-c1-ks | KS-20261110-1620, image jetson-c1-ks (built 199 s). bf16 and q8_0 screened (MUL_MAT, MUL_MAT_ID, MUL_MAT_VEC_FUSION x n_tokens 1/8 x b 0/1, A/A2/B x3): all A/B ratios 0.96-1.10, inside the A/A spread (0.98-1.06); decode-shape (n_tokens=1) MUL_MAT_ID A/B 0.99-1.03 for both types. **The micro-screen does NOT reproduce D027** (+19.3% bf16 / -6.2% q8_0 end-to-end): the unfuse effect lives in graph-level fusion that single-op test-backend-ops cases do not exercise. q4_K arm FAILED: pipeline upper-cased the type to `Q4_K` and test-backend-ops matched no cases (pipeline bug, not rerun at closeout). | |
+| (see Addendum c2) | | | | |
 | qwen36-layout.json | per-expert slice layout | - | ok | see 1.4 | |
 
 ---------------------------------------------------------------------
@@ -243,6 +244,7 @@ Source: handoff/factory-ledger.html prediction register ("4 held, 7 missed or pa
 | router-informed exact prefetch gives up to ~2x decode (IO 46 s vs 140 s) | D033 | 0.72-0.76 vs 1.18-1.22 t/s; bytes -57% but IO stays 5 KiB (no lead time) | **wrong** (as implemented) |
 | direct-fill removes copy cost | J-OM6 | never activated | untested |
 | kernel screen (test-backend-ops perf, seconds) predicts the D027 per-type rule | NEEDS-MAP/pipeline4 | bf16/q8_0 A/B within A/A noise; q4_K arm failed (type-name bug) | **wrong** for graph-fusion changes |
+| (see Addendum c2) | | | |
 | D025/D027 transfer to sm_120 | x86 request R1 | no x86 answer | untested |
 | n-gram speculation helps a disk-bound decoder (x86 saw 2.3-3.0x on repeat text) | research/x86-c2-digest.md | J-SPEC2: copy-heavy +63% (rewrite) / +97% (repeat), text identical, NVMe bytes -27..-35%; J-SPEC1 replay: no gain on natural text; chat arm invalid | **correct for copy-heavy text** (smaller than x86's 2.3-3.0x); natural text untested live (replay says ~0) |
 | replay LRU hit rate matches the engine counter | ledger "good predictor" | ~54% (12% capacity) vs 64% measured: close, slot-to-MiB mapping not audited | inconclusive-to-correct |
@@ -307,6 +309,7 @@ Sandbox kill, runner SIGKILL, duplicate refusal, reconcile, retry-as-new-attempt
 | profiling/test | `resource_observe` (+io, watchdog) | om_run telemetry: NVMe GiB, avg KiB/IO, refaults, MemAvailable, zram | scope field, null-with-reason, baseline required, `host_id` = campaign id | qualified (33 tests; live kill validated after fix) |
 | profiling/test | guarded run wrapper (`om_run.sh`) | 48 guarded runs (result.json count in OM/), 5 results labelled watchdog_killed (one of them a forced test) | kills only owned container; limits as data; results.json status must separate "tripped" from "killed" | in use |
 | profiling/test | kernel screen (`test-backend-ops perf` per op x type) | ran (KS-20261110-1620): did NOT predict D027 | exact type names (q4_K, case-sensitive); A/A arm; add graph-level fused cases (MUL_MAT_ID+GLU chain) or screen with a 1-layer llama-bench graph | ran; useful for kernel-local changes only |
+| (see Addendum c2) | | | | |
 | profiling/test | decode-path quality gate (ub 1 KL vs saved base logits) | J-E005: ppl20 identical, ub1 KL 2.7e-4 | stores base logits per model; bounded chunk count for large models | in use |
 | tool | `expert_replay` + `routing_trace` generic | replay sweep, leave-one-out profiles | trace schema + completeness footer (Strata reader silently dropped truncated tails); slot-to-bytes mapping | qualified (10 tests; trace 56 tests) |
 | tool | `gguf_manifest` | bf16 file sha differs from x86 | x86 to run the same on its file | implemented |
@@ -340,6 +343,40 @@ Sandbox kill, runner SIGKILL, duplicate refusal, reconcile, retry-as-new-attempt
 ## 7. Open items, gaps and placeholders
 
 - KS q4_K arm not rerun (type-name bug in pipeline5; use `--types q4_K`).
+  (see Addendum c2)
 - SPEC2 chat arm needs a chat-templated prompt (`/v1/chat/completions`) and >=2 rounds; MTP not tried (J-SPEC1 predicts ~break-even; would need the 22.66 GB -MTP GGUF).
 - Gaps found while drafting: Granite safetensors sha and the KL base file sha not recorded on Jetson; Qwen file sha not re-verified locally; trace token counts not recorded; J-OM6b not done; why pr31469 was dropped not recorded; early D028 kills unexplained; no x86 reply to R1-R6 (sm_120 transfer of D025/D027 is the highest-value open test); J-T2 Codex run in the artifact log ended with API 401 errors, how the resource_observe code was then completed is not documented in files I read; the factory-ledger register predates D031-D033 and needs regeneration.
 - Honest status: two local full-engine gains (A1, A2) and one dependency gain (A3) exist; no over-memory *loader/cache* component of ours has beaten the baseline (`-lm mmap -cmoe`, ~1.2-1.36 t/s). The only over-memory speedup is upstream n-gram self-speculation on copy-heavy prompts (SPEC2: +63%/+97%, text identical), which is a decoding-strategy gain, workload-dependent.
+
+
+## Addendum c2 (2026-11-11)
+
+The completed c2 engine series, including J-OM10c, supersedes the earlier statement that no local over-memory loader beat baseline. These results use same-image switches, counterbalanced arm orders, measured A/A gates and identical output text. They apply to the tested Qwen prompt/model on this Jetson and drive. D034–D036 preserve the mechanism, qualifications and corrections.
+
+| run | intervention | result | output / decision | source |
+|---|---|---|---|---|
+| J-OM8 | selected-expert pread fill | base 1.185; fill 1.33; fill_random 1.39 t/s; B/A 1.122 / 1.173; A/A gap 0.0928, threshold 0.186; null | identical; exploratory, D034 | `experiments/jetson/OM/J-OM8/REPORT.md`, `verdict.json` |
+| J-OM8b | decode-only random + fill, frd16 | base 1.1875 → 1.3025 t/s; B/A 1.097; A/A gap 0.0471, threshold 0.0941; improved | identical; preserve prefill, D034 | `experiments/jetson/OM/J-OM8b/REPORT.md`, `verdict.json` |
+| J-OM9 | reproduce fill; diagnose faults; POPULATE_READ | base 1.195; frd16 1.295; diagnostic 1.18; populate 1.2 t/s; A/A gap 0.0232; fill improved, populate null | identical; synchronous fill IO bottleneck, D034 | `experiments/jetson/OM/J-OM9/REPORT.md`, `verdict.json`, `003-frd16d/stderr.txt`, `004-frd16p/stderr.txt` |
+| J-OM10 | host-router next-layer prediction | base 1.185; frd16 1.29; pg8 1.23; pg16 0.75 t/s; A/A gap 0.0163 | identical; prediction works but first scheduling loses against fill, D035 | `experiments/jetson/OM/J-OM10/REPORT.md`, `verdict.json` |
+| J-OM10b | demand-first, cancel stale queue, cap async occupancy | base 1.165; frd16 1.285; pg8b 1.42; pg12b 1.285 t/s; pg8b B/A 1.219; A/A gap 0.0258; improved | identical; retain pg8b opt-in, D035 | `experiments/jetson/OM/J-OM10b/REPORT.md`, `verdict.json` |
+| J-OM10c | occupancy sweep, completed confirmation | base 1.19; pg8b 1.385; pg8i8 1.39; pg8i12 1.38; pg10i8 1.4 t/s; A/A gap 0.0217; all improved vs base | identical; pg10i8 actually logs K=8, no established incremental occupancy win, D035 | `experiments/jetson/OM/J-OM10c/REPORT.md`, `verdict.json`, `005-pg10i8/summary.json` |
+| KS-q4K-r3 | canonical type name + explicit job environment | 108 runs; A/B 0.91–1.06 within A/A 0.94–1.18 | success; micro-screen does not predict D027 graph unfuse, D036 | `experiments/jetson/KS-q4K-20261111-r3/q4_K/results.md`; `c2/worklog.jsonl` KS-q4K-r3 result |
+
+Each abbreviated source after a full experiment path is relative to that same experiment directory. Per-arm sample counts and the exact source ratios are in D034/D035 and the cited verdict inputs. J-OM8b has four observations per arm; the other listed OM experiments have two. The OM output hash is `7a1541792364` throughout (cited reports). Gates compare each arm with that experiment's base; they do not prove differences between nearby candidate arms.
+
+Harness components added:
+
+- `bin/jobq`: durable job IDs, dependencies and resource queues replace hand-written pgrep chains; captured submission environment determines job behavior. H1 checkin passed after the lead moved full environment out of public job JSON into a private side file (`c2/worklog.jsonl`, H1 checkin; `bin/README-jobq.md`).
+- `cc/abrun`: explicit counterbalanced arms, summary extraction, active-switch checks, A/A/drift-aware verdicts and output identity classification. H2 checkin reproduced the earlier negative prefetch verdict; J-OM8b's checkin notes that an OR switch regex required post-hoc decode-marker verification (`c2/worklog.jsonl`, H2 and J-OM8b checkins).
+- `c2/shape_report.py`: regenerates `c2/SHAPE.md` and `c2/shape.json` from evidence and worklog. H4 checkin identified incomplete flag-error classification and idle-gap bounds; H2b-H4b follow-up is recorded. Treat accounting as measured evidence with warnings, not an exact reconstruction of all historical work (`c2/worklog.jsonl`; `c2/test_shape_report.py`).
+- `c2/METHODS.md` and `c2/skills/`: campaign methods and reusable build, experiment, profiling, over-memory and delegation recipes. H3 checkin passed with the qualification that the historical flag-failure count was sourced only from CLOSEOUT (`c2/worklog.jsonl`, H3 checkin; `c2/skills/README.md`).
+
+Corrections to the historical sections above:
+
+- KS attribution in the results table and prediction/candidate rows is affected by the tool's case-folding bug: `q4_K` became `q4_k` inside kernel_screen, independently of pipeline upper-casing. The fabricated fixture repeated the same error. The canonical type map and corrected fixture address the tool defect; passing the correctly cased argument alone was insufficient. See D036, the current `cc/kernel_screen/kernel_screen.py` git diff and the KS-q4K failure event in `c2/worklog.jsonl`.
+- The q4_K rerun open item is closed by r3. r1 was invalid from case folding; r2 was invalid because DOCKER_CMD_PREFIX was absent from the captured job environment; r3 succeeded. The graph-level screen gap remains (`c2/worklog.jsonl`, KS failure/result events).
+- The old “no over-memory loader/cache component beat baseline” statement is superseded by fill and scheduled pregate results above. The original no-lead-time prefetch failure remains valid for that implementation. D033's projected gain was not established by this series.
+- J-OM10c's `pg10i8` name describes a requested K=10, but the active value is K=8. The parser only recognizes the other supported overrides; use the active log, not the arm name, to identify the experiment (`cc/mmap_advice/patches/06-pregate.patch`, `07-pregate-sched.patch`; `experiments/jetson/OM/J-OM10c/005-pg10i8/summary.json`).
+- POPULATE_READ removes many downstream faults but adds its own population cost; it is net zero against baseline here. Diagnostics add overhead, and process-wide fault counters include driver threads (D034; J-OM9 result/checkin events in `c2/worklog.jsonl`).
+- Scheduler, summarizer and A/A-gate entries previously marked missing now have c2 implementations above. This does not imply every historical harness gap or cross-host qualification is resolved. The original tables remain a historical snapshot.

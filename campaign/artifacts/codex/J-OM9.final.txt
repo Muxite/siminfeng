@@ -1,0 +1,8 @@
+Implemented J-OM9.
+- Per-node hook works: residency checked immediately before each CPU expert `MUL_MAT_ID`.
+- Populate: EINVAL logs once and disables further attempts; runner lacks leak regex support, documented.
+- A1–A5 pass: tests, patch equivalence, five syntax checks, exact eight-run order, header equality.
+- A6 guard: `expert_diag_enabled && expert_diag_token_active`; worker snapshots use `if (batch_diag_)`.
+- Patches: [05](cc/mmap_advice/patches/05-fill-diag.patch), [combined](cc/mmap_advice/patches/combined-01-02-03-04-05.patch).
+- Updated [header](cc/expert_fill/expert_fill.h), [tests](cc/expert_fill/test_expert_fill.cpp), [README](cc/expert_fill/README.md), [compile proof](cc/expert_fill/COMPILE-CHECK.txt), [spec](cc/abrun/specs/J-OM9.json).
+- No commits, Docker/GPU/full build, or evidence edits.

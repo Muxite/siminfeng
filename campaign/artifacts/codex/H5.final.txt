@@ -1,0 +1,12 @@
+Implemented; **75 tests pass**. `python3 cc/abrun/regate.py experiments/jetson/OM/J-OM10c --dry`:
+
+| Arm | ms/token | NVMe GiB/token (decode) | gpu_util med (%) | J/token | NVMe GiB/token (whole) | Prompt t/s | Eval t/s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| base | 840.975 | 0.253062 | 16.5 | 5.5484 | 0.873321 | 5.295 | 1.19 |
+| pg8b | 723.15 | 0.232149 | 18 | 5.14456 | 0.855608 | 5.58 | 1.385 |
+| pg8i8 | 720.34 | 0.244159 | 18 | 5.1594 | 0.865933 | 5.525 | 1.39 |
+| pg8i12 | 723.03 | 0.246511 | 18 | 5.17242 | 0.867498 | 5.675 | 1.38 |
+| pg10i8 | 712.8 | 0.237081 | 18 | 5.11002 | 0.860619 | 5.285 | 1.4 |
+
+Captured fixture asserts **716.54 ms/token**; 3-second sampling emitted seven `gpu_freq` readings in Hz.
+Phase method and timing uncertainty documented. No Docker/GPU jobs, commits, or writes under experiments/evidence.

@@ -1,0 +1,169 @@
+{
+  "id": "J-OM10c",
+  "outdir_base": "experiments/jetson/OM",
+  "runner": "om_run",
+  "tool": "llama-completion",
+  "argv": [
+    "-m",
+    "/om/model.gguf",
+    "-f",
+    "/om/prompts/p1.txt",
+    "-n",
+    "64",
+    "-c",
+    "4096",
+    "--temp",
+    "0",
+    "-s",
+    "1",
+    "-no-cnv",
+    "-ngl",
+    "99",
+    "-lm",
+    "mmap",
+    "-cmoe",
+    "-lv",
+    "4"
+  ],
+  "metric": "eval_tps",
+  "arms": {
+    "base": {
+      "image": "campaign/llamacpp:jetson-up1108-om10b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "0",
+        "LLAMA_EXPERT_FILL_RANDOM": "0",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "0"
+      },
+      "expect_switch": false,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode"
+      ]
+    },
+    "pg8b": {
+      "image": "campaign/llamacpp:jetson-up1108-om10b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "8",
+        "LLAMA_EXPERT_PREGATE_ORDER": "after",
+        "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "4"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active",
+        "expert_pregate: stats"
+      ]
+    },
+    "pg8i8": {
+      "image": "campaign/llamacpp:jetson-up1108-om10b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "8",
+        "LLAMA_EXPERT_PREGATE_ORDER": "after",
+        "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "8"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active",
+        "expert_pregate: stats"
+      ]
+    },
+    "pg8i12": {
+      "image": "campaign/llamacpp:jetson-up1108-om10b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "8",
+        "LLAMA_EXPERT_PREGATE_ORDER": "after",
+        "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "12"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active",
+        "expert_pregate: stats"
+      ]
+    },
+    "pg10i8": {
+      "image": "campaign/llamacpp:jetson-up1108-om10b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "10",
+        "LLAMA_EXPERT_PREGATE_ORDER": "after",
+        "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "8"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active",
+        "expert_pregate: stats"
+      ]
+    }
+  },
+  "order": "explicit",
+  "explicit_order": [
+    "base",
+    "pg8b",
+    "pg8i8",
+    "pg8i12",
+    "pg10i8",
+    "pg10i8",
+    "pg8i12",
+    "pg8i8",
+    "pg8b",
+    "base"
+  ]
+}

@@ -1,0 +1,21 @@
+# Assignment J-OM9 — where do decode major faults come from? fill diagnostics + MADV_POPULATE_READ variant (component; worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Builds on 01-04 (cc/mmap_advice/patches/combined-01-02-03-04.patch; cc/expert_fill/expert_fill.h single source of truth; header copy rule as in J-OM8 A5). Engine tree ref/llama.cpp-up1108 @ cf34d311 — never modify in place.
+## Evidence (experiments/jetson/OM/J-OM8b: REPORT.md, */summary.json, `expert_fill: stats` in */stderr.txt, */telemetry.jsonl)
+frd16 decode 764 ms/token; synchronous fill 427 ms/token (164 MB/token, 44.9k pread syscalls/run, ~230 KB each). Yet system telemetry shows ~900 major faults/token during decode even though fill makes the selected expert ranges resident before the CPU expert matmul. At 4 KiB random reads (~20 MiB/s qd1) that could be ~0.2 s/token. Unknown: are these faults (a) filled pages evicted before use, (b) pages outside the filled ranges (other CPU tensors, e.g. token embd, output, or misaligned range edges), (c) something else (GPU/driver, KV)?
+## Deliverables
+1. `cc/mmap_advice/patches/05-fill-diag.patch` (on top of 01-04) + `combined-01-02-03-04-05.patch`:
+   a. `LLAMA_EXPERT_FILL_DIAG=1`: using `getrusage(RUSAGE_THREAD)` on the thread(s) that run fill and `getrusage(RUSAGE_SELF)`, accumulate per phase (decode only): majflt/minflt during fill; majflt/minflt between fills (= compute + everything else, process-wide); wall time in fill vs between fills. Post-fill check: right after fill, mincore() the filled ranges and count non-resident pages (expected 0). Pre-next-fill check: at the next layer's callback, before filling, mincore() the PREVIOUS layer's filled ranges and count pages evicted (they were consumed by then; eviction after use is harmless — so ALSO record, using the CPU scheduler observer, a check immediately BEFORE the expert MUL_MAT_ID node of the same layer runs, if the observer allows a per-node hook; otherwise state why not and use the next callback).
+   b. Optional per-token CSV `LLAMA_EXPERT_FILL_DIAG_CSV=/path` (token idx, fill ns, between ns, majflt fill, majflt between, post-fill nonresident pages, pre-use nonresident pages, bytes read).
+   c. `LLAMA_EXPERT_FILL_POPULATE=1`: after the pread fill of a range set, call `madvise(addr, len, MADV_POPULATE_READ)` (Linux >= 5.14; define the constant 22 if headers lack it) on the page-aligned filled ranges, split across the fill threads; on EINVAL log `expert_fill: populate unsupported` once and disable. Counts populate calls + ns in stats.
+   d. Exit stats line `expert_fill: diag ...` with every counter.
+2. Keep `make -C cc/expert_fill test` passing (add a test for the populate path if it lives in the header: after fill+populate, mincore shows resident and a second touch costs 0 majflt via getrusage).
+3. COMPILE-CHECK.txt section for 05 (every touched .cpp, exit codes).
+4. Spec `cc/abrun/specs/J-OM9.json` (image `campaign/llamacpp:jetson-up1108-om9`, argv as cc/abrun/specs/J-OM8b.json; use the per-arm `switch_regex` feature now in cc/abrun (read cc/abrun/README.md)): arms frd16 (as J-OM8b frd16), frd16d (+DIAG=1, CSV to /tmp inside container is fine — but persist: om_run mounts only /om ro; so instead have DIAG print a compact per-token summary to stderr every 16 tokens), frd16p (+DIAG=1 +POPULATE=1), base. Order explicit: base frd16 frd16d frd16p frd16p frd16d frd16 base. Per-arm regexes: frd16d requires `expert_fill: diag`; frd16p requires `expert_fill: diag` and must NOT match `populate unsupported` (add that as leak regex if supported, else note).
+## Acceptance (checker runs)
+- A1 `make -C cc/expert_fill test` PASS.
+- A2 fresh cf34d311 extract: sequential 01..05 == combined-01-02-03-04-05 (diff -r empty).
+- A3 COMPILE-CHECK 05: all exit 0.
+- A4 `python3 cc/abrun/abrun.py cc/abrun/specs/J-OM9.json --dry-run` = 8 runs in the order above.
+- A5 header single-source diff empty against the combined-01..05 header content.
+- A6 with DIAG unset, the 05 code path adds no syscalls: quote the guard (checker inspects).
+Constraints: no docker/GPU/full build; no commits; no evidence edits. Time 60 min. Final <= 10 lines: per-node hook feasibility, populate fallback, files.

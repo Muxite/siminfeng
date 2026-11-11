@@ -46,21 +46,33 @@ def parse_output(text):
     return rows
 
 
+# ggml type names are case-sensitive in test-backend-ops vars() (q4_K, not q4_k); KS-20261110-1620 and
+# KS-q4K-20261111 both failed on q4_K because names were lower()/upper()-cased. Canonicalize instead.
+GGML_TYPES = ["f32", "f16", "bf16", "q4_0", "q4_1", "q5_0", "q5_1", "q8_0", "q8_1", "q2_K", "q3_K", "q4_K",
+              "q5_K", "q6_K", "q8_K", "iq2_xxs", "iq2_xs", "iq3_xxs", "iq1_s", "iq4_nl", "iq3_s", "iq2_s",
+              "iq4_xs", "iq1_m", "tq1_0", "tq2_0", "mxfp4"]
+_CANON = {t.lower(): t for t in GGML_TYPES}
+
+
+def ggml_type(name):
+    return _CANON.get(name.lower(), name)
+
+
 def param_regex(shape, op, weight):
     """ECMAScript-compatible lookaheads against vars(), passed before allocation."""
     e, f, x, u, t = (shape[k] for k in ("n_embd", "n_ff", "n_expert", "n_used", "n_tokens"))
     down = shape.get("direction", "up") == "down"
     k, width = (f, e) if down else (e, f)
     if op == "MUL_MAT_VEC_FUSION":
-        wanted = dict(type=weight.lower(), k=k, n=width, m=t, use_id=1,
+        wanted = dict(type=ggml_type(weight), k=k, n=width, m=t, use_id=1,
                       n_mats=x, n_used=u, with_gate=1)
     elif op in ("MUL_MAT_ID", "MUL_MAT_ID_FUSION"):
-        wanted = dict(type_a=weight.lower(), k=k, m=width, n=t, n_mats=x, n_used=u)
+        wanted = dict(type_a=ggml_type(weight), k=k, m=width, n=t, n_mats=x, n_used=u)
     elif op == "MUL_MAT":
-        wanted = dict(type_a=weight.lower(), k=k, m=width, n=t)
+        wanted = dict(type_a=ggml_type(weight), k=k, m=width, n=t)
     elif op in ("SWIGLU", "GEGLU", "REGLU", "GLU"):
         # Activation dtype, not quantized weight dtype; use F32/F16 in --types.
-        return (f"^(?=.*(?:^|,)type={re.escape(weight.lower())}(?:,|$))"
+        return (f"^(?=.*(?:^|,)type={re.escape(ggml_type(weight))}(?:,|$))"
                 f"(?=.*(?:^|,)ne_a=\\[{2 * width},{t},1,1\\](?:,|$)).*$")
     else:
         raise ValueError("Unsupported op: " + op)

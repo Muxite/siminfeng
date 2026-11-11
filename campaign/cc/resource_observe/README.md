@@ -72,3 +72,15 @@ there is no process lifetime to observe. Monitoring errors stop the watchdog
 without killing anything. No live destructive watchdog validation was run;
 signals and command execution are covered with mocks and a fake clock.
 The five-second live system/device capture is `fixtures/live-io-sample.jsonl`.
+
+GPU clock sampling (H5): discover `/sys/class/devfreq/*.gpu` by name and read its
+public `cur_freq` as metric `gpu_freq` in Hz. `sysfs_tegra` also keeps the legacy
+`gpu_freq_cur/min/max` MHz fields. Tegrastats samples include this sysfs reading,
+so existing runners requesting `io,proc,tegrastats` gain the clock without a runner
+change. A readable `*emc*/cur_freq` devfreq node adds `emc_freq` in Hz; otherwise
+tegrastats' @MHz field is used when present. Unreadable clocks are never invented.
+A CPU-only three-second check requires no Docker or GPU job:
+
+```sh
+python3 cc/resource_observe/resource_observe.py sample --backends sysfs_tegra --duration-s 3 --out /tmp/resource-clocks.jsonl
+```

@@ -1,0 +1,16 @@
+{
+  "id": "om7-replay",
+  "outdir_base": "experiments/jetson/OM",
+  "runner": "om_run",
+  "tool": "llama-completion",
+  "argv": ["-m", "/om/model.gguf", "-f", "/om/prompts/p1.txt", "-n", "64", "-c", "4096", "--temp", "0", "-s", "1", "-no-cnv", "-ngl", "99", "-lm", "mmap", "-cmoe", "-lv", "4"],
+  "switch_regex": ["expert_prefetch: CPU host-consumer hook enabled"],
+  "metric": "eval_tps",
+  "arms": {
+    "base": {"image": "campaign/llamacpp:jetson-up1108-om7", "env": {}},
+    "pf": {"image": "campaign/llamacpp:jetson-up1108-om7", "env": {"LLAMA_EXPERT_PREFETCH": "1"}, "expect_switch": true},
+    "pfn": {"image": "campaign/llamacpp:jetson-up1108-om7", "env": {"LLAMA_EXPERT_PREFETCH": "1", "LLAMA_EXPERT_PREFETCH_NEXT": "1"}, "expect_switch": true}
+  },
+  "order": "ABCCBA",
+  "rounds": 1
+}

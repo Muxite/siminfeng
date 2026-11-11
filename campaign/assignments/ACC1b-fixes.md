@@ -1,0 +1,8 @@
+# Assignment ACC1b — accuracy harness + jobq robustness fixes (worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Checker findings on ACC1 (c2/worklog.jsonl ACC1 checkin). Files: cc/acc/*, bin/jobq, bin/test_jobq.py, bin/README-jobq.md. Do not touch cc/ladder/ (another worker).
+1. datasets.py: retry with exponential backoff + jitter on HTTP 429/5xx/URLError (max 8 tries, honour Retry-After), polite delay between pages (configurable, default 0.5 s); per-row `source` = the URL of the page the row came from.
+2. Subset selection: `--per-category N` mode = exactly N per category (seeded), and keep proportional mode as `--proportional`. Default for MMLU-Pro: per-category. meta records mode, seed, category counts.
+3. jobq: configurable grace between SIGTERM and SIGKILL (`--grace` per job, default 20 s) for timeout/cancel. Test with a child that traps TERM and sleeps 2 s before exiting (must exit cleanly, not be SIGKILLed).
+4. Orphan reaper: cc/acc/server.py labels containers `acc=1` + `jobq_job=$JOBQ_JOB_ID` (if set); on start it removes any exited/running container with label acc=1 whose jobq job is not running (ask bin/jobq show) or, if no jobq id, older than 6 h; also `cc/acc/server.py reap --dry-run`. Also provide `bin/jobq reap-containers` that removes containers labelled om=1 or acc=1 belonging to jobs that are not running (dry-run default, --yes to act).
+5. Remove redundant `argmax_letter_found` field (keep `no_letter`).
+Acceptance: A1 pytest cc/acc + bin/test_jobq.py pass (counts); A2 test that per-category selection with a captured-shape sample yields exactly N per category; A3 grace test passes; A4 reap dry-run prints docker commands only (mock). No docker/network/GPU; no commits. Time 40 min. Final <= 8 lines.

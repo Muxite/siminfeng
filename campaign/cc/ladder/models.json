@@ -1,0 +1,889 @@
+{
+  "schema_version": 1,
+  "image": "campaign/llamacpp:jetson-up1108-om11",
+  "source": "research/model-candidates-20261111.md",
+  "memory_domain": "shared-dram",
+  "models": {
+    "qwen36-35b-a3b": {
+      "path": "~/models/campaign/qwen36-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+      "family": "qwen3.6",
+      "arch": "qwen35moe",
+      "total_params_b": 35.95,
+      "active_params_b": 3,
+      "quant": "UD-Q4_K_XL",
+      "published_size_gib": 20.82,
+      "over_memory": true,
+      "placeholder": false,
+      "tokenizer_group": "qwen36-35b-a3b",
+      "vocab_size_upper_bound": 300000,
+      "template_kwargs": {
+        "enable_thinking": false
+      },
+      "template_policy": "enable_thinking=false where template supports it; completion also uses --reasoning off; acc records actual /props-derived kwargs",
+      "published_scores": {
+        "scores": {
+          "MMLU-Pro": 85.2,
+          "MMLU-Redux": 93.3,
+          "GPQA": 86.0,
+          "LCB v6": 80.4,
+          "HMMT Feb25": 90.7,
+          "AIME26": 92.7
+        },
+        "units": "percent",
+        "mode": "thinking",
+        "urls": [
+          "https://huggingface.co/Qwen/Qwen3.6-35B-A3B"
+        ]
+      },
+      "configs": [
+        {
+          "id": "mmap-cmoe-frd16-pg8",
+          "argv": [
+            "-ngl",
+            "99",
+            "-lm",
+            "mmap",
+            "-cmoe",
+            "-c",
+            "4096"
+          ],
+          "env": {
+            "LLAMA_EXPERT_FILL": "1",
+            "LLAMA_EXPERT_FILL_RANDOM": "decode",
+            "LLAMA_EXPERT_FILL_THREADS": "16",
+            "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+            "LLAMA_EXPERT_PREFETCH": "0",
+            "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+            "LLAMA_MMAP_ADVICE": "default",
+            "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+            "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+            "LLAMA_EXPERT_FILL_POPULATE": "0",
+            "LLAMA_EXPERT_PREGATE": "1",
+            "LLAMA_EXPERT_PREGATE_K": "8",
+            "LLAMA_EXPERT_PREGATE_ORDER": "after",
+            "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "4",
+            "LLAMA_EXPERT_PREGATE_LOOKAHEAD": "1"
+          },
+          "switch_regex": [
+            "expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=\\(unset\\) prefetch=0 prefetch_next=0$",
+            "expert_fill: active",
+            "expert_fill: random advice applied at decode",
+            "expert_pregate: active k=8 ",
+            "expert_pregate: stats"
+          ]
+        },
+        {
+          "id": "mmap-cmoe",
+          "argv": [
+            "-ngl",
+            "99",
+            "-lm",
+            "mmap",
+            "-cmoe",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": [
+            "expert_config: effective fill=0 .*pregate=0 "
+          ]
+        }
+      ],
+      "kld_ref": null
+    },
+    "qwen35-9b": {
+      "path": "~/models/campaign/qwen35-9b/Qwen3.5-9B-UD-Q4_K_XL.gguf",
+      "family": "qwen3.5",
+      "arch": "qwen35",
+      "total_params_b": 9,
+      "active_params_b": 9,
+      "quant": "UD-Q4_K_XL",
+      "published_size_gib": 5.56,
+      "over_memory": false,
+      "placeholder": false,
+      "tokenizer_group": "qwen35-9b",
+      "vocab_size_upper_bound": 300000,
+      "template_kwargs": {
+        "enable_thinking": false
+      },
+      "template_policy": "enable_thinking=false where template supports it; completion also uses --reasoning off; acc records actual /props-derived kwargs",
+      "published_scores": {
+        "scores": {
+          "MMLU-Pro": 82.5,
+          "MMLU-Redux": 91.1,
+          "GPQA-D": 81.7,
+          "IFEval": 91.5,
+          "LCB v6": 65.6,
+          "HMMT Feb25": 83.2
+        },
+        "units": "percent",
+        "mode": "thinking",
+        "urls": [
+          "https://huggingface.co/Qwen/Qwen3.5-9B"
+        ]
+      },
+      "configs": [
+        {
+          "id": "gpu",
+          "argv": [
+            "-ngl",
+            "99",
+            "-fa",
+            "on",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "gpu-kvq8",
+          "argv": [
+            "-ngl",
+            "99",
+            "-fa",
+            "on",
+            "-c",
+            "4096",
+            "-ctk",
+            "q8_0",
+            "-ctv",
+            "q8_0"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "gpu-mmap",
+          "argv": [
+            "-ngl",
+            "99",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-24",
+          "argv": [
+            "-ngl",
+            "24",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-12",
+          "argv": [
+            "-ngl",
+            "12",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-0",
+          "argv": [
+            "-ngl",
+            "0",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        }
+      ],
+      "kld_ref": null
+    },
+    "gemma4-e4b": {
+      "path": "~/models/campaign/gemma4-e4b/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf",
+      "family": "gemma4",
+      "arch": "gemma4",
+      "total_params_b": 8,
+      "active_params_b": 4.5,
+      "quant": "QAT UD-Q4_K_XL",
+      "published_size_gib": 3.93,
+      "over_memory": false,
+      "placeholder": false,
+      "tokenizer_group": "gemma4-e4b",
+      "vocab_size_upper_bound": 300000,
+      "template_kwargs": {
+        "enable_thinking": false
+      },
+      "template_policy": "enable_thinking=false where template supports it; completion also uses --reasoning off; acc records actual /props-derived kwargs",
+      "published_scores": {
+        "scores": {
+          "MMLU-Pro": 69.4,
+          "GPQA-D": 58.6,
+          "LCB v6": 52.0,
+          "AIME26": 42.5,
+          "MMMLU": 76.6
+        },
+        "units": "percent",
+        "mode": "instruction-tuned; thinking flag unspecified",
+        "urls": [
+          "https://huggingface.co/google/gemma-4-E4B-it"
+        ]
+      },
+      "configs": [
+        {
+          "id": "gpu",
+          "argv": [
+            "-ngl",
+            "99",
+            "-fa",
+            "on",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "gpu-kvq8",
+          "argv": [
+            "-ngl",
+            "99",
+            "-fa",
+            "on",
+            "-c",
+            "4096",
+            "-ctk",
+            "q8_0",
+            "-ctv",
+            "q8_0"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "gpu-mmap",
+          "argv": [
+            "-ngl",
+            "99",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-24",
+          "argv": [
+            "-ngl",
+            "24",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-12",
+          "argv": [
+            "-ngl",
+            "12",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-0",
+          "argv": [
+            "-ngl",
+            "0",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        }
+      ],
+      "kld_ref": null,
+      "published_quant": {
+        "mean_kld": 0.00121,
+        "kld_p999": 0.0536,
+        "top1_agreement_percent": 98.54,
+        "reference": "QAT BF16",
+        "url": "https://unsloth.ai/docs/models/gemma-4/qat"
+      }
+    },
+    "qwen36-35b-a3b-iq3s": {
+      "path": "~/models/campaign/qwen36-35b-a3b/Qwen3.6-35B-A3B-UD-IQ3_S.gguf",
+      "family": "qwen3.6",
+      "arch": "qwen35moe",
+      "total_params_b": 35.95,
+      "active_params_b": 3,
+      "quant": "UD-IQ3_S",
+      "published_size_gib": 12.74,
+      "over_memory": true,
+      "placeholder": true,
+      "tokenizer_group": "qwen36-35b-a3b",
+      "vocab_size_upper_bound": 300000,
+      "template_kwargs": {
+        "enable_thinking": false
+      },
+      "template_policy": "enable_thinking=false where template supports it; completion also uses --reasoning off; acc records actual /props-derived kwargs",
+      "published_scores": {
+        "scores": {
+          "MMLU-Pro": 85.2,
+          "MMLU-Redux": 93.3,
+          "GPQA": 86.0,
+          "LCB v6": 80.4,
+          "HMMT Feb25": 90.7,
+          "AIME26": 92.7
+        },
+        "units": "percent",
+        "mode": "thinking",
+        "urls": [
+          "https://huggingface.co/Qwen/Qwen3.6-35B-A3B"
+        ]
+      },
+      "configs": [
+        {
+          "id": "mmap-cmoe-frd16-pg8",
+          "argv": [
+            "-ngl",
+            "99",
+            "-lm",
+            "mmap",
+            "-cmoe",
+            "-c",
+            "4096"
+          ],
+          "env": {
+            "LLAMA_EXPERT_FILL": "1",
+            "LLAMA_EXPERT_FILL_RANDOM": "decode",
+            "LLAMA_EXPERT_FILL_THREADS": "16",
+            "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+            "LLAMA_EXPERT_PREFETCH": "0",
+            "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+            "LLAMA_MMAP_ADVICE": "default",
+            "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+            "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+            "LLAMA_EXPERT_FILL_POPULATE": "0",
+            "LLAMA_EXPERT_PREGATE": "1",
+            "LLAMA_EXPERT_PREGATE_K": "8",
+            "LLAMA_EXPERT_PREGATE_ORDER": "after",
+            "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "4",
+            "LLAMA_EXPERT_PREGATE_LOOKAHEAD": "1"
+          },
+          "switch_regex": [
+            "expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=\\(unset\\) prefetch=0 prefetch_next=0$",
+            "expert_fill: active",
+            "expert_fill: random advice applied at decode",
+            "expert_pregate: active k=8 ",
+            "expert_pregate: stats"
+          ]
+        },
+        {
+          "id": "mmap-cmoe",
+          "argv": [
+            "-ngl",
+            "99",
+            "-lm",
+            "mmap",
+            "-cmoe",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": [
+            "expert_config: effective fill=0 .*pregate=0 "
+          ]
+        }
+      ],
+      "kld_ref": "qwen36-35b-a3b"
+    },
+    "qwen35-4b-q8": {
+      "path": "~/models/campaign/qwen35-4b/Qwen3.5-4B-Q8_0.gguf",
+      "family": "qwen3.5",
+      "arch": "qwen35",
+      "total_params_b": 4,
+      "active_params_b": 4,
+      "quant": "Q8_0",
+      "published_size_gib": 4.17,
+      "over_memory": false,
+      "placeholder": true,
+      "tokenizer_group": "qwen35-4b",
+      "vocab_size_upper_bound": 300000,
+      "template_kwargs": {
+        "enable_thinking": false
+      },
+      "template_policy": "enable_thinking=false where template supports it; completion also uses --reasoning off; acc records actual /props-derived kwargs",
+      "published_scores": {
+        "scores": {
+          "MMLU-Pro": 79.1,
+          "MMLU-Redux": 88.8,
+          "GPQA-D": 76.2,
+          "IFEval": 89.8,
+          "LCB v6": 55.8,
+          "HMMT Feb25": 74.0
+        },
+        "units": "percent",
+        "mode": "thinking",
+        "urls": [
+          "https://huggingface.co/Qwen/Qwen3.5-9B"
+        ]
+      },
+      "configs": [
+        {
+          "id": "gpu",
+          "argv": [
+            "-ngl",
+            "99",
+            "-fa",
+            "on",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "gpu-kvq8",
+          "argv": [
+            "-ngl",
+            "99",
+            "-fa",
+            "on",
+            "-c",
+            "4096",
+            "-ctk",
+            "q8_0",
+            "-ctv",
+            "q8_0"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "gpu-mmap",
+          "argv": [
+            "-ngl",
+            "99",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-24",
+          "argv": [
+            "-ngl",
+            "24",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-12",
+          "argv": [
+            "-ngl",
+            "12",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-0",
+          "argv": [
+            "-ngl",
+            "0",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        }
+      ],
+      "kld_ref": null
+    },
+    "qwen35-4b-q4": {
+      "path": "~/models/campaign/qwen35-4b/Qwen3.5-4B-UD-Q4_K_XL.gguf",
+      "family": "qwen3.5",
+      "arch": "qwen35",
+      "total_params_b": 4,
+      "active_params_b": 4,
+      "quant": "UD-Q4_K_XL",
+      "published_size_gib": 2.71,
+      "over_memory": false,
+      "placeholder": true,
+      "tokenizer_group": "qwen35-4b",
+      "vocab_size_upper_bound": 300000,
+      "template_kwargs": {
+        "enable_thinking": false
+      },
+      "template_policy": "enable_thinking=false where template supports it; completion also uses --reasoning off; acc records actual /props-derived kwargs",
+      "published_scores": {
+        "scores": {
+          "MMLU-Pro": 79.1,
+          "MMLU-Redux": 88.8,
+          "GPQA-D": 76.2,
+          "IFEval": 89.8,
+          "LCB v6": 55.8,
+          "HMMT Feb25": 74.0
+        },
+        "units": "percent",
+        "mode": "thinking",
+        "urls": [
+          "https://huggingface.co/Qwen/Qwen3.5-9B"
+        ]
+      },
+      "configs": [
+        {
+          "id": "gpu",
+          "argv": [
+            "-ngl",
+            "99",
+            "-fa",
+            "on",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "gpu-kvq8",
+          "argv": [
+            "-ngl",
+            "99",
+            "-fa",
+            "on",
+            "-c",
+            "4096",
+            "-ctk",
+            "q8_0",
+            "-ctv",
+            "q8_0"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "gpu-mmap",
+          "argv": [
+            "-ngl",
+            "99",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-24",
+          "argv": [
+            "-ngl",
+            "24",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-12",
+          "argv": [
+            "-ngl",
+            "12",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-0",
+          "argv": [
+            "-ngl",
+            "0",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        }
+      ],
+      "kld_ref": "qwen35-4b-q8"
+    },
+    "qwen36-35b-a3b-iq2m": {
+      "path": "~/models/campaign/qwen36-35b-a3b/Qwen3.6-35B-A3B-UD-IQ2_M.gguf",
+      "family": "qwen3.6",
+      "arch": "qwen35moe",
+      "total_params_b": 35.95,
+      "active_params_b": 3,
+      "quant": "UD-IQ2_M",
+      "published_size_gib": 10.73,
+      "over_memory": true,
+      "placeholder": true,
+      "tokenizer_group": "qwen36-35b-a3b",
+      "vocab_size_upper_bound": 300000,
+      "template_kwargs": {
+        "enable_thinking": false
+      },
+      "template_policy": "enable_thinking=false where template supports it; completion also uses --reasoning off; acc records actual /props-derived kwargs",
+      "published_scores": {
+        "scores": {
+          "MMLU-Pro": 85.2,
+          "MMLU-Redux": 93.3,
+          "GPQA": 86.0,
+          "LCB v6": 80.4,
+          "HMMT Feb25": 90.7,
+          "AIME26": 92.7
+        },
+        "units": "percent",
+        "mode": "thinking",
+        "urls": [
+          "https://huggingface.co/Qwen/Qwen3.6-35B-A3B"
+        ]
+      },
+      "configs": [
+        {
+          "id": "mmap-cmoe-frd16-pg8",
+          "argv": [
+            "-ngl",
+            "99",
+            "-lm",
+            "mmap",
+            "-cmoe",
+            "-c",
+            "4096"
+          ],
+          "env": {
+            "LLAMA_EXPERT_FILL": "1",
+            "LLAMA_EXPERT_FILL_RANDOM": "decode",
+            "LLAMA_EXPERT_FILL_THREADS": "16",
+            "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+            "LLAMA_EXPERT_PREFETCH": "0",
+            "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+            "LLAMA_MMAP_ADVICE": "default",
+            "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+            "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+            "LLAMA_EXPERT_FILL_POPULATE": "0",
+            "LLAMA_EXPERT_PREGATE": "1",
+            "LLAMA_EXPERT_PREGATE_K": "8",
+            "LLAMA_EXPERT_PREGATE_ORDER": "after",
+            "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "4",
+            "LLAMA_EXPERT_PREGATE_LOOKAHEAD": "1"
+          },
+          "switch_regex": [
+            "expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=\\(unset\\) prefetch=0 prefetch_next=0$",
+            "expert_fill: active",
+            "expert_fill: random advice applied at decode",
+            "expert_pregate: active k=8 ",
+            "expert_pregate: stats"
+          ]
+        },
+        {
+          "id": "mmap-cmoe",
+          "argv": [
+            "-ngl",
+            "99",
+            "-lm",
+            "mmap",
+            "-cmoe",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": [
+            "expert_config: effective fill=0 .*pregate=0 "
+          ]
+        }
+      ],
+      "kld_ref": "qwen36-35b-a3b"
+    },
+    "gemma4-12b": {
+      "path": "~/models/campaign/gemma4-12b/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
+      "family": "gemma4",
+      "arch": "gemma4",
+      "total_params_b": 11.95,
+      "active_params_b": 11.95,
+      "quant": "QAT UD-Q4_K_XL",
+      "published_size_gib": 6.26,
+      "over_memory": false,
+      "placeholder": true,
+      "tokenizer_group": "gemma4-12b",
+      "vocab_size_upper_bound": 300000,
+      "template_kwargs": {
+        "enable_thinking": false
+      },
+      "template_policy": "enable_thinking=false where template supports it; completion also uses --reasoning off; acc records actual /props-derived kwargs",
+      "published_scores": {
+        "scores": {
+          "MMLU-Pro": 77.2,
+          "GPQA-D": 78.8,
+          "LCB v6": 72,
+          "AIME26": 77.5,
+          "MMMLU": 83.4
+        },
+        "units": "percent",
+        "mode": "instruction-tuned; thinking flag unspecified",
+        "urls": [
+          "https://huggingface.co/google/gemma-4-12B-it"
+        ]
+      },
+      "configs": [
+        {
+          "id": "gpu",
+          "argv": [
+            "-ngl",
+            "99",
+            "-fa",
+            "on",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "gpu-kvq8",
+          "argv": [
+            "-ngl",
+            "99",
+            "-fa",
+            "on",
+            "-c",
+            "4096",
+            "-ctk",
+            "q8_0",
+            "-ctv",
+            "q8_0"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "gpu-mmap",
+          "argv": [
+            "-ngl",
+            "99",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-24",
+          "argv": [
+            "-ngl",
+            "24",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-12",
+          "argv": [
+            "-ngl",
+            "12",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        },
+        {
+          "id": "partial-0",
+          "argv": [
+            "-ngl",
+            "0",
+            "-fa",
+            "on",
+            "-lm",
+            "mmap",
+            "-c",
+            "4096"
+          ],
+          "env": {},
+          "switch_regex": []
+        }
+      ],
+      "kld_ref": null
+    }
+  }
+}

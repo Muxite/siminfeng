@@ -1,0 +1,53 @@
+{"event":"start","task":"J-OM8","worker":"codex","assignment":"assignments/J-OM8-expert-pread-fill.md","ts":"2026-11-11T04:00:28Z"}
+{"event":"start","task":"H1","worker":"codex","assignment":"assignments/H1-jobq.md","ts":"2026-11-11T04:00:28Z"}
+{"event":"start","task":"H2","worker":"codex","assignment":"assignments/H2-abrun.md","ts":"2026-11-11T04:00:28Z"}
+{"event":"end","task":"H1","worker":"codex","rc":0,"wall_s":269,"tokens":"33944","ts":"2026-11-11T04:04:57Z"}
+{"event":"end","task":"H2","worker":"codex","rc":0,"wall_s":395,"tokens":"55172","ts":"2026-11-11T04:07:03Z"}
+{"event":"end","task":"J-OM8","worker":"codex","rc":0,"wall_s":397,"tokens":"70621","ts":"2026-11-11T04:07:05Z"}
+{"event":"checkin","task":"H1","checker":"haiku","verdict":"PASS 5/5","issues":["job JSON persisted full env incl. secrets -> fixed by opus (env side file 0600, env_public allowlist, lab/jobq gitignored)"],"rework_rounds":0,"opus_fix":true,"ts":"2026-11-11T04:10Z"}
+{"event":"checkin","task":"H2","checker":"haiku","verdict":"PASS 4/4","issues":["gate on real om7 data: regressed -38%, threshold 0.108, identical output (matches CLOSEOUT)"],"rework_rounds":0,"ts":"2026-11-11T04:12Z"}
+{"event":"checkin","task":"J-OM8","checker":"haiku","verdict":"PASS 5/5","issues":["COMPILE-CHECK omits llama-model-loader.cpp/llama-model.cpp?","checker claimed FILL w/o RANDOM is no-op; opus: false for over-memory model (populate evicted), test decides"],"rework_rounds":0,"ts":"2026-11-11T04:12Z"}
+{"event":"start","task":"H3","worker":"codex","assignment":"assignments/H3-methods-skills.md","ts":"2026-11-11T04:11:34Z"}
+{"event":"start","task":"H4","worker":"codex","assignment":"assignments/H4-shape-report.md","ts":"2026-11-11T04:12:01Z"}
+{"event":"end","task":"H4","worker":"codex","rc":0,"wall_s":262,"tokens":"52067","ts":"2026-11-11T04:16:23Z"}
+{"event":"end","task":"H3","worker":"codex","rc":0,"wall_s":313,"tokens":"97187","ts":"2026-11-11T04:16:47Z"}
+{"event":"contamination","task":"J-OM8-ab","detail":"run 001-base (start 04:14:29Z) overlapped Codex H3/H4 (ended 04:16:23Z/04:16:47Z), launched outside jobq. Treat 001-base timing as suspect; compare with 006-base.","fix":"codex now launched via c2/codex_job.sh (jobq cpu class)","ts":"2026-11-11T04:20Z"}
+{"event":"result","task":"J-OM8-ab","detail":"base 1.13*/1.24, fill 1.33/1.33, fill_random 1.37/1.41 eval t/s; output identical; gate null (A/A 9.3% from contaminated 001-base). fill_random prefill 5.7->1.4. fill stats: 72% of requested expert bytes resident, 11 GB read in ~29 s (~380 MB/s).","ts":"2026-11-11T04:45Z"}
+{"event":"start","task":"J-OM8b","worker":"codex","assignment":"assignments/J-OM8b-decode-random.md","ts":"2026-11-11T04:32:00Z"}
+{"event":"failure","task":"KS-q4K","class":"tool_bug","detail":"kernel_screen lower()-cased ggml type names (q4_k vs real q4_K); test fixture was fabricated with the same wrong case so tests passed; CLOSEOUT misattributed to pipeline. Fixed by opus (canonical type map + fixture). Lesson: fixtures must be captured from real tool output.","ts":"2026-11-11T04:55Z"}
+{"event":"checkin","task":"H3","checker":"haiku","verdict":"PASS 4/4","issues":["'11 flag failures' only sourced in CLOSEOUT (partial)"],"rework_rounds":0,"ts":"2026-11-11T05:00Z"}
+{"event":"checkin","task":"H4","checker":"haiku","verdict":"PASS 3/3","issues":["flag_error=5 vs ~11 known (18 'other')","idle-gap bounds offset 16-40 min from known deadlock window","worklog rows for non-codex events show worker unknown"],"rework_rounds":0,"ts":"2026-11-11T05:00Z"}
+{"event":"end","task":"J-OM8b","worker":"codex","rc":0,"wall_s":185,"tokens":"82843","ts":"2026-11-11T04:35:05Z"}
+{"event":"start","task":"H2b-H4b","worker":"codex","assignment":"assignments/H2b-H4b-fixes.md","ts":"2026-11-11T04:35:38Z"}
+{"event":"checkin","task":"J-OM8b","checker":"haiku","verdict":"PASS 5/5","issues":["spec switch regex is OR; decode marker verified post-hoc"],"rework_rounds":0,"ts":"2026-11-11T05:15Z"}
+{"event":"end","task":"H2b-H4b","worker":"codex","rc":0,"wall_s":266,"tokens":"60549","ts":"2026-11-11T04:40:04Z"}
+{"event":"result","task":"J-OM8b-ab","detail":"16 runs clean. base 1.1875 (A/A 1.7%), fr 1.275, frd 1.29, frd16 1.3025 (+9.7%, gate improved, threshold 9.4%); prefill kept 5.6-5.7 for frd*, fr 1.46; output identical x16. decode: 764 ms/token, fill 427 ms (164 MB/token @ ~384 MB/s, 230 KB/syscall); ~900 major faults/token remain during decode (telemetry, system-wide, approx window).","ts":"2026-11-11T06:10Z"}
+{"event":"start","task":"J-OM9","worker":"codex","assignment":"assignments/J-OM9-fill-diag-populate.md","ts":"2026-11-11T05:23:23Z"}
+{"event":"failure","task":"KS-q4K-r2","class":"operator_env","detail":"submitted from shell without DOCKER_CMD_PREFIX; jobq replays submit-time env -> docker permission denied. Resubmitted as r3 with env in argv. Candidate jobq feature: --require-env K.","ts":"2026-11-11T06:20Z"}
+{"event":"end","task":"J-OM9","worker":"codex","rc":0,"wall_s":352,"tokens":"57244","ts":"2026-11-11T05:29:15Z"}
+{"event":"result","task":"KS-q4K-r3","detail":"q4_K kernel screen ran (108 runs): A/B 0.91-1.06 within A/A 0.94-1.18; end-to-end D027 mixE4K +23.6%. Third type confirming micro-screen cannot predict graph-level unfuse. Closes CLOSEOUT 7 item 1.","ts":"2026-11-11T07:30Z"}
+{"event":"result","task":"J-OM9-ab","detail":"frd16 reproduced +8.4% (gate improved, A/A 2.3%) on new image. diag overhead ~9%. per token (diag): fill 461 ms, between 394 ms; majflt_between 162/token, pre_use_nonresident 45/token -> faults are minor. POPULATE_READ removes faults (10208->454) but costs ~10 s/run: net 0. Bottleneck = synchronous fill IO (364 MB/s) not overlapped with compute.","ts":"2026-11-11T07:30Z"}
+{"event":"start","task":"J-OM10","worker":"codex","assignment":"assignments/J-OM10-pregate-prefetch.md","ts":"2026-11-11T06:05:54Z"}
+{"event":"checkin","task":"J-OM9","checker":"haiku","verdict":"PASS 6/6","issues":["diag per-token lines only every 16 tokens: too sparse to localize nonresident events","majflt_between is RUSAGE_SELF (includes GPU-driver thread faults)"],"rework_rounds":0,"ts":"2026-11-11T07:45Z"}
+{"event":"end","task":"J-OM10","worker":"codex","rc":0,"wall_s":694,"tokens":"96058","ts":"2026-11-11T06:17:28Z"}
+{"event":"result","task":"J-OM10-ab","detail":"pregate predictor recall@8 0.81 (vs 3% naive J-OM7); recall@16 0.955 precision 0.48. But pg8 1.23 < frd16 1.29 (gate improved vs base only), pg16 0.75 regressed. Opus code read: pregate hook runs BEFORE layer L sync fill (L+1 prefetch competes with L demand reads), not-started async jobs never cancelled at L+1 arrival (pending_reads ~3.7k -> duplicate IO), async can occupy all 16 workers.","ts":"2026-11-11T08:40Z"}
+{"event":"start","task":"J-OM10b","worker":"codex","assignment":"assignments/J-OM10b-pregate-scheduling.md","ts":"2026-11-11T06:43:23Z"}
+{"event":"end","task":"J-OM10b","worker":"codex","rc":0,"wall_s":310,"tokens":"55325","ts":"2026-11-11T06:48:33Z"}
+{"event":"result","task":"J-OM10b-ab","detail":"pg8b (pregate K=8, demand-first, cancel-at-arrival, async cap 4) 1.42/1.42 t/s vs base 1.15/1.18 (+21.9%), frd16 1.29/1.28 (+10.5% over fill). gate improved, A/A 2.6%, output identical x8. pg12b 1.30/1.27. pg8b: async 7.8 GB, cancelled 4.35 GB, sync 5.4 GB.","ts":"2026-11-11T09:40Z"}
+{"ts": "2026-11-11T14:20:18.650804+00:00", "event": "checkin", "task": "J-OM10b", "agent": "haiku", "verdict": "PASS", "checks": "A1-A6 6/6; X1 router host copy (MAP_PRIVATE PROT_READ); X2 demand never in async queue; X3 no writes"}
+{"event":"start","task":"D-c2-ledger","worker":"codex","assignment":"assignments/D-c2-ledger.md","ts":"2026-11-11T14:45:15Z"}
+{"event":"end","task":"D-c2-ledger","worker":"codex","rc":0,"wall_s":213,"tokens":"58859","ts":"2026-11-11T14:48:48Z"}
+{"event":"start","task":"H5","worker":"codex","assignment":"assignments/H5-measure.md","ts":"2026-11-11T16:53:07Z"}
+{"event":"start","task":"J-OM11","worker":"codex","assignment":"assignments/J-OM11-pregate-observe.md","ts":"2026-11-11T16:53:29Z"}
+{"event":"start","task":"ACC1","worker":"codex","assignment":"assignments/ACC1-accuracy-harness.md","ts":"2026-11-11T16:54:46Z"}
+{"event":"end","task":"H5","worker":"codex","rc":0,"wall_s":351,"tokens":"62861","ts":"2026-11-11T16:58:58Z"}
+{"event":"end","task":"J-OM11","worker":"codex","rc":0,"wall_s":842,"tokens":"116014","ts":"2026-11-11T17:07:31Z"}
+{"event":"end","task":"ACC1","worker":"codex","rc":0,"wall_s":766,"tokens":"74189","ts":"2026-11-11T17:07:32Z"}
+{"event":"start","task":"M1","worker":"codex","assignment":"assignments/M1-model-ladder.md","ts":"2026-11-11T18:14:54Z"}
+{"ts": "2026-11-11T18:30:00Z", "event": "checkin", "task": "H5", "agent": "haiku", "verdict": "PASS", "checks": "A1 76 tests; A2 ms/token base 840.975 pg 712-723; A3 decode 0.253 vs whole 0.873 GiB/token; A4 gpu_freq sysfs; A5; X1 fixtures verbatim; X2 window err ~2%; X3 default metric for spec without field = eval_ms_per_token (intended), all old specs explicit eval_tps"}
+{"ts": "2026-11-11T18:50:00Z", "event": "checkin", "task": "J-OM11", "agent": "haiku", "verdict": "PASS-with-caveat", "checks": "A1-A6 PASS; X1 118 old-spec env pairs parse; X2 order demand->L+1->L+2 quoted; X3 FAIL: 08 default differs from 07 (resident() mincore probe skips resident experts; per-expert batches) -> J-OM11 pg8 is NOT 07+counters; compare within-run only; lookahead test is queue-level only"}
+{"ts": "2026-11-11T19:00:00Z", "event": "checkin", "task": "ACC1", "agent": "haiku", "verdict": "PASS-with-issues", "checks": "A1 41 tests; A2 KLD parse 0.004051/97.024; A3; A4 McNemar 0.021484375; A5. Issues: fetch no retry (429/502); stratified proportional not per-category; jobq SIGTERM->SIGKILL 0.5 s too short for server close(); no orphan container reaper -> ACC1b"}
+{"event":"start","task":"ACC1b","worker":"codex","assignment":"assignments/ACC1b-fixes.md","ts":"2026-11-11T18:25:53Z"}
+{"event":"end","task":"M1","worker":"codex","rc":0,"wall_s":941,"tokens":"99250","ts":"2026-11-11T18:30:35Z"}
+{"event":"end","task":"ACC1b","worker":"codex","rc":0,"wall_s":334,"tokens":"55550","ts":"2026-11-11T18:31:27Z"}
+{"ts": "2026-11-11T19:20:00Z", "event": "checkin", "task": "M1", "agent": "haiku", "verdict": "PASS", "checks": "A1 38/55/40 tests; A2 -c pinned, MoE env within parser ranges; A3; A4; X4 speed reuses fit choice; fixes by opus: refuse_busy also checks acc=1, gemma URLs -> own cards (score 69.4 present in both cards). Open: acc non-thinking only if template mentions enable_thinking (verify on qwen35/gemma)"}

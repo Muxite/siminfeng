@@ -1,0 +1,1559 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /tmp]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c8c3-ab9d-7292-91a1-2a0da27ef9d6
+--------
+user
+# Assignment H1 — job queue + run-wrapper fixes (harness; host jetson-arm; worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Read first: CLOSEOUT.md sections 5.2 and 5.6, cc/om_run/om_run.sh, cc/om_run/pipeline5.sh, bin/run_op (how ops are recorded), cc/resource_observe/resource_observe.py (sample/watchdog CLI).
+Problem: experiment chains are hand-written bash pipelines that wait with `pgrep -f`; one self-matched and idled the GPU 8.7 h. Builds overlapped timed runs and contaminated results (D029-D031).
+
+## Deliverables
+1. `bin/jobq` (python3 stdlib only, single file, executable). State dir `lab/jobq/` (one JSON per job + append-only `events.jsonl`).
+   - `jobq submit --class {gpu,build,cpu} [--after JOBID ...] [--name N] [--timeout S] -- CMD...` -> prints JOBID. Job runs through `bin/run_op --agent jobq --task <name>`.
+   - `jobq worker [--once]`: runs queued jobs FIFO when dependencies succeeded; a job whose dependency failed becomes `skipped_dep_failed`. Exclusivity: at most one `gpu` OR `build` job at a time (they exclude each other because builds contaminate timings); `cpu` jobs may run alongside a build but NOT alongside a gpu job unless submitted with `--allow-during-gpu` (also record that flag in the job JSON). Lock via `fcntl.flock` on `lab/jobq/lock`.
+   - `jobq list`, `jobq show JOBID`, `jobq wait JOBID [--timeout S]` (exit 0 if succeeded, 1 failed, 2 timeout), `jobq cancel JOBID` (SIGTERM the process group it started; never pattern-match process names).
+   - Waiting uses stored PIDs (`os.kill(pid,0)`) and job JSON state; NO pgrep/pkill anywhere (grep the file to prove it).
+   - Each job JSON records: argv, class, deps, state (queued/running/succeeded/failed/cancelled/skipped_dep_failed/timeout), pid, pgid, start/end, rc, and `concurrent_jobs` (ids of jobs running at any point during it) so contamination is auditable.
+2. `cc/om_run/om_run.sh` fixes: result.json `status` must distinguish `watchdog_tripped_killed` (trip AND container exit 137/killed) from `watchdog_tripped_survived` (trip but exit 0); keep `ok`/`failed`/`oom_killed`. Add `"host_id"` from `~/.config/siminfeng/host_id` (fallback hostname) and `"image"`, `"env"`, `"argv"` fields.
+3. `cc/resource_observe/resource_observe.py`: telemetry records' host id must use `~/.config/siminfeng/host_id` when present (CLOSEOUT 5.2 bullet). Keep existing tests green.
+4. `bin/test_jobq.py` (pytest): uses a temp state dir (env `JOBQ_DIR`), covers: FIFO, dependency success/failure/skip, gpu-vs-build exclusion (two `sleep 1` jobs must not overlap: check timestamps), cpu-during-build allowed, cancel kills child process group, wait exit codes, timeout. Tests must not touch docker or GPU and must run in < 60 s. Commands in tests should run via a fake run_op (env `JOBQ_RUN_OP` override) so evidence streams are not polluted.
+5. `bin/README-jobq.md` (<= 60 lines): usage, the exclusivity rule and why (D029/D031), migration example rewriting cc/om_run/pipeline6.sh as jobq submits.
+
+## Acceptance (the check-in agent runs exactly these)
+- A1 `cd campaign && python3 -m pytest -q bin/test_jobq.py` passes, < 60 s.
+- A2 `python3 -m pytest -q cc/resource_observe` passes.
+- A3 `grep -nE 'pgrep|pkill' bin/jobq` prints nothing.
+- A4 `bash -n cc/om_run/om_run.sh` ok and `grep -n watchdog_tripped_survived cc/om_run/om_run.sh` matches.
+- A5 smoke: `JOBQ_DIR=$(mktemp -d) bin/jobq submit --class cpu -- true` then `JOBQ_DIR=same bin/jobq worker --once` then `jobq wait` exits 0.
+Constraints: no docker, no GPU, no builds, do not edit evidence/*.jsonl, do not commit. Time budget 60 min.
+Final message <= 12 lines: files, test counts, any deviation from this spec and why.
+
+You are a Codex worker in campaign c2. Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
+codex
+I’ll read the required files, implement the queue and wrapper fixes, then run the acceptance checks without using Docker, the GPU, or builds.
+exec
+/bin/bash -lc "pwd; rg --files -g AGENTS.md -g CLOSEOUT.md -g '*resource_observe*' -g 'pipeline6.sh'; sed -n '1,220p' cc/om_run/om_run.sh; cat cc/om_run/pipeline5.sh; cat bin/run_op" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+/home/muk/projects/siminfeng/campaign
+CLOSEOUT.md
+cc/om_run/pipeline6.sh
+cc/resource_observe/test_resource_observe.py
+cc/resource_observe/resource_observe.py
+cc/resource_observe/__pycache__/resource_observe.cpython-310.pyc
+cc/resource_observe/__pycache__/test_resource_observe.cpython-310-pytest-9.2.0.pyc
+ref/llama.cpp-pr31469/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/reservation-workflow/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/refactor-orders/AGENTS.md
+ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/merge-windows/AGENTS.md
+ref/Strata/AGENTS.md
+ref/llama.cpp/AGENTS.md
+cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/AGENTS.md
+ref/llama.cpp-up1108/AGENTS.md
+#!/usr/bin/env bash
+# om_run.sh — guarded over-memory engine run on jetson-arm.
+# usage: om_run.sh OUTDIR IMAGE "ENV_FLAGS" TOOL ARGS...
+#   e.g. om_run.sh experiments/jetson/OM/b1-r1 campaign/llamacpp:jetson-c1-p03 "" llama-bench -m /om/model.gguf -lm mmap -ngl 99 -cmoe -p 64 -n 32 -r 2
+# Model dir ~/models/campaign/qwen36-35b-a3b is mounted read-only at /om. Watchdog kills ONLY this container
+# when MemAvailable < OM_MIN_AVAIL_MIB (default 700) or zram swap used > OM_MAX_SWAP_MIB (default 1536).
+set -u
+OUT=$1; IMG=$2; ENVF=$3; TOOL=$4; shift 4
+R=$(cd "$(dirname "$0")/../.." && pwd); mkdir -p "$OUT"
+NAME="om-$(date +%s)-$$"
+MODELDIR=${OM_MODELDIR:-$HOME/models/campaign/qwen36-35b-a3b}
+DATADIR=$HOME/models/campaign/data/wikitext/wikitext-2-raw
+DP=${DOCKER_CMD_PREFIX:-}
+dk(){ if [ -n "$DP" ]; then $DP "docker $*"; else docker "$@"; fi; }
+printf '%s\n' "$IMG" "$ENVF" "$TOOL $*" > "$OUT/cmd.txt"
+dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
+   -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro "$IMG" /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
+if [ -n "$DP" ]; then KILLCMD="$DP 'docker kill $NAME'"; else KILLCMD="docker kill $NAME"; fi
+python3 "$R/cc/resource_observe/resource_observe.py" watchdog --min-available-mib ${OM_MIN_AVAIL_MIB:-600} \
+   --max-swap-used-mib ${OM_MAX_SWAP_MIB:-2560} --max-swap-rate-mibs ${OM_MAX_SWAP_RATE:-1000} --interval-ms 250 --kill-cmd "$KILLCMD" --out "$OUT/watchdog.jsonl" & WD=$!
+python3 "$R/cc/resource_observe/resource_observe.py" sample --backends io,proc,tegrastats --path "$MODELDIR" --interval-ms 500 \
+   --duration-s ${OM_MAX_S:-1800} --out "$OUT/telemetry.jsonl" >/dev/null 2>&1 & SM=$!
+T0=$(date +%s.%N)
+RC=$(dk wait "$NAME"); T1=$(date +%s.%N)
+kill $WD $SM 2>/dev/null; wait $WD 2>/dev/null; WDRC=$?
+dk logs "$NAME" > "$OUT/stdout.txt" 2> "$OUT/stderr.txt"
+OOM=$(dk inspect "$NAME" --format '{{.State.OOMKilled}}')
+dk rm "$NAME" > /dev/null
+TRIP=$(grep -c watchdog_trip "$OUT/watchdog.jsonl" 2>/dev/null); TRIP=${TRIP:-0}
+python3 - "$OUT" "$RC" "$T0" "$T1" "$OOM" "$TRIP" <<'PY'
+import json,sys
+o,rc,t0,t1,oom,trip=sys.argv[1:]
+json.dump(dict(exit_code=int(rc.strip() or -1),wall_s=round(float(t1)-float(t0),2),oom_killed=oom.strip()=="true",watchdog_trips=int(trip),
+  status="watchdog_killed" if int(trip) else ("ok" if rc.strip()=="0" else "failed")),open(o+"/result.json","w"),indent=1)
+print(open(o+"/result.json").read())
+PY
+#!/usr/bin/env bash
+# J-OM7: router-informed expert WILLNEED prefetch; ABCCBA base/pf/pfn, then kernel-screen (was pipeline4; its pgrep wait loop self-matched the launching shell).
+cd "$(dirname "$0")/../.."; export PATH=$HOME/.local/bin:/usr/local/cuda/bin:$PATH DOCKER_CMD_PREFIX='sg docker -c' BUILD_JOBS=3
+bin/run_op --agent opus-jetson --task J-BQ --desc "build upstream cf34d311 + mmap advice 01+02 router prefetch (J-OM7)" --timeout 7200 -- python3 cc/build_engine/build_engine.py --target jetson-orin --source ref/llama.cpp-up1108 --commit cf34d311332e362198f0a410c466d1e940287d02 --patch cc/mmap_advice/patches/combined-01-02.patch --tag campaign/llamacpp:jetson-up1108-om7 --out cc/build_engine/results/jetson-up1108-om7 >/dev/null 2>&1
+python3 -c "import json;r=json.load(open('cc/build_engine/results/jetson-up1108-om7/build-record.json'));print('BUILD',r['status'],r.get('failure_stage'),str(r.get('error'))[:200],round(r.get('wall_seconds') or 0))"
+[ "$(python3 -c "import json;print(json.load(open('cc/build_engine/results/jetson-up1108-om7/build-record.json'))['status'])")" = success ] || exit 1
+IMG=campaign/llamacpp:jetson-up1108-om7; O=experiments/jetson/OM/om7-$(date +%Y%m%d-%H%M)
+C="llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4"
+run(){ name=$1; env=$2; OM_MAX_S=2400 bin/run_op --agent opus-jetson --task J-OM7 --desc "J-OM7 $name" --timeout 3000 -- cc/om_run/om_run.sh $O/$name $IMG "$env" $C >/dev/null 2>&1
+  python3 - $O/$name <<'PY'
+import json,sys,re
+d=sys.argv[1]; r=json.load(open(d+'/result.json')); se=open(d+'/stderr.txt',errors='replace').read()
+pe=re.findall(r'prompt eval time.*?([0-9.]+) tokens per second',se); ev=re.findall(r'\n.*?\beval time.*?([0-9.]+) tokens per second',se)
+v={}
+for l in open(d+'/telemetry.jsonl'):
+    try: x=json.loads(l)
+    except: continue
+    for m in x['metrics']:
+        if isinstance(m['value'],(int,float)): v.setdefault(m['name'],[]).append(m['value'])
+rd=(max(v['device_read'])-min(v['device_read']))/1024; io=(max(v['device_read_ios'])-min(v['device_read_ios']))
+print(d.split('/')[-1], r['status'], 'wall',r['wall_s'],'prompt',pe[-1] if pe else '-','eval',ev[-1] if ev else '-','NVMe GiB',round(rd,1),'avg KiB/io',round(rd*1048576/max(io,1)),'minAvail',round(min(v['mem_available'])),'pf',[l.strip()[-160:] for l in se.splitlines() if 'prefetch' in l.lower()][-3:], flush=True)
+PY
+  sha256sum < $O/$name/stdout.txt | cut -c1-12; }
+E="-e LLAMA_EXPERT_PREFETCH=1"; N="-e LLAMA_EXPERT_PREFETCH=1 -e LLAMA_EXPERT_PREFETCH_NEXT=1"
+run base-a ""; run pf-a "$E"; run pfn-a "$N"; run pfn-b "$N"; run pf-b "$E"; run base-b ""
+echo OM7_DONE $O
+bin/run_op --agent opus-jetson --task J-BQ --desc "build pin + patch03 + perf cases --with-tests (kernel screen image)" --timeout 7200 -- python3 cc/build_engine/build_engine.py --target jetson-orin --source ref/llama.cpp --commit 31288c9c66e59377f7788d920678a565bb89dd37 --patch cc/kernel_screen/combined-p03-perf.patch --with-tests --extra-target test-backend-ops --tag campaign/llamacpp:jetson-c1-ks --out cc/build_engine/results/jetson-c1-ks >/dev/null 2>&1
+python3 -c "import json;r=json.load(open('cc/build_engine/results/jetson-c1-ks/build-record.json'));print('BUILD',r['status'],r.get('failure_stage'),str(r.get('error'))[:300],round(r.get('wall_seconds') or 0))"
+[ "$(python3 -c "import json;print(json.load(open('cc/build_engine/results/jetson-c1-ks/build-record.json'))['status'])")" = success ] || exit 1
+O=experiments/jetson/KS-$(date +%Y%m%d-%H%M); mkdir -p $O
+for t in bf16 q4_K q8_0; do
+  T=$(echo $t | tr a-z A-Z | sed 's/Q4_K/Q4_K/;s/BF16/BF16/')
+  bin/run_op --agent opus-jetson --task J-KS --desc "kernel screen granite $t base vs unfuse" --timeout 1800 -- python3 cc/kernel_screen/kernel_screen.py --image campaign/llamacpp:jetson-c1-ks --preset cc/kernel_screen/presets/granite.json --types $T --ops MUL_MAT,MUL_MAT_ID,MUL_MAT_VEC_FUSION --arm 'A={"GGML_CUDA_J_UNFUSE_IDS_TYPES":null}' --arm 'A2={"GGML_CUDA_J_UNFUSE_IDS_TYPES":null}' --arm "B={\"GGML_CUDA_J_UNFUSE_IDS_TYPES\":\"$t\"}" --repeats 3 --out $O/$t > $O/$t.log 2>&1
+  echo "== $t rc=$?"; tail -15 $O/$t.log | cut -c1-200
+done
+echo KS_DONE $O
+#!/usr/bin/env python3
+"""run_op: record intent -> run command -> record outcome. Append-only JSONL per agent, flock-protected.
+Usage: run_op --agent A [--parent P] [--task T] [--desc D] [--campaign C] -- cmd args...
+Observes: argv, cwd, UTC times, exit code/signal, stdout/stderr (saved+sha256), process-group id, allowlisted env.
+Does NOT observe: grandchildren's own argv (only pgid membership at start/end), network, files written by the command."""
+import argparse, fcntl, hashlib, json, os, signal, subprocess, sys, time, uuid, datetime as dt
+ROOT = os.environ.get("CAMPAIGN_ROOT", os.path.expanduser("~/projects/siminfeng/campaign"))
+ENV_ALLOW = ["CAMPAIGN_ID", "CUDA_VISIBLE_DEVICES", "PATH", "LANG"]
+def evdir(root):
+    """D021: per-host evidence dir. Host id from ~/.config/siminfeng/host_id (untracked); legacy x86 stream stays at evidence/."""
+    try: h = open(os.path.expanduser("~/.config/siminfeng/host_id")).read().strip()
+    except Exception: h = "x86-main"
+    d = os.path.join(root, "evidence") if h in ("", "x86-main") else os.path.join(root, "evidence", h)
+    os.makedirs(d, exist_ok=True); return d, h
+def now(): return dt.datetime.now(dt.timezone.utc).isoformat()
+def emit(agent, rec):
+    d, host = evdir(ROOT); rec.setdefault("host_id", host)
+    path = os.path.join(d, f"{agent}.jsonl")
+    line = (json.dumps(rec, sort_keys=True) + "\n").encode()
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX); os.write(fd, line); os.fsync(fd)
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
+def survivors(sid):
+    """processes still alive in the command's session (descendants that outlived the main process)"""
+    out = []
+    for d in os.listdir("/proc"):
+        if not d.isdigit(): continue
+        try:
+            st = open(f"/proc/{d}/stat").read().rsplit(")", 1)[1].split()
+            if int(st[3]) == sid and st[0] != "Z":   # session id == sid, not zombie
+                out.append(dict(pid=int(d), cmd=open(f"/proc/{d}/cmdline").read().replace("\0", " ")[:200]))
+        except Exception: pass
+    return out
+def sha(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""): h.update(b)
+    return h.hexdigest()
+def main():
+    ap = argparse.ArgumentParser(); ap.add_argument("--agent", required=True)
+    ap.add_argument("--parent"); ap.add_argument("--task"); ap.add_argument("--desc", default="")
+    ap.add_argument("--campaign", default=os.environ.get("CAMPAIGN_ID", "c0")); ap.add_argument("--timeout", type=float)
+    ap.add_argument("cmd", nargs=argparse.REMAINDER); a = ap.parse_args()
+    cmd = a.cmd[1:] if a.cmd and a.cmd[0] == "--" else a.cmd
+    if not cmd: sys.exit("no command")
+    op = "op-" + uuid.uuid4().hex[:12]
+    outdir = os.path.join(ROOT, "artifacts", op); os.makedirs(outdir)
+    base = dict(campaign=a.campaign, agent=a.agent, task=a.task, parent=a.parent, op=op)
+    emit(a.agent, dict(base, kind="intent", ts=now(), argv=cmd, cwd=os.getcwd(), desc=a.desc,
+         env={k: os.environ.get(k, "") for k in ENV_ALLOW if k != "PATH"}, wrapper_pid=os.getpid()))
+    t0 = time.monotonic(); outp, errp = os.path.join(outdir, "stdout"), os.path.join(outdir, "stderr")
+    status, code, sig, pgid = "unknown", None, None, None
+    try:
+        with open(outp, "wb") as o, open(errp, "wb") as e:
+            p = subprocess.Popen(cmd, stdout=o, stderr=e, start_new_session=True); pgid = p.pid
+            emit(a.agent, dict(base, kind="started", ts=now(), pid=p.pid, pgid=pgid, sid=pgid))
+            try: rc = p.wait(timeout=a.timeout)
+            except subprocess.TimeoutExpired:
+                os.killpg(pgid, signal.SIGKILL); p.wait(); rc = None; status = "timeout"
+        if rc is not None:
+            if rc < 0: status, sig = "signaled", -rc
+            else: status, code = ("ok" if rc == 0 else "failed"), rc
+    except FileNotFoundError as ex: status = "spawn_error"; open(errp, "a").write(str(ex))
+    surv = survivors(pgid) if pgid else []
+    emit(a.agent, dict(base, kind="outcome", ts=now(), status=status, survivors=surv, exit_code=code, signal=sig,
+         elapsed_s=round(time.monotonic() - t0, 3), pgid=pgid,
+         stdout=dict(path=outp, sha256=sha(outp), bytes=os.path.getsize(outp)),
+         stderr=dict(path=errp, sha256=sha(errp), bytes=os.path.getsize(errp))))
+    sys.stdout.flush(); sys.stdout.buffer.write(open(outp, 'rb').read()); sys.stdout.buffer.flush()  # D021: raw bytes, never decode
+    sys.stderr.buffer.write(open(errp, 'rb').read())
+    sys.exit(code if code is not None else 1)
+main()
+
+exec
+/bin/bash -lc "cat cc/resource_observe/resource_observe.py; rg -n '5\\.2|5\\.6' CLOSEOUT.md; cat cc/om_run/pipeline6.sh; find .. -name AGENTS.md -print" in /home/muk/projects/siminfeng/campaign
+ succeeded in 187ms:
+#!/usr/bin/env python3
+"""Portable resource observation: tegrastats / proc / sysfs_tegra / nvml -> JSONL (resource-observe/0)."""
+import argparse, glob, hashlib, json, os, re, shutil, socket, subprocess, sys, threading, queue, time
+from datetime import datetime, timezone
+from io_watchdog import IOSampler, watchdog
+
+SCHEMA = "resource-observe/0"
+GPU_DEVFREQ = "/sys/devices/platform/17000000.gpu/devfreq/17000000.gpu"
+ALL_BACKENDS = ["tegrastats", "proc", "sysfs_tegra", "nvml", "io"]
+
+
+def M(name, value, unit, scope, source):
+    return {"name": name, "value": value, "unit": unit, "scope": scope, "source": source}
+
+
+def U(name, backend, reason):
+    return {"name": name, "backend": backend, "reason": reason}
+
+
+def record(backend, seq, metrics, unavailable=(), parse_errors=(), host_id=None, mono=None):
+    return {"schema": SCHEMA, "ts": datetime.now(timezone.utc).isoformat(),
+            "mono_s": time.monotonic() if mono is None else mono,
+            "host_id": host_id or socket.gethostname(), "backend": backend, "seq": seq,
+            "metrics": list(metrics), "unavailable": list(unavailable), "parse_errors": list(parse_errors)}
+
+
+def _read(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+# ---------------- tegrastats ----------------
+_RAM = re.compile(r"RAM (\d+)/(\d+)MB(?: \(lfb (\d+)x(\d+)MB\))?")
+_SWAP = re.compile(r"SWAP (\d+)/(\d+)MB(?: \(cached (\d+)MB\))?")
+_CPU = re.compile(r"CPU \[([^\]]*)\]")
+_GR3D = re.compile(r"GR3D_FREQ (\d+)%(?:@\[?(\d+)\]?)?")
+_EMC = re.compile(r"EMC_FREQ (\d+)%(?:@(\d+))?")
+_TEMP = re.compile(r"\b([A-Za-z0-9_]+)@(-?\d+(?:\.\d+)?)C\b")
+_RAIL = re.compile(r"\b([A-Z][A-Z0-9_]+) (\d+)mW/(\d+)mW")
+
+
+def line_hash(line):
+    return hashlib.sha256(line.encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def parse_tegrastats(line):
+    """Return (metrics, unavailable, parse_errors) for one tegrastats line. Never raises."""
+    line = (line or "").strip()
+    S, B = "system-shared-dram", "tegrastats"
+    if not line:
+        return [], [], [{"error": "empty line", "line_sha256_16": line_hash(line)}]
+    m, un, errs = [], [], []
+    r = _RAM.search(line)
+    if r:
+        m += [M("ram_used", int(r[1]), "MiB", S, B), M("ram_total", int(r[2]), "MiB", S, B)]
+        if r[3]:
+            m.append(M("ram_lfb", int(r[3]) * int(r[4]), "MiB", S, B))
+        else:
+            un.append(U("ram_lfb", B, "lfb not in line"))
+    else:
+        un.append(U("ram_used", B, "RAM field missing or truncated"))
+        errs.append({"error": "RAM field not parsed", "line_sha256_16": line_hash(line)})
+    s = _SWAP.search(line)
+    if s:
+        m += [M("swap_used", int(s[1]), "MiB", "system", B), M("swap_total", int(s[2]), "MiB", "system", B)]
+        if s[3] is not None:
+            m.append(M("swap_cached", int(s[3]), "MiB", "system", B))
+    else:
+        un.append(U("swap_used", B, "SWAP field missing"))
+    c = _CPU.search(line)
+    if c:
+        for i, ent in enumerate(x.strip() for x in c[1].split(",")):
+            cm = re.fullmatch(r"(\d+)%(?:@(\d+))?", ent)
+            if cm:
+                m.append(M("cpu%d_load" % i, int(cm[1]), "percent", "system", B))
+                if cm[2]:
+                    m.append(M("cpu%d_freq" % i, int(cm[2]), "MHz", "system", B))
+            elif ent == "off":
+                un.append(U("cpu%d_load" % i, B, "core offline"))
+            else:
+                errs.append({"error": "bad cpu entry %r" % ent, "line_sha256_16": line_hash(line)})
+    else:
+        un.append(U("cpu_load", B, "CPU field missing"))
+    g = _GR3D.search(line)
+    if g:
+        m.append(M("gpu_util", int(g[1]), "percent", "gpu", B))
+        if g[2]:
+            m.append(M("gpu_freq", int(g[2]), "MHz", "gpu", B))
+        else:
+            un.append(U("gpu_freq", B, "no @MHz in GR3D_FREQ"))
+    else:
+        un.append(U("gpu_util", B, "GR3D_FREQ missing"))
+    e = _EMC.search(line)
+    if e:
+        m.append(M("emc_util", int(e[1]), "percent", "system", B))
+        if e[2]:
+            m.append(M("emc_freq", int(e[2]), "MHz", "system", B))
+    else:
+        un.append(U("emc_freq", B, "EMC_FREQ not reported on this board/release"))
+    for name, val in _TEMP.findall(line):
+        m.append(M("temp_" + name, float(val), "celsius", "sensor", B))
+    for name, inst, avg in _RAIL.findall(line):
+        m += [M("power_%s_instant" % name, int(inst), "mW", "rail", B),
+              M("power_%s_avg" % name, int(avg), "mW", "rail", B)]
+    if not m:
+        errs.append({"error": "no fields parsed", "line_sha256_16": line_hash(line)})
+    return m, un, errs
+
+
+class TegrastatsReader:
+    def __init__(self, interval_ms, cmd=None):
+        self.q = queue.Queue()
+        self.p = subprocess.Popen(cmd or ["tegrastats", "--interval", str(interval_ms)], stdout=subprocess.PIPE,
+                                  stderr=subprocess.DEVNULL, text=True, errors="replace")
+        threading.Thread(target=lambda: [self.q.put(l) for l in self.p.stdout], daemon=True).start()
+
+    def drain(self):
+        out = []
+        while True:
+            try:
+                out.append(self.q.get_nowait())
+            except queue.Empty:
+                return out
+
+    def close(self):
+        self.p.terminate()
+
+
+def tegrastats_available():
+    return (True, "") if shutil.which("tegrastats") else (False, "tegrastats not on PATH")
+
+
+# ---------------- proc ----------------
+_NVMAP = re.compile(r"^(NvMap\w*|Nvmap\w*)")
+
+
+def parse_meminfo(text):
+    d = {}
+    for l in (text or "").splitlines():
+        k, _, v = l.partition(":")
+        p = v.split()
+        if p and p[0].isdigit():
+            d[k] = int(p[0]) * (1 if len(p) > 1 and p[1] == "B" else 1024) if len(p) > 1 else int(p[0])
+    return d
+
+
+def parse_status_kb(text, key):
+    mm = re.search(r"^%s:\s+(\d+) kB" % key, text or "", re.M)
+    return int(mm[1]) * 1024 if mm else None
+
+
+def proc_sample(root="/proc", pid=None, cgroup=None, cgroup_root="/sys/fs/cgroup"):
+    B = "proc"
+    m, un = [], []
+    mi = _read(os.path.join(root, "meminfo"))
+    if mi is None:
+        un.append(U("meminfo", B, "%s/meminfo unreadable" % root))
+    else:
+        d = parse_meminfo(mi)
+        for name, key, unit in [("mem_total", "MemTotal", "MiB"), ("mem_available", "MemAvailable", "MiB"),
+                                ("mem_cached", "Cached", "MiB"), ("swap_total", "SwapTotal", "MiB"),
+                                ("swap_free", "SwapFree", "MiB")]:
+            if key in d:
+                m.append(M(name, round(d[key] / 1048576, 3), unit, "system", "meminfo:" + key))
+            else:
+                un.append(U(name, B, "%s absent from meminfo" % key))
+        nv = [k for k in d if _NVMAP.match(k)]
+        for k in nv:
+            m.append(M("meminfo_" + k, round(d[k] / 1048576, 3), "MiB", "system", "meminfo:" + k))
+        if not nv:
+            un.append(U("nvmap", B, "no NvMap* fields in meminfo"))
+    la = _read(os.path.join(root, "loadavg"))
+    p = la.split() if la else []
+    if len(p) >= 3:
+        try:
+            for n, v in zip(("load1", "load5", "load15"), p[:3]):
+                m.append(M(n, float(v), "load", "system", "loadavg"))
+        except ValueError:
+            un.append(U("loadavg", B, "unparseable loadavg"))
+    else:
+        un.append(U("loadavg", B, "loadavg missing/short"))
+    if pid is not None:
+        st = _read(os.path.join(root, str(pid), "status"))
+        for name, key in (("pid_rss", "VmRSS"), ("pid_hwm", "VmHWM")):
+            v = parse_status_kb(st, key) if st else None
+            if v is None:
+                un.append(U(name, B, "pid %s status missing or no %s" % (pid, key)))
+            else:
+                m.append(M(name, round(v / 1048576, 3), "MiB", "process", "status:" + key))
+    if cgroup:
+        base = os.path.join(cgroup_root, cgroup.lstrip("/")) if not os.path.isabs(cgroup) or not os.path.isdir(cgroup) else cgroup
+        note = "cgroup memory may not include nvmap/driver GPU allocations on Tegra"
+        for name, f in (("cgroup_current", "memory.current"), ("cgroup_peak", "memory.peak"), ("cgroup_max", "memory.max")):
+            t = _read(os.path.join(base, f))
+            t = t.strip() if t else None
+            if t is None:
+                un.append(U(name, B, "%s unreadable in %s" % (f, base)))
+            elif t == "max":
+                un.append(U(name, B, "unlimited (max)"))
+            elif t.isdigit():
+                x = M(name, round(int(t) / 1048576, 3), "MiB", "cgroup", f)
+                x["accounting_note"] = note
+                m.append(x)
+            else:
+                un.append(U(name, B, "unparseable %r" % t))
+    return m, un
+
+
+# ---------------- sysfs_tegra ----------------
+def sysfs_sample(devfreq=GPU_DEVFREQ, thermal="/sys/class/thermal", nvpmodel_mode=None, query_nvpmodel=True):
+    B = "sysfs_tegra"
+    m, un = [], []
+    if not os.path.isdir(devfreq):
+        un.append(U("gpu_devfreq", B, "%s absent (not a Jetson?)" % devfreq))
+    else:
+        for n, f in (("gpu_freq_cur", "cur_freq"), ("gpu_freq_min", "min_freq"), ("gpu_freq_max", "max_freq")):
+            t = (_read(os.path.join(devfreq, f)) or "").strip()
+            if t.isdigit():
+                m.append(M(n, int(t) / 1e6, "MHz", "gpu", "devfreq:" + f))
+            else:
+                un.append(U(n, B, "%s unreadable" % f))
+    zones = sorted(glob.glob(os.path.join(thermal, "thermal_zone*")))
+    if not zones:
+        un.append(U("thermal", B, "no thermal zones"))
+    for z in zones:
+        ty = (_read(os.path.join(z, "type")) or "").strip()
+        t = (_read(os.path.join(z, "temp")) or "").strip()
+        zn = os.path.basename(z)
+        if ty and re.fullmatch(r"-?\d+", t):
+            m.append(M("thermal_%s_%s" % (zn, ty), int(t) / 1000.0, "celsius", "sensor", "thermal:" + zn))
+        else:
+            un.append(U("thermal_" + zn, B, "type/temp unreadable"))
+    mode = nvpmodel_mode
+    if mode is None and query_nvpmodel and shutil.which("nvpmodel"):
+        try:
+            out = subprocess.run(["nvpmodel", "-q"], capture_output=True, text=True, timeout=5).stdout
+            mm = re.search(r"NV Power Mode:\s*(\S+)", out)
+            mode = mm[1] if mm else None
+        except Exception:
+            mode = None
+    if mode:
+        m.append(M("nvpmodel_mode", mode, "string", "system", "nvpmodel -q"))
+    else:
+        un.append(U("nvpmodel_mode", B, "not provided and query failed/unavailable"))
+    return m, un
+
+
+# ---------------- nvml ----------------
+GPU_FIELDS = [("gpu_mem_used", "MiB"), ("gpu_mem_total", "MiB"), ("gpu_util", "percent"),
+              ("gpu_sm_clock", "MHz"), ("gpu_temp", "celsius"), ("gpu_power", "W")]
+
+
+def parse_nvml_csv(text, apps_text=""):
+    B, S = "nvml", "device-discrete"
+    m, un = [], []
+    rows = [l for l in (text or "").splitlines() if l.strip()]
+    if not rows:
+        return [], [U("gpu", B, "no nvidia-smi output")]
+    for gi, row in enumerate(rows):
+        cells = [c.strip() for c in row.split(",")]
+        sfx = "" if len(rows) == 1 else str(gi)
+        for (name, unit), c in zip(GPU_FIELDS, cells + [None] * (len(GPU_FIELDS) - len(cells))):
+            try:
+                if c is None or re.search(r"N/A|Not Supported", c, re.I) or c == "":
+                    raise ValueError
+                m.append(M(name + sfx, float(c), unit, S, "nvidia-smi"))
+            except ValueError:
+                un.append(U(name + sfx, B, "field %r N/A or missing" % c))
+    for l in (apps_text or "").splitlines():
+        c = [x.strip() for x in l.split(",")]
+        if len(c) >= 3 and c[0].isdigit() and re.fullmatch(r"\d+(\.\d+)?", c[-1]):
+            m.append(M("gpu_proc_mem_pid%s" % c[0], float(c[-1]), "MiB", "process", "nvidia-smi compute-apps"))
+    return m, un
+
+
+def nvml_available():
+    if not shutil.which("nvidia-smi"):
+        return False, "nvidia-smi not on PATH"
+    return True, ""
+
+
+def nvml_sample(runner=None):
+    runner = runner or (lambda a: subprocess.run(a, capture_output=True, text=True, timeout=10))
+    q = ["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu,clocks.sm,temperature.gpu,power.draw",
+         "--format=csv,noheader,nounits"]
+    try:
+        r = runner(q)
+        if r.returncode != 0:
+            return [], [U("gpu", "nvml", "nvidia-smi failed: %s" % (r.stderr or "").strip()[:100])]
+        a = runner(["nvidia-smi", "--query-compute-apps=pid,used_memory", "--format=csv,noheader,nounits"])
+        m, un = parse_nvml_csv(r.stdout, a.stdout if a.returncode == 0 else "")
+    except Exception as ex:
+        return [], [U("gpu", "nvml", "nvidia-smi error: %s" % ex)]
+    if not m:
+        un.append(U("gpu_mem", "nvml", "no usable memory fields (integrated GPU?)"))
+    return m, un
+
+
+# ---------------- capabilities / sampling ----------------
+def capabilities(devfreq=GPU_DEVFREQ, root="/proc", runner=None):
+    caps = {}
+    ok, why = tegrastats_available()
+    caps["tegrastats"] = {"available": ok, "reason": why or "tegrastats found",
+                          "metrics": ["ram_used", "ram_total", "ram_lfb", "swap_*", "cpuN_load/freq", "gpu_util", "gpu_freq", "emc_freq", "temp_*", "power_*"] if ok else []}
+    pm, pu = proc_sample(root)
+    caps["proc"] = {"available": bool(pm), "reason": "ok" if pm else "no /proc fields", "metrics": [x["name"] for x in pm],
+                    "missing": [x["name"] + ": " + x["reason"] for x in pu]}
+    sm, su = sysfs_sample(devfreq, query_nvpmodel=True)
+    has = os.path.isdir(devfreq)
+    caps["sysfs_tegra"] = {"available": has, "reason": "ok" if has else "no Tegra GPU devfreq node",
+                           "metrics": [x["name"] for x in sm][:6], "missing": [x["name"] + ": " + x["reason"] for x in su][:6]}
+    ok, why = nvml_available()
+    if ok:
+        nm, nu = nvml_sample(runner)
+        ok = bool(nm)
+        why = "ok" if ok else (nu[-1]["reason"] if nu else "no memory fields")
+    caps["nvml"] = {"available": ok, "reason": why or "ok", "metrics": [n for n, _ in GPU_FIELDS] if ok else []}
+    im, iu = IOSampler(procroot=root).sample()
+    caps["io"] = {"available": bool(im), "reason": "ok" if im else "no I/O counters",
+                  "metrics": [x["name"] for x in im], "missing": iu}
+    return caps
+
+
+def resolve_backends(spec):
+    if spec == "auto":
+        c = capabilities()
+        return [b for b in ALL_BACKENDS if c[b]["available"]]
+    bs = [b.strip() for b in spec.split(",") if b.strip()]
+    bad = [b for b in bs if b not in ALL_BACKENDS]
+    if bad:
+        raise SystemExit("unknown backend(s): %s" % bad)
+    return bs
+
+
+def sample_once(backend, seq, a):
+    if backend == "io":
+        m, u = a.io_sampler.sample()
+    elif backend == "proc":
+        m, u = proc_sample(pid=a.pid, cgroup=a.cgroup)
+    elif backend == "sysfs_tegra":
+        m, u = sysfs_sample(nvpmodel_mode=a.nvpmodel_mode)
+    elif backend == "nvml":
+        m, u = nvml_sample()
+    else:
+        raise ValueError(backend)
+    return record(backend, seq, m, u)
+
+
+def cmd_sample(a):
+    a.io_sampler = IOSampler(path=a.path, device=a.device, pid=a.pid,
+                             pid_from_cgroup=a.pid_from_cgroup, cgroup=a.cgroup)
+    backends = resolve_backends(a.backends)
+    seq = 0
+    end = time.monotonic() + a.duration_s if a.duration_s else None
+    tg = None
+    n = 0
+    with open(a.out, "w") as out:
+        def emit(r):
+            out.write(json.dumps(r) + "\n"); out.flush()
+        for b in backends:
+            if b == "tegrastats":
+                ok, why = tegrastats_available()
+                if ok:
+                    tg = TegrastatsReader(a.interval_ms)
+                else:
+                    emit(record(b, seq, [], [U("tegrastats", b, why)])); seq += 1
+        try:
+            while True:
+                t0 = time.monotonic()
+                if tg:
+                    for l in tg.drain():
+                        m, u, e = parse_tegrastats(l)
+                        emit(record("tegrastats", seq, m, u, e)); seq += 1
+                for b in backends:
+                    if b != "tegrastats":
+                        emit(sample_once(b, seq, a)); seq += 1
+                n += 1
+                if end and time.monotonic() >= end:
+                    break
+                time.sleep(max(0, a.interval_ms / 1000 - (time.monotonic() - t0)))
+            if tg:
+                time.sleep(a.interval_ms / 1000 + 0.1)
+                for l in tg.drain():
+                    m, u, e = parse_tegrastats(l)
+                    emit(record("tegrastats", seq, m, u, e)); seq += 1
+        finally:
+            if tg:
+                tg.close()
+    return 0
+
+
+def summarize(path, interval_ms=None):
+    stats, times, nrec, errs = {}, {}, {}, 0
+    for l in open(path):
+        if not l.strip():
+            continue
+        r = json.loads(l)
+        b = r["backend"]
+        nrec[b] = nrec.get(b, 0) + 1
+        times.setdefault(b, []).append(r["mono_s"])
+        errs += len(r.get("parse_errors", []))
+        for x in r["metrics"]:
+            if isinstance(x["value"], (int, float)):
+                stats.setdefault((b, x["name"], x["unit"], x["scope"]), []).append(x["value"])
+    metrics = {"%s/%s" % (k[0], k[1]): {"unit": k[2], "scope": k[3], "n": len(v), "min": min(v), "max": max(v),
+               "mean": sum(v) / len(v), "high_water": max(v)} for k, v in stats.items()}
+    cov = {}
+    for b, ts in times.items():
+        ts = sorted(ts)
+        d = [y - x for x, y in zip(ts, ts[1:])]
+        iv = interval_ms / 1000 if interval_ms else (sorted(d)[len(d) // 2] if d else 0)
+        span = ts[-1] - ts[0]
+        exp = int(round(span / iv)) + 1 if iv else len(ts)
+        gaps = [{"after_mono_s": x, "gap_s": round(y - x, 3)} for x, y in zip(ts, ts[1:]) if iv and y - x > 2 * iv]
+        cov[b] = {"received": len(ts), "expected": exp, "interval_s": iv, "gaps_gt_2x": gaps}
+    return {"metrics": metrics, "coverage": cov, "parse_error_count": errs}
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="resource_observe.py")
+    sp = ap.add_subparsers(dest="cmd", required=True)
+    s = sp.add_parser("sample")
+    s.add_argument("--backends", default="auto")
+    s.add_argument("--interval-ms", type=int, default=500)
+    s.add_argument("--duration-s", type=float, default=0)
+    pids = s.add_mutually_exclusive_group()
+    pids.add_argument("--pid", type=int)
+    pids.add_argument("--pid-from-cgroup")
+    s.add_argument("--path", default=".")
+    s.add_argument("--device")
+    s.add_argument("--cgroup")
+    s.add_argument("--nvpmodel-mode")
+    s.add_argument("--out", required=True)
+    z = sp.add_parser("summarize"); z.add_argument("file"); z.add_argument("--interval-ms", type=int)
+    sp.add_parser("capabilities")
+    w = sp.add_parser("watchdog")
+    w.add_argument("--min-available-mib", type=float, default=900)
+    w.add_argument("--max-swap-used-mib", type=float, default=512)
+    w.add_argument("--max-swap-rate-mibs", type=float, default=20)
+    w.add_argument("--interval-ms", type=int, default=250)
+    target = w.add_mutually_exclusive_group()
+    target.add_argument("--kill-cgroup")
+    target.add_argument("--kill-pid", type=int)
+    target.add_argument("--kill-cmd")
+    w.add_argument("--out", required=True)
+    a = ap.parse_args(argv)
+    if a.cmd in ("sample", "watchdog") and a.interval_ms <= 0:
+        ap.error("--interval-ms must be positive")
+    if a.cmd == "sample" and (a.duration_s < 0 or (a.pid is not None and a.pid <= 0)):
+        ap.error("duration must be nonnegative and pid positive")
+    if a.cmd == "watchdog":
+        if a.kill_pid is not None and a.kill_pid <= 0:
+            ap.error("--kill-pid must be positive (process groups are not allowed)")
+        if any(not __import__('math').isfinite(v) or v < 0 for v in
+               (a.min_available_mib, a.max_swap_used_mib, a.max_swap_rate_mibs)):
+            ap.error("watchdog thresholds must be finite and nonnegative")
+        with open(a.out, "w") as out:
+            seq = 0
+            def emit(event, data):
+                nonlocal seq
+                r = record("watchdog", seq, [])
+                r.update(event=event, **data)
+                out.write(json.dumps(r) + "\n")
+                out.flush()
+                seq += 1
+            return watchdog(a, emit)
+    if a.cmd == "sample":
+        return cmd_sample(a)
+    if a.cmd == "summarize":
+        print(json.dumps(summarize(a.file, a.interval_ms), indent=1)); return 0
+    print(json.dumps(capabilities(), indent=1)); return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+49:Orin Nano 8GB Super devkit (p3767-0005), L4T R36.5.2, JetPack 6.2.3, CUDA 12.6.68 (sm_87), kernel 5.15.199-tegra, 6x Cortex-A78AE, 7.4 GiB shared DRAM, zram swap 6 x 634 MB (~3.8 GiB), NVMe "X15 Lite SSD 128GB" PCIe Gen3 x4, nvpmodel MAXN_SUPER (queried only), GPU devfreq governor nvhost_podgov 306-1020 MHz (never pinned), nsys 2024.5.4, ncu 2024.3.1 (counters admin-only), Docker 29.1.3 (containerd snapshotter) + nvidia runtime, buildx v0.29.1 user plugin. Source: hosts/jetson-arm.json, handoff/jetson-checkpoint-1.md, D031.
+157:| ra-20261110-0635 | base,rand,rand,base; `LLAMA_MMAP_ADVICE=random` (advice_log=1 only in rand arms) | jetson-up1108-ra | ok x4 | base prompt 5.68/5.69, decode 1.19/1.20, NVMe 56.6/55.7 GiB, 93/95 KiB per IO; rand prompt 1.42/1.47, decode 0.56/0.59, NVMe 24.1/23.5 GiB, 4 KiB per IO; output identical (7a1541...) | switch verified active |
+158:| om7-20261110-1555 | base/pf/pfn ABCCBA with router-informed prefetch (`LLAMA_EXPERT_PREFETCH[_NEXT]`) | jetson-up1108-om7 | ok x6, ABCCBA (om7-20261110-1555): base 1.18/1.22 t/s (prompt 5.69, NVMe 57.2/55.1 GiB, 95 KiB/IO); prefetch 0.72/0.76 (prompt 1.38/1.44, 24.4/23.7 GiB, 5 KiB/IO; 20,823 advise calls, 13.5 GB advised, 0 failures); prefetch+next 0.64/0.65 (29.1 GiB, 6 KiB/IO; 50,343 calls, next-layer precision 614/20263 = 3.0%); output identical in all 6 (7a1541...). **Negative: -38% vs base**, +30% vs whole-file RANDOM (0.57). WILLNEED issued at the first CPU consumer has ~zero lead time, so faults still read 4 KiB pages; next-layer reuse of the current union is useless (3%). | |
+213:11. Own-error negatives: D024 (nearly pushed 1.4 GB archive), D029 (watchdog kill command broken), mistyped build commit (jetson-up1108), flag-drift failures (6 + 4 + 1 attempts), 8.7 h idle GPU from a pipeline deadlock (5.6).
+258:### 5.2 Missing tools and repeated manual work
+259:- No "wait for job" primitive: every chain is a hand-written bash pipeline polling `pgrep -f` (pipeline2-6, build_queue). It broke once (5.6).
+290:### 5.6 Scheduling and logging
+#!/usr/bin/env bash
+# J-SPEC2: n-gram self-spec on over-memory Qwen3.6 (ABBA base/ngram-mod), after pipeline5 (waits on its PID, not a pgrep pattern).
+cd "$(dirname "$0")/../.."
+
+O=experiments/jetson/SPEC2-$(date +%Y%m%d-%H%M); IMG=campaign/llamacpp:jetson-up1108
+for a in "base 1" "ngram-mod 1" "ngram-mod 2" "base 2"; do set -- $a
+  bin/run_op --agent opus-jetson --task J-SPEC2 --desc "ngram self-spec $1 r$2" --timeout 5400 -- python3 cc/om_spec/om_spec.py $O/$1-r$2 $IMG $1 $2
+done
+echo SPEC2_DONE $O
+../campaign/ref/Strata/AGENTS.md
+../campaign/ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/merge-windows/AGENTS.md
+../campaign/ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/refactor-orders/AGENTS.md
+../campaign/ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/reservation-workflow/AGENTS.md
+../campaign/ref/llama.cpp-up1108/AGENTS.md
+../campaign/ref/llama.cpp/AGENTS.md
+../campaign/ref/llama.cpp-pr31469/AGENTS.md
+../campaign/cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/AGENTS.md
+
+codex
+`run_op` starts its command in a separate process group. I’ll record that command’s PID and group as well as the wrapper’s, so cancellation can reach child processes. Queue admission and state updates will share the file lock, and overlap records will be updated for both jobs whenever one starts.
+exec
+/bin/bash -lc "cat > bin/jobq <<'PY'
+#"'!/usr/bin/env python3
+"""Local, flock-serialized job queue. All state changes happen under lock."""
+import argparse
+from contextlib import contextmanager
+import fcntl
+import json
+import math
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+import uuid
+
+ROOT = Path(__file__).resolve().parent.parent
+SELF = str(Path(__file__).resolve())
+DIR = Path(os.environ.get('"'JOBQ_DIR', ROOT / 'lab/jobq')).resolve()
+TERMINAL = {'succeeded', 'failed', 'cancelled', 'skipped_dep_failed', 'timeout'}
+
+
+@contextmanager
+def locked():
+    DIR.mkdir(parents=True, exist_ok=True)
+    with (DIR / 'lock').open('a') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+
+
+def jobs():
+    return sorted((json.loads(p.read_text()) for p in DIR.glob('job-*.json')),
+                  key=lambda j: (j['submitted'], j['id']))
+
+
+def get(jid):
+    if not jid.startswith('job-') or any(c not in 'job-0123456789abcdef' for c in jid):
+        raise ValueError('invalid job id')
+    try:
+        return json.loads((DIR / (jid + '.json')).read_text())
+    except FileNotFoundError:
+        raise ValueError('unknown job: ' + jid)
+
+
+def save(j, event):
+    path = DIR / (j['id'] + '.json')
+    tmp = path.with_suffix('.tmp')
+    tmp.write_text(json.dumps(j, indent=2) + '\\n')
+    os.replace(tmp, path)
+    with (DIR / 'events.jsonl').open('a') as f:
+        f.write(json.dumps(dict(time=time.time(), job=j['id'], event=event,
+                               state=j['state'])) + '\\n')
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def alive(pid):
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+        # A dead supervisor may remain a zombie until its parent reaps it.
+        stat = Path('/proc/%s/stat' % pid)
+        if stat.exists() and stat.read_text().rsplit(')', 1)[1].split()[0] == 'Z':
+            return False
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def kill_groups(j, sig):
+    for pgid in {j.get('pgid'), j.get('wrapper_pgid')} - {None}:
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            pass
+
+
+def finish(j, state, rc):
+    j.update(state=state, rc=rc, end=time.time())
+    save(j, state)
+
+
+def reconcile():
+    for j in jobs():
+        if j['state'] == 'running' and not alive(j.get('runner_pid')):
+            kill_groups(j, signal.SIGKILL)
+            finish(j, j.get('stop_reason') or 'failed', None)
+
+
+def compatible(j, running):
+    for other in running:
+        if j['class'] in ('gpu', 'build') and other['class'] in ('gpu', 'build'):
+            return False
+        if j['class'] == 'gpu' and other['class'] == 'cpu' and not other['allow_during_gpu']:
+            return False
+        if j['class'] == 'cpu' and other['class'] == 'gpu' and not j['allow_during_gpu']:
+            return False
+    return True
+
+
+def worker(once):
+    children = []
+    try:
+        while True:
+            children[:] = [p for p in children if p.poll() is None]
+            with locked():
+                reconcile()
+                alljobs = jobs()
+                byid = {j['id']: j for j in alljobs}
+                running = [j for j in alljobs if j['state'] == 'running']
+                for j in alljobs:
+                    if j['state'] "'!= '"'queued':
+                        continue
+                    deps = [byid[d] for d in j['deps']]
+                    if any(d['state'] in TERMINAL - {'succeeded'} for d in deps):
+                        finish(j, 'skipped_dep_failed', None)
+                        continue
+                    if any(d['state'] "'!= '"'succeeded' for d in deps) or not compatible(j, running):
+                        continue
+                    j.update(state='running', start=time.time())
+                    for other in running:
+                        other['concurrent_jobs'].append(j['id'])
+                        j['concurrent_jobs'].append(other['id'])
+                        save(other, 'overlap')
+                    with (DIR / (j['id'] + '.log')).open('ab') as log:
+                        p = subprocess.Popen([sys.executable, SELF, '_run', j['id']],
+                                             stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                                             start_new_session=True)
+                    children.append(p)
+                    j['runner_pid'] = p.pid
+                    save(j, 'started')
+                    running.append(j)
+                pending = any(j['state'] in ('queued', 'running') for j in alljobs)
+            if once and not pending:
+                return 0
+            time.sleep(.05)
+    finally:
+        for p in children:
+            p.poll()
+
+
+def run_job(jid):
+    p = None
+    try:
+        with locked():
+            j = get(jid)
+            if j.get('stop_reason'):
+                finish(j, j['stop_reason'], None)
+                return 0
+            runop = os.environ.get('JOBQ_RUN_OP', str(ROOT / 'bin/run_op'))
+            p = subprocess.Popen([runop, '--agent', 'jobq', '--task', j['name'], '--',
+                                  sys.executable, SELF, '_exec', jid],
+                                 cwd=j['cwd'], env=j['env'], start_new_session=True)
+            j['wrapper_pgid'] = p.pid
+            save(j, 'wrapper_started')
+        stopped_at = None
+        while True:
+            with locked():
+                j = get(jid)
+                if not j.get('stop_reason') and j['timeout'] is not None and time.time() - j['start'] >= j['timeout']:
+                    j['stop_reason'] = 'timeout'
+                    save(j, 'timeout_requested')
+                if j.get('stop_reason'):
+                    kill_groups(j, signal.SIGTERM)
+                    stopped_at = stopped_at or time.monotonic()
+                    if time.monotonic() - stopped_at >= .5:
+                        kill_groups(j, signal.SIGKILL)
+                        rc = p.wait()
+                        finish(j, j['stop_reason'], rc)
+                        return 0
+                elif p.poll() is not None:
+                    # Do not leave command descendants behind after wrapper exit.
+                    kill_groups(j, signal.SIGKILL)
+                    finish(j, 'succeeded' if p.returncode == 0 else 'failed', p.returncode)
+                    return 0
+            time.sleep(.025)
+    except Exception as exc:
+        with locked():
+            j = get(jid)
+            kill_groups(j, signal.SIGKILL)
+            j['error'] = str(exc)
+            finish(j, 'failed', None)
+        if p:
+            p.wait()
+        return 1
+
+
+def exec_job(jid):
+    with locked():
+        j = get(jid)
+        if j.get('stop_reason') or j['state'] "'!= '"'running':
+            return 1
+        j.update(pid=os.getpid(), pgid=os.getpgrp())
+        save(j, 'command_started')
+    os.execvpe(j['argv'][0], j['argv'], os.environ)
+
+
+def seconds(value):
+    n = float(value)
+    if not math.isfinite(n) or n < 0:
+        raise argparse.ArgumentTypeError('seconds must be finite and nonnegative')
+    return n
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    sp = ap.add_subparsers(dest='command', required=True)
+    s = sp.add_parser('submit')
+    s.add_argument('--class', dest='cls', choices=['gpu', 'build', 'cpu'], required=True)
+    s.add_argument('--after', nargs='+', action='extend', default=[])
+    s.add_argument('--name')
+    s.add_argument('--timeout', type=seconds)
+    s.add_argument('--allow-during-gpu', action='store_true')
+    s.add_argument('argv', nargs=argparse.REMAINDER)
+    w = sp.add_parser('worker'); w.add_argument('--once', action='store_true')
+    sp.add_parser('list')
+    for cmd in ('show', 'wait', 'cancel', '_run', '_exec'):
+        p = sp.add_parser(cmd); p.add_argument('jobid')
+        if cmd == 'wait':
+            p.add_argument('--timeout', type=seconds)
+    a = ap.parse_args()
+    if a.command == '_run':
+        return run_job(a.jobid)
+    if a.command == '_exec':
+        return exec_job(a.jobid)
+    if a.command == 'worker':
+        return worker(a.once)
+    if a.command == 'wait':
+        deadline = None if a.timeout is None else time.monotonic() + a.timeout
+        while True:
+            with locked():
+                reconcile(); j = get(a.jobid)
+            if j['state'] in TERMINAL:
+                return 0 if j['state'] == 'succeeded' else 1
+            if deadline is not None and time.monotonic() >= deadline:
+                return 2
+            time.sleep(.05)
+    with locked():
+        reconcile()
+        if a.command == 'submit':
+            argv = a.argv[1:] if a.argv[:1] == ['--'] else a.argv
+            if not argv:
+                ap.error('command required after --')
+            for dep in a.after:
+                get(dep)
+            jid = 'job-' + uuid.uuid4().hex
+            j = dict(id=jid, argv=argv, **{'class': a.cls}, deps=a.after,
+                     name=a.name or argv[0], timeout=a.timeout,
+                     allow_during_gpu=a.allow_during_gpu, state='queued', pid=None,
+                     pgid=None, runner_pid=None, start=None, end=None, rc=None,
+                     concurrent_jobs=[], submitted=time.time_ns(), cwd=os.getcwd(),
+                     env=dict(os.environ))
+            save(j, 'submitted'); print(jid)
+        elif a.command == 'list':
+            for j in jobs():
+                print(j['id'], j['state'], j['class'], j['name'])
+        elif a.command == 'show':
+            print(json.dumps(get(a.jobid), indent=2))
+        elif a.command == 'cancel':
+            j = get(a.jobid)
+            if j['state'] == 'queued':
+                finish(j, 'cancelled', None)
+            elif j['state'] == 'running':
+                j['stop_reason'] = 'cancelled'
+                save(j, 'cancel_requested')
+                kill_groups(j, signal.SIGTERM)
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (ValueError, OSError) as exc:
+        print('jobq: ' + str(exc), file=sys.stderr)
+        sys.exit(1)
+PY
+chmod +x bin/jobq
+python3 - <<'PY'
+p='cc/resource_observe/resource_observe.py'
+s=open(p).read().replace('\"host_id\": host_id or socket.gethostname()', '\"host_id\": host_id or campaign_host_id()')
+pos=s.index('\\ndef record(')
+s=s[:pos]+'''\\ndef campaign_host_id():
+    try:
+        with open(os.path.expanduser(\"~/.config/siminfeng/host_id\")) as f:
+            return f.read().strip() or socket.gethostname()
+    except OSError:
+        return socket.gethostname()
+
+'''+s[pos:]
+open(p,'w').write(s)
+p='cc/om_run/om_run.sh';s=open(p).read();s=s.replace('\""'$OOM" "$TRIP" <<'"', '\""'$OOM" "$TRIP" "$IMG" "$ENVF" "$TOOL" "$@" <<'"')
+a=s.index('import json,sys\\n');s=s[:a]+'''import json,sys,os,socket
+o,rc,t0,t1,oom,trip,image,env,*argv=sys.argv[1:]
+code=int(rc.strip() or -1)
+tripped=int(trip)>0
+if tripped and code in (137, -9):
+    status=\"watchdog_tripped_killed\"
+elif tripped and code == 0:
+    status=\"watchdog_tripped_survived\"
+elif oom.strip()==\"true\":
+    status=\"oom_killed\"
+else:
+    status=\"ok\" if code == 0 else \"failed\"
+try:
+    with open(os.path.expanduser(\"~/.config/siminfeng/host_id\")) as f:
+        host_id=f.read().strip() or socket.gethostname()
+except OSError:
+    host_id=socket.gethostname()
+json.dump(dict(exit_code=code,wall_s=round(float(t1)-float(t0),2),
+  oom_killed=oom.strip()==\"true\",watchdog_trips=int(trip),status=status,
+  host_id=host_id,image=image,env=env,argv=argv),open(o+\"/result.json\",\"w\"),indent=1)
+print(open(o+\"/result.json\").read())
+PY
+''';open(p,'w').write(s)
+PY" in /home/muk/projects/siminfeng/campaign
+ exited 2 in 275ms:
+  File "<stdin>", line 14
+    a=s.index('import json,sys\n');s=s[:a]+'''import json,sys,os,socket
+                                           ^
+SyntaxError: unterminated triple-quoted string literal (detected at line 34)
+/bin/bash: -c: line 317: unexpected EOF while looking for matching `''
+/bin/bash: -c: line 319: syntax error: unexpected end of file
+
+exec
+/bin/bash -lc "python3 - <<'EDIT'
+p='cc/resource_observe/resource_observe.py'
+s=open(p).read().replace('\"host_id\": host_id or socket.gethostname()', '\"host_id\": host_id or campaign_host_id()')
+pos=s.index('\\ndef record(')
+s=s[:pos]+'''\\ndef campaign_host_id():
+    try:
+        with open(os.path.expanduser(\"~/.config/siminfeng/host_id\")) as f:
+            return f.read().strip() or socket.gethostname()
+    except OSError:
+        return socket.gethostname()
+
+'''+s[pos:]
+open(p,'w').write(s)
+p='cc/om_run/om_run.sh';s=open(p).read();s=s.replace('\""'$OOM" "$TRIP" <<'"', '\""'$OOM" "$TRIP" "$IMG" "$ENVF" "$TOOL" "$@" <<'"')
+a=s.index('import json,sys\\n');s=s[:a]+'''import json,sys,os,socket
+o,rc,t0,t1,oom,trip,image,env,*argv=sys.argv[1:]
+code=int(rc.strip() or -1)
+tripped=int(trip)>0
+if tripped and code in (137, -9):
+    status=\"watchdog_tripped_killed\"
+elif tripped and code == 0:
+    status=\"watchdog_tripped_survived\"
+elif oom.strip()==\"true\":
+    status=\"oom_killed\"
+else:
+    status=\"ok\" if code == 0 else \"failed\"
+try:
+    with open(os.path.expanduser(\"~/.config/siminfeng/host_id\")) as f:
+        host_id=f.read().strip() or socket.gethostname()
+except OSError:
+    host_id=socket.gethostname()
+json.dump(dict(exit_code=code,wall_s=round(float(t1)-float(t0),2),
+  oom_killed=oom.strip()==\"true\",watchdog_trips=int(trip),status=status,
+  host_id=host_id,image=image,env=env,argv=argv),open(o+\"/result.json\",\"w\"),indent=1)
+print(open(o+\"/result.json\").read())
+PY
+''';open(p,'w').write(s)
+EDIT" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc "cat > bin/test_jobq.py <<'PY'
+\"\"\"Queue integration tests: no evidence, containers, builds, or device access.\"\"\"
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+import pytest
+
+JOBQ = Path(__file__).with_name('jobq')
+
+
+@pytest.fixture
+def q(tmp_path):
+    fake = tmp_path / 'run_op'
+    fake.write_text('#"'!/usr/bin/env python3'"\\nimport os,sys\\na=sys.argv[sys.argv.index(\"--\")+1:]\\nos.execvp(a[0],a)\\n')
+    fake.chmod(0o755)
+    env = dict(os.environ, JOBQ_DIR=str(tmp_path / 'state'), JOBQ_RUN_OP=str(fake))
+    workers = []
+
+    class Queue:
+        def call(self, *args, check=True):
+            return subprocess.run([str(JOBQ), *map(str, args)], env=env,
+                                  capture_output=True, text=True, check=check, timeout=15)
+
+        def submit(self, cls='cpu', cmd=None, options=()):
+            return self.call('submit', '--class', cls, *options, '--',
+                             *(cmd or ['true'])).stdout.strip()
+
+        def show(self, jid):
+            return json.loads(self.call('show', jid).stdout)
+
+        def worker(self):
+            p = subprocess.Popen([str(JOBQ), 'worker', '--once'], env=env,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            workers.append(p)
+            return p
+
+        def drain(self):
+            self.call('worker', '--once')
+
+        def until(self, jid, predicate):
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                j = self.show(jid)
+                if predicate(j):
+                    return j
+                time.sleep(.02)
+            pytest.fail('job did not reach expected state: ' + str(j))
+
+    queue = Queue()
+    yield queue
+    state = tmp_path / 'state'
+    for path in state.glob('job-*.json'):
+        j = json.loads(path.read_text())
+        for key in ('pgid', 'wrapper_pgid'):
+            if j.get(key):
+                try:
+                    os.killpg(j[key], signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+    for p in workers:
+        if p.poll() is None:
+            p.terminate()
+        p.communicate(timeout=5)
+
+
+def test_fifo_and_metadata(q):
+    ids = [q.submit('build', ['sleep', '.1'], ['--name', 'ordered']) for _ in range(3)]
+    q.drain()
+    records = [q.show(i) for i in ids]
+    assert all(j['state'] == 'succeeded' and j['rc'] == 0 for j in records)
+    assert all(a['end'] <= b['start'] for a, b in zip(records, records[1:]))
+    for j in records:
+        assert j['argv'] == ['sleep', '.1']
+        assert j['pid'] == j['pgid'] and j['pid'] > 0
+        assert j['deps'] == [] and j['concurrent_jobs'] == []
+        assert j['allow_during_gpu'] is False
+    assert ids[0] in q.call('list').stdout
+    events = [json.loads(line) for line in (Path(os.environ.get('UNUSED', '/tmp')) / 'unused').read_text().splitlines()] if False else []
+    # The event stream preserves submission and terminal transitions.
+    path = Path(q.call('show', ids[0]).args[0])  # CLI itself remains a single executable.
+    assert path == JOBQ
+
+
+def test_dependencies_success_failure_and_transitive_skip(q):
+    good = q.submit()
+    bad = q.submit(cmd=['false'])
+    child = q.submit(options=['--after', good])
+    skipped = q.submit(options=['--after', good, bad])
+    grandchild = q.submit(options=['--after', skipped])
+    q.drain()
+    assert q.show(child)['state'] == 'succeeded'
+    assert q.show(child)['start'] >= q.show(good)['end']
+    assert q.show(bad)['state'] == 'failed'
+    for jid in (skipped, grandchild):
+        assert q.show(jid)['state'] == 'skipped_dep_failed'
+        assert q.show(jid)['pid'] is None
+    assert q.call('submit', '--class', 'cpu', '--after', 'job-abc', '--', 'true', check=False).returncode == 1
+
+
+def test_gpu_build_exclusion_multiple_workers(q):
+    ids = [q.submit(cls, ['sleep', '1']) for cls in ('gpu', 'build')]
+    p, other = q.worker(), q.worker()
+    assert p.wait(timeout=10) == other.wait(timeout=10) == 0
+    a, b = [q.show(i) for i in ids]
+    assert a['end'] <= b['start']
+    assert a['concurrent_jobs'] == b['concurrent_jobs'] == []
+
+
+def test_cpu_during_build(q):
+    build = q.submit('build', ['sleep', '.6'])
+    cpu = q.submit('cpu', ['sleep', '.3'])
+    q.drain()
+    a, b = q.show(build), q.show(cpu)
+    assert a['start'] < b['end'] and b['start'] < a['end']
+    assert a['concurrent_jobs'] == [cpu] and b['concurrent_jobs'] == [build]
+
+
+@pytest.mark.parametrize('cpu_first', [False, True])
+def test_cpu_gpu_exclusion_both_directions(q, cpu_first):
+    ids = [q.submit(c, ['sleep', '.2']) for c in (('cpu', 'gpu') if cpu_first else ('gpu', 'cpu'))]
+    q.drain()
+    a, b = [q.show(i) for i in ids]
+    assert a['end'] <= b['start']
+
+
+def test_cpu_opt_in_during_gpu(q):
+    gpu = q.submit('gpu', ['sleep', '.5'])
+    cpu = q.submit('cpu', ['sleep', '.3'], ['--allow-during-gpu'])
+    q.drain()
+    assert q.show(cpu)['allow_during_gpu'] is True
+    assert q.show(gpu)['concurrent_jobs'] == [cpu]
+    assert q.show(cpu)['concurrent_jobs'] == [gpu]
+
+
+def test_cancel_child_process_group(q, tmp_path):
+    child_pid = tmp_path / 'child.pid'
+    # Parent reaps its child on TERM, so the assertion checks death, not zombies.
+    code = '''import os,signal,subprocess,sys,time
+p=subprocess.Popen([sys.executable,\"-c\",\"import time; time.sleep(30)\"])
+def stop(*args):
+    p.wait(timeout=3)
+    sys.exit(0)
+signal.signal(signal.SIGTERM,stop)
+open(sys.argv[1],\"w\").write(str(p.pid))
+time.sleep(30)
+'''
+    jid = q.submit(cmd=[sys.executable, '-c', code, str(child_pid)])
+    p = q.worker()
+    q.until(jid, lambda j: j['pid'] is not None and child_pid.exists())
+    pid = int(child_pid.read_text())
+    q.call('cancel', jid)
+    assert q.call('wait', jid, '--timeout', '5', check=False).returncode == 1
+    assert q.show(jid)['state'] == 'cancelled'
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+    assert p.wait(timeout=5) == 0
+
+
+def test_queued_cancel_and_wait_codes(q):
+    queued = q.submit()
+    assert q.call('wait', queued, '--timeout', '.05', check=False).returncode == 2
+    q.call('cancel', queued)
+    assert q.call('wait', queued, check=False).returncode == 1
+    good, bad = q.submit(), q.submit(cmd=['false'])
+    q.drain()
+    assert q.call('wait', good).returncode == 0
+    assert q.call('wait', bad, check=False).returncode == 1
+    assert q.show(queued)['state'] == 'cancelled'
+
+
+def test_job_timeout(q):
+    jid = q.submit(cmd=['sleep', '30'], options=['--timeout', '.2'])
+    next_job = q.submit('gpu')
+    q.drain()
+    j = q.show(jid)
+    assert j['state'] == 'timeout'
+    assert j['end'] - j['start'] < 3
+    assert q.show(next_job)['start'] >= j['end']
+    assert q.call('wait', jid, check=False).returncode == 1
+PY
+python3 -m pytest -q bin/test_jobq.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 16851ms:
+..........                                                               [100%]
+10 passed in 16.19s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='bin/test_jobq.py';s=open(p).read();s=s.replace('import os,sys\\\\na=sys.argv[sys.argv.index(\"--\")+1:]\\\\nos.execvp(a[0],a)\\\\n', 'import subprocess,sys\\\\na=sys.argv[sys.argv.index(\"--\")+1:]\\\\np=subprocess.Popen(a,start_new_session=True)\\\\nsys.exit(p.wait())\\\\n');s=s.replace('    queue = Queue()\\n', '    queue = Queue()\\n    queue.state = tmp_path / \"state\"\\n');a=s.index('    events = [json.loads(line)');b=s.index('\\n\\ndef test_dependencies',a);s=s[:a]+'''    events = [json.loads(line) for line in (q.state / 'events.jsonl').read_text().splitlines()]
+    assert [e['job'] for e in events if e['event'] == 'submitted'] == ids
+    assert [e['job'] for e in events if e['event'] == 'succeeded'] == ids
+'''+s[b:];open(p,'w').write(s)
+PY
+cat > bin/README-jobq.md <<'DOC'
+# Local job queue
+
+Run from the campaign root. Python 3 standard library only; jobs use "'`bin/run_op`
+with agent `jobq` and the submitted name as task. No worker starts automatically.
+
+```sh
+build=$(bin/jobq submit --class build --name engine --timeout 7200 -- python3 cc/build_engine/build_engine.py ...)
+run=$(bin/jobq submit --class gpu --after "$build" --name timing --timeout 5400 -- python3 cc/om_spec/om_spec.py ...)
+bin/jobq worker --once
+bin/jobq wait "$run" --timeout 600
+bin/jobq list
+bin/jobq show "$run"
+bin/jobq cancel "$run"
+```
+
+`worker` polls continuously; `worker --once` drains the queue until idle, including
+jobs made ready by dependencies. Multiple workers share the same admission lock.
+Eligible jobs are admitted FIFO; blocked jobs do not prevent compatible work.
+A failed, cancelled, timed out, or skipped dependency causes `skipped_dep_failed`.
+`wait` returns 0 for success, 1 for any other terminal state, 2 for wait timeout.
+Wait timeout does not cancel work. Job timeout terminates its process groups.
+Cancellation sends TERM, then KILL after a short grace period if needed.
+
+At most one GPU or build job runs at once. CPU jobs can overlap builds; CPU jobs
+exclude GPU jobs unless submitted with `--allow-during-gpu`. This prevents the
+build/timing contamination seen in D029/D031. The rule works in both directions.
+Only commands admitted through this queue are covered by its exclusivity rules.
+
+State defaults to `lab/jobq/`: one JSON per job, append-only `events.jsonl`, a
+`lock`, and per-job logs. JSON records command PID/group, wrapper group, times,
+exit status, dependencies, and symmetric `concurrent_jobs` overlap history.
+A worker restart detects a dead job supervisor and fails the abandoned job.
+`JOBQ_DIR` overrides state storage; `JOBQ_RUN_OP` selects a test wrapper.
+Submit preserves the working directory and environment for execution.
+
+Migration of `cc/om_run/pipeline6.sh` (run after the preceding pipeline'"'s job):
+
+"'```sh
+O=experiments/jetson/SPEC2-$(date +%Y%m%d-%H%M)
+IMG=campaign/llamacpp:jetson-up1108
+prev=$pipeline5_job_id
+for arm in '"'base 1' 'ngram-mod 1' 'ngram-mod 2' 'base 2'; do
+  set -- "'$arm
+  prev=$(bin/jobq submit --class gpu --after "$prev" '"\\
+    --name \"J-SPEC2-"'$1-r$2" --timeout 5400 -- '"\\
+    python3 cc/om_spec/om_spec.py \""'$O/$1-r$2" "$IMG" "$1" "$2")
+done
+bin/jobq worker --once
+bin/jobq wait "$prev"
+```
+DOC
+python3 -m pytest -q cc/resource_observe' in /home/muk/projects/siminfeng/campaign
+ succeeded in 1294ms:
+.................................                                        [100%]
+33 passed in 0.80s
+
+codex
+The initial queue tests passed: 10 tests in 16.19 seconds. I’ve since adjusted the fake wrapper to create a separate command session like `run_op`, so the next run will test cancellation across that session boundary. I’ll also check host identity, result classification, and the isolated smoke flow.
+exec
+/bin/bash -lc "sed -n '1,90p' cc/resource_observe/test_resource_observe.py; sed -n '1,26p' bin/test_jobq.py; git diff --stat; bash -n cc/om_run/om_run.sh; grep -n watchdog_tripped_survived cc/om_run/om_run.sh; grep -nE 'pgrep|pkill' bin/jobq; wc -l bin/README-jobq.md" in /home/muk/projects/siminfeng/campaign
+ succeeded in 110ms:
+import json, os, subprocess, sys
+import pytest
+import resource_observe as ro
+
+FX = os.path.join(os.path.dirname(__file__), "fixtures")
+def fx(n): return open(os.path.join(FX, n)).read()
+def names(ms): return {m["name"]: m for m in ms}
+
+def test_real_fixture():
+    for line in fx("tegrastats-idle-orin-nano-r36.5.txt").splitlines():
+        m, u, e = ro.parse_tegrastats(line)
+        d = names(m)
+        assert not e
+        assert d["ram_used"]["value"] == 1539 and d["ram_total"]["value"] == 7607
+        assert d["ram_used"]["scope"] == "system-shared-dram" and d["ram_used"]["unit"] == "MiB"
+        assert d["ram_lfb"]["value"] == 52 and d["swap_total"]["value"] == 3804 and d["swap_cached"]["value"] == 0
+        assert len([k for k in d if k.endswith("_load") and k.startswith("cpu")]) == 6
+        assert d["cpu4_freq"]["unit"] == "MHz"
+        assert d["gpu_util"]["value"] == 0 and d["temp_tj"]["unit"] == "celsius"
+        assert d["power_VDD_IN_instant"]["value"] > 4000 and d["power_VDD_IN_avg"]["unit"] == "mW"
+        assert "power_VDD_CPU_GPU_CV_avg" in d
+        assert any(x["name"] == "gpu_freq" for x in u) and any(x["name"] == "emc_freq" for x in u)
+        assert "gpu_freq" not in d and "emc_freq" not in d  # no false values
+
+def test_gr3d_and_emc_with_freq():
+    m, u, e = ro.parse_tegrastats("RAM 1/2MB SWAP 0/1MB CPU [1%@100,off] GR3D_FREQ 50%@[612] EMC_FREQ 7%@2133")
+    d = names(m)
+    assert d["gpu_freq"]["value"] == 612 and d["emc_freq"]["value"] == 2133 and d["emc_util"]["value"] == 7
+    assert any(x["name"] == "cpu1_load" and "offline" in x["reason"] for x in u)
+
+def test_empty_and_garbage():
+    m, u, e = ro.parse_tegrastats("")
+    assert not m and e and "line_sha256_16" in e[0]
+    m, u, e = ro.parse_tegrastats("complete garbage \x00")
+    assert not m and e and len(e[0]["line_sha256_16"]) == 16
+    assert ro.parse_tegrastats(None)[2]
+
+def test_truncated_and_missing_ram():
+    full = fx("tegrastats-idle-orin-nano-r36.5.txt").splitlines()[0]
+    m, u, e = ro.parse_tegrastats(full[:60])  # cut inside SWAP
+    assert "ram_used" in names(m)
+    m, u, e = ro.parse_tegrastats(full.replace("RAM 1539/7607MB (lfb 13x4MB) ", ""))
+    assert "ram_used" not in names(m) and e and any(x["name"] == "ram_used" for x in u)
+    assert "gpu_util" in names(m)  # rest still parsed
+
+def test_unknown_rails_and_extra_fields():
+    m, u, e = ro.parse_tegrastats("RAM 1/2MB SWAP 0/1MB CPU [1%@1] GR3D_FREQ 0% NEWFIELD 5 foo@12.5C VDD_WEIRD_X9 10mW/20mW")
+    d = names(m)
+    assert not e and d["power_VDD_WEIRD_X9_avg"]["value"] == 20 and d["temp_foo"]["value"] == 12.5
+
+def test_proc_fixtures(tmp_path):
+    (tmp_path / "meminfo").write_text(fx("proc-meminfo-orin-nano.txt"))
+    (tmp_path / "loadavg").write_text(fx("proc-loadavg-orin-nano.txt"))
+    m, u = ro.proc_sample(str(tmp_path))
+    d = names(m)
+    assert d["mem_total"]["value"] == pytest.approx(7789756 / 1024, rel=1e-6) and d["mem_total"]["unit"] == "MiB"
+    assert d["load1"]["value"] == 0.56
+    assert any(x["name"] == "nvmap" for x in u)
+
+def test_proc_missing_fields(tmp_path):
+    (tmp_path / "meminfo").write_text("MemTotal: 1024 kB\nNvMapMemUsed: 2048 kB\n")
+    m, u = ro.proc_sample(str(tmp_path))
+    d = names(m)
+    assert d["mem_total"]["value"] == 1.0 and d["meminfo_NvMapMemUsed"]["value"] == 2.0
+    un = {x["name"] for x in u}
+    assert {"mem_available", "swap_total", "loadavg"} <= un and "mem_available" not in d
+    m, u = ro.proc_sample(str(tmp_path / "nope"))
+    assert not m and u
+
+def test_pid_and_cgroup(tmp_path):
+    (tmp_path / "42").mkdir()
+    (tmp_path / "42" / "status").write_text("VmHWM:\t 2048 kB\nVmRSS:\t 1024 kB\n")
+    cg = tmp_path / "cg"; cg.mkdir()
+    (cg / "memory.current").write_text("1048576\n"); (cg / "memory.max").write_text("max\n")
+    m, u = ro.proc_sample(str(tmp_path), pid=42, cgroup=str(cg))
+    d = names(m)
+    assert d["pid_rss"]["value"] == 1.0 and d["pid_rss"]["scope"] == "process" and d["pid_hwm"]["value"] == 2.0
+    assert d["cgroup_current"]["scope"] == "cgroup" and "accounting_note" in d["cgroup_current"]
+    un = {x["name"] for x in u}
+    assert "cgroup_peak" in un and "cgroup_max" in un and "cgroup_max" not in d
+    m, u = ro.proc_sample(str(tmp_path), pid=999)
+    assert any(x["name"] == "pid_rss" for x in u) and "pid_rss" not in names(m)
+
+def test_no_double_count_scopes(tmp_path):
+    (tmp_path / "meminfo").write_text(fx("proc-meminfo-orin-nano.txt"))
+    (tmp_path / "7").mkdir(); (tmp_path / "7" / "status").write_text("VmRSS: 1024 kB\n")
+    cg = tmp_path / "cg"; cg.mkdir(); (cg / "memory.current").write_text("4096")
+    tm, _, _ = ro.parse_tegrastats(fx("tegrastats-idle-orin-nano-r36.5.txt").splitlines()[0])
+    pm, _ = ro.proc_sample(str(tmp_path), pid=7, cgroup=str(cg))
+    scopes = {x["scope"] for x in tm + pm if "ram" in x["name"] or "mem" in x["name"] or "pid" in x["name"] or "cgroup" in x["name"]}
+"""Queue integration tests: no evidence, containers, builds, or device access."""
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+import pytest
+
+JOBQ = Path(__file__).with_name('jobq')
+
+
+@pytest.fixture
+def q(tmp_path):
+    fake = tmp_path / 'run_op'
+    fake.write_text('#!/usr/bin/env python3\nimport subprocess,sys\na=sys.argv[sys.argv.index("--")+1:]\np=subprocess.Popen(a,start_new_session=True)\nsys.exit(p.wait())\n')
+    fake.chmod(0o755)
+    env = dict(os.environ, JOBQ_DIR=str(tmp_path / 'state'), JOBQ_RUN_OP=str(fake))
+    workers = []
+
+    class Queue:
+        def call(self, *args, check=True):
+            return subprocess.run([str(JOBQ), *map(str, args)], env=env,
+                                  capture_output=True, text=True, check=check, timeout=15)
+ campaign/cc/om_run/om_run.sh                     | 26 ++++++++--
+ campaign/cc/resource_observe/resource_observe.py | 10 +++-
+ campaign/evidence/jetson-arm/claude-code.jsonl   | 66 ++++++++++++++++++++++++
+ 3 files changed, 96 insertions(+), 6 deletions(-)
+38:    status="watchdog_tripped_survived"
+50 bin/README-jobq.md
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='bin/jobq';s=open(p).read().replace('def kill_groups(j, sig):\\n    for pgid in {j.get(\\'pgid\\'), j.get(\\'wrapper_pgid\\')} - {None}:', '''def kill_groups(j, sig):
+    # Let run_op reap the command and record its outcome during the TERM grace.
+    groups = {j.get('pgid')}
+    if sig == signal.SIGKILL:
+        groups.add(j.get('wrapper_pgid'))
+    for pgid in groups - {None}:''');s=s.replace('env=dict(os.environ))','env=dict(os.environ, JOBQ_DIR=str(DIR)))');open(p,'w').write(s)
+p='cc/resource_observe/test_resource_observe.py';s=open(p).read();s+='''\\n\\ndef test_campaign_host_id(tmp_path, monkeypatch):
+    monkeypatch.setenv(\"HOME\", str(tmp_path))
+    monkeypatch.setattr(ro.socket, \"gethostname\", lambda: \"fallback-host\")
+    assert ro.record(\"proc\", 0, [])['host_id'] == \"fallback-host\"
+    path = tmp_path / \".config\" / \"siminfeng\" / \"host_id\"
+    path.parent.mkdir(parents=True)
+    path.write_text(\"jetson-arm\\\\n\")
+    assert ro.record(\"proc\", 0, [])['host_id'] == \"jetson-arm\"
+    assert ro.record(\"proc\", 0, [], host_id=\"explicit\")['host_id'] == \"explicit\"
+    path.write_text(\"\\\\n\")
+    assert ro.record(\"proc\", 0, [])['host_id'] == \"fallback-host\"
+''';open(p,'w').write(s)
+PY
+python3 -m pytest -q bin/test_jobq.py" in /home/muk/projects/siminfeng/campaign
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+import json, os, subprocess, sys, tempfile
+script=Path('cc/om_run/om_run.sh').read_text().split(\"<<'PY'\\n\",1)[1].rsplit('\\nPY',1)[0]
+with tempfile.TemporaryDirectory() as tmp:
+    home=Path(tmp)/'home'; p=home/'.config/siminfeng/host_id';p.parent.mkdir(parents=True);p.write_text('jetson-arm\\n')
+    env=dict(os.environ,HOME=str(home))
+    for rc,oom,trip,want in [('0','false','1','watchdog_tripped_survived'),('137','false','1','watchdog_tripped_killed'),('0','false','0','ok'),('137','true','0','oom_killed'),('1','false','0','failed'),('1','false','1','failed')]:
+        subprocess.run([sys.executable,'-',tmp,rc,'1','2',oom,trip,'test-image','-e A=1','llama-bench','arg with spaces'],input=script,text=True,env=env,stdout=subprocess.DEVNULL,check=True)
+        result=json.loads((Path(tmp)/'result.json').read_text())
+        assert result['status']==want,result
+        assert result['host_id']=='jetson-arm'
+        assert result['image']=='test-image' and result['env']=='-e A=1'
+        assert result['argv']==['llama-bench','arg with spaces']
+print('Result classifier: 6 cases passed (Python block only; no Docker).')
+PY
+python3 -m pytest -q cc/resource_observe" in /home/muk/projects/siminfeng/campaign
+ succeeded in 1676ms:
+Result classifier: 6 cases passed (Python block only; no Docker).
+..................................                                       [100%]
+34 passed in 0.84s
+
+ succeeded in 16794ms:
+..........                                                               [100%]
+10 passed in 16.27s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+import json, os, pathlib, subprocess, tempfile
+jobq=str(pathlib.Path('bin/jobq').resolve())
+with tempfile.TemporaryDirectory(prefix='jobq-smoke-') as tmp:
+    env=dict(os.environ,JOBQ_DIR=tmp+'/queue',CAMPAIGN_ROOT=tmp+'/campaign')
+    jid=subprocess.check_output([jobq,'submit','--class','cpu','--','true'],env=env,text=True).strip()
+    subprocess.run([jobq,'worker','--once'],env=env,check=True,timeout=10)
+    subprocess.run([jobq,'wait',jid],env=env,check=True,timeout=5)
+    j=json.loads(subprocess.check_output([jobq,'show',jid],env=env,text=True))
+    assert j['state']=='succeeded' and j['rc']==0
+    ev=pathlib.Path(tmp+'/campaign/evidence')
+    records=[json.loads(l) for p in ev.rglob('*.jsonl') for l in p.read_text().splitlines()]
+    assert [r['kind'] for r in records]==['intent','started','outcome']
+    assert records[-1]['status']=='ok' and records[0]['agent']=='jobq'
+    print('Smoke passed with real run_op; all artifacts/evidence isolated in temporary directory.')
+PY
+bash -n cc/om_run/om_run.sh
+if grep -nE 'pgrep|pkill' bin/jobq; then exit 1; fi
+grep -n watchdog_tripped_survived cc/om_run/om_run.sh
+git diff --check -- bin/jobq bin/test_jobq.py bin/README-jobq.md cc/om_run/om_run.sh cc/resource_observe/resource_observe.py cc/resource_observe/test_resource_observe.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 668ms:
+Smoke passed with real run_op; all artifacts/evidence isolated in temporary directory.
+38:    status="watchdog_tripped_survived"
+
+codex
+The final checks passed: 10 queue tests in 16.27 seconds, 34 resource-observer tests, and six result-classifier cases. The real `run_op` smoke test also passed with evidence and artifacts isolated under `/tmp`. Shell syntax, forbidden-pattern grep, and whitespace checks are clean.
+codex
+Implemented:
+- `bin/jobq`, `bin/test_jobq.py`, `bin/README-jobq.md`
+- `cc/om_run/om_run.sh`
+- `cc/resource_observe/resource_observe.py` and host-ID regression test
+
+Validation: 10 queue tests passed in 16.27s; 34 resource tests passed; six classifier cases passed. Syntax, grep, whitespace, and isolated real-`run_op` smoke checks passed.
+
+No deviations. No Docker, GPU, builds, repository evidence edits, or commits.
+tokens used
+33,944
+Implemented:
+- `bin/jobq`, `bin/test_jobq.py`, `bin/README-jobq.md`
+- `cc/om_run/om_run.sh`
+- `cc/resource_observe/resource_observe.py` and host-ID regression test
+
+Validation: 10 queue tests passed in 16.27s; 34 resource tests passed; six classifier cases passed. Syntax, grep, whitespace, and isolated real-`run_op` smoke checks passed.
+
+No deviations. No Docker, GPU, builds, repository evidence edits, or commits.

@@ -1,0 +1,1360 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /tmp]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1c8ce-3f17-7c21-a31a-8c492e232306
+--------
+user
+# Assignment H4 — "shape of work" report generator (harness; host jetson-arm; worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Purpose: the campaign must yield usable data about how inference-engine work is actually spent (who did what, how long, how often it failed and why, how much the GPU sat idle), not just results.
+Inputs (read their formats from real files):
+- `c2/worklog.jsonl` (events start/end/checkin per task; fields task, worker, wall_s, tokens, verdict, issues, rework_rounds, opus_fix).
+- `evidence/jetson-arm/*.jsonl` run_op records (kind intent/started/outcome joined by `op`; fields agent, task, argv, elapsed_s, exit_code, status, ts). Ignore `claude-code.jsonl` hook events except to count tool calls per day (event PreToolUse, payload.tool_name).
+- `lab/jobq/*.json` job records (class, state, start/end ns, concurrent_jobs) — may be absent.
+- experiment result dirs: `experiments/jetson/OM/*/**/result.json` and abrun `verdict.json` files.
+- CLOSEOUT.md section 2 tables are NOT inputs (hand-written).
+
+## Deliverables
+1. `c2/shape_report.py [--since ISO] [--out c2/SHAPE.md] [--json c2/shape.json]` (python3 stdlib):
+   - Ops table by (agent, task-prefix class) with counts, total/median elapsed, failure rate; task-prefix class = mapping you define in a dict at top (J-OM*->over-memory, J-T*/H*->tooling, J-E*/J-P*->granite-experiments, J-BQ/build*->build, J-KS/KS*->kernel-screen, J-SPEC*->speculation, else other) — print unmapped task names so the map can be extended.
+   - Failure taxonomy: classify non-ok outcomes by regex over argv/stderr path tail (read at most 4 KiB of each stderr file if present): flag_error (`invalid argument|unknown argument|error: invalid`), oom/watchdog, docker_start, build_fail, timeout, other. Counts + 3 example ops each.
+   - Timeline: GPU-busy intervals = union of ops whose argv contains `om_run.sh|om_spec.py|llama-bench|kernel_screen|abrun.py|llama-perplexity` (and jobq gpu jobs); build intervals = argv containing `build_engine.py`. Report per day: gpu busy h, build h, overlap h (gpu AND build = contamination risk), and the longest idle gap between GPU ops while queued work existed (if jobq data available; otherwise just longest idle gap).
+   - Delegation table from worklog: per task wall, tokens, check-in verdict, issues count, rework rounds, opus_fix; totals by worker.
+   - Experiments: count of result.json by status; abrun verdicts by verdict value.
+   - Write SHAPE.md (tables, <= 200 lines) and shape.json (all numbers).
+2. `c2/test_shape_report.py` (pytest, < 30 s) on small synthetic fixtures in a tmp dir (env/args to point at fixture roots): interval union/overlap math, failure classification, worklog aggregation.
+## Acceptance (checker runs)
+- A1 `python3 -m pytest -q c2/test_shape_report.py` passes.
+- A2 `python3 c2/shape_report.py --out /tmp/SHAPE.md --json /tmp/shape.json` exits 0 on the real repo; /tmp/SHAPE.md has the 5 sections; shape.json parses.
+- A3 The real report shows the 2026-11-10 pipeline4 idle gap: longest GPU idle gap on 2026-11-10 >= 7 h (the known ~8.7 h deadlock 06:34-15:15). If it does not, explain why in the final message (that would mean the interval extraction is wrong).
+Constraints: read-only on all inputs; no docker/GPU; do not commit. Time 45 min. Final message <= 10 lines incl. the top 5 numbers from the real report.
+
+You are a Codex worker in campaign c2. Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
+codex
+I’ll inspect the input formats, build the report and fixture tests, then run the acceptance checks and verify the November 10 idle gap.
+exec
+/bin/bash -lc "pwd && rg --files -g AGENTS.md -g 'worklog.jsonl' -g '*.jsonl' -g 'result.json' -g 'verdict.json' -g '*.json' c2 evidence/jetson-arm lab/jobq experiments/jetson/OM 2>/dev/null | head -70" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+/home/muk/projects/siminfeng/campaign
+evidence/jetson-arm/opus-jetson.jsonl
+evidence/jetson-arm/jobq.jsonl
+evidence/jetson-arm/claude-code.jsonl
+experiments/jetson/OM/mc-20261110-0602/base-b/telemetry.jsonl
+experiments/jetson/OM/mc-20261110-0602/base-b/watchdog.jsonl
+experiments/jetson/OM/mc-20261110-0602/base-b/result.json
+experiments/jetson/OM/mc-20261110-0602/cache2048-direct-cpu50/telemetry.jsonl
+experiments/jetson/OM/mc-20261110-0602/cache2048-direct-cpu50/watchdog.jsonl
+experiments/jetson/OM/mc-20261110-0602/cache2048-direct-cpu50/result.json
+experiments/jetson/OM/mc-20261110-0602/cache2048/telemetry.jsonl
+experiments/jetson/OM/mc-20261110-0602/cache2048/watchdog.jsonl
+experiments/jetson/OM/mc-20261110-0602/cache2048/result.json
+experiments/jetson/OM/mc-20261110-0602/base-a/telemetry.jsonl
+experiments/jetson/OM/mc-20261110-0602/base-a/watchdog.jsonl
+experiments/jetson/OM/mc-20261110-0602/base-a/result.json
+experiments/jetson/OM/base-20261110-0435/mmap-ncmoe38/telemetry.jsonl
+experiments/jetson/OM/base-20261110-0435/mmap-ncmoe38/watchdog.jsonl
+experiments/jetson/OM/base-20261110-0435/mmap-ncmoe38/result.json
+experiments/jetson/OM/mc-20261110-0602/cache2048-dedupe/telemetry.jsonl
+experiments/jetson/OM/mc-20261110-0602/cache2048-dedupe/watchdog.jsonl
+experiments/jetson/OM/mc-20261110-0602/cache2048-dedupe/result.json
+experiments/jetson/OM/base-20261110-0435/mmap-ncmoe40-a/telemetry.jsonl
+experiments/jetson/OM/base-20261110-0435/mmap-ncmoe40-a/watchdog.jsonl
+experiments/jetson/OM/base-20261110-0435/mmap-ncmoe40-a/result.json
+experiments/jetson/OM/mc-20261110-0602/cache1024-direct/telemetry.jsonl
+experiments/jetson/OM/mc-20261110-0602/cache1024-direct/watchdog.jsonl
+experiments/jetson/OM/mc-20261110-0602/cache1024-direct/result.json
+experiments/jetson/OM/base-20261110-0435/auto-default/telemetry.jsonl
+experiments/jetson/OM/base-20261110-0435/auto-default/watchdog.jsonl
+experiments/jetson/OM/base-20261110-0435/auto-default/result.json
+experiments/jetson/OM/mc-20261110-0602/cache2048-direct/telemetry.jsonl
+experiments/jetson/OM/mc-20261110-0602/cache2048-direct/watchdog.jsonl
+experiments/jetson/OM/mc-20261110-0602/cache2048-direct/result.json
+experiments/jetson/OM/qwen36-layout.json
+experiments/jetson/OM/base-20261110-0435/none-ncmoe40/telemetry.jsonl
+experiments/jetson/OM/base-20261110-0435/none-ncmoe40/watchdog.jsonl
+experiments/jetson/OM/base-20261110-0435/none-ncmoe40/result.json
+experiments/jetson/OM/feas-b1-a2/telemetry.jsonl
+experiments/jetson/OM/feas-b1-a2/watchdog.jsonl
+experiments/jetson/OM/feas-b1-a2/result.json
+experiments/jetson/OM/base-20261110-0435/mmap-ngl0/telemetry.jsonl
+experiments/jetson/OM/base-20261110-0435/mmap-ngl0/watchdog.jsonl
+experiments/jetson/OM/base-20261110-0435/mmap-ngl0/result.json
+experiments/jetson/OM/trace-20261110-0504/code/routing.jsonl
+experiments/jetson/OM/base-20261110-0435/mmap-ncmoe40-b/telemetry.jsonl
+experiments/jetson/OM/trace-20261110-0504/code/run/telemetry.jsonl
+experiments/jetson/OM/base-20261110-0435/mmap-ncmoe40-b/watchdog.jsonl
+experiments/jetson/OM/base-20261110-0435/mmap-ncmoe40-b/result.json
+experiments/jetson/OM/trace-20261110-0504/code/run/watchdog.jsonl
+experiments/jetson/OM/trace-20261110-0504/code/run/result.json
+experiments/jetson/OM/trace-20261110-0504/chat/routing.jsonl
+experiments/jetson/OM/base-20261110-0448/mmap-ncmoe38/telemetry.jsonl
+experiments/jetson/OM/base-20261110-0448/mmap-ncmoe38/watchdog.jsonl
+experiments/jetson/OM/base-20261110-0448/mmap-ncmoe38/result.json
+experiments/jetson/OM/trace-20261110-0504/chat/run/telemetry.jsonl
+experiments/jetson/OM/trace-20261110-0504/chat/run/watchdog.jsonl
+experiments/jetson/OM/trace-20261110-0504/chat/run/result.json
+experiments/jetson/OM/trace-20261110-0504/math/routing.jsonl
+experiments/jetson/OM/base-20261110-0448/mmap-ncmoe40-a/telemetry.jsonl
+experiments/jetson/OM/base-20261110-0448/mmap-ncmoe40-a/watchdog.jsonl
+experiments/jetson/OM/base-20261110-0448/mmap-ncmoe40-a/result.json
+experiments/jetson/OM/trace-20261110-0504/math/run/telemetry.jsonl
+experiments/jetson/OM/base-20261110-0448/auto-default/telemetry.jsonl
+experiments/jetson/OM/trace-20261110-0504/math/run/watchdog.jsonl
+experiments/jetson/OM/base-20261110-0448/auto-default/watchdog.jsonl
+experiments/jetson/OM/trace-20261110-0504/math/run/result.json
+experiments/jetson/OM/base-20261110-0448/auto-default/result.json
+experiments/jetson/OM/base-20261110-0448/none-ncmoe40/telemetry.jsonl
+experiments/jetson/OM/base-20261110-0448/none-ncmoe40/watchdog.jsonl
+experiments/jetson/OM/base-20261110-0448/none-ncmoe40/result.json
+
+exec
+/bin/bash -lc 'find .. -name AGENTS.md -print' in /home/muk/projects/siminfeng/campaign
+ succeeded in 135ms:
+../campaign/ref/Strata/AGENTS.md
+../campaign/ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/merge-windows/AGENTS.md
+../campaign/ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/refactor-orders/AGENTS.md
+../campaign/ref/Strata/bench/results/2026-10-10-community-rx-9060-xt/fixtures/reservation-workflow/AGENTS.md
+../campaign/ref/llama.cpp-up1108/AGENTS.md
+../campaign/ref/llama.cpp/AGENTS.md
+../campaign/ref/llama.cpp-pr31469/AGENTS.md
+../campaign/cc/build_engine/results/jetson-up1108-om8/staging-f53bpe91/source/AGENTS.md
+../campaign/cc/build_engine/results/jetson-pr31469/staging-0hom114y/source/AGENTS.md
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+import json,pathlib,collections
+for p in [pathlib.Path('c2/worklog.jsonl'),*pathlib.Path('evidence/jetson-arm').glob('*.jsonl')]:
+ print('\\nFILE',p)
+ rows=[json.loads(x) for x in p.read_text().splitlines() if x.strip()];print('count',len(rows));print(*rows[:3],sep='\\n');print('last',rows[-1] if rows else '')
+for folder in ['lab/jobq','experiments/jetson/OM']:
+ ps=list(pathlib.Path(folder).rglob('*.json'));print(folder,len(ps))
+ for p in ps[:2]: print(p,p.read_text()[:2000])
+ps=list(pathlib.Path('experiments').rglob('verdict.json'));print('verdicts',len(ps));print([(str(p),p.read_text()[:1200]) for p in ps[:2]])
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 66ms:
+
+FILE c2/worklog.jsonl
+count 11
+{'event': 'start', 'task': 'J-OM8', 'worker': 'codex', 'assignment': 'assignments/J-OM8-expert-pread-fill.md', 'ts': '2026-11-11T04:00:28Z'}
+{'event': 'start', 'task': 'H1', 'worker': 'codex', 'assignment': 'assignments/H1-jobq.md', 'ts': '2026-11-11T04:00:28Z'}
+{'event': 'start', 'task': 'H2', 'worker': 'codex', 'assignment': 'assignments/H2-abrun.md', 'ts': '2026-11-11T04:00:28Z'}
+last {'event': 'start', 'task': 'H4', 'worker': 'codex', 'assignment': 'assignments/H4-shape-report.md', 'ts': '2026-11-11T04:12:01Z'}
+
+FILE evidence/jetson-arm/claude-code.jsonl
+count 1370
+{'event': 'SessionStart', 'kind': 'claude_hook', 'payload': {'cwd': '/home/muk/projects/siminfeng', 'hook_event_name': 'SessionStart', 'model': 'claude-opus-5-5', 'scratchpad_dir': '/tmp/claude-1000/-home-muk-projects-siminfeng/dea92124-f703-47de-bb9e-9c93188bff0f/scratchpad', 'session_id': 'dea92124-f703-47de-bb9e-9c93188bff0f', 'source': 'startup', 'transcript_path': '/home/muk/.claude/projects/-home-muk-projects-siminfeng/dea92124-f703-47de-bb9e-9c93188bff0f.jsonl'}, 'ts': '2026-11-09T22:52:51.152248+00:00'}
+{'event': 'PreToolUse', 'kind': 'claude_hook', 'payload': {'cwd': '/home/muk/projects/siminfeng', 'effort': {'level': 'medium'}, 'hook_event_name': 'PreToolUse', 'permission_mode': 'plan', 'prompt_id': 'dd37dd37-130a-48b6-ae5b-6f96172d7f2f', 'scratchpad_dir': '/tmp/claude-1000/-home-muk-projects-siminfeng/dea92124-f703-47de-bb9e-9c93188bff0f/scratchpad', 'session_id': 'dea92124-f703-47de-bb9e-9c93188bff0f', 'tool_input': {'command': 'cd ~/projects/siminfeng && git log --oneline -3 && git status --short | head -20 && ls campaign && wc -l campaign/START-HERE.md && uname -m && cat /etc/nv_tegra_release 2>/dev/null; free -h; nproc; git remote -v', 'description': 'Inspect repo state and host basics'}, 'tool_name': 'Bash', 'tool_use_id': 'toolu_01JhEp1AetQCeUMWMzK6yWNE', 'transcript_path': '/home/muk/.claude/projects/-home-muk-projects-siminfeng/dea92124-f703-47de-bb9e-9c93188bff0f.jsonl'}, 'ts': '2026-11-09T22:53:48.161250+00:00'}
+{'event': 'PostToolUse', 'kind': 'claude_hook', 'payload': {'cwd': '/home/muk/projects/siminfeng', 'duration_ms': 156, 'effort': {'level': 'medium'}, 'hook_event_name': 'PostToolUse', 'permission_mode': 'plan', 'prompt_id': 'dd37dd37-130a-48b6-ae5b-6f96172d7f2f', 'scratchpad_dir': '/tmp/claude-1000/-home-muk-projects-siminfeng/dea92124-f703-47de-bb9e-9c93188bff0f/scratchpad', 'session_id': 'dea92124-f703-47de-bb9e-9c93188bff0f', 'tool_input': {'command': 'cd ~/projects/siminfeng && git log --oneline -3 && git status --short | head -20 && ls campaign && wc -l campaign/START-HERE.md && uname -m && cat /etc/nv_tegra_release 2>/dev/null; free -h; nproc; git remote -v', 'description': 'Inspect repo state and host basics'}, 'tool_name': 'Bash', 'tool_response': {'interrupted': False, 'isImage': False, 'noOutputExpected': False, 'stderr': '', 'stdout': 'f0e676b Campaign c1 snapshot: Granite MoE memory/quality/speed discovery, lab core, Build CC, handoff, evidence\n M campaign/evidence/claude-code.jsonl\nartifacts\nassignments\nbin\nbuilds\ncapabilities\ncc\ncc-inventory.csv\nCHECKPOINT-1.md\nCHECKPOINT-2.md\nclaims\ndecisions\nevidence\nexperiments\nindex\nlab\nLAB-FEASIBILITY.md\nMANAGER-DESIGN.md\nSTART-HERE.md\n28 campaign/START-HERE.md\naarch64\n# R36 (release), REVISION: 5.2, GCID: 46426093, BOARD: generic, EABI: aarch64, DATE: Thu Jul 16 18:56:22 UTC 2026\n# KERNEL_VARIANT: oot\nTARGET_USERSPACE_LIB_DIR=nvidia\nTARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia\n               total        used        free      shared  buff/cache   available\nMem:           7.4Gi       1.2Gi       3.6Gi        80Mi       2.7Gi       5.9Gi\nSwap:          3.7Gi          0B       3.7Gi\n6\norigin\tgit@github.com:Muxite/siminfeng.git (fetch)\norigin\tgit@github.com:Muxite/siminfeng.git (push)'}, 'tool_use_id': 'toolu_01JhEp1AetQCeUMWMzK6yWNE', 'transcript_path': '/home/muk/.claude/projects/-home-muk-projects-siminfeng/dea92124-f703-47de-bb9e-9c93188bff0f.jsonl'}, 'ts': '2026-11-09T22:53:48.453573+00:00'}
+last {'event': 'PostToolUse', 'host_id': 'jetson-arm', 'kind': 'claude_hook', 'payload': {'cwd': '/home/muk/projects/siminfeng/campaign', 'duration_ms': 58, 'effort': {'level': 'medium'}, 'hook_event_name': 'PostToolUse', 'permission_mode': 'bypassPermissions', 'prompt_id': 'a9d40854-13e1-4579-8884-a6a1dd384baf', 'scratchpad_dir': '/tmp/claude-1000/-home-muk-projects-siminfeng/f788ee04-950c-45f8-ae6d-aa6e956451d3/scratchpad', 'session_id': 'f788ee04-950c-45f8-ae6d-aa6e956451d3', 'tool_input': {'command': 'cd /home/muk/projects/siminfeng/campaign; while kill -0 723692 2>/dev/null || kill -0 724126 2>/dev/null; do sleep 30; done; tail -3 c2/worklog.jsonl; bin/jobq list', 'run_in_background': True}, 'tool_name': 'Bash', 'tool_response': {'backgroundCwdHint': 'Session cwd remains /home/muk/projects/siminfeng/campaign; directory changes made by the backgrounded command do not apply to subsequent commands.', 'backgroundTaskId': 'bfp3qtyes', 'interrupted': False, 'isImage': False, 'noOutputExpected': False, 'stderr': '', 'stdout': ''}, 'tool_use_id': 'toolu_0191cdBZvCN6kRwkJ5PS4jJj', 'transcript_path': '/home/muk/.claude/projects/-home-muk-projects-siminfeng/f788ee04-950c-45f8-ae6d-aa6e956451d3.jsonl'}, 'ts': '2026-11-11T04:12:05.623006+00:00'}
+
+FILE evidence/jetson-arm/jobq.jsonl
+count 17
+{'agent': 'jobq', 'argv': ['/usr/bin/python3', '/home/muk/projects/siminfeng/campaign/bin/jobq', '_exec', 'job-bae847ce1fbd45fd84cd0b91a92a55ee'], 'campaign': 'c0', 'cwd': '/home/muk/projects/siminfeng/campaign', 'desc': '', 'env': {'CAMPAIGN_ID': '', 'CUDA_VISIBLE_DEVICES': '', 'LANG': 'en_US.UTF-8'}, 'host_id': 'jetson-arm', 'kind': 'intent', 'op': 'op-04810239fd04', 'parent': None, 'task': 'true', 'ts': '2026-11-11T04:08:08.068475+00:00', 'wrapper_pid': 722136}
+{'agent': 'jobq', 'campaign': 'c0', 'host_id': 'jetson-arm', 'kind': 'started', 'op': 'op-04810239fd04', 'parent': None, 'pgid': 722137, 'pid': 722137, 'sid': 722137, 'task': 'true', 'ts': '2026-11-11T04:08:08.070426+00:00'}
+{'agent': 'jobq', 'campaign': 'c0', 'elapsed_s': 0.096, 'exit_code': 0, 'host_id': 'jetson-arm', 'kind': 'outcome', 'op': 'op-04810239fd04', 'parent': None, 'pgid': 722137, 'signal': None, 'status': 'ok', 'stderr': {'bytes': 0, 'path': '/home/muk/projects/siminfeng/campaign/artifacts/op-04810239fd04/stderr', 'sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}, 'stdout': {'bytes': 0, 'path': '/home/muk/projects/siminfeng/campaign/artifacts/op-04810239fd04/stdout', 'sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}, 'survivors': [], 'task': 'true', 'ts': '2026-11-11T04:08:08.166166+00:00'}
+last {'agent': 'jobq', 'campaign': 'c0', 'host_id': 'jetson-arm', 'kind': 'started', 'op': 'op-d0fda3ae10b1', 'parent': None, 'pgid': 722820, 'pid': 722820, 'sid': 722820, 'task': 'build-om8', 'ts': '2026-11-11T04:10:49.613384+00:00'}
+
+FILE evidence/jetson-arm/opus-jetson.jsonl
+count 707
+{'agent': 'opus-jetson', 'argv': ['sh', '-c', 'true'], 'campaign': 'c0', 'cwd': '/home/muk/projects/siminfeng/campaign', 'desc': 'capture fixture', 'env': {'CAMPAIGN_ID': '', 'CUDA_VISIBLE_DEVICES': '', 'LANG': 'en_US.UTF-8'}, 'host_id': 'jetson-arm', 'kind': 'intent', 'op': 'op-1ff83a2bf02e', 'parent': None, 'task': 'J-EV1', 'ts': '2026-11-09T22:58:16.580552+00:00', 'wrapper_pid': 435600}
+{'agent': 'opus-jetson', 'campaign': 'c0', 'host_id': 'jetson-arm', 'kind': 'started', 'op': 'op-1ff83a2bf02e', 'parent': None, 'pgid': 435602, 'pid': 435602, 'sid': 435602, 'task': 'J-EV1', 'ts': '2026-11-09T22:58:16.613955+00:00'}
+{'agent': 'opus-jetson', 'campaign': 'c0', 'elapsed_s': 0.022, 'exit_code': 0, 'host_id': 'jetson-arm', 'kind': 'outcome', 'op': 'op-1ff83a2bf02e', 'parent': None, 'pgid': 435602, 'signal': None, 'status': 'ok', 'stderr': {'bytes': 0, 'path': '/home/muk/projects/siminfeng/campaign/artifacts/op-1ff83a2bf02e/stderr', 'sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}, 'stdout': {'bytes': 0, 'path': '/home/muk/projects/siminfeng/campaign/artifacts/op-1ff83a2bf02e/stdout', 'sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}, 'survivors': [], 'task': 'J-EV1', 'ts': '2026-11-09T22:58:16.634822+00:00'}
+last {'agent': 'opus-jetson', 'campaign': 'c0', 'elapsed_s': 401.557, 'exit_code': 0, 'host_id': 'jetson-arm', 'kind': 'outcome', 'op': 'op-120f5cd57108', 'parent': None, 'pgid': 664472, 'signal': None, 'status': 'ok', 'stderr': {'bytes': 0, 'path': '/home/muk/projects/siminfeng/campaign/artifacts/op-120f5cd57108/stderr', 'sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}, 'stdout': {'bytes': 966, 'path': '/home/muk/projects/siminfeng/campaign/artifacts/op-120f5cd57108/stdout', 'sha256': 'ea404d531ebbc130de7b43d72d38820de54dbe79b4d25c35a2aaabad6aa74b81'}, 'survivors': [], 'task': 'J-SPEC2', 'ts': '2026-11-10T16:57:41.057484+00:00'}
+lab/jobq 6
+lab/jobq/job-9b89d684d4eb49d8bea86f36a32a8558.json {
+  "id": "job-9b89d684d4eb49d8bea86f36a32a8558",
+  "argv": [
+    "python3",
+    "cc/abrun/abrun.py",
+    "cc/abrun/specs/J-OM8.json"
+  ],
+  "class": "gpu",
+  "deps": [
+    "job-75250d7500e948afa095da1da5bd5f9c"
+  ],
+  "name": "J-OM8-ab",
+  "timeout": 9000.0,
+  "allow_during_gpu": false,
+  "state": "queued",
+  "pid": null,
+  "pgid": null,
+  "runner_pid": null,
+  "start": null,
+  "end": null,
+  "rc": null,
+  "concurrent_jobs": [],
+  "submitted": 1794370249196103325,
+  "cwd": "/home/muk/projects/siminfeng/campaign",
+  "env_file": "/home/muk/projects/siminfeng/campaign/lab/jobq/env/job-9b89d684d4eb49d8bea86f36a32a8558.json",
+  "env_public": {
+    "DOCKER_CMD_PREFIX": "sg docker -c",
+    "BUILD_JOBS": "3",
+    "PATH": "/home/muk/.local/bin:/usr/local/cuda/bin:/home/muk/.local/bin:/home/muk/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+    "JOBQ_DIR": "/home/muk/projects/siminfeng/campaign/lab/jobq"
+  }
+}
+
+lab/jobq/job-2716006378e341d3a39f7b5781a3db50.json {
+  "id": "job-2716006378e341d3a39f7b5781a3db50",
+  "argv": [
+    "bash",
+    "-c",
+    "mkdir -p experiments/jetson/KS-q4K-20261111 && python3 cc/kernel_screen/kernel_screen.py --image campaign/llamacpp:jetson-c1-ks --preset cc/kernel_screen/presets/granite.json --types q4_K --ops MUL_MAT,MUL_MAT_ID,MUL_MAT_VEC_FUSION --arm 'A={\"GGML_CUDA_J_UNFUSE_IDS_TYPES\":null}' --arm 'A2={\"GGML_CUDA_J_UNFUSE_IDS_TYPES\":null}' --arm 'B={\"GGML_CUDA_J_UNFUSE_IDS_TYPES\":\"q4_K\"}' --repeats 3 --out experiments/jetson/KS-q4K-20261111/q4_K > experiments/jetson/KS-q4K-20261111/q4_K.log 2>&1"
+  ],
+  "class": "gpu",
+  "deps": [
+    "job-9b89d684d4eb49d8bea86f36a32a8558"
+  ],
+  "name": "KS-q4K",
+  "timeout": 2400.0,
+  "allow_during_gpu": false,
+  "state": "queued",
+  "pid": null,
+  "pgid": null,
+  "runner_pid": null,
+  "start": null,
+  "end": null,
+  "rc": null,
+  "concurrent_jobs": [],
+  "submitted": 1794370249321767987,
+  "cwd": "/home/muk/projects/siminfeng/campaign",
+  "env_file": "/home/muk/projects/siminfeng/campaign/lab/jobq/env/job-2716006378e341d3a39f7b5781a3db50.json",
+  "env_public": {
+    "DOCKER_CMD_PREFIX": "sg docker -c",
+    "BUILD_JOBS": "3",
+    "PATH": "/home/muk/.local/bin:/usr/local/cuda/bin:/home/muk/.local/bin:/home/muk/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin",
+    "JOBQ_DIR": "/home/muk/projects/siminfeng/campaign/lab/jobq"
+  }
+}
+
+experiments/jetson/OM 67
+experiments/jetson/OM/qwen36-layout.json {
+ "file": "/home/muk/models/campaign/qwen36-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+ "arch": "qwen35moe",
+ "n_tensors": 733,
+ "total_bytes": 22349466112,
+ "expert_bytes": 19671285760,
+ "non_expert_bytes": 2678180352,
+ "expert_count": 256,
+ "expert_used": 8,
+ "layers_with_experts": 40,
+ "bytes_per_expert_by_layer": {
+  "0": 1900544,
+  "1": 2301952,
+  "2": 1900544,
+  "3": 1900544,
+  "4": 1900544,
+  "5": 1900544,
+  "6": 1900544,
+  "7": 1900544,
+  "8": 1900544,
+  "9": 1900544,
+  "10": 1900544,
+  "11": 1900544,
+  "12": 1900544,
+  "13": 1900544,
+  "14": 1900544,
+  "15": 1900544,
+  "16": 1900544,
+  "17": 1900544,
+  "18": 1900544,
+  "19": 1900544,
+  "20": 1900544,
+  "21": 1900544,
+  "22": 1900544,
+  "23": 1900544,
+  "24": 1900544,
+  "25": 1900544,
+  "26": 1900544,
+  "27": 1900544,
+  "28": 1900544,
+  "29": 1900544,
+  "30": 1900544,
+  "31": 1900544,
+  "32": 1900544,
+  "33": 1900544,
+  "34": 2039808,
+  "35": 1900544,
+  "36": 1900544,
+  "37": 1900544,
+  "38": 2039808,
+  "39": 2039808
+ },
+ "expert_types_by_layer": {
+  "0": {
+   "ffn_down_exps:Q5_K": 184549376,
+   "ffn_gate_exps:Q4_K": 150994944,
+   "ffn_up_exps:Q4_K": 150994944
+  },
+  "1": {
+   "ffn_down_exps:Q6_K": 220200960,
+   "ffn_gate_exps:Q5_K": 184549376,
+   "ffn_up_exps:Q5_K": 184549376
+  },
+  "2": {
+   "ffn_down_exps:Q5_K": 184549376,
+   "ffn_gate_exps:Q4_K": 150994944,
+   "ffn_up_exps:Q4_K": 150994944
+  },
+  "3": {
+   "ffn_down_exps:Q5_K": 184549376,
+   "ffn_gate_exps:Q4_K": 150994944,
+   "ffn_up_exps:Q4_K": 150994944
+  },
+  "4": {
+   "ffn_down_exps:Q5_K": 184549376,
+   "ffn_gate_exps:Q4_K": 150994944,
+   "ffn_up_exps:Q4_K": 150994944
+  },
+  "5": {
+   "ffn_down_exps:Q5_K": 184549376,
+   "ffn_gate_exps:Q4_K": 150994944,
+   "ffn_up_exps:Q4_K": 150994944
+  },
+  "6": {
+   "ffn_down_exps:Q5_K": 184549376,
+   "ffn_gate_exps:Q4_K": 150994944,
+   "ffn_up_exps:Q4_K": 150994944
+  },
+  "7": {
+   "ffn_down_exps:Q5_K": 184549376,
+   "ffn_gate_exps:Q4_K": 150994944,
+   "ffn_up_exps:Q4_K": 150994944
+  },
+  "8": {
+   "ffn_down_exps
+experiments/jetson/OM/numa-20261110-0622/numa-b/result.json {
+ "exit_code": 0,
+ "wall_s": 141.68,
+ "oom_killed": false,
+ "watchdog_trips": 0,
+ "status": "ok"
+}
+verdicts 1
+[('experiments/handoff-real/verdict.json', '{"state": "rejected", "reasons": ["release.expected_image_config_id: null or missing required identity", "release.executable_sha256: null or missing required identity", "release.expected_image_config_id: expected sha256:<64 hex>", "release.executable_sha256: expected nonempty executable-to-SHA-256 map", "build-record archive hash/bytes mismatch vs recomputed bytes", "build-record claim differs from handoff: platform", "release.platform: missing", "build_record.schema_version: declared (not independently verified)", "build_record.status: declared (not independently verified)", "build_record.failure_stage: declared (not independently verified)", "build_record.started_at: declared (not independently verified)", "build_record.source: declared (not independently verified)", "build_record.patch_sha256: declared (not independently verified)", "build_record.tag: declared (not independently verified)", "build_record.platform: declared (not independently verified)", "build_record.cmake_flags: declared (not independently verified)", "build_record.recipes: declared (not independently verified)", "build_record.base_images: declared (not independently verified)", "build_record.versions: declared')]
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+import json,collections
+rows=[json.loads(x) for x in open('evidence/jetson-arm/opus-jetson.jsonl')];ops={}
+for r in rows: ops.setdefault(r['op'],{}).update({r['kind']:r})
+for op,d in ops.items():
+ i=d.get('intent',{});o=d.get('outcome',{});a=str(i.get('argv',''))
+ if 'pipeline4' in a or ('outcome' not in d):print(op, i.get('task'),i.get('ts'),o.get('ts'),o.get('elapsed_s'),a[:700])
+print('worklog');print(open('c2/worklog.jsonl').read())
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+op-c63b2bd59050 J-BQ 2026-11-10T04:35:40.022131+00:00 None None ['python3', 'cc/build_engine/build_engine.py', '--target', 'jetson-orin', '--source', 'ref/llama.cpp-pr31469', '--commit', 'fc4a5a77a61b6ff965a5aa8b0f9e6d6a9c796583', '--tag', 'campaign/llamacpp:jetson-pr31469', '--out', 'cc/build_engine/results/jetson-pr31469']
+worklog
+{"event":"start","task":"J-OM8","worker":"codex","assignment":"assignments/J-OM8-expert-pread-fill.md","ts":"2026-11-11T04:00:28Z"}
+{"event":"start","task":"H1","worker":"codex","assignment":"assignments/H1-jobq.md","ts":"2026-11-11T04:00:28Z"}
+{"event":"start","task":"H2","worker":"codex","assignment":"assignments/H2-abrun.md","ts":"2026-11-11T04:00:28Z"}
+{"event":"end","task":"H1","worker":"codex","rc":0,"wall_s":269,"tokens":"33944","ts":"2026-11-11T04:04:57Z"}
+{"event":"end","task":"H2","worker":"codex","rc":0,"wall_s":395,"tokens":"55172","ts":"2026-11-11T04:07:03Z"}
+{"event":"end","task":"J-OM8","worker":"codex","rc":0,"wall_s":397,"tokens":"70621","ts":"2026-11-11T04:07:05Z"}
+{"event":"checkin","task":"H1","checker":"haiku","verdict":"PASS 5/5","issues":["job JSON persisted full env incl. secrets -> fixed by opus (env side file 0600, env_public allowlist, lab/jobq gitignored)"],"rework_rounds":0,"opus_fix":true,"ts":"2026-11-11T04:10Z"}
+{"event":"checkin","task":"H2","checker":"haiku","verdict":"PASS 4/4","issues":["gate on real om7 data: regressed -38%, threshold 0.108, identical output (matches CLOSEOUT)"],"rework_rounds":0,"ts":"2026-11-11T04:12Z"}
+{"event":"checkin","task":"J-OM8","checker":"haiku","verdict":"PASS 5/5","issues":["COMPILE-CHECK omits llama-model-loader.cpp/llama-model.cpp?","checker claimed FILL w/o RANDOM is no-op; opus: false for over-memory model (populate evicted), test decides"],"rework_rounds":0,"ts":"2026-11-11T04:12Z"}
+{"event":"start","task":"H3","worker":"codex","assignment":"assignments/H3-methods-skills.md","ts":"2026-11-11T04:11:34Z"}
+{"event":"start","task":"H4","worker":"codex","assignment":"assignments/H4-shape-report.md","ts":"2026-11-11T04:12:01Z"}
+
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+import json,re
+ops={}
+for l in open('evidence/jetson-arm/opus-jetson.jsonl'):
+ r=json.loads(l);ops.setdefault(r['op'],{}).update({r['kind']:r})
+for op,d in ops.items():
+ i=d.get('intent',{});o=d.get('outcome',{});a=' '.join(i.get('argv',[]))
+ if re.search(r'om_run.sh|om_spec.py|llama-bench|kernel_screen|abrun.py|llama-perplexity',a):print(op,i.get('task'),i.get('ts','')[11:19],o.get('ts','')[11:19],o.get('elapsed_s'),a[:160])
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+op-cbc3b760bcc4 J2-build 23:15:02 23:33:40 1118.19 sh -c cmake -S ref/llama.cpp -B builds/jetson-native/31288c9-sm87-a1/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=87 -DGG
+op-6b3ca04a2f55 J2-image-qual 00:27:08 00:27:10 1.904 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 campaign/llamacpp:jetson-c1 /app/llama-bench --list-devices
+op-508fc5117fe1 J-E001 00:28:53 00:29:04 10.478 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikit
+op-fd169b573d82 J-E001 00:29:04 00:29:13 9.228 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikit
+op-8bceedb60544 J-E001 00:29:13 00:29:22 8.32 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikit
+op-3ad799729b02 J-E001 00:29:22 00:29:29 7.421 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikit
+op-7ff1744da448 J-E001 00:29:29 00:29:41 11.33 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikit
+op-36555171bdee J-E002 00:30:06 00:30:28 22.012 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1 /app/llama-
+op-94a19a7c8670 J-E003 00:31:11 00:31:12 1.452 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1 /app/llama-
+op-bac2f9937453 J-E003 00:31:59 00:32:00 0.802 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1 /app/llama-
+op-0751d4f0786d J-E003 00:32:47 00:32:47 0.803 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1 /app/llama-
+op-d6f4b46d3b18 J-E003 00:33:34 00:33:35 0.753 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1 /app/llama-
+op-84f4dbd266e8 J-E003 00:34:43 00:34:54 10.68 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1 /app/llama-
+op-60cfbef199bc J-E003 00:35:26 00:35:36 9.774 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1 /app/llama-
+op-9a3bea07652b J-E003 00:36:09 00:36:20 10.226 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1 /app/llama-
+op-469211b72a39 J-E003 00:36:52 00:37:02 9.925 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1 /app/llama-
+op-c749deb0adc7 J-P001 00:42:00 00:42:19 19.706 nsys profile -t cuda,nvtx,osrt --cuda-graph-trace=node -o experiments/jetson/J-P001-nsys-decode/tg64 -f true cc/build_engine/results/jetson-c1/build/bin/llama-b
+op-c38080d3bb46 J-E004 00:47:15 00:47:32 17.195 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1 /app/llama
+op-a2b76186740d J-E004 00:47:32 00:47:48 15.137 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -e GGML_CUDA_DISABLE_FUSION=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/
+op-9377c5bcb129 J-E004 00:47:48 00:48:04 16.392 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1 /app/llama
+op-efa3dd5e9c19 J-E004 00:48:04 00:48:28 23.208 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -e GGML_CUDA_DISABLE_FUSION=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/
+op-0e41fd1a2e21 J-E004 00:48:39 00:48:55 15.34 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikitext/wikitext-2-raw:
+op-7e411ce166c6 J-E004 00:49:01 00:49:29 27.572 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_DISABLE_FUSION=1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/
+op-56d53a8076ca J-E005 01:28:27 01:29:13 46.725 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-j3 /app/ll
+op-888ba1884560 J-E005 01:29:14 01:29:32 18.649 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -e GGML_CUDA_J_MMF_IDS=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llama
+op-750171ac1c23 J-E005 01:29:32 01:29:52 19.299 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -e GGML_CUDA_J_MMVF_128=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llam
+op-9e34ceba7946 J-E005 01:29:52 01:30:06 14.539 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -e GGML_CUDA_DISABLE_FUSION=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/
+op-18d1a0c87fa2 J-E005 01:30:07 01:30:22 15.037 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -e GGML_CUDA_DISABLE_FUSION=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/
+op-7ddef08f98e1 J-E005 01:30:22 01:30:37 14.736 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -e GGML_CUDA_J_MMVF_128=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llam
+op-5bfde830ca81 J-E005 01:30:37 01:30:50 13.739 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1 -e GGML_CUDA_J_MMF_IDS=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llama
+op-f8ed64d72d5e J-E005 01:30:51 01:31:07 16.54 sg docker -c docker run --rm --runtime nvidia --network none --label campaign=c1  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-j3 /app/ll
+op-65df904e4f0a J-E005 01:31:19 01:31:33 14.59 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikitext/wikitext-2-raw:
+op-8795cb837be2 J-E005 01:31:40 01:31:55 15.19 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_MMF_IDS=1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/
+op-6af7d6e32e7e J-E005 01:33:02 01:33:17 14.841 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_MMVF_128=1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data
+op-10b5e9edf3c2 J-E005 01:33:46 01:34:10 24.365 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikitext/wikitext-2-raw:
+op-58eea0a84539 J-E005 01:34:10 01:34:31 20.608 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_MMF_IDS=1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/
+op-e4a30f6dca95 J-E005 01:34:31 01:34:52 20.596 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_MMVF_128=1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data
+op-84c55fe6a3d1 J-E005 01:35:07 01:35:30 23.711 sg docker -c docker run --rm --runtime nvidia --network none --user 1000:1000 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikitext
+op-49fa72e39de8 J-E005 01:35:31 01:35:53 22.761 sg docker -c docker run --rm --runtime nvidia --network none --user 1000:1000  -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikitex
+op-d260428a720c J-E005 01:35:53 01:36:13 19.651 sg docker -c docker run --rm --runtime nvidia --network none --user 1000:1000 -e GGML_CUDA_J_MMF_IDS=1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/mode
+op-b361158e2290 J-E005 01:36:13 01:36:44 30.629 sg docker -c docker run --rm --runtime nvidia --network none --user 1000:1000 -e GGML_CUDA_J_MMVF_128=1 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/mod
+op-5ea1b54d9345 J-E005 01:37:22 01:37:47 24.865 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-j3 /app/llama-bench -m /m/gran
+op-38c47f97e982 J-E005 01:37:47 01:38:35 47.124 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_MMF_IDS=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-j3 /ap
+op-395cf3fb837c J-E005 01:38:35 01:38:58 23.51 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_MMF_IDS=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-j3 /ap
+op-656a24b4ac5e J-E005 01:38:58 01:39:31 32.836 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-j3 /app/llama-bench -m /m/gran
+op-f0391eb8ca07 J-P002 01:41:53 01:42:35 41.861 env nsys profile -t cuda --cuda-graph-trace=node -o experiments/jetson/J-P002-nsys-P1/base -f true cc/build_engine/results/jetson-c1-j3/build/bin/llama-bench -m
+op-7621ae2a6909 J-P002 01:42:36 01:44:31 114.753 env GGML_CUDA_J_MMF_IDS=1 nsys profile -t cuda --cuda-graph-trace=node -o experiments/jetson/J-P002-nsys-P1/P1 -f true cc/build_engine/results/jetson-c1-j3/buil
+op-bda5aa55dc8f J2-repro 02:26:49 02:27:25 35.858 sg docker -c docker run --rm --runtime nvidia --network none -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikitext/wikitext-2-raw:/
+op-0b2378f4abe0 J-E006 02:32:30 02:32:44 14.086 sg docker -c docker run --rm --runtime nvidia --network none -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p01q /app/llama-bench -m /m/gra
+op-4fcad2a8c3fc J-E006 02:32:45 02:32:56 11.581 sg docker -c docker run --rm --runtime nvidia --network none -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p01q /app/llama-bench -m /m/gra
+op-618b4e2971e1 J-E006 02:32:56 02:33:08 11.831 sg docker -c docker run --rm --runtime nvidia --network none -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p01q /app/llama-bench -m /m/gra
+op-5b73938f96d4 J-E006 02:33:08 02:33:19 10.926 sg docker -c docker run --rm --runtime nvidia --network none -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p01q /app/llama-bench -m /m/gra
+op-3bfd7ebed41c J-E006 02:33:19 02:33:34 14.88 sg docker -c docker run --rm --runtime nvidia --network none --user 1000:1000 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikitext
+op-92f4699bc063 J-E006 02:33:34 02:33:48 13.234 sg docker -c docker run --rm --runtime nvidia --network none --user 1000:1000 -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikitext
+op-e148f2b2fb4a J-P003 02:34:05 02:34:11 6.271 nsys profile -t cuda --cuda-graph-trace=node -o experiments/jetson/J-P003-nsys-quant/Q8_0 -f true cc/build_engine/results/jetson-c1-p01q/build/bin/llama-bench -
+op-0c736ec49231 J-P003 02:34:12 02:34:14 2.102 nsys profile -t cuda --cuda-graph-trace=node -o experiments/jetson/J-P003-nsys-quant/mixE4K -f true cc/build_engine/results/jetson-c1-p01q/build/bin/llama-bench
+op-78b4aa978c65 J-P003 02:34:36 02:34:47 11.334 env LD_LIBRARY_PATH=/home/muk/projects/siminfeng/campaign/cc/build_engine/results/jetson-c1-p01q/build/bin nsys profile -t cuda --cuda-graph-trace=node -o exper
+op-2b3bb3280cc4 J-P003 02:34:48 02:34:54 6.166 env LD_LIBRARY_PATH=/home/muk/projects/siminfeng/campaign/cc/build_engine/results/jetson-c1-p01q/build/bin nsys profile -t cuda --cuda-graph-trace=node -o exper
+op-0ca89a4419f0 J-E006 02:35:22 02:35:32 10.125 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p01q /app/llama-bench -m /m/gr
+op-af2090f8a594 J-E006 02:35:32 02:35:44 11.076 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_DISABLE_FUSION=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p
+op-693232812665 J-E006 02:35:44 02:35:55 10.977 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_DISABLE_FUSION=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p
+op-ac9e610e753c J-E006 02:35:55 02:36:05 9.975 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p01q /app/llama-bench -m /m/gr
+op-5987cc628df6 J-E006 02:36:05 02:36:14 9.271 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p01q /app/llama-bench -m /m/gr
+op-fa52e443e2ae J-E006 02:36:14 02:36:23 8.319 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_DISABLE_FUSION=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p
+op-65dd81f725df J-E006 02:36:23 02:36:31 8.172 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_DISABLE_FUSION=1 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p
+op-fdf50b52bf6f J-E006 02:36:31 02:36:40 9.171 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p01q /app/llama-bench -m /m/gr
+op-038faaf2601f J-E007 02:42:05 02:42:28 22.974 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p03 /app/llama-bench -m /m/gra
+op-000a4dcf539e J-E007 02:42:28 02:42:59 30.238 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_UNFUSE_IDS_TYPES=bf16 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jets
+op-2624d0866f87 J-E007 02:42:59 02:43:18 18.782 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_UNFUSE_IDS_TYPES=bf16 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jets
+op-7fdd830fea74 J-E007 02:43:18 02:43:35 17.793 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p03 /app/llama-bench -m /m/gra
+op-de7de1f32654 J-E007 02:43:36 02:43:46 10.726 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p03 /app/llama-bench -m /m/gra
+op-cffa5e1528a9 J-E007 02:43:46 02:43:54 7.918 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jets
+op-83b80776643d J-E007 02:43:55 02:44:02 7.767 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jets
+op-1e4ca376a366 J-E007 02:44:02 02:44:12 9.271 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p03 /app/llama-bench -m /m/gra
+op-85cc18eda92a J-E007 02:44:12 02:44:24 12.332 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p03 /app/llama-bench -m /m/gra
+op-1f44780c88a9 J-E007 02:44:24 02:44:55 30.372 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_UNFUSE_IDS_TYPES=q8_0 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jets
+op-bf2025b7e5aa J-E007 02:44:55 02:45:06 11.229 sg docker -c docker run --rm --runtime nvidia --network none -e GGML_CUDA_J_UNFUSE_IDS_TYPES=q8_0 -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jets
+op-3141e341a84b J-E007 02:45:06 02:45:16 9.926 sg docker -c docker run --rm --runtime nvidia --network none  -v /home/muk/models/campaign/gguf:/m:ro campaign/llamacpp:jetson-c1-p03 /app/llama-bench -m /m/gra
+op-8b08d0ca0a9a J-E007 02:45:29 02:45:44 14.386 sg docker -c docker run --rm --runtime nvidia --network none --user 1000:1000  -v /home/muk/models/campaign/gguf:/m:ro -v /home/muk/models/campaign/data/wikitex
+op-130d2ef73b62 J-E007 02:45:47 02:45:58 10.776 sg docker -c docker run --rm --runtime nvidia --network none --user 1000:1000 -e GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K -v /home/muk/models/campaign/gguf:/m:ro -v /h
+op-a0ca520409c8 J-OM-B1 04:22:24 04:22:27 3.107 cc/om_run/om_run.sh experiments/jetson/OM/feas-b1 campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -lm mmap -ngl 99 -cmoe -p 64 -n 32 -r 1 -o json
+op-4c65e2050f3b J-OM-B1 04:22:45 04:24:58 133.556 cc/om_run/om_run.sh experiments/jetson/OM/feas-b1-a2 campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -lm mmap -ngl 99 -ncmoe 40 -p 64 -n 32 -r 1 
+op-34f484ff0b44 J-OM-WD 04:25:51 04:25:52 1.239 cc/om_run/om_run.sh experiments/jetson/OM/watchdog-killtest campaign/llamacpp:jetson-c1-p03 --entrypoint /usr/bin/tail llama-bench -f /dev/null
+op-8792c0f11058 J-OM-S 04:35:49 04:35:52 2.704 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0435/mmap-ncmoe40-a campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -c 4096 -p 128 -n 64 
+op-c3b05a13a92b J-OM-S 04:35:52 04:35:53 0.802 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0435/mmap-ncmoe38 campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -c 4096 -p 128 -n 64 -r
+op-29b6ae427db2 J-OM-S 04:35:53 04:35:53 0.79 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0435/mmap-ncmoe40-b campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -c 4096 -p 128 -n 64 
+op-cbeb9e35fd7d J-OM-S 04:35:54 04:35:54 0.803 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0435/none-ncmoe40 campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -c 4096 -p 128 -n 64 -r
+op-817420cc765b J-OM-S 04:35:55 04:35:55 0.807 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0435/mmap-ngl0 campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -c 4096 -p 128 -n 64 -r 2 
+op-98121dae00b9 J-OM-S 04:35:56 04:35:56 0.802 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0435/auto-default campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -c 4096 -p 128 -n 64 -r
+op-dff3a7d16258 J-OM-U 04:36:15 04:38:37 142.384 cc/om_run/om_run.sh experiments/jetson/OM/up-20261110-0436/base-cmoe-a campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt
+op-3771da7ed99c J-OM-U 04:38:38 04:41:20 162.58 cc/om_run/om_run.sh experiments/jetson/OM/up-20261110-0436/cache1024 campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -
+op-a1e6e75e5570 J-OM-U 04:41:20 04:43:56 155.574 cc/om_run/om_run.sh experiments/jetson/OM/up-20261110-0436/cache2048 campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -
+op-dcd56cdd8411 J-OM-U 04:43:56 04:46:23 146.865 cc/om_run/om_run.sh experiments/jetson/OM/up-20261110-0436/cache2048-cpu50 campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1
+op-d2076a712c01 J-OM-U 04:46:23 04:48:44 140.708 cc/om_run/om_run.sh experiments/jetson/OM/up-20261110-0436/base-cmoe-b campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt
+op-8f28328d470f J-OM-S 04:48:56 04:52:56 239.581 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0448/mmap-ncmoe40-a campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -p 128 -n 64 -r 2 -o 
+op-f0e612eb2b73 J-OM-S 04:52:56 04:57:01 245.684 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0448/mmap-ncmoe38 campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -p 128 -n 64 -r 2 -o js
+op-d82c5cbb2d76 J-OM-S 04:57:02 04:59:18 136.359 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0448/mmap-ncmoe40-b campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -p 128 -n 64 -r 2 -o 
+op-bf2ecfd02e23 J-OM-S 04:59:18 04:59:31 13.041 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0448/none-ncmoe40 campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -p 128 -n 64 -r 2 -o js
+op-ccf98edfaf12 J-OM-S 04:59:31 05:03:50 258.491 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0448/mmap-ngl0 campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -p 128 -n 64 -r 2 -o json 
+op-c7da81a8b6aa J-OM-S 05:03:50 05:03:59 9.075 cc/om_run/om_run.sh experiments/jetson/OM/base-20261110-0448/auto-default campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -p 128 -n 64 -r 2 -o js
+op-a9275e7785d7 J-OM-T 05:04:14 05:08:27 253.112 cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/trace-20261110-0504/wiki/run campaign/llamacpp:jetson-c1-tr03 -v /home/muk/proje
+op-ccda80b69c8c J-OM-T 05:08:28 05:12:15 226.703 cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/trace-20261110-0504/code/run campaign/llamacpp:jetson-c1-tr03 -v /home/muk/proje
+op-006a64de6203 J-OM-T 05:12:15 05:15:17 181.706 cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/trace-20261110-0504/chat/run campaign/llamacpp:jetson-c1-tr03 -v /home/muk/proje
+op-727ce607ffa0 J-OM-T 05:15:17 05:18:46 208.522 cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/trace-20261110-0504/math/run campaign/llamacpp:jetson-c1-tr03 -v /home/muk/proje
+op-89b919e51a37 J-OM-U 05:19:13 05:21:35 141.922 cc/om_run/om_run.sh experiments/jetson/OM/upv-20261110-0519/base-cmoe-a campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.tx
+op-6555a3440865 J-OM-U 05:21:35 05:24:09 153.749 cc/om_run/om_run.sh experiments/jetson/OM/upv-20261110-0519/cache512 campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -
+op-578c28c745b1 J-OM-U 05:24:09 05:26:47 158.105 cc/om_run/om_run.sh experiments/jetson/OM/upv-20261110-0519/cache2048 campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt 
+op-f52fb9d2b72b J-OM-U 05:26:48 05:29:32 164.628 cc/om_run/om_run.sh experiments/jetson/OM/upv-20261110-0519/cache2048-cpu100 campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/
+op-c6a639d0ac9f J-OM-U 05:29:32 05:32:03 151.081 cc/om_run/om_run.sh experiments/jetson/OM/upv-20261110-0519/cache1024-cpu50 campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p
+op-c53fe024990e J-OM-U 05:32:04 05:34:27 143.488 cc/om_run/om_run.sh experiments/jetson/OM/upv-20261110-0519/base-cmoe-b campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.tx
+op-5b0085d94ccc J-OM-C 05:34:42 05:38:43 241.266 cc/om_run/om_run.sh experiments/jetson/OM/cmp-20261110-0534/pin-a campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm m
+op-1111b7c401c1 J-OM-C 05:38:43 05:42:31 227.578 cc/om_run/om_run.sh experiments/jetson/OM/cmp-20261110-0534/up-a campaign/llamacpp:jetson-up1108  llama-bench -m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm mm
+op-9082adba3faa J-OM-C 05:42:31 05:46:21 229.712 cc/om_run/om_run.sh experiments/jetson/OM/cmp-20261110-0534/up-b campaign/llamacpp:jetson-up1108  llama-bench -m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm mm
+op-7d124852706d J-OM-C 05:46:21 05:50:28 247.115 cc/om_run/om_run.sh experiments/jetson/OM/cmp-20261110-0534/pin-b campaign/llamacpp:jetson-c1-p03  llama-bench -m /om/model.gguf -p 128 -n 64 -r 2 -o json -lm m
+op-4f5e047f918f J-OM-MC 06:02:31 06:04:55 144.062 cc/om_run/om_run.sh experiments/jetson/OM/mc-20261110-0602/base-a campaign/llamacpp:jetson-up1108-mc  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -
+op-fd7c828ac3e1 J-OM-MC 06:04:55 06:07:37 161.686 cc/om_run/om_run.sh experiments/jetson/OM/mc-20261110-0602/cache2048 campaign/llamacpp:jetson-up1108-mc  llama-completion -m /om/model.gguf -f /om/prompts/p1.tx
+op-2d09d115dd66 J-OM-MC 06:07:37 06:10:24 166.178 cc/om_run/om_run.sh experiments/jetson/OM/mc-20261110-0602/cache2048-dedupe campaign/llamacpp:jetson-up1108-mc  llama-completion -m /om/model.gguf -f /om/prompt
+op-671ff4cebfcc J-OM-MC 06:10:24 06:13:10 166.081 cc/om_run/om_run.sh experiments/jetson/OM/mc-20261110-0602/cache2048-direct campaign/llamacpp:jetson-up1108-mc  llama-completion -m /om/model.gguf -f /om/prompt
+op-8b51b8a792d5 J-OM-MC 06:13:10 06:15:38 147.722 cc/om_run/om_run.sh experiments/jetson/OM/mc-20261110-0602/cache2048-direct-cpu50 campaign/llamacpp:jetson-up1108-mc  llama-completion -m /om/model.gguf -f /om/
+op-c0b9542c941d J-OM-MC 06:15:38 06:18:19 160.675 cc/om_run/om_run.sh experiments/jetson/OM/mc-20261110-0602/cache1024-direct campaign/llamacpp:jetson-up1108-mc  llama-completion -m /om/model.gguf -f /om/prompt
+op-2b59997f1c94 J-OM-MC 06:18:19 06:20:43 143.815 cc/om_run/om_run.sh experiments/jetson/OM/mc-20261110-0602/base-b campaign/llamacpp:jetson-up1108-mc  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -
+op-ca65a5ecd3fc J-OM-RA 06:22:52 06:25:18 145.071 cc/om_run/om_run.sh experiments/jetson/OM/numa-20261110-0622/base-a campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n
+op-12d2b3262231 J-OM-RA 06:25:18 06:27:41 143.729 cc/om_run/om_run.sh experiments/jetson/OM/numa-20261110-0622/numa-a campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n
+op-ee7517e98d61 J-OM-RA 06:27:42 06:30:05 143.516 cc/om_run/om_run.sh experiments/jetson/OM/numa-20261110-0622/numa-b campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n
+op-088949f024da J-OM-RA 06:30:05 06:32:29 143.253 cc/om_run/om_run.sh experiments/jetson/OM/numa-20261110-0622/base-b campaign/llamacpp:jetson-up1108  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n
+op-a482390dce03 J-OM-RA 06:35:56 06:38:19 142.498 cc/om_run/om_run.sh experiments/jetson/OM/ra-20261110-0635/base-a campaign/llamacpp:jetson-up1108-ra  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -
+op-350849f1c8c7 J-OM-RA 06:38:19 06:43:10 291.34 cc/om_run/om_run.sh experiments/jetson/OM/ra-20261110-0635/rand-a campaign/llamacpp:jetson-up1108-ra -e LLAMA_MMAP_ADVICE=random llama-completion -m /om/model.g
+op-6a6a9b1719cf J-OM-RA 06:43:11 06:47:50 279.068 cc/om_run/om_run.sh experiments/jetson/OM/ra-20261110-0635/rand-b campaign/llamacpp:jetson-up1108-ra -e LLAMA_MMAP_ADVICE=random llama-completion -m /om/model.g
+op-2258a04126e7 J-OM-RA 06:47:50 06:50:12 141.807 cc/om_run/om_run.sh experiments/jetson/OM/ra-20261110-0635/base-b campaign/llamacpp:jetson-up1108-ra  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -
+op-51c5e54ac7bd J-OM7 15:55:41 15:58:05 143.672 cc/om_run/om_run.sh experiments/jetson/OM/om7-20261110-1555/base-a campaign/llamacpp:jetson-up1108-om7  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt
+op-3327de04db98 J-OM7 15:58:05 16:02:15 249.671 cc/om_run/om_run.sh experiments/jetson/OM/om7-20261110-1555/pf-a campaign/llamacpp:jetson-up1108-om7 -e LLAMA_EXPERT_PREFETCH=1 llama-completion -m /om/model.gg
+op-9c4db46c0ac1 J-OM7 16:02:15 16:06:27 252.352 cc/om_run/om_run.sh experiments/jetson/OM/om7-20261110-1555/pfn-a campaign/llamacpp:jetson-up1108-om7 -e LLAMA_EXPERT_PREFETCH=1 -e LLAMA_EXPERT_PREFETCH_NEXT=1
+op-2dd71330730c J-OM7 16:06:28 16:10:43 255.108 cc/om_run/om_run.sh experiments/jetson/OM/om7-20261110-1555/pfn-b campaign/llamacpp:jetson-up1108-om7 -e LLAMA_EXPERT_PREFETCH=1 -e LLAMA_EXPERT_PREFETCH_NEXT=1
+op-5f4cfdd9b73d J-OM7 16:10:43 16:14:42 238.615 cc/om_run/om_run.sh experiments/jetson/OM/om7-20261110-1555/pf-b campaign/llamacpp:jetson-up1108-om7 -e LLAMA_EXPERT_PREFETCH=1 llama-completion -m /om/model.gg
+op-1b9f10f8f4d7 J-OM7 16:14:42 16:17:03 141.362 cc/om_run/om_run.sh experiments/jetson/OM/om7-20261110-1555/base-b campaign/llamacpp:jetson-up1108-om7  llama-completion -m /om/model.gguf -f /om/prompts/p1.txt
+op-7f2284639cf8 J-BQ 16:17:04 16:20:22 198.737 python3 cc/build_engine/build_engine.py --target jetson-orin --source ref/llama.cpp --commit 31288c9c66e59377f7788d920678a565bb89dd37 --patch cc/kernel_screen/c
+op-350fefe968f0 J-KS 16:20:23 16:26:39 376.459 python3 cc/kernel_screen/kernel_screen.py --image campaign/llamacpp:jetson-c1-ks --preset cc/kernel_screen/presets/granite.json --types BF16 --ops MUL_MAT,MUL_M
+op-55be2319a5c2 J-KS 16:26:39 16:28:09 90.049 python3 cc/kernel_screen/kernel_screen.py --image campaign/llamacpp:jetson-c1-ks --preset cc/kernel_screen/presets/granite.json --types Q4_K --ops MUL_MAT,MUL_M
+op-811cc3f7317c J-KS 16:28:09 16:33:43 333.759 python3 cc/kernel_screen/kernel_screen.py --image campaign/llamacpp:jetson-c1-ks --preset cc/kernel_screen/presets/granite.json --types Q8_0 --ops MUL_MAT,MUL_M
+op-d5306b49ef78 J-SPEC2 16:34:00 16:34:01 1.203 python3 cc/om_spec/om_spec.py experiments/jetson/SPEC2-20261110-1634/base-r1 campaign/llamacpp:jetson-up1108 base 1
+op-56f03cdaef12 J-SPEC2 16:34:01 16:34:02 1.262 python3 cc/om_spec/om_spec.py experiments/jetson/SPEC2-20261110-1634/ngram-mod-r1 campaign/llamacpp:jetson-up1108 ngram-mod 1
+op-d23bd166a19f J-SPEC2 16:34:03 16:34:04 1.14 python3 cc/om_spec/om_spec.py experiments/jetson/SPEC2-20261110-1634/ngram-mod-r2 campaign/llamacpp:jetson-up1108 ngram-mod 2
+op-a12b63110c9c J-SPEC2 16:34:04 16:34:05 1.105 python3 cc/om_spec/om_spec.py experiments/jetson/SPEC2-20261110-1634/base-r2 campaign/llamacpp:jetson-up1108 base 2
+op-657a022a48dc J-SPEC2 16:34:15 16:40:52 396.554 python3 cc/om_spec/om_spec.py experiments/jetson/SPEC2-20261110-1634/base-r1 campaign/llamacpp:jetson-up1108 base 1
+op-02d54456d15e J-SPEC2 16:40:52 16:46:03 310.538 python3 cc/om_spec/om_spec.py experiments/jetson/SPEC2-20261110-1634/ngram-mod-r1 campaign/llamacpp:jetson-up1108 ngram-mod 1
+op-d5324b1723e0 J-SPEC2 16:46:03 16:50:59 296.079 python3 cc/om_spec/om_spec.py experiments/jetson/SPEC2-20261110-1634/ngram-mod-r2 campaign/llamacpp:jetson-up1108 ngram-mod 2
+op-120f5cd57108 J-SPEC2 16:50:59 16:57:41 401.557 python3 cc/om_spec/om_spec.py experiments/jetson/SPEC2-20261110-1634/base-r2 campaign/llamacpp:jetson-up1108 base 2
+
+codex
+The logs join cleanly by `op`. They show a November 10 GPU gap from roughly 06:50 to 15:55, which exceeds the 7-hour check. Jobq records begin on November 11, so the report will show both observed idle gaps and queue-supported idle gaps without inferring earlier queue state.
+exec
+/bin/bash -lc "cat > c2/shape_report.py <<'PY'
+#"'!/usr/bin/env python3
+"""Read-only campaign accounting. All intervals and calendar days are UTC."""
+import argparse
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+import json
+import os
+from pathlib import Path
+import re
+import statistics
+
+TASK_CLASSES = {
+    r'"'"'^J-OM'"': 'over-memory',
+    r'"'^(J-T|H)'"': 'tooling',
+    r'"'^(J-E|J-P)'"': 'granite-experiments',
+    r'"'^(J-BQ|build)'"': 'build',
+    r'"'^(J-KS|KS)'"': 'kernel-screen',
+    r'"'^J-SPEC'"': 'speculation',
+}
+GPU_PATTERN = re.compile(r'om_run\\.sh|om_spec\\.py|llama-bench|kernel_screen|abrun\\.py|llama-perplexity')
+FAILURE_PATTERNS = {
+    'flag_error': r'invalid argument|unknown argument|error: invalid',
+    'oom/watchdog': r'out of memory|\\boom\\b|oom.kill|watchdog|cuda.*alloc.*fail|std::bad_alloc',
+    'docker_start': r'cannot connect.*docker|docker.*permission denied|permission denied.*docker|error response from daemon|failed to (?:create|start).*container|docker:|nvidia-container-cli',
+    'build_fail': r'build_engine\\.py|ninja: build stopped|cmake error|compilation terminated|fatal error:|undefined reference|build.*fail',
+    'timeout': r'timeout|timed out|deadline exceeded',
+}
+
+
+def timestamp(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return value / 1e9 if value > 1e14 else float(value)
+    return datetime.fromisoformat(str(value).replace('Z', '+00:00')).replace(tzinfo=timezone.utc).timestamp() if not re.search(r'(Z|[+-]\\d\\d:\\d\\d)"'$'"', str(value)) else datetime.fromisoformat(str(value).replace('Z', '+00:00')).timestamp()
+
+
+def iso(value):
+    return datetime.fromtimestamp(value, timezone.utc).isoformat()
+
+
+def union(intervals):
+    result = []
+    for start, end in sorted((a, b) for a, b in intervals if b > a):
+        if result and start <= result[-1][1]:
+            result[-1] = (result[-1][0], max(end, result[-1][1]))
+        else:
+            result.append((start, end))
+    return result
+
+
+def intersection(left, right):
+    left, right = union(left), union(right)
+    result, i, j = [], 0, 0
+    while i < len(left) and j < len(right):
+        a, b = max(left[i][0], right[j][0]), min(left[i][1], right[j][1])
+        if b > a:
+            result.append((a, b))
+        if left[i][1] < right[j][1]:
+            i += 1
+        else:
+            j += 1
+    return result
+
+
+def duration(intervals):
+    return sum(b - a for a, b in union(intervals))
+
+
+def classify_failure(text):
+    for category, pattern in FAILURE_PATTERNS.items():
+        if re.search(pattern, text, re.I):
+            return category
+    return 'other'
+
+
+def task_class(task):
+    return next((value for pattern, value in TASK_CLASSES.items() if re.search(pattern, task)), 'other')
+
+
+def jsonlines(path, warnings):
+    if not path.exists():
+        return
+    for n, line in enumerate(path.read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            yield json.loads(line)
+        except json.JSONDecodeError:
+            warnings.append(f'{path}:{n}: malformed JSON skipped')
+
+
+def aggregate_worklog(rows, since=None):
+    tasks = {}
+    for row in rows:
+        task = row.get('task', 'unknown')
+        item = tasks.setdefault(task, dict(task=task, worker='unknown', wall_s=0, tokens=0,
+                                          verdict=None, issues_count=0, rework_rounds=0,
+                                          opus_fix=False, end_events=0, checkins=0, events=[]))
+        item['events'].append(row)
+        if row.get('worker'):
+            item['worker'] = row['worker']
+        if row.get('event') == 'end':
+            item['end_events'] += 1
+            for field in ('wall_s', 'tokens'):
+                item[field] += float(row.get(field) or 0)
+        if row.get('event') == 'checkin':
+            item['checkins'] += 1
+            item['verdict'] = row.get('verdict')
+            issues = row.get('issues', [])
+            item['issues_count'] += len(issues) if isinstance(issues, (list, dict)) else int(issues or 0)
+            # Rework rounds are cumulative snapshots, not additive check-in counts.
+            item['rework_rounds'] = max(item['rework_rounds'], int(row.get('rework_rounds') or 0))
+            item['opus_fix'] |= bool(row.get('opus_fix'))
+    selected = []
+    workers = {}
+    for item in tasks.values():
+        if since is not None and not any((timestamp(r.get('ts')) or 0) >= since for r in item['events']):
+            continue
+        selected.append(item)
+        worker = workers.setdefault(item['worker'], dict(tasks=0, wall_s=0, tokens=0, issues_count=0,
+                                                        rework_rounds=0, opus_fixes=0))
+        worker['tasks'] += 1
+        for field in ('wall_s', 'tokens', 'issues_count', 'rework_rounds'):
+            worker[field] += item[field]
+        worker['opus_fixes'] += int(item['opus_fix'])
+    return dict(tasks=sorted(selected, key=lambda r: r['task']), workers=workers)
+
+
+def read_json(path, warnings):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        warnings.append(f'{path}: {exc}')
+        return None
+
+
+def generate(root, since=None, now=None):
+    now = now or datetime.now(timezone.utc).timestamp()
+    warnings, joined, tools = [], {}, defaultdict(Counter)
+    for path in sorted((root / 'evidence/jetson-arm').glob('*.jsonl')):
+        for row in jsonlines(path, warnings):
+            if path.name == 'claude-code.jsonl':
+                ts = timestamp(row.get('ts'))
+                if row.get('event') == 'PreToolUse' and ts is not None and (since is None or ts >= since):
+                    tools[iso(ts)[:10]][row.get('payload', {}).get('tool_name', 'unknown')] += 1
+            elif row.get('op') and row.get('kind') in ('intent', 'started', 'outcome'):
+                joined.setdefault(row['op'], {})[row['kind']] = row
+    operations, gpu, build = [], [], []
+    for op, events in sorted(joined.items()):
+        intent, started, outcome = (events.get(k, {}) for k in ('intent', 'started', 'outcome'))
+        merged = {**intent, **started, **outcome}
+        start = timestamp(started.get('ts') or intent.get('ts'))
+        end = timestamp(outcome.get('ts'))
+        elapsed = outcome.get('elapsed_s')
+        if start is None and end is not None and elapsed is not None:
+            start = end - float(elapsed)
+        if since is not None and (end or start or 0) < since:
+            continue
+        argv = intent.get('argv', [])
+        command = ' '.join(map(str, argv)) if isinstance(argv, list) else str(argv)
+        failed = bool(outcome) and (outcome.get('status', 'ok') "'!= '"'ok' or outcome.get('exit_code', 0) not in (None, 0))
+        category = None
+        if failed:
+            stderr = outcome.get('stderr', {})
+            stderr_path = stderr.get('path', '') if isinstance(stderr, dict) else str(stderr or '')
+            text = command + '\\n' + stderr_path + '\\n' + str(outcome.get('status', ''))
+            if stderr_path:
+                path = Path(stderr_path)
+                path = path if path.is_absolute() else root / path
+                try:
+                    with path.open('rb') as stream:
+                        # Bounded tail captures terminal errors without loading large files.
+                        stream.seek(0, 2)
+                        stream.seek(max(0, stream.tell() - 4096))
+                        text += '\\n' + stream.read(4096).decode(errors='replace')
+                except OSError:
+                    pass
+            category = classify_failure(text)
+        item = dict(op=op, agent=merged.get('agent', 'unknown'), task=merged.get('task', 'unknown'),
+                    argv=argv, start=start, end=end, elapsed_s=float(elapsed) if elapsed is not None else (end-start if start is not None and end is not None else None),
+                    completed=bool(outcome), failed=failed, failure=category,
+                    status=outcome.get('status', 'incomplete'), exit_code=outcome.get('exit_code'))
+        item['class'] = task_class(item['task'])
+        operations.append(item)
+        if start is not None and end is not None:
+            interval = (max(start, since) if since is not None else start, end)
+            if GPU_PATTERN.search(command):
+                gpu.append(interval)
+            if 'build_engine.py' in command:
+                build.append(interval)
+    jobs, queued = [], []
+    for path in sorted((root / 'lab/jobq').glob('*.json')):
+        job = read_json(path, warnings)
+        if not job or 'class' not in job or 'state' not in job:
+            continue
+        jobs.append(job)
+        start, end, submitted = (timestamp(job.get(k)) for k in ('start', 'end', 'submitted'))
+        if start is not None and job['class'] == 'gpu':
+            gpu.append((max(start, since or start), end if end is not None else now))
+        if submitted is not None:
+            queue_end = start if start is not None else (end if end is not None else now)
+            queued.append((max(submitted, since or submitted), queue_end))
+    gpu, build, queued = union(gpu), union(build), union(queued)
+    overlap = intersection(gpu, build)
+    # Only gaps bounded by observed GPU activity; do not invent midnight/now activity.
+    gaps = [(gpu[i-1][1], gpu[i][0]) for i in range(1, len(gpu))]
+    all_times = [x for seq in (gpu, build, queued) for interval in seq for x in interval]
+    all_times += [x for op in operations for x in (op['start'], op['end']) if x is not None]
+    days = {}
+    if all_times:
+        day = int(max(min(all_times), since or min(all_times)) // 86400) * 86400
+        while day <= max(all_times):
+            window = [(day, day + 86400)]
+            idle = intersection(gaps, window)
+            queued_idle = intersection(idle, queued)
+            longest = max(idle, key=lambda pair: pair[1]-pair[0], default=None)
+            days[iso(day)[:10]] = dict(
+                gpu_busy_h=duration(intersection(gpu, window))/3600,
+                build_h=duration(intersection(build, window))/3600,
+                overlap_h=duration(intersection(overlap, window))/3600,
+                longest_idle_gap_h=max((b-a for a,b in idle), default=0)/3600,
+                longest_idle_gap=[iso(t) for t in longest] if longest else None,
+                longest_queued_idle_gap_h=max((b-a for a,b in queued_idle), default=0)/3600 if intersection(queued, window) else None)
+            day += 86400
+    groups = defaultdict(list)
+    failures = {key: dict(count=0, examples=[]) for key in [*FAILURE_PATTERNS, 'other']}
+    for op in operations:
+        groups[(op['agent'], op['class'])].append(op)
+        if op['failed']:
+            bucket = failures[op['failure']]
+            bucket['count'] += 1
+            if len(bucket['examples']) < 3:
+                bucket['examples'].append(op['op'])
+    summary = []
+    for (agent, cls), items in sorted(groups.items()):
+        elapsed = [r['elapsed_s'] for r in items if r['elapsed_s'] is not None]
+        complete = sum(r['completed'] for r in items)
+        failed = sum(r['failed'] for r in items)
+        summary.append(dict(agent=agent, task_class=cls, count=len(items), completed=complete,
+                            failed=failed, failure_rate=failed/complete if complete else None,
+                            total_elapsed_s=sum(elapsed), median_elapsed_s=statistics.median(elapsed) if elapsed else None))
+    experiments = dict(result_status=Counter(), abrun_verdict=Counter(), records=[])
+    paths = [(p, 'result_status', 'status') for p in (root/'experiments/jetson/OM').rglob('result.json')]
+    # Abrun verdicts live beside manifest.json; exclude unrelated handoff verdicts.
+    paths += [(p, 'abrun_verdict', 'verdict') for p in (root/'experiments').rglob('verdict.json') if (p.parent/'manifest.json').exists() or 'abrun' in str(p.relative_to(root)).lower()]
+    for path, bucket, field in paths:
+        record = read_json(path, warnings)
+        if not isinstance(record, dict):
+            continue
+        ts = next((timestamp(record[k]) for k in ('ts', 'ended_at', 'timestamp') if record.get(k)), path.stat().st_mtime)
+        if since is not None and ts < since:
+            continue
+        value = str(record.get(field, 'unknown'))
+        experiments[bucket][value] += 1
+        experiments['records'].append(dict(path=str(path.relative_to(root)), value=value, timestamp=ts))
+    delegation = aggregate_worklog(list(jsonlines(root/'c2/worklog.jsonl', warnings)), since)
+    return dict(since=iso(since) if since is not None else None, generated_at=iso(now),
+                ops_summary=summary, operations=operations, failures=failures,
+                unmapped_tasks=sorted({r['task'] for r in operations if r['class']=='other'}),
+                timeline=days, intervals=dict(gpu=gpu, build=build, overlap=overlap, queued=queued),
+                jobs=jobs, tool_calls_per_day={d:dict(c) for d,c in sorted(tools.items())},
+                delegation=delegation, experiments=experiments, warnings=warnings,
+                totals=dict(ops=len(operations), completed_ops=sum(r['completed'] for r in operations),
+                            failed_ops=sum(r['failed'] for r in operations),
+                            gpu_busy_h=duration(gpu)/3600, build_h=duration(build)/3600,
+                            overlap_h=duration(overlap)/3600,
+                            result_count=sum(experiments['result_status'].values()),
+                            abrun_count=sum(experiments['abrun_verdict'].values())))
+
+
+def markdown(report):
+    lines = ['# Shape of work', '', f\"Generated {report['generated_at']}; since {report['since'] or 'all available evidence'}.\",
+             'UTC; busy means matching command lifetime, not measured GPU utilization. Inputs are read-only.',
+             'Incomplete ops have no inferred end and are excluded from intervals. Running GPU jobs end at this snapshot.',
+             'Elapsed totals use whole ops selected by end/start >= since; timeline intervals are clipped to since.',
+             'Experiment time uses embedded timestamp, otherwise file mtime. All detail is retained in JSON.', '']
+
+    def table(headers, rows, limit=28):
+        lines.append('| ' + ' | '.join(headers) + ' |')
+        lines.append('| ' + ' | '.join('---' for _ in headers) + ' |')
+        for row in rows[:limit]:
+            lines.append('| ' + ' | '.join(str(v).replace('|', '\\\\|').replace('\\n', ' ') if v is not None else '—' for v in row) + ' |')
+        if len(rows) > limit:
+            lines.append(f'{len(rows)-limit} more rows in JSON.')
+        lines.append('')
+
+    lines += ['## 1. Operations', '', 'Failure rate denominator: completed outcomes; pending ops remain in count.', '']
+    table(['Agent', 'Class', 'Ops', 'Completed', 'Elapsed s', 'Median s', 'Failure rate'],
+          [[r['agent'], r['task_class'], r['count'], r['completed'], round(r['total_elapsed_s'],3), r['median_elapsed_s'], f\"{r['failure_rate']:.1%}\" if r['failure_rate'] is not None else None] for r in report['ops_summary']])
+    lines += ['Unmapped task names: ' + (', '.join(report['unmapped_tasks']) or 'none') + '.', '']
+    table(['Tool calls UTC day', 'Count', 'By tool'], [[d, sum(c.values()), ', '.join(f'{k}: {v}' for k,v in sorted(c.items()))] for d,c in report['tool_calls_per_day'].items()])
+    lines += ['## 2. Failure taxonomy', '', 'First matching regex wins; stderr reads are bounded to a 4 KiB tail per failed op.', '']
+    table(['Category', 'Count', 'Example ops (up to 3)'], [[k,v['count'], ', '.join(v['examples'])] for k,v in report['failures'].items()])
+    lines += ['## 3. Timeline', '', 'Overlap is contamination risk. Idle gaps are bounded by GPU ops and split at UTC midnight.',
+              'Queue idle uses observed submitted-to-start intervals for all jobs (including dependency waits); — means no queue coverage that day.', '']
+    table(['UTC day', 'GPU busy h', 'Build h', 'Overlap h', 'Longest idle h', 'Queued idle h', 'Idle bounds UTC'],
+          [[d, *[round(r[k],4) if r[k] is not None else None for k in ('gpu_busy_h','build_h','overlap_h','longest_idle_gap_h','longest_queued_idle_gap_h')], ' to '.join(r['longest_idle_gap'] or [])] for d,r in report['timeline'].items()])
+    lines += ['## 4. Delegation', '', 'Wall/tokens sum end events; latest check-in verdict, cumulative issues, maximum rework rounds, any opus fix.', '']
+    table(['Task','Worker','Wall s','Tokens','Verdict','Issues','Rework','Opus fix'], [[r[k] for k in ('task','worker','wall_s','tokens','verdict','issues_count','rework_rounds','opus_fix')] for r in report['delegation']['tasks']])
+    table(['Worker','Tasks','Wall s','Tokens','Issues','Rework','Opus fixes'], [[w,*[r[k] for k in ('tasks','wall_s','tokens','issues_count','rework_rounds','opus_fixes')]] for w,r in sorted(report['delegation']['workers'].items())])
+    lines += ['## 5. Experiments', '']
+    table(['Kind','Status / verdict','Count'], [[k,v,n] for k in ('result_status','abrun_verdict') for v,n in sorted(report['experiments'][k].items())])
+    lines += [f\"Totals: {json.dumps(report['totals'], sort_keys=True)}\", f\"Input warnings: {len(report['warnings'])} (details in JSON).\", '']
+    assert len(lines) <= 200, 'Markdown line budget exceeded'
+    return '\\n'.join(lines)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--since', help='ISO timestamp (naive timestamps are UTC)')
+    parser.add_argument('--out', default='c2/SHAPE.md')
+    parser.add_argument('--json', default='c2/shape.json')
+    parser.add_argument('--root', type=Path, default=Path(os.environ.get('SHAPE_ROOT', Path(__file__).resolve().parents[1])), help='Input repository/fixture root; outputs remain relative to cwd')
+    args = parser.parse_args()
+    try:
+        since = timestamp(args.since)
+    except ValueError as exc:
+        parser.error(str(exc))
+    report = generate(args.root.resolve(), since)
+    for target, content in ((args.out, markdown(report)), (args.json, json.dumps(report, indent=2, sort_keys=True)+'\\n')):
+        path = Path(target)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    print('Unmapped tasks: ' + (', '.join(report['unmapped_tasks']) or 'none'))
+    print(json.dumps(report['totals'], sort_keys=True))
+
+
+if __name__ == '__main__':
+    main()
+PY
+python3 c2/shape_report.py --out /tmp/SHAPE.md --json /tmp/shape.json" in /home/muk/projects/siminfeng/campaign
+ succeeded in 141ms:
+Unmapped tasks: J-FIO, J-ISO1, J-Q, J-UP, J1, J1-container, J2-build, J2-image-qual, J2-model, J2-repro, J5, J5-regress, sleep, true
+{"abrun_count": 0, "build_h": 3.956420346432262, "completed_ops": 240, "failed_ops": 27, "gpu_busy_h": 3.6616808348231844, "ops": 242, "overlap_h": 0.1457733991410997, "result_count": 54}
+
+exec
+/bin/bash -lc "rg -n 'verdict.json|manifest.json|verdict|start.*ns|concurrent_jobs' cc/abrun/abrun.py bin/jobq | head -65" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+bin/jobq:128:                        other['concurrent_jobs'].append(j['id'])
+bin/jobq:129:                        j['concurrent_jobs'].append(other['id'])
+bin/jobq:257:                     concurrent_jobs=[], submitted=time.time_ns(), cwd=os.getcwd(),
+cc/abrun/abrun.py:107:def write_report(out, spec, runs, verdict):
+cc/abrun/abrun.py:108:    (out / 'verdict.json').write_text(json.dumps(verdict, indent=2) + '\n')
+cc/abrun/abrun.py:109:    lines = [f"# {spec['id']}", '', f"Status: {verdict['status']}", '',
+cc/abrun/abrun.py:118:    for arm, mean in verdict['means'].items():
+cc/abrun/abrun.py:119:        comparison = verdict['comparisons'].get(arm, {})
+cc/abrun/abrun.py:120:        lines.append(f"| {arm} | {mean} | {comparison.get('ratio', '—')} | {comparison.get('verdict', 'base')} |")
+cc/abrun/abrun.py:121:    lines += ['', f"A/A gap: {verdict['aa_gap']}; drift: {verdict['drift']}; threshold: {verdict['threshold']}",
+cc/abrun/abrun.py:122:              '', f"Output class: {verdict['output']['class']}", '',
+cc/abrun/abrun.py:123:              'Output details: `' + json.dumps(verdict['output']) + '`', '',
+cc/abrun/abrun.py:124:              *verdict.get('invalid_reasons', []), *verdict.get('reasons', [])]
+cc/abrun/abrun.py:158:    verdict = gate.evaluate(grouped, spec.get('metric', 'eval_tps'))
+cc/abrun/abrun.py:159:    if verdict['reasons']:
+cc/abrun/abrun.py:160:        invalid.extend(verdict['reasons'])
+cc/abrun/abrun.py:161:    verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+cc/abrun/abrun.py:165:        for comparison in verdict['comparisons'].values():
+cc/abrun/abrun.py:166:            comparison['verdict'] = 'null'
+cc/abrun/abrun.py:167:    write_report(out, spec, completed, verdict)
+cc/abrun/abrun.py:168:    print(json.dumps(verdict, indent=2))
+
+exec
+/bin/bash -lc 'cat /tmp/SHAPE.md && git status --short c2' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Shape of work
+
+Generated 2026-11-11T04:14:15.068547+00:00; since all available evidence.
+UTC; busy means matching command lifetime, not measured GPU utilization. Inputs are read-only.
+Incomplete ops have no inferred end and are excluded from intervals. Running GPU jobs end at this snapshot.
+Elapsed totals use whole ops selected by end/start >= since; timeline intervals are clipped to since.
+Experiment time uses embedded timestamp, otherwise file mtime. All detail is retained in JSON.
+
+## 1. Operations
+
+Failure rate denominator: completed outcomes; pending ops remain in count.
+
+| Agent | Class | Ops | Completed | Elapsed s | Median s | Failure rate |
+| --- | --- | --- | --- | --- | --- | --- |
+| jobq | build | 1 | 0 | 0 | — | — |
+| jobq | other | 5 | 5 | 6.469 | 0.097 | 0.0% |
+| opus-jetson | build | 6 | 5 | 3415.16 | 198.737 | 0.0% |
+| opus-jetson | granite-experiments | 90 | 90 | 1422.967 | 12.0815 | 8.9% |
+| opus-jetson | kernel-screen | 3 | 3 | 800.267 | 333.759 | 33.3% |
+| opus-jetson | other | 57 | 57 | 13154.321 | 11.734 | 26.3% |
+| opus-jetson | over-memory | 63 | 63 | 15013.338 | 158.105 | 1.6% |
+| opus-jetson | speculation | 8 | 8 | 1409.438 | 148.6705 | 0.0% |
+| opus-jetson | tooling | 9 | 9 | 4789.492 | 204.525 | 22.2% |
+
+Unmapped task names: J-FIO, J-ISO1, J-Q, J-UP, J1, J1-container, J2-build, J2-image-qual, J2-model, J2-repro, J5, J5-regress, sleep, true.
+
+| Tool calls UTC day | Count | By tool |
+| --- | --- | --- |
+| 2026-11-09 | 83 | Agent: 2, AskUserQuestion: 1, Bash: 71, Edit: 1, ExitPlanMode: 1, Read: 1, ToolSearch: 2, Write: 4 |
+| 2026-11-10 | 509 | Agent: 10, Artifact: 3, Bash: 469, Edit: 5, Read: 1, SendUserFile: 1, TaskStop: 1, ToolSearch: 2, WebFetch: 2, WebSearch: 3, Write: 12 |
+| 2026-11-11 | 65 | Agent: 3, Bash: 59, Read: 1, TaskStop: 1, Write: 1 |
+
+## 2. Failure taxonomy
+
+First matching regex wins; stderr reads are bounded to a 4 KiB tail per failed op.
+
+| Category | Count | Example ops (up to 3) |
+| --- | --- | --- |
+| flag_error | 5 | op-0751d4f0786d, op-94a19a7c8670, op-a0ca520409c8 |
+| oom/watchdog | 0 |  |
+| docker_start | 1 | op-42b9e5a28469 |
+| build_fail | 2 | op-5f72a82807c0, op-fdb40d139c4c |
+| timeout | 2 | op-5ce5f9a963cb, op-f7dc5536fc7e |
+| other | 17 | op-0c736ec49231, op-1a37540ab664, op-44de226900ed |
+
+## 3. Timeline
+
+Overlap is contamination risk. Idle gaps are bounded by GPU ops and split at UTC midnight.
+Queue idle uses observed submitted-to-start intervals for all jobs (including dependency waits); — means no queue coverage that day.
+
+| UTC day | GPU busy h | Build h | Overlap h | Longest idle h | Queued idle h | Idle bounds UTC |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-09 | 0.3106 | 0.4884 | 0.0523 | 0.4388 | — | 2026-11-09T23:33:40.399418+00:00 to 2026-11-10T00:00:00+00:00 |
+| 2026-11-10 | 3.3511 | 3.468 | 0.0935 | 9.0915 | — | 2026-11-10T06:50:12.416213+00:00 to 2026-11-10T15:55:41.657565+00:00 |
+| 2026-11-11 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |  |
+
+## 4. Delegation
+
+Wall/tokens sum end events; latest check-in verdict, cumulative issues, maximum rework rounds, any opus fix.
+
+| Task | Worker | Wall s | Tokens | Verdict | Issues | Rework | Opus fix |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| H1 | codex | 269.0 | 33944.0 | PASS 5/5 | 1 | 0 | True |
+| H2 | codex | 395.0 | 55172.0 | PASS 4/4 | 1 | 0 | False |
+| H3 | codex | 0 | 0 | — | 0 | 0 | False |
+| H4 | codex | 0 | 0 | — | 0 | 0 | False |
+| J-OM8 | codex | 397.0 | 70621.0 | PASS 5/5 | 2 | 0 | False |
+
+| Worker | Tasks | Wall s | Tokens | Issues | Rework | Opus fixes |
+| --- | --- | --- | --- | --- | --- | --- |
+| codex | 5 | 1061.0 | 159737.0 | 4 | 0 | 1 |
+
+## 5. Experiments
+
+| Kind | Status / verdict | Count |
+| --- | --- | --- |
+| result_status | failed | 6 |
+| result_status | ok | 43 |
+| result_status | watchdog_killed | 5 |
+
+Totals: {"abrun_count": 0, "build_h": 3.956420346432262, "completed_ops": 240, "failed_ops": 27, "gpu_busy_h": 3.6616808348231844, "ops": 242, "overlap_h": 0.1457733991410997, "result_count": 54}
+Input warnings: 0 (details in JSON).
+?? c2/
+
+exec
+/bin/bash -lc "sed -n '100,175p' cc/abrun/abrun.py && sed -n '1,100p' cc/abrun/abrun.py && rg -n 'verdict|return ' cc/abrun/gate.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+        command = runner + [str(directory), config['image'], env_flags, spec['tool']] + spec['argv']
+        if not override:
+            command = [str(ROOT / 'bin/run_op'), '--agent', 'abrun', '--task', spec['id'], '--'] + command
+        runs.append({'index': index, 'arm': arm, 'dir': str(directory), 'command': command})
+    return out, runs
+
+
+def write_report(out, spec, runs, verdict):
+    (out / 'verdict.json').write_text(json.dumps(verdict, indent=2) + '\n')
+    lines = [f"# {spec['id']}", '', f"Status: {verdict['status']}", '',
+             '| # | Arm | Status | Metric | Wall s | Output SHA |',
+             '|---|---|---|---:|---:|---|']
+    metric = spec.get('metric', 'eval_tps')
+    for row in runs:
+        s = row['summary']
+        lines.append(f"| {row['index']} | {row['arm']} | {s['status']} | {s.get(metric)} | {s['wall_s']} | {s['output_sha']} |")
+    lines += ['', f'Metric: {metric} (higher is better)', '', '| Arm | Mean | B/A | Gate |',
+              '|---|---:|---:|---|']
+    for arm, mean in verdict['means'].items():
+        comparison = verdict['comparisons'].get(arm, {})
+        lines.append(f"| {arm} | {mean} | {comparison.get('ratio', '—')} | {comparison.get('verdict', 'base')} |")
+    lines += ['', f"A/A gap: {verdict['aa_gap']}; drift: {verdict['drift']}; threshold: {verdict['threshold']}",
+              '', f"Output class: {verdict['output']['class']}", '',
+              'Output details: `' + json.dumps(verdict['output']) + '`', '',
+              *verdict.get('invalid_reasons', []), *verdict.get('reasons', [])]
+    (out / 'REPORT.md').write_text('\n'.join(lines) + '\n')
+
+
+def execute(spec, out, runs):
+    # Exclusive creation refuses accidental overwrite/replay into prior results.
+    out.mkdir(parents=True, exist_ok=False)
+    (out / 'spec.json').write_text(json.dumps(spec, indent=2) + '\n')
+    grouped = {arm: [] for arm in spec['arms']}
+    completed, invalid = [], []
+    try:
+        checked = set()
+        for arm in spec['arms'].values():
+            key = (arm['image'], spec['tool'])
+            if key not in checked:
+                preflight.check(*key, spec['argv'])
+                checked.add(key)
+        for run in runs:
+            rc = subprocess.run(run['command'], cwd=ROOT).returncode
+            summary = run_summary.summarize(run['dir'], spec.get('switch_regex', []))
+            run['summary'] = summary
+            completed.append(run)
+            grouped[run['arm']].append(summary)
+            config = spec['arms'][run['arm']]
+            if config.get('expect_switch') and not summary['switch_lines']:
+                invalid.append(f"{run['arm']}: switch inert (no switch_lines)")
+            if run['arm'] == 'base' and summary['switch_lines']:
+                invalid.append('base: switch leaked (switch_lines present)')
+            if rc != 0 or summary['status'] != 'ok':
+                invalid.append(f"{run['arm']}: runner rc={rc}, status={summary['status']}")
+            if invalid:
+                break
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        invalid.append(str(exc))
+    verdict = gate.evaluate(grouped, spec.get('metric', 'eval_tps'))
+    if verdict['reasons']:
+        invalid.extend(verdict['reasons'])
+    verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+                   planned_order=[r['arm'] for r in runs],
+                   executed_order=[r['arm'] for r in completed])
+    if invalid:
+        for comparison in verdict['comparisons'].values():
+            comparison['verdict'] = 'null'
+    write_report(out, spec, completed, verdict)
+    print(json.dumps(verdict, indent=2))
+    return 1 if invalid else 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('spec')
+    parser.add_argument('--dry-run', action='store_true')
+#!/usr/bin/env python3
+"""Plan and execute a declarative counterbalanced experiment."""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+
+if __package__:
+    from . import gate, preflight, run_summary
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from cc.abrun import gate, preflight, run_summary
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def validate(spec):
+    for key in ('id', 'outdir_base', 'runner', 'tool', 'argv', 'arms', 'order'):
+        if key not in spec:
+            raise ValueError(f'missing spec field: {key}')
+    safe = r'[A-Za-z0-9][A-Za-z0-9_.-]*'
+    if not isinstance(spec['id'], str) or not re.fullmatch(safe, spec['id']):
+        raise ValueError('id must be a safe path component')
+    if spec['runner'] != 'om_run':
+        raise ValueError('only runner=om_run is supported')
+    if not isinstance(spec['tool'], str) or not re.fullmatch(safe, spec['tool']):
+        raise ValueError('tool must be a binary name')
+    if not isinstance(spec['outdir_base'], str) or not spec['outdir_base']:
+        raise ValueError('outdir_base must be a nonempty path')
+    if not isinstance(spec['argv'], list) or not all(isinstance(x, str) for x in spec['argv']):
+        raise ValueError('argv must be an array of strings')
+    arms = spec['arms']
+    if not isinstance(arms, dict) or len(arms) < 2 or 'base' not in arms:
+        raise ValueError('arms must contain base and at least one treatment')
+    for name, arm in arms.items():
+        if not re.fullmatch(safe, name) or not isinstance(arm, dict):
+            raise ValueError('invalid arm')
+        if not isinstance(arm.get('image'), str) or not arm['image']:
+            raise ValueError(f'{name}: missing image')
+        env = arm.get('env', {})
+        if not isinstance(env, dict) or any(not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', k)
+                                           or not isinstance(v, str) or re.search(r'\s', v)
+                                           for k, v in env.items()):
+            raise ValueError(f'{name}: env must map names to strings without whitespace (om_run restriction)')
+        if not isinstance(arm.get('expect_switch', False), bool):
+            raise ValueError('expect_switch must be boolean')
+    regexes = spec.get('switch_regex', [])
+    if not isinstance(regexes, list) or not all(isinstance(r, str) for r in regexes):
+        raise ValueError('switch_regex must be an array of regex strings')
+    for pattern in regexes:
+        re.compile(pattern)
+    if any(a.get('expect_switch') for a in arms.values()) and not regexes:
+        raise ValueError('expect_switch requires switch_regex')
+    if arms['base'].get('expect_switch'):
+        raise ValueError('base cannot expect a switch')
+    rounds = spec.get('rounds', 1)
+    if not isinstance(rounds, int) or isinstance(rounds, bool) or rounds < 1:
+        raise ValueError('rounds must be a positive integer')
+    if not isinstance(spec.get('metric', 'eval_tps'), str):
+        raise ValueError('metric must be a summary field name')
+    planned_order(spec)
+
+
+def planned_order(spec):
+    arms = list(spec['arms'])
+    arms = ['base'] + [name for name in arms if name != 'base']
+    order = spec['order']
+    if order == 'explicit':
+        names = spec.get('explicit_order')
+        if not isinstance(names, list) or not names or any(n not in arms for n in names):
+            raise ValueError('explicit_order must be a nonempty list of known arms')
+        if set(names) != set(arms):
+            raise ValueError('explicit_order must include every arm')
+    else:
+        expected = ''.join(chr(65 + i) for i in range(len(arms)))
+        expected += expected[::-1]
+        if order not in (expected, 'mirrored'):
+            raise ValueError(f'{len(arms)} arms require order={expected!r} or mirrored')
+        names = arms + arms[::-1]
+    return names * spec.get('rounds', 1)
+
+
+def plan(spec):
+    out = Path(spec['outdir_base']).expanduser() / spec['id']
+    if not out.is_absolute():
+        out = ROOT / out
+    runs = []
+    for index, arm in enumerate(planned_order(spec), 1):
+        config = spec['arms'][arm]
+        directory = out / f'{index:03d}-{arm}'
+        env_flags = ' '.join(f'-e {k}={v}' for k, v in config.get('env', {}).items())
+        override = os.environ.get('ABRUN_RUNNER')
+        runner = shlex.split(override) if override else [str(ROOT / 'cc/om_run/om_run.sh')]
+        command = runner + [str(directory), config['image'], env_flags, spec['tool']] + spec['argv']
+11:    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+43:        verdict = 'null'
+46:                verdict = 'improved'
+48:                verdict = 'regressed'
+51:                            'threshold': threshold, 'verdict': verdict}
+65:    return {'metric': metric, 'base': base, 'inputs': inputs, 'means': means,
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='c2/shape_report.py'
+s=open(p).read().replace(\"    return datetime.fromisoformat(str(value).replace('Z', '+00:00')).replace(tzinfo=timezone.utc).timestamp() if not re.search(r'(Z|[+-]\\\\d\\\\d:\\\\d\\\\d)"'$'"', str(value)) else datetime.fromisoformat(str(value).replace('Z', '+00:00')).timestamp()\", \"    parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))\\n    if parsed.tzinfo is None:\\n        parsed = parsed.replace(tzinfo=timezone.utc)\\n    return parsed.timestamp()\")
+s=s.replace(\"        if start is not None and job['class'] == 'gpu':\\n            gpu.append((max(start, since or start), end if end is not None else now))\", \"        if start is not None:\\n            interval = (max(start, since) if since is not None else start, end if end is not None else now)\\n            if job['class'] == 'gpu':\\n                gpu.append(interval)\\n            command = job.get('argv', [])\\n            command = ' '.join(command) if isinstance(command, list) else str(command)\\n            if 'build_engine.py' in command:\\n                build.append(interval)\")
+s=s.replace(\"experiments = dict(result_status=Counter(), abrun_verdict=Counter(), records=[])\", \"experiments = dict(result_status=Counter(), abrun_verdict=Counter(), abrun_files=0, records=[])\")
+s=s.replace(\"    # Abrun verdicts live beside manifest.json; exclude unrelated handoff verdicts.\\n    paths += [(p, 'abrun_verdict', 'verdict') for p in (root/'experiments').rglob('verdict.json') if (p.parent/'manifest.json').exists() or 'abrun' in str(p.relative_to(root)).lower()]\", \"    # Abrun stores comparisons.*.verdict, not a top-level verdict; older fixtures may use the latter.\\n    paths += [(p, 'abrun_verdict', 'verdict') for p in (root/'experiments').rglob('verdict.json')]\")
+s=s.replace(\"        value = str(record.get(field, 'unknown'))\\n        experiments[bucket][value] += 1\\n        experiments['records'].append(dict(path=str(path.relative_to(root)), value=value, timestamp=ts))\", \"        if bucket == 'abrun_verdict':\\n            if 'verdict' in record:\\n                values = [record['verdict']]\\n            elif isinstance(record.get('comparisons'), dict):\\n                values = [v.get('verdict', 'unknown') for v in record['comparisons'].values()]\\n            else:\\n                continue  # Unrelated handoff verdicts have state/reasons.\\n            experiments['abrun_files'] += 1\\n        else:\\n            values = [record.get(field, 'unknown')]\\n        for value in values:\\n            experiments[bucket][str(value)] += 1\\n        experiments['records'].append(dict(path=str(path.relative_to(root)), values=values, timestamp=ts))\")
+s=s.replace(\"abrun_count=sum(experiments['abrun_verdict'].values())\", \"abrun_count=experiments['abrun_files'],\\n                            abrun_verdict_count=sum(experiments['abrun_verdict'].values())\")
+s=s.replace(\"    lines += ['## 5. Experiments', '']\", \"    lines += ['## 5. Experiments', '', 'Abrun counts comparison verdicts (or a legacy top-level verdict); unrelated handoff verdicts are excluded.', '']\")
+open(p,'w').write(s)
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+codex
+The first real report shows a 9.09-hour November 10 idle gap, 27 failed outcomes, and 54 OM results. I also checked the abrun writer: it stores verdicts under `comparisons.*.verdict`, so I’ve added support for that format and excluded unrelated handoff verdicts. Fixture tests are next.
+exec
+/bin/bash -lc "cat > c2/test_shape_report.py <<'PY'
+\"\"\"Small offline fixtures: no Docker, GPU, or production input writes.\"\"\"
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+import pytest
+
+spec = importlib.util.spec_from_file_location('shape_report', Path(__file__).with_name('shape_report.py'))
+shape = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(shape)
+
+
+def write(path, value, lines=False):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(''.join(json.dumps(r)+'\\n' for r in value) if lines else json.dumps(value))
+
+
+def test_interval_math():
+    assert shape.union([(5, 9), (0, 3), (2, 5), (12, 12), (15, 14)]) == [(0, 9)]
+    assert shape.duration([(0, 10), (2, 5), (8, 12)]) == 12
+    assert shape.intersection([(0, 10), (20, 30)], [(5, 25)]) == [(5, 10), (20, 25)]
+    assert shape.duration(shape.intersection([(0, 10)], [(10, 12)])) == 0
+    assert shape.union([]) == []
+
+
+@pytest.mark.parametrize('text, expected', [
+    ('error: invalid option', 'flag_error'), ('unknown argument --foo', 'flag_error'),
+    ('invalid argument during build_engine.py', 'flag_error'),
+    ('CUDA out of memory', 'oom/watchdog'), ('watchdog tripped', 'oom/watchdog'),
+    ('OOM-killed', 'oom/watchdog'), ('docker: Error response from daemon', 'docker_start'),
+    ('Cannot connect to the Docker daemon', 'docker_start'),
+    ('ninja: build stopped', 'build_fail'), ('build_engine.py --target x', 'build_fail'),
+    ('timed out', 'timeout'), ('timeout', 'timeout'), ('exit 7', 'other'),
+])
+def test_failure_classification(text, expected):
+    assert shape.classify_failure(text) == expected
+
+
+def test_worklog_aggregation():
+    rows = [
+        dict(event='start', task='H1', worker='codex', ts='2026-11-09T12:00Z'),
+        dict(event='end', task='H1', wall_s=10, tokens='20', ts='2026-11-10T12:00Z'),
+        dict(event='checkin', task='H1', verdict='REWORK', issues=['a','b'], rework_rounds=1, ts='2026-11-10T12:01Z'),
+        dict(event='end', task='H1', worker='codex', wall_s=5, tokens=8, ts='2026-11-10T12:02Z'),
+        dict(event='checkin', task='H1', verdict='PASS', issues=[], rework_rounds=1, opus_fix=True, ts='2026-11-10T12:03Z'),
+        dict(event='start', task='H2', worker='other', ts='2026-11-09T12:00Z'),
+    ]
+    result = shape.aggregate_worklog(rows, shape.timestamp('2026-11-10'))
+    assert len(result['tasks']) == 1
+    task = result['tasks'][0]
+    assert (task['worker'], task['wall_s'], task['tokens'], task['verdict']) == ('codex', 15, 28, 'PASS')
+    assert (task['issues_count'], task['rework_rounds'], task['opus_fix']) == (2, 1, True)
+    assert result['workers']['codex'] == dict(tasks=1, wall_s=15, tokens=28, issues_count=2, rework_rounds=1, opus_fixes=1)
+
+
+@pytest.fixture
+def fixture_root(tmp_path):
+    day = shape.timestamp('2026-11-10')
+    records = []
+
+    def operation(op, task, argv, start, end, failed=False, stderr=None):
+        records.extend([
+            dict(kind='outcome', op=op, ts=shape.iso(day+end), status='error' if failed else 'ok',
+                 exit_code=1 if failed else 0, elapsed_s=end-start, stderr={'path': stderr} if stderr else {}),
+            dict(kind='intent', op=op, task=task, agent='codex', argv=argv, ts=shape.iso(day+start)),
+            dict(kind='started', op=op, ts=shape.iso(day+start)),
+        ])
+    operation('gpu1', 'J-OM1', ['om_run.sh'], 0, 3600)
+    operation('gpu2', 'J-KS1', ['kernel_screen.py'], 1800, 5400)
+    operation('gpu3', 'J-SPEC1', ['om_spec.py'], 36000, 39600)
+    operation('build', 'build-x', ['build_engine.py'], 2700, 7200)
+    error = tmp_path/'artifacts/err'
+    error.parent.mkdir()
+    error.write_text('unknown argument OLD\\n'+'x'*5000+'\\nwatchdog tripped\\n')
+    operation('bad', 'H1', ['python3','tool.py'], 10, 11, True, 'artifacts/err')
+    records.append(dict(kind='intent', op='unfinished', task='J-OM2', agent='codex', argv=['om_run.sh'], ts=shape.iso(day+8000)))
+    write(tmp_path/'evidence/jetson-arm/worker.jsonl', records, True)
+    write(tmp_path/'evidence/jetson-arm/claude-code.jsonl', [
+        dict(event='PreToolUse', ts=shape.iso(day), payload={'tool_name':'Bash'}, argv=['om_run.sh'], op='hook'),
+        dict(event='PostToolUse', ts=shape.iso(day), payload={'tool_name':'Bash'})], True)
+    write(tmp_path/'c2/worklog.jsonl', [dict(event='end', task='H1', worker='codex', wall_s=2, tokens='9', ts=shape.iso(day))], True)
+    write(tmp_path/'experiments/jetson/OM/one/a/result.json', {'status':'ok'})
+    write(tmp_path/'experiments/jetson/arbitrary-run/verdict.json', {'status':'completed', 'comparisons':{'B':{'verdict':'improved'}, 'C':{'verdict':'null'}}})
+    write(tmp_path/'experiments/handoff/verdict.json', {'state':'rejected'})
+    return tmp_path, day
+
+
+def test_fixture_report_and_queue(fixture_root):
+    root, day = fixture_root
+    report = shape.generate(root, now=day+43200)
+    r = report['timeline']['2026-11-10']
+    assert r['gpu_busy_h'] == 2.5
+    assert r['build_h'] == 1.25
+    assert r['overlap_h'] == .75
+    assert r['longest_idle_gap_h'] == 8.5
+    assert r['longest_queued_idle_gap_h'] is None
+    assert report['totals']['ops'] == 6
+    assert report['totals']['failed_ops'] == 1
+    assert report['failures']['oom/watchdog']['examples'] == ['bad']
+    assert report['tool_calls_per_day'] == {'2026-11-10':{'Bash':1}}
+    assert report['experiments']['abrun_verdict'] == {'improved':1, 'null':1}
+    assert report['totals']['abrun_count'] == 1
+    assert report['experiments']['result_status'] == {'ok':1}
+    assert len(shape.markdown(report).splitlines()) <= 200
+    write(root/'lab/jobq/queued.json', dict(id='queued', **{'class':'gpu'}, state='running', submitted=int((day+7200)*1e9), start=int((day+32400)*1e9), end=int((day+34200)*1e9), concurrent_jobs=['build']))
+    with_queue = shape.generate(root, now=day+43200)
+    q = with_queue['timeline']['2026-11-10']
+    assert q['gpu_busy_h'] == 3
+    assert q['longest_idle_gap_h'] == 7.5
+    assert q['longest_queued_idle_gap_h'] == 7
+    assert with_queue['jobs'][0]['concurrent_jobs'] == ['build']
+    clipped = shape.generate(root, since=day+3600, now=day+43200)
+    assert clipped['timeline']['2026-11-10']['gpu_busy_h'] == 2
+    assert shape.timestamp('2026-11-10T01:00:00+01:00') == day
+
+
+def test_cli(fixture_root, tmp_path):
+    root, _ = fixture_root
+    out, data = tmp_path/'out.md', tmp_path/'out.json'
+    process = subprocess.run([sys.executable, str(Path(__file__).with_name('shape_report.py')),
+                              '--root', str(root), '--out', str(out), '--json', str(data)],
+                             capture_output=True, text=True, timeout=10)
+    assert process.returncode == 0, process.stderr
+    assert len([line for line in out.read_text().splitlines() if line.startswith('## ')]) == 5
+    assert json.loads(data.read_text())['totals']['ops'] == 6
+PY
+python3 -m pytest -q c2/test_shape_report.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 1676ms:
+.................                                                        [100%]
+17 passed in 0.28s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='c2/shape_report.py'
+s=open(p).read().replace('def table(headers, rows, limit=28):','def table(headers, rows, limit=20):')
+s=s.replace(\"for d,c in report['tool_calls_per_day'].items()])\", \"for d,c in report['tool_calls_per_day'].items()], limit=14)\")
+s=s.replace(\"for r in report['delegation']['tasks']])\", \"for r in report['delegation']['tasks']], limit=25)\")
+s=s.replace(\"for w,r in sorted(report['delegation']['workers'].items())])\", \"for w,r in sorted(report['delegation']['workers'].items())], limit=12)\")
+open(p,'w').write(s)
+PY
+python3 -m pytest -q c2/test_shape_report.py
+python3 c2/shape_report.py --out /tmp/SHAPE.md --json /tmp/shape.json
+python3 c2/shape_report.py
+python3 - <<'PY'
+import json,pathlib
+r=json.loads(pathlib.Path('/tmp/shape.json').read_text())
+assert r['timeline']['2026-11-10']['longest_idle_gap_h'] >= 7
+assert sum(l.startswith('## ') for l in pathlib.Path('/tmp/SHAPE.md').read_text().splitlines()) == 5
+assert len(pathlib.Path('/tmp/SHAPE.md').read_text().splitlines()) <= 200
+print('A3:',r['timeline']['2026-11-10'])
+print('Totals:',r['totals'])
+print('Delegation:',r['delegation']['workers'])
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 2149ms:
+.................                                                        [100%]
+17 passed in 0.25s
+Unmapped tasks: J-FIO, J-ISO1, J-Q, J-UP, J1, J1-container, J2-build, J2-image-qual, J2-model, J2-repro, J5, J5-regress, sleep, true
+{"abrun_count": 0, "abrun_verdict_count": 0, "build_h": 4.01754506263468, "completed_ops": 241, "failed_ops": 27, "gpu_busy_h": 3.6874547127220367, "ops": 244, "overlap_h": 0.1457733991410997, "result_count": 54}
+Unmapped tasks: J-FIO, J-ISO1, J-Q, J-UP, J1, J1-container, J2-build, J2-image-qual, J2-model, J2-repro, J5, J5-regress, sleep, true
+{"abrun_count": 0, "abrun_verdict_count": 0, "build_h": 4.01754506263468, "completed_ops": 241, "failed_ops": 27, "gpu_busy_h": 3.6875680871804555, "ops": 244, "overlap_h": 0.1457733991410997, "result_count": 54}
+A3: {'build_h': 3.467973793413904, 'gpu_busy_h': 3.3510727697610854, 'longest_idle_gap': ['2026-11-10T06:50:12.416213+00:00', '2026-11-10T15:55:41.657565+00:00'], 'longest_idle_gap_h': 9.091455931133694, 'longest_queued_idle_gap_h': None, 'overlap_h': 0.0935095602936215}
+Totals: {'abrun_count': 0, 'abrun_verdict_count': 0, 'build_h': 4.01754506263468, 'completed_ops': 241, 'failed_ops': 27, 'gpu_busy_h': 3.6874547127220367, 'ops': 244, 'overlap_h': 0.1457733991410997, 'result_count': 54}
+Delegation: {'codex': {'issues_count': 4, 'opus_fixes': 1, 'rework_rounds': 0, 'tasks': 5, 'tokens': 159737.0, 'wall_s': 1061.0}}
+
+codex
+Implemented [generator](c2/shape_report.py), [tests](c2/test_shape_report.py), and generated [SHAPE.md](c2/SHAPE.md) / [shape.json](c2/shape.json).
+A1–A3 pass; 17 tests pass.
+Real report: **244 ops**, **27 failures**, **3.69 GPU-busy h**, **4.02 build h**, **9.09 h longest November 10 idle gap**.
+Gap bounds: 06:50–15:55 UTC; historical queue data is unavailable.
+Inputs unchanged; no Docker/GPU use; no commits.
+tokens used
+52,067
+Implemented [generator](c2/shape_report.py), [tests](c2/test_shape_report.py), and generated [SHAPE.md](c2/SHAPE.md) / [shape.json](c2/shape.json).
+A1–A3 pass; 17 tests pass.
+Real report: **244 ops**, **27 failures**, **3.69 GPU-busy h**, **4.02 build h**, **9.09 h longest November 10 idle gap**.
+Gap bounds: 06:50–15:55 UTC; historical queue data is unavailable.
+Inputs unchanged; no Docker/GPU use; no commits.

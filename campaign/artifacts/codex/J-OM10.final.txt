@@ -1,0 +1,10 @@
+Delivered [06 patch](/home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/06-pregate.patch), combined patch, canonical header/tests, J-OM10 spec, README, and compile proof.
+
+Validation passed: unit tests, sequential/combined empty diff, header equality, all five C++ syntax checks, and exact eight-run dry-run.
+
+Arch: `qwen35moe`; routers F32 `[2048,256]`; softmax gating, no biases or grouped top-k.
+`x_L`: host-validated `src[1]` of the first gate/up expert matmul, containing post-attention RMS-normalized activations.
+Prediction submission never waits for async completion.
+Risks: wrong predictions cause cache eviction and extra IO; fill workers and router math contend with matmul on six cores.
+
+Reference tree unchanged; no Docker, GPU, full build, commits, or evidence edits. Runtime recall/performance remains unmeasured.

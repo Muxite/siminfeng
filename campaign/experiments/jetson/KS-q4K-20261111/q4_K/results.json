@@ -1,0 +1,2880 @@
+{
+  "schema_version": 1,
+  "started_at": "2026-11-11T04:30:32.520522+00:00",
+  "inspected_source_reference": "31288c9c6",
+  "image": "campaign/llamacpp:jetson-c1-ks",
+  "binary": null,
+  "backend": "CUDA0",
+  "shapes": [
+    {
+      "n_embd": 1024,
+      "n_ff": 512,
+      "n_expert": 32,
+      "n_used": 8,
+      "n_tokens": 1,
+      "direction": "up"
+    },
+    {
+      "n_embd": 1024,
+      "n_ff": 512,
+      "n_expert": 32,
+      "n_used": 8,
+      "n_tokens": 1,
+      "direction": "down"
+    },
+    {
+      "n_embd": 1024,
+      "n_ff": 512,
+      "n_expert": 32,
+      "n_used": 8,
+      "n_tokens": 8,
+      "direction": "up"
+    },
+    {
+      "n_embd": 1024,
+      "n_ff": 512,
+      "n_expert": 32,
+      "n_used": 8,
+      "n_tokens": 8,
+      "direction": "down"
+    }
+  ],
+  "types": [
+    "Q4_K"
+  ],
+  "ops": [
+    "MUL_MAT",
+    "MUL_MAT_ID",
+    "MUL_MAT_VEC_FUSION"
+  ],
+  "arms": {
+    "A": {
+      "GGML_CUDA_J_UNFUSE_IDS_TYPES": null
+    },
+    "A2": {
+      "GGML_CUDA_J_UNFUSE_IDS_TYPES": null
+    },
+    "B": {
+      "GGML_CUDA_J_UNFUSE_IDS_TYPES": "q4_K"
+    }
+  },
+  "managed_env": [
+    "GGML_CUDA_DISABLE_FUSION",
+    "GGML_CUDA_J_UNFUSE_IDS_TYPES"
+  ],
+  "repeats": 3,
+  "runs": [
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00000.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00001.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00002.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00003.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00004.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00005.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00006.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00007.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00008.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00009.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00010.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00011.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00012.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00013.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00014.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00015.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00016.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00017.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00018.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00019.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00020.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00021.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00022.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00023.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00024.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00025.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00026.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00027.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00028.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00029.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00030.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00031.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00032.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00033.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00034.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00035.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00036.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00037.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00038.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00039.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00040.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00041.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00042.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00043.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00044.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00045.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00046.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00047.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00048.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00049.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00050.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00051.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00052.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 1,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=1(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00053.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00054.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00055.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00056.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00057.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00058.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00059.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00060.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00061.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00062.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00063.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00064.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00065.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00066.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00067.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00068.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00069.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00070.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)m=512(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00071.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00072.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00073.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00074.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00075.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00076.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00077.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00078.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00079.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "up"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=1024(?:,|$))(?=.*(?:^|,)n=512(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00080.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00081.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00082.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00083.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00084.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00085.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00086.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00087.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00088.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00089.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00090.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00091.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00092.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00093.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00094.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00095.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00096.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00097.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_ID",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_ID -b CUDA0 -p '^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type_a=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)m=1024(?:,|$))(?=.*(?:^|,)n=8(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$)).*$",
+      "rows": [],
+      "log": "00098.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00099.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00100.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 0,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00101.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00102.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00103.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 1,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00104.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00105.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "A2",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00106.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    },
+    {
+      "arm": "B",
+      "repeat": 2,
+      "shape": {
+        "n_embd": 1024,
+        "n_ff": 512,
+        "n_expert": 32,
+        "n_used": 8,
+        "n_tokens": 8,
+        "direction": "down"
+      },
+      "op": "MUL_MAT_VEC_FUSION",
+      "weight_type": "Q4_K",
+      "command": [
+        "sg",
+        "docker",
+        "-c",
+        "docker run --rm --runtime nvidia --network=none -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --entrypoint /usr/bin/env campaign/llamacpp:jetson-c1-ks -u GGML_CUDA_DISABLE_FUSION -u GGML_CUDA_J_UNFUSE_IDS_TYPES GGML_CUDA_J_UNFUSE_IDS_TYPES=q4_K /app/test-backend-ops perf -o MUL_MAT_VEC_FUSION -b CUDA0 -p '^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$'"
+      ],
+      "params_filter": "^(?=.*(?:^|,)type=q4_k(?:,|$))(?=.*(?:^|,)k=512(?:,|$))(?=.*(?:^|,)n=1024(?:,|$))(?=.*(?:^|,)m=8(?:,|$))(?=.*(?:^|,)use_id=1(?:,|$))(?=.*(?:^|,)n_mats=32(?:,|$))(?=.*(?:^|,)n_used=8(?:,|$))(?=.*(?:^|,)with_gate=1(?:,|$)).*$",
+      "rows": [],
+      "log": "00107.log",
+      "returncode": 0,
+      "error": "no supported cases; requested shape/type may not exist in binary"
+    }
+  ],
+  "errors": [
+    "run 0 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 1 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 2 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 3 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 4 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 5 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 6 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 7 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 8 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 9 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 10 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 11 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 12 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 13 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 14 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 15 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 16 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 17 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 18 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 19 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 20 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 21 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 22 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 23 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 24 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 25 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 26 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 27 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 28 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 29 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 30 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 31 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 32 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 33 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 34 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 35 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 36 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 37 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 38 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 39 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 40 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 41 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 42 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 43 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 44 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 45 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 46 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 47 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 48 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 49 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 50 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 51 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 52 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 53 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 1, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 54 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 55 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 56 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 57 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 58 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 59 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 60 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 61 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 62 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 63 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 64 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 65 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 66 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 67 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 68 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 69 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 70 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 71 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 72 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 73 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 74 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 75 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 76 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 77 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 78 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 79 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 80 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'up'}): no supported cases; requested shape/type may not exist in binary",
+    "run 81 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 82 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 83 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 84 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 85 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 86 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 87 (A, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 88 (A2, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 89 (B, MUL_MAT, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 90 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 91 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 92 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 93 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 94 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 95 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 96 (A, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 97 (A2, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 98 (B, MUL_MAT_ID, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 99 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 100 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 101 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 102 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 103 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 104 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 105 (A, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 106 (A2, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary",
+    "run 107 (B, MUL_MAT_VEC_FUSION, Q4_K, {'n_embd': 1024, 'n_ff': 512, 'n_expert': 32, 'n_used': 8, 'n_tokens': 8, 'direction': 'down'}): no supported cases; requested shape/type may not exist in binary"
+  ],
+  "summary": [],
+  "status": "failed"
+}

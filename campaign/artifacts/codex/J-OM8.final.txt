@@ -1,0 +1,9 @@
+Implemented all deliverables in [cc/expert_fill](/home/muk/projects/siminfeng/campaign/cc/expert_fill/README.md), both patches, and `cc/abrun/specs/J-OM8.json`.
+
+Hook: patched `src/llama-context.cpp:818`, inside `expert_prefetch_cb`.
+File offsets: loader `weights_map` entries (`idx`, `offs`), validated against mmap addresses.
+
+Validation: component test PASS; combined apply check PASS; sequential/combined trees identical; header identity PASS; all five `.cpp` syntax checks exit 0; ABCCBA dry-run PASS.
+
+Risks: cache eviction after filling, fragmented reads, buffered readahead, and synchronous wait/copy overhead. Engine performance remains unmeasured.
+Reference tree unchanged; no commits, Docker, GPU execution, or full build.

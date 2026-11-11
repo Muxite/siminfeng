@@ -1,4 +1,6 @@
 import json, os, subprocess, sys
+from pathlib import Path
+import shutil
 import pytest
 import resource_observe as ro
 
@@ -144,3 +146,41 @@ def test_cli_sample_fake_and_summarize(tmp_path):
     recs = [json.loads(l) for l in open(out)]
     assert len(recs) >= 3 and all(x["schema"] == ro.SCHEMA and x["backend"] == "proc" for x in recs)
     assert recs[0]["seq"] == 0 and {"ts", "mono_s", "host_id", "metrics", "unavailable", "parse_errors"} <= set(recs[0])
+
+
+def test_campaign_host_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(ro.socket, "gethostname", lambda: "fallback-host")
+    assert ro.record("proc", 0, [])['host_id'] == "fallback-host"
+    path = tmp_path / ".config" / "siminfeng" / "host_id"
+    path.parent.mkdir(parents=True)
+    path.write_text("jetson-arm\n")
+    assert ro.record("proc", 0, [])['host_id'] == "jetson-arm"
+    assert ro.record("proc", 0, [], host_id="explicit")['host_id'] == "explicit"
+    path.write_text("\n")
+    assert ro.record("proc", 0, [])['host_id'] == "fallback-host"
+
+
+def test_discovered_gpu_frequency_hz(tmp_path):
+    captured = Path(__file__).parent / "tests/fixtures/gpu-devfreq"
+    gpu = tmp_path / 'different-address.gpu'
+    gpu.mkdir()
+    for name in ("cur_freq", "min_freq", "max_freq"):
+        shutil.copyfile(captured / name, gpu / name)
+    assert ro.discover_gpu_devfreq(str(tmp_path)) == str(gpu)
+    metrics, unavailable = ro.frequency_sample(devfreq_root=str(tmp_path))
+    assert names(metrics)['gpu_freq']['value'] == int((captured / 'cur_freq').read_text())
+    assert names(metrics)['gpu_freq']['unit'] == 'Hz'
+    assert not unavailable
+    (gpu / 'cur_freq').unlink()
+    metrics, unavailable = ro.frequency_sample(devfreq_root=str(tmp_path))
+    assert not metrics and unavailable[0]['name'] == 'gpu_freq'
+
+
+def test_tegrastats_sampling_adds_discovered_frequency(monkeypatch):
+    real = ro.frequency_sample()
+    if 'gpu_freq' not in names(real[0]):
+        pytest.skip('no readable GPU sysfs frequency on this host')
+    m, u, e = ro.observed_tegrastats(fx('tegrastats-idle-orin-nano-r36.5.txt').splitlines()[0])
+    assert names(m)['gpu_freq']['unit'] == 'Hz'
+    assert not any(x['name'] == 'gpu_freq' for x in u)

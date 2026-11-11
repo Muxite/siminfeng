@@ -27,10 +27,26 @@ dk logs "$NAME" > "$OUT/stdout.txt" 2> "$OUT/stderr.txt"
 OOM=$(dk inspect "$NAME" --format '{{.State.OOMKilled}}')
 dk rm "$NAME" > /dev/null
 TRIP=$(grep -c watchdog_trip "$OUT/watchdog.jsonl" 2>/dev/null); TRIP=${TRIP:-0}
-python3 - "$OUT" "$RC" "$T0" "$T1" "$OOM" "$TRIP" <<'PY'
-import json,sys
-o,rc,t0,t1,oom,trip=sys.argv[1:]
-json.dump(dict(exit_code=int(rc.strip() or -1),wall_s=round(float(t1)-float(t0),2),oom_killed=oom.strip()=="true",watchdog_trips=int(trip),
-  status="watchdog_killed" if int(trip) else ("ok" if rc.strip()=="0" else "failed")),open(o+"/result.json","w"),indent=1)
+python3 - "$OUT" "$RC" "$T0" "$T1" "$OOM" "$TRIP" "$IMG" "$ENVF" "$TOOL" "$@" <<'PY'
+import json,sys,os,socket
+o,rc,t0,t1,oom,trip,image,env,*argv=sys.argv[1:]
+code=int(rc.strip() or -1)
+tripped=int(trip)>0
+if tripped and code in (137, -9):
+    status="watchdog_tripped_killed"
+elif tripped and code == 0:
+    status="watchdog_tripped_survived"
+elif oom.strip()=="true":
+    status="oom_killed"
+else:
+    status="ok" if code == 0 else "failed"
+try:
+    with open(os.path.expanduser("~/.config/siminfeng/host_id")) as f:
+        host_id=f.read().strip() or socket.gethostname()
+except OSError:
+    host_id=socket.gethostname()
+json.dump(dict(exit_code=code,wall_s=round(float(t1)-float(t0),2),
+  oom_killed=oom.strip()=="true",watchdog_trips=int(trip),status=status,
+  host_id=host_id,image=image,env=env,argv=argv),open(o+"/result.json","w"),indent=1)
 print(open(o+"/result.json").read())
 PY

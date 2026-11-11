@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from io_watchdog import IOSampler, watchdog
 
 SCHEMA = "resource-observe/0"
-GPU_DEVFREQ = "/sys/devices/platform/17000000.gpu/devfreq/17000000.gpu"
+DEVFREQ_ROOT = "/sys/class/devfreq"
 ALL_BACKENDS = ["tegrastats", "proc", "sysfs_tegra", "nvml", "io"]
 
 
@@ -17,10 +17,18 @@ def U(name, backend, reason):
     return {"name": name, "backend": backend, "reason": reason}
 
 
+def campaign_host_id():
+    try:
+        with open(os.path.expanduser("~/.config/siminfeng/host_id")) as f:
+            return f.read().strip() or socket.gethostname()
+    except OSError:
+        return socket.gethostname()
+
+
 def record(backend, seq, metrics, unavailable=(), parse_errors=(), host_id=None, mono=None):
     return {"schema": SCHEMA, "ts": datetime.now(timezone.utc).isoformat(),
             "mono_s": time.monotonic() if mono is None else mono,
-            "host_id": host_id or socket.gethostname(), "backend": backend, "seq": seq,
+            "host_id": host_id or campaign_host_id(), "backend": backend, "seq": seq,
             "metrics": list(metrics), "unavailable": list(unavailable), "parse_errors": list(parse_errors)}
 
 
@@ -210,10 +218,33 @@ def proc_sample(root="/proc", pid=None, cgroup=None, cgroup_root="/sys/fs/cgroup
 
 
 # ---------------- sysfs_tegra ----------------
-def sysfs_sample(devfreq=GPU_DEVFREQ, thermal="/sys/class/thermal", nvpmodel_mode=None, query_nvpmodel=True):
+def discover_gpu_devfreq(root=DEVFREQ_ROOT):
+    return next(iter(sorted(glob.glob(os.path.join(root, "*.gpu")))), None)
+
+
+def frequency_sample(devfreq=None, devfreq_root=DEVFREQ_ROOT):
+    """Read public devfreq clocks without sudo; raw frequencies are Hz."""
+    devfreq = devfreq or discover_gpu_devfreq(devfreq_root)
+    m, un = [], []
+    t = (_read(os.path.join(devfreq, "cur_freq")) or "").strip() if devfreq else ""
+    if t.isdigit():
+        m.append(M("gpu_freq", int(t), "Hz", "gpu", str(devfreq) + "/cur_freq"))
+    else:
+        un.append(U("gpu_freq", "sysfs_tegra", "*.gpu/cur_freq absent or unreadable"))
+    emc = sorted(glob.glob(os.path.join(devfreq_root, "*emc*")))
+    for path in emc:
+        t = (_read(os.path.join(path, "cur_freq")) or "").strip()
+        if t.isdigit():
+            m.append(M("emc_freq", int(t), "Hz", "system", path + "/cur_freq"))
+            break
+    return m, un
+
+
+def sysfs_sample(devfreq=None, thermal="/sys/class/thermal", nvpmodel_mode=None, query_nvpmodel=True):
     B = "sysfs_tegra"
     m, un = [], []
-    if not os.path.isdir(devfreq):
+    devfreq = devfreq or discover_gpu_devfreq()
+    if not devfreq or not os.path.isdir(devfreq):
         un.append(U("gpu_devfreq", B, "%s absent (not a Jetson?)" % devfreq))
     else:
         for n, f in (("gpu_freq_cur", "cur_freq"), ("gpu_freq_min", "min_freq"), ("gpu_freq_max", "max_freq")):
@@ -222,6 +253,9 @@ def sysfs_sample(devfreq=GPU_DEVFREQ, thermal="/sys/class/thermal", nvpmodel_mod
                 m.append(M(n, int(t) / 1e6, "MHz", "gpu", "devfreq:" + f))
             else:
                 un.append(U(n, B, "%s unreadable" % f))
+    fm, fu = frequency_sample(devfreq)
+    m.extend(fm)
+    un.extend(fu)
     zones = sorted(glob.glob(os.path.join(thermal, "thermal_zone*")))
     if not zones:
         un.append(U("thermal", B, "no thermal zones"))
@@ -300,7 +334,7 @@ def nvml_sample(runner=None):
 
 
 # ---------------- capabilities / sampling ----------------
-def capabilities(devfreq=GPU_DEVFREQ, root="/proc", runner=None):
+def capabilities(devfreq=None, root="/proc", runner=None):
     caps = {}
     ok, why = tegrastats_available()
     caps["tegrastats"] = {"available": ok, "reason": why or "tegrastats found",
@@ -309,7 +343,7 @@ def capabilities(devfreq=GPU_DEVFREQ, root="/proc", runner=None):
     caps["proc"] = {"available": bool(pm), "reason": "ok" if pm else "no /proc fields", "metrics": [x["name"] for x in pm],
                     "missing": [x["name"] + ": " + x["reason"] for x in pu]}
     sm, su = sysfs_sample(devfreq, query_nvpmodel=True)
-    has = os.path.isdir(devfreq)
+    has = bool(devfreq and os.path.isdir(devfreq)) if devfreq else bool(discover_gpu_devfreq())
     caps["sysfs_tegra"] = {"available": has, "reason": "ok" if has else "no Tegra GPU devfreq node",
                            "metrics": [x["name"] for x in sm][:6], "missing": [x["name"] + ": " + x["reason"] for x in su][:6]}
     ok, why = nvml_available()
@@ -349,6 +383,16 @@ def sample_once(backend, seq, a):
     return record(backend, seq, m, u)
 
 
+def observed_tegrastats(line):
+    m, u, e = parse_tegrastats(line)
+    clocks, missing = frequency_sample()
+    have = {x["name"] for x in clocks}
+    m = [x for x in m if x["name"] not in have] + clocks
+    u = [x for x in u if x["name"] not in have]
+    u.extend(x for x in missing if not any(y["name"] == x["name"] for y in m + u))
+    return m, u, e
+
+
 def cmd_sample(a):
     a.io_sampler = IOSampler(path=a.path, device=a.device, pid=a.pid,
                              pid_from_cgroup=a.pid_from_cgroup, cgroup=a.cgroup)
@@ -372,7 +416,7 @@ def cmd_sample(a):
                 t0 = time.monotonic()
                 if tg:
                     for l in tg.drain():
-                        m, u, e = parse_tegrastats(l)
+                        m, u, e = observed_tegrastats(l)
                         emit(record("tegrastats", seq, m, u, e)); seq += 1
                 for b in backends:
                     if b != "tegrastats":
@@ -384,7 +428,7 @@ def cmd_sample(a):
             if tg:
                 time.sleep(a.interval_ms / 1000 + 0.1)
                 for l in tg.drain():
-                    m, u, e = parse_tegrastats(l)
+                    m, u, e = observed_tegrastats(l)
                     emit(record("tegrastats", seq, m, u, e)); seq += 1
         finally:
             if tg:

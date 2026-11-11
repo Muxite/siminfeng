@@ -1,0 +1,684 @@
+J-OM8 syntax-only compile proof (no engine build, no Docker, no GPU)
+Source: cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03.patch
+Patch SHA256: d0435da67d3c59ae2e4d5238461b0eb9e231d901204a636c11f2994291eb5a0a
+Fresh copy: /tmp/j-om8-check-combined
+Compiler: g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+Preparation: git apply --check and git apply of the combined patch both exited 0.
+Sequential 01 then 02 then 03 versus combined: diff -qr --exclude=.git exited 0.
+Header extracted with acceptance A5 sed/grep/cut: cmp exited 0.
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+Every touched .cpp: exit 0.
+
+J-OM8b / 04 phase-aware fill syntax-only compile proof
+Source: cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03-04.patch
+Patch SHA256: d1792e9565df2d2d27d1e24492b665f9704db674b6d823ab7ca482407a9e3036
+Compiler: g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om8b-work
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+Every touched .cpp in 01-04: exit 0.
+
+04 patch verification: fresh cf34d311 archive; git apply --check and apply exit 0 for each of 01,02,03,04 and combined-01-02-03-04.
+Sequential versus combined: diff -r exit 0 (empty).
+Final src/llama-expert-fill.h versus cc/expert_fill/expert_fill.h: byte comparison equal.
+Final combined header extracted with J-OM8 A5 sed/grep/cut pipeline: cmp exit 0.
+make -C cc/expert_fill test: exit 0, PASS (cold prompt/decode bytes, warm decode skip, phase sums including bounds failure).
+python3 cc/abrun/abrun.py cc/abrun/specs/J-OM8b.json --dry-run: exit 0; exact requested 16-run order.
+Shared switch regex OR semantics checked: base matches none; each fill arm matches >=1; inactive marker matches neither. The runner cannot independently require the decode marker.
+
+05 / J-OM9 syntax-only compile proof (no Docker/GPU/full build)
+Source: fresh cf34d311332e362198f0a410c466d1e940287d02 + combined-01-02-03-04-05.patch
+Patch SHA256: f79fcf38de248cbf05fd934ef74191b2fc6bbcf6c50bc08cce40b5fc6697e7b0
+05 touches src/llama-context.cpp and two headers; all C++ files touched by 01-05 are checked below.
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om9-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+05 fresh archives: git apply --check and apply of sequential 01,02,03,04,05 and combined each exit 0.
+A2 diff -r /tmp/j-om9-check-seq /tmp/j-om9-check-combined: exit 0, empty.
+A5 canonical header versus applied combined and extracted full added header: byte-equal.
+A1 make -C cc/expert_fill test: exit 0, PASS including populate residency and zero-major-fault retouch.
+A4 dry-run: exit 0, 8 runs: base frd16 frd16d frd16p frd16p frd16d frd16 base.
+A6 guards and runner leak-regex limitation: see README.md 05 section.
+
+06 / J-OM10 pre-gated async fill syntax-only compile proof (no Docker/GPU/full build)
+Source: fresh cf34d311332e362198f0a410c466d1e940287d02 archive + combined-01-02-03-04-05-06.patch
+Combined patch SHA256: fdda6bbc8b3e92b9eddfe4a9aa97481082512dc8c912bad08a56989e32aa5005
+Canonical header: cc/expert_fill/expert_fill.h
+All C++ files touched by 01-06 are checked below. Engine reference tree unchanged.
+Compiler: g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/01-mmap-advice-random.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/01-mmap-advice-random.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/02-router-prefetch.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/02-router-prefetch.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/03-expert-fill.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/03-expert-fill.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/04-fill-phase.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/04-fill-phase.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/05-fill-diag.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/05-fill-diag.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/06-pregate.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/06-pregate.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/combined-01-02-03-04-05-06.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/combined-01-02-03-04-05-06.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /home/muk/projects/siminfeng/campaign
+$ diff -r /tmp/j-om10-check-seq /tmp/j-om10-check-combined
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /home/muk/projects/siminfeng/campaign
+$ cmp /home/muk/projects/siminfeng/campaign/cc/expert_fill/expert_fill.h /tmp/j-om10-check-combined/src/llama-expert-fill.h
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+A5 full added-header extraction versus canonical header: byte equal.
+
+$ cd /tmp/j-om10-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /home/muk/projects/siminfeng/campaign
+$ make -C cc/expert_fill test
+stdout:
+make: Entering directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+./test_expert_fill
+measured readahead extra pages: 31 (126976 bytes)
+PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds, async completion and zero-read sync repeat, populate residency and zero-major-fault retouch
+make: Leaving directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+stderr:
+(empty)
+exit 0
+
+A4 python3 cc/abrun/abrun.py cc/abrun/specs/J-OM10.json --dry-run: exit 0.
+Exactly 8 runs: base frd16 pg8 pg16 pg16 pg8 frd16 base; no DIAG in spec.
+A6 reviewable quotes and false assumptions: README.md section 06.
+
+07 / J-OM10b pre-gate scheduling syntax-only compile proof (no Docker/GPU/full build)
+Source: fresh cf34d311332e362198f0a410c466d1e940287d02 archives; engine reference unchanged.
+Canonical header: cc/expert_fill/expert_fill.h
+07-pregate-sched.patch SHA256: 21628cd1e075ad66610bedc315ba9d8d421d59d2f56395c7bf73b576f7c92c42
+combined-01-02-03-04-05-06-07.patch SHA256: ba4654969cb60888bdc8fb12fbc2e5cc0d154302bdc3b9076825d52d340b8fae
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/01-mmap-advice-random.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/01-mmap-advice-random.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/02-router-prefetch.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/02-router-prefetch.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/03-expert-fill.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/03-expert-fill.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/04-fill-phase.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/04-fill-phase.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/05-fill-diag.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/05-fill-diag.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/06-pregate.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/06-pregate.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/07-pregate-sched.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-seq
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/07-pregate-sched.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-combined
+$ git apply --check /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/combined-01-02-03-04-05-06-07.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-combined
+$ git apply /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/combined-01-02-03-04-05-06-07.patch
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /home/muk/projects/siminfeng/campaign
+$ diff -r /tmp/j-om10b-check-seq /tmp/j-om10b-check-combined
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /home/muk/projects/siminfeng/campaign
+$ cmp /home/muk/projects/siminfeng/campaign/cc/expert_fill/expert_fill.h /tmp/j-om10b-check-combined/src/llama-expert-fill.h
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+A2 diff -r: exit 0, empty. A5 applied and full added-header extraction: byte-equal.
+
+$ cd /tmp/j-om10b-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /tmp/j-om10b-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ cd /home/muk/projects/siminfeng/campaign
+$ make -C cc/expert_fill test
+stdout:
+make: Entering directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+./test_expert_fill
+measured readahead extra pages: 31 (126976 bytes)
+PASS test_cancel_before_start (older/current/future batches, bytes, idempotence, drain)
+PASS test_async_inflight_cap (1, 2, default 4, invalid fallback, demand progress, slot reuse)
+PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds, async completion and zero-read sync repeat, populate residency and zero-major-fault retouch
+make: Leaving directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+stderr:
+(empty)
+exit 0
+
+$ cd /home/muk/projects/siminfeng/campaign
+$ python3 cc/abrun/abrun.py cc/abrun/specs/J-OM10b.json --dry-run
+stdout:
+Order: base, frd16, pg8b, pg12b, pg12b, pg8b, frd16, base
+Run 1: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/001-base campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=0 -e LLAMA_EXPERT_FILL_RANDOM=0 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 2: frd16  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/002-frd16 campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 3: pg8b  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/003-pg8b campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=8 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 4: pg12b  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/004-pg12b campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=12 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 5: pg12b  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/005-pg12b campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=12 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 6: pg8b  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/006-pg8b campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=8 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 7: frd16  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/007-frd16 campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 8: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM10b -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM10b/008-base campaign/llamacpp:jetson-up1108-om10b '-e LLAMA_EXPERT_FILL=0 -e LLAMA_EXPERT_FILL_RANDOM=0 -e LLAMA_EXPERT_FILL_THREADS=8 -e LLAMA_EXPERT_FILL_CHUNK_KIB=1024 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=0 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=0' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+stderr:
+(empty)
+exit 0
+
+A1 PASS includes test_cancel_before_start and test_async_inflight_cap.
+A3 all five C++ units touched by 01-07: exit 0.
+A4 exactly eight runs: base frd16 pg8b pg12b pg12b pg8b frd16 base.
+A6 observer/cancel site quotes: README.md section 07.
+async_wait_ns_in_demand omitted; rationale in README.md section 07.
+
+
+08 / J-OM11 pregate observation syntax-only compile proof (no Docker/GPU/full build)
+Source: fresh git archive of cf34d311332e362198f0a410c466d1e940287d02.
+Engine ref/llama.cpp-up1108 was read only; git status --short is empty.
+Fresh combined tree: /tmp/j-om11-check-combined
+Fresh sequential tree: /tmp/j-om11-check-sequential
+Compiler: g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+08-pregate-observe.patch SHA256: e5fab81608abaec4cfeade2a168e9f5fc44b2042f0edd57344527649f392cc06
+combined-01-02-03-04-05-06-07-08.patch SHA256: 87761ce57350498d5c49e00bf03d151fd5fc1bbb49b5f5528c8b288723357497
+
+Preparation, each command exit 0:
+  git -C ref/llama.cpp-up1108 archive cf34d311 | tar -x -C FRESH_TREE
+  patch -d /tmp/j-om11-check-combined -p1 -F0 --batch < cc/mmap_advice/patches/combined-01-02-03-04-05-06-07-08.patch
+  (separate fresh archive; patch -p1 -F0 --batch for 01,02,03,04,05,06,07,08 in order)
+  diff -r /tmp/j-om11-check-sequential /tmp/j-om11-check-combined
+  cmp cc/expert_fill/expert_fill.h /tmp/j-om11-check-combined/src/llama-expert-fill.h
+Diff output: empty. Header byte-equal, including extraction of the combined new-file hunk.
+08 touches src/llama-context.cpp, src/llama-context.h, src/llama-expert-fill.h,
+src/llama-mmap.cpp, src/llama-model-loader.cpp and src/llama-model.cpp.
+All five C++ units touched by the entire 01..08 chain are checked below;
+the changed headers are included by those units.
+
+$ cd /tmp/j-om11-check-combined
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+stdout:
+(empty)
+stderr:
+(empty)
+exit 0
+
+
+$ make -C cc/expert_fill test
+stdout/stderr:
+make: Entering directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+g++ -std=c++17 -O2 -pthread -Wall -Wextra -Werror test_expert_fill.cpp -o test_expert_fill
+./test_expert_fill
+PASS test_strict_parser (all vars, boundaries, K=10 accepted; K=0/33/abc abort; unknown names)
+measured readahead extra pages: 31 (126976 bytes)
+PASS test_cancel_before_start (older/current/future batches, bytes, idempotence, drain)
+PASS test_async_inflight_cap (1, 2, default 4, cap 64 limited by 8 workers, demand progress, slot reuse)
+PASS test_lookahead_order (L+1 before L+2, natural arrival cancellation)
+PASS test_classification_counters (fake residency oracle, done/inflight/queued/cancelled/resident, hits)
+PASS expert_fill: resident union, counters, warm skip, mmap contents, bounds, async completion and zero-read sync repeat, populate residency and zero-major-fault retouch
+make: Leaving directory '/home/muk/projects/siminfeng/campaign/cc/expert_fill'
+exit 0
+
+$ python3 -m pytest -q cc/abrun
+........................................                                 [100%]
+40 passed in 6.57s
+exit 0
+
+$ python3 cc/abrun/abrun.py cc/abrun/specs/J-OM11.json --dry-run
+Order: base, pg8, pg10, pg8la2, pg12la2, pg12la2, pg8la2, pg10, pg8, base
+Run 1: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM11 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM11/001-base campaign/llamacpp:jetson-up1108-om11 '' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 2: pg8  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM11 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM11/002-pg8 campaign/llamacpp:jetson-up1108-om11 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=8 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4 -e LLAMA_EXPERT_PREGATE_LOOKAHEAD=1' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 3: pg10  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM11 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM11/003-pg10 campaign/llamacpp:jetson-up1108-om11 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=10 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4 -e LLAMA_EXPERT_PREGATE_LOOKAHEAD=1' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 4: pg8la2  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM11 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM11/004-pg8la2 campaign/llamacpp:jetson-up1108-om11 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=8 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4 -e LLAMA_EXPERT_PREGATE_LOOKAHEAD=2' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 5: pg12la2  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM11 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM11/005-pg12la2 campaign/llamacpp:jetson-up1108-om11 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=12 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4 -e LLAMA_EXPERT_PREGATE_LOOKAHEAD=2' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 6: pg12la2  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM11 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM11/006-pg12la2 campaign/llamacpp:jetson-up1108-om11 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=12 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4 -e LLAMA_EXPERT_PREGATE_LOOKAHEAD=2' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 7: pg8la2  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM11 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM11/007-pg8la2 campaign/llamacpp:jetson-up1108-om11 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=8 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4 -e LLAMA_EXPERT_PREGATE_LOOKAHEAD=2' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 8: pg10  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM11 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM11/008-pg10 campaign/llamacpp:jetson-up1108-om11 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=10 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4 -e LLAMA_EXPERT_PREGATE_LOOKAHEAD=1' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 9: pg8  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM11 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM11/009-pg8 campaign/llamacpp:jetson-up1108-om11 '-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=8 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=4 -e LLAMA_EXPERT_PREGATE_LOOKAHEAD=1' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+Run 10: base  /home/muk/projects/siminfeng/campaign/bin/run_op --agent abrun --task J-OM11 -- /home/muk/projects/siminfeng/campaign/cc/om_run/om_run.sh /home/muk/projects/siminfeng/campaign/experiments/jetson/OM/J-OM11/010-base campaign/llamacpp:jetson-up1108-om11 '' llama-completion -m /om/model.gguf -f /om/prompts/p1.txt -n 64 -c 4096 --temp 0 -s 1 -no-cnv -ngl 99 -lm mmap -cmoe -lv 4
+exit 0
+
+A1 PASS: test_strict_parser, test_lookahead_order, test_classification_counters,
+plus existing cancel/cap/fill tests. Invalid parser cases assert SIGABRT AND exact diagnostic.
+A2 PASS: fresh sequential 01..08 == combined (diff -r empty); every patch applied -F0.
+A3 PASS: all five C++ units exit 0 on freshly patched cf34d311, empty stderr.
+A4 PASS: exact ten-run order, two reps/arm; base env {}; every arm asserts effective k.
+Metric: eval_ms_per_token, direction lower (current gate supports direction).
+A5 PASS: header cmp and combined-hunk extraction byte equality.
+A6: cc/expert_fill/README.md section 08 quotes K=0 abort path and effective print site.
+Source sites: ExpertConfig::read -> integer(K,8,1,32) -> invalid -> std::abort;
+ExpertConfig::print -> fprintf("expert_config: effective ..."), called once in context constructor.
+Arrival snapshots and cancellation are under the same per-file dispatch lock.
+No Docker, GPU, full engine build, commits, or evidence edits performed.

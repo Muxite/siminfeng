@@ -1,0 +1,3724 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng/campaign
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /tmp]
+reasoning effort: none
+reasoning summaries: none
+session id: 01a1cb87-0bd2-7911-93a6-5faa1186e1e5
+--------
+user
+# Assignment H5 — fix measurement gaps in run summaries and gate (worker Codex)
+Repo root: /home/muk/projects/siminfeng/campaign. Read c2/MEASUREMENT-GAPS.md §1-2 first. Files you may edit: cc/abrun/*, cc/resource_observe/*, their tests/README, c2/METHODS.md (append only).
+## Deliverables
+1. run_summary.py:
+   a. `eval_ms_per_token` and `prompt_ms_per_token` parsed from `common_perf_print` lines (`eval time = X ms / N runs ( Y ms per token`), plus `eval_ms_total`, `eval_runs`, `load_ms`. Keep eval_tps for display.
+   b. Phase windows: derive decode window start/end on the telemetry clock. stderr lines are prefixed with a relative timestamp (e.g. `2.20.928.587 I ...`); if the absolute mapping is not derivable, use end-of-run anchored on the last telemetry sample before container exit and eval_ms_total (document the method + error bound). Report `nvme_gib_decode`, `nvme_gib_per_token_decode` (bytes read only inside the decode window / eval_runs), and `nvme_gib_load`.
+   c. Summaries over the decode window: gpu_util median/p90 (tegrastats `gpu_util`), `device_util` median (io backend), `power_in_w_median`, `energy_j_per_token` (∫ VDD_IN instant mW over decode window / eval_runs), temp_tj max.
+   d. gpu_freq_median: resource_observe must sample `/sys/class/devfreq/17000000.gpu/cur_freq` (Hz; discover the gpu devfreq node by name `*.gpu`, not hard-coded) as metric `gpu_freq` per sample. Record emc freq too if readable without root.
+2. gate.py: primary metric may be declared `lower_is_better` (spec field `"metric": "eval_ms_per_token", "direction": "lower"`). Rule unchanged in ratio form (use A/B for lower-is-better). Default for new specs: eval_ms_per_token. regate.py must work on old run dirs (recompute from stderr).
+3. abrun secondary table adds: ms/token, NVMe GiB/token (decode window), gpu_util med, J/token.
+4. Tests: fixtures must be CAPTURED from real run dirs (copy trimmed real stderr.txt + telemetry.jsonl from experiments/jetson/OM/J-OM10c/003-pg8i8 into tests/fixtures; never hand-written numbers). Assert eval_ms_per_token == 716.54 for that fixture.
+5. Validation: `python3 cc/abrun/regate.py experiments/jetson/OM/J-OM10c --dry` (or equivalent no-write mode) prints the J-OM10c table with ms/token; include it in the final message.
+## Acceptance (checker runs)
+- A1 all cc/abrun + cc/resource_observe tests pass (count reported).
+- A2 regate on J-OM10c (no writes into experiments/) shows ms/token per arm: base ≈ 840, pg arms ≈ 712-732.
+- A3 decode-window NVMe GiB/token < whole-run GiB/token for J-OM10c base (load excluded), with the method documented.
+- A4 resource_observe emits gpu_freq in a 3 s dry sample (`python3 cc/resource_observe/resource_observe.py --help` to find the sampling mode; must run without docker/GPU job).
+- A5 no edits under experiments/ or evidence/.
+Constraints: no docker/GPU runs; no commits. Time 60 min. Final <= 12 lines.
+
+You are a Codex worker in campaign c2. Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
+codex
+I’ll read the measurement gaps and existing code, add the decode-window metrics and gate direction support, then validate against J-OM10c without writing to experiments.
+
+exec
+/bin/bash -lc "pwd; rg --files -g AGENTS.md -g MEASUREMENT-GAPS.md -g '*test*' cc/abrun cc/resource_observe c2 .agents 2>/dev/null" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+/home/muk/projects/siminfeng/campaign
+c2/test_shape_report.py
+cc/abrun/test_abrun.py
+cc/resource_observe/test_resource_observe.py
+c2/__pycache__/test_shape_report.cpython-310-pytest-9.2.0.pyc
+c2/MEASUREMENT-GAPS.md
+cc/resource_observe/test_io_watchdog.py
+cc/resource_observe/__pycache__/test_io_watchdog.cpython-310-pytest-9.2.0.pyc
+cc/resource_observe/__pycache__/test_resource_observe.cpython-310-pytest-9.2.0.pyc
+
+exec
+/bin/bash -lc 'cat c2/MEASUREMENT-GAPS.md; ls cc/abrun cc/resource_observe; git status --short' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+# Measurement gaps — what we could not measure, or measured badly (2026-11-11)
+
+Sources: CLOSEOUT.md §5/§7 + Addendum c2, c2/SHAPE.md, D034–D036, J-OM10c run dirs (summary.json, telemetry.jsonl, stderr.txt).
+Severity: **H** = can change a conclusion; M = limits interpretation; L = bookkeeping.
+
+## 1. Collected but never reported (cheap fixes; data already on disk)
+| Gap | Evidence | Sev | Fix |
+|---|---|---|---|
+| `gpu_freq_median` is null in **56/56** abrun summaries | summary.json `reasons` lists it every run; tegrastats on this L4T gives GR3D % only | M | read `/sys/class/devfreq/*gpu*/cur_freq` in resource_observe |
+| GPU utilisation sampled but not summarised | J-OM10c/003 telemetry: gpu_util median 4 %, max 99 % → decode is IO-bound, GPU idle | M | add gpu_util median/p90 to summary + secondary table |
+| Power sampled but no energy metric | VDD_IN median ~6.06 W; no J/token anywhere | M | J/token = ∫VDD_IN over eval window / tokens |
+| NVMe busy (`device_util`, io_ticks) not summarised | collected per 0.5 s sample | M | add device_util during eval window |
+| t/s printed to 2 decimals and used by the gate | `1.40 tokens per second` vs `716.54 ms per token`; at 1.4 t/s one step = 0.7 %, a third of the A/A gap | **H** for close arms | gate on ms/token (eval_ms / runs) instead of rounded t/s |
+
+## 2. Window/resolution problems
+| Gap | Evidence | Sev |
+|---|---|---|
+| NVMe GiB/token divides whole-run bytes (load + prefill + decode) by decode tokens | load 60 s of ~145 s wall (J-OM10c/003 stderr) | **H** for IO conclusions — need per-phase byte split using eval timestamps |
+| Telemetry is 0.5 s sampling vs ~715 ms/token | tegrastats dt median 0.50 s | M — cannot see per-token phases (fill vs compute vs idle) |
+| vmstat / block counters are system-wide | include docker, codex, other procs | M — fine under jobq exclusivity, not otherwise |
+| Peak MiB/s values are sampling artefacts | 825 MiB/s > drive ceiling 570 (D031) | L |
+| Per-token time breakdown exists only with the diag patch (J-OM9), which costs ~9 % | D034 | M — need a cheap always-on counter (ns in fill wait per token) |
+
+## 3. Prefetch internals we cannot see (blocks next tuning step)
+- **Timeliness**: `hits` counts correct predictions, not "page resident before demand". `async_wait_ns_in_demand` was omitted in 07. We do not know how many of the 81 % correct predictions actually arrived in time. **H** — this is the metric that decides K, inflight and L+2.
+- Wasted IO: cancelled_bytes is counted (4.35 GB in pg8b), but bytes read async and then evicted before use are not counted.
+- Drive queue depth / latency distribution: no iostat/blktrace (no sudo); only avg KiB/IO.
+- Fill bandwidth ~380 MB/s vs drive 570 MiB/s: the cause of the gap (syscall size, QD, page-cache insertion cost) is unmeasured.
+
+## 4. Config verification (the switch is on, but is it the value you asked for?)
+- **J-OM10c pg10i8 requested K=10 but ran K=8** (parser accepts only 12/16, silently falls back). The switch regex proved "pregate active", not "k=10". Same class as earlier: `--numa` inert (D032), direct-fill never activated (D032), OR-regex in J-OM8b. **H** — arm names are not trustworthy.
+- Fix: every env-gated component logs one `effective config` line with all parsed values; abrun asserts each arm's expected values (not just a regex on "active"); unknown/invalid values → hard fail, not fallback.
+
+## 5. Things we cannot measure on this host / with these permissions
+| Gap | Cause | Effect |
+|---|---|---|
+| GPU kernel counters (ncu) | RmProfilingAdminOnly=1 | no kernel-level attribution on Orin |
+| CPU profiles (perf) | not installed, paranoid=2, no sudo | CPU-side fill/syscall cost unprofiled |
+| Fixed clocks | jetson_clocks/nvpmodel not run (no sudo) | GPU 306–1020 MHz floats; mitigated by counterbalancing only |
+| Cold-cache control | no `drop_caches` (no sudo); grep finds none in abrun/om_run | page-cache state at run start uncontrolled (partly self-flushing since 20.8 GiB > 7.4 GiB RAM) |
+| Target scale (≈500 GB on 128 GB) | host is 7.4 GiB + 128 GB drive | proxy ratio 2.8× vs target ~3.9×; no validated extrapolation; one drive model |
+
+## 6. Statistical / workload coverage
+- n = 2 runs per arm (4 in J-OM8b); A/A 1.6–2.6 %, gate threshold ~4–5 %. Gate compares arms to base only. **Neighbouring arms (pg8b/pg8i8/pg8i12/"pg10i8": 1.37–1.40) are indistinguishable** — no occupancy conclusion is possible.
+- One prompt, 64 decode tokens, greedy, batch 1, `-c 4096`. No TTFT, long-context, multi-turn, batch >1, or chat-template workloads (SPEC2 chat arm invalid). Routing (and so prefetch recall) is workload-dependent (replay: LRU 0.54–0.69 by workload).
+- Prefill run-to-run spread is large (4.92–5.73 t/s inside one arm in J-OM10c); prefill is not gated.
+- Quality = output-hash identity on 64 tokens only (fine for lossless IO changes; not enough for any lossy change).
+
+## 7. Bookkeeping / provenance
+- Model checksums: Qwen sha not re-verified locally; Granite safetensors and KL base sha not recorded on Jetson.
+- Trace token counts not recorded; replay ↔ engine slot/MiB mapping not audited.
+- SHAPE: "GPU busy" = command lifetime, not utilisation; 19 failures classified `other`; Haiku check-in tokens/cost not tracked (only Codex).
+- x86 cross-host transfer (sm_120 for D025/D027) still unanswered.
+
+## Priority fix list (proposed H5 / J-OM11)
+1. Gate on ms/token; per-phase NVMe bytes (decode window only). — harness, cheap
+2. Summarise gpu_util, device_util, J/token, GPU freq from sysfs. — harness, cheap
+3. Effective-config log line + per-arm value assertions; invalid env → fail. — engine + abrun
+4. Prefetch timeliness counters: prefetched-and-resident-at-demand, demand wait ns per token, async bytes evicted unused. — engine
+5. Workload matrix (≥3 prompts incl. chat template, 256 tokens) and n ≥ 3 for arms < 5 % apart. — spec
+cc/abrun:
+README.md
+__init__.py
+__pycache__
+abrun.py
+fixtures
+gate.py
+preflight.py
+regate.py
+run_summary.py
+specs
+test_abrun.py
+
+cc/resource_observe:
+README.md
+__pycache__
+fixtures
+io_watchdog.py
+resource_observe.py
+test_io_watchdog.py
+test_resource_observe.py
+ M ../.gitignore
+ M CLOSEOUT.md
+ M cc/kernel_screen/fixtures/perf.txt
+ M cc/kernel_screen/kernel_screen.py
+ M cc/om_run/om_run.sh
+ M cc/resource_observe/resource_observe.py
+ M cc/resource_observe/test_resource_observe.py
+ M evidence/jetson-arm/claude-code.jsonl
+?? ../.claude/skills/
+?? artifacts/codex/D-c2-ledger.final.txt
+?? artifacts/codex/D-c2-ledger.log
+?? artifacts/codex/H1.final.txt
+?? artifacts/codex/H1.log
+?? artifacts/codex/H2.final.txt
+?? artifacts/codex/H2.log
+?? artifacts/codex/H2b-H4b.final.txt
+?? artifacts/codex/H2b-H4b.log
+?? artifacts/codex/H3.final.txt
+?? artifacts/codex/H3.log
+?? artifacts/codex/H4.final.txt
+?? artifacts/codex/H4.log
+?? artifacts/codex/H5.log
+?? artifacts/codex/J-OM10.final.txt
+?? artifacts/codex/J-OM10.log
+?? artifacts/codex/J-OM10b.final.txt
+?? artifacts/codex/J-OM10b.log
+?? artifacts/codex/J-OM8.final.txt
+?? artifacts/codex/J-OM8.log
+?? artifacts/codex/J-OM8b.final.txt
+?? artifacts/codex/J-OM8b.log
+?? artifacts/codex/J-OM9.final.txt
+?? artifacts/codex/J-OM9.log
+?? artifacts/op-04810239fd04/
+?? artifacts/op-0491ab7d9b64/
+?? artifacts/op-0c94b8514514/
+?? artifacts/op-103a1fb13e8b/
+?? artifacts/op-1252946c2dd9/
+?? artifacts/op-1263a4f7fb41/
+?? artifacts/op-191fa19edd9b/
+?? artifacts/op-1aeded39e879/
+?? artifacts/op-1cb21767dbaf/
+?? artifacts/op-1ce2d671913a/
+?? artifacts/op-1e0844fa4f46/
+?? artifacts/op-218a56d373af/
+?? artifacts/op-23c099229e1d/
+?? artifacts/op-26ab3d78735f/
+?? artifacts/op-2b6791aa3ad9/
+?? artifacts/op-2c9e8772e3a5/
+?? artifacts/op-2eae0e6564ef/
+?? artifacts/op-347e678ed12a/
+?? artifacts/op-36926980ce1b/
+?? artifacts/op-39141c29107a/
+?? artifacts/op-3921a3841393/
+?? artifacts/op-3d31f5fbfc73/
+?? artifacts/op-3df6c2e1288c/
+?? artifacts/op-40f18da591f8/
+?? artifacts/op-4196624781b6/
+?? artifacts/op-4361d6251871/
+?? artifacts/op-4875a91ebe9e/
+?? artifacts/op-4967902d2acc/
+?? artifacts/op-4c92db73ea1c/
+?? artifacts/op-4d1fd9b32011/
+?? artifacts/op-4f1547f4295e/
+?? artifacts/op-55af713c70a4/
+?? artifacts/op-55e94e8f2ec9/
+?? artifacts/op-5609857025b0/
+?? artifacts/op-5759ddb8786c/
+?? artifacts/op-5849d5542eba/
+?? artifacts/op-5a247cd981ec/
+?? artifacts/op-5c2e0a7f1ab1/
+?? artifacts/op-5cec65699fce/
+?? artifacts/op-65ecd7bf6823/
+?? artifacts/op-6761df1a3b2c/
+?? artifacts/op-6e1f873a67b4/
+?? artifacts/op-773f9d85b381/
+?? artifacts/op-78aa30258ca4/
+?? artifacts/op-7a590a93f7d9/
+?? artifacts/op-7c79aa7bb0cd/
+?? artifacts/op-80a6b2fd96db/
+?? artifacts/op-82ad2b8c4330/
+?? artifacts/op-879bc80daaab/
+?? artifacts/op-8ee9ad760af0/
+?? artifacts/op-90ff6bd2ec26/
+?? artifacts/op-9347a535f6e0/
+?? artifacts/op-9a375b4cdeb0/
+?? artifacts/op-9d3a71114383/
+?? artifacts/op-9deabb96fe51/
+?? artifacts/op-a878cc4ec198/
+?? artifacts/op-a9d8140fc151/
+?? artifacts/op-ab2efde81bf5/
+?? artifacts/op-acee8700aac1/
+?? artifacts/op-b7250c184f56/
+?? artifacts/op-b7ff0512c3ae/
+?? artifacts/op-b823058ff03a/
+?? artifacts/op-b9d77c464caf/
+?? artifacts/op-bb8eee8a430b/
+?? artifacts/op-bd396749651d/
+?? artifacts/op-bfe0a8b74c24/
+?? artifacts/op-c55b5b317906/
+?? artifacts/op-c8070da6cf62/
+?? artifacts/op-cadfede37e48/
+?? artifacts/op-d0fda3ae10b1/
+?? artifacts/op-d4a75015c69e/
+?? artifacts/op-d520c3e63f2b/
+?? artifacts/op-db1c6773ca7c/
+?? artifacts/op-dd91c84c9197/
+?? artifacts/op-e0f4aa3068cf/
+?? artifacts/op-e5d0a38d479d/
+?? artifacts/op-eb80b5651d94/
+?? artifacts/op-ed103f15b7bf/
+?? artifacts/op-f3a91310220b/
+?? artifacts/op-f46fc32ed368/
+?? artifacts/op-fe2e1c1dc8c2/
+?? artifacts/op-ffac23b48ee5/
+?? assignments/D-c2-ledger.md
+?? assignments/H1-jobq.md
+?? assignments/H2-abrun.md
+?? assignments/H2b-H4b-fixes.md
+?? assignments/H3-methods-skills.md
+?? assignments/H4-shape-report.md
+?? assignments/H5-measure.md
+?? assignments/J-OM10-pregate-prefetch.md
+?? assignments/J-OM10b-pregate-scheduling.md
+?? assignments/J-OM8-expert-pread-fill.md
+?? assignments/J-OM8b-decode-random.md
+?? assignments/J-OM9-fill-diag-populate.md
+?? bin/README-jobq.md
+?? bin/jobq
+?? bin/test_jobq.py
+?? c2/
+?? cc/abrun/
+?? cc/build_engine/TARBALLS-PRUNED.md
+?? cc/build_engine/results/jetson-up1108-om10/
+?? cc/build_engine/results/jetson-up1108-om10b/
+?? cc/build_engine/results/jetson-up1108-om8/
+?? cc/build_engine/results/jetson-up1108-om8b/
+?? cc/build_engine/results/jetson-up1108-om9/
+?? cc/expert_fill/
+?? cc/mmap_advice/patches/03-expert-fill.patch
+?? cc/mmap_advice/patches/04-fill-phase.patch
+?? cc/mmap_advice/patches/05-fill-diag.patch
+?? cc/mmap_advice/patches/06-pregate.patch
+?? cc/mmap_advice/patches/07-pregate-sched.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04-05-06-07.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04-05-06.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04-05.patch
+?? cc/mmap_advice/patches/combined-01-02-03-04.patch
+?? cc/mmap_advice/patches/combined-01-02-03.patch
+?? decisions/D034-expert-pread-fill.md
+?? decisions/D035-pregate-prefetch.md
+?? decisions/D036-ks-q4k-and-screen-bug.md
+?? evidence/jetson-arm/abrun.jsonl
+?? evidence/jetson-arm/jobq.jsonl
+?? experiments/jetson/KS-q4K-20261111-r2/
+?? experiments/jetson/KS-q4K-20261111-r3/
+?? experiments/jetson/KS-q4K-20261111/
+?? experiments/jetson/OM/J-OM10/
+?? experiments/jetson/OM/J-OM10b/
+?? experiments/jetson/OM/J-OM10c/
+?? experiments/jetson/OM/J-OM8/
+?? experiments/jetson/OM/J-OM8b/
+?? experiments/jetson/OM/J-OM9/
+?? research/strata-update-20261111.md
+
+exec
+/bin/bash -lc 'for p in /AGENTS.md /home/AGENTS.md /home/muk/AGENTS.md /home/muk/projects/AGENTS.md /home/muk/projects/siminfeng/AGENTS.md AGENTS.md cc/AGENTS.md cc/abrun/AGENTS.md cc/resource_observe/AGENTS.md c2/AGENTS.md; do if [ -f "$p" ]; then echo "$p"; cat "$p"; fi; done; cat cc/abrun/run_summary.py cc/abrun/gate.py' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+#!/usr/bin/env python3
+"""Summarize guarded runs without requiring complete or well-formed logs."""
+import argparse
+import hashlib
+import json
+import math
+from pathlib import Path
+import re
+import statistics
+
+
+def numeric(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def summarize(directory, switch_regex=(), write=True):
+    directory = Path(directory)
+    result = {'dir': str(directory), 'reasons': {}, 'warnings': []}
+
+    def put(key, value, reason='not recorded'):
+        result[key] = value
+        if value is None:
+            result['reasons'][key] = reason
+        else:
+            result['reasons'].pop(key, None)
+
+    def read(name):
+        try:
+            return (directory / name).read_text(errors='replace')
+        except OSError as exc:
+            result['warnings'].append(f'{name}: {exc.strerror}')
+            return ''
+
+    try:
+        record = json.loads(read('result.json'))
+        if not isinstance(record, dict):
+            record = {}
+    except (ValueError, TypeError):
+        record = {}
+    put('status', record.get('status'), 'result.json status missing or invalid')
+    put('wall_s', record.get('wall_s') if numeric(record.get('wall_s')) else None)
+    stderr = read('stderr.txt')
+    stdout = read('stdout.txt')
+    try:
+        digest = hashlib.sha256((directory / 'stdout.txt').read_bytes()).hexdigest()[:12]
+    except OSError:
+        digest = None
+    put('output_sha', digest, 'stdout.txt unavailable')
+    patterns = []
+    for pattern in switch_regex:
+        try:
+            patterns.append(re.compile(pattern))
+        except re.error as exc:
+            result['warnings'].append(f'invalid switch regex {pattern!r}: {exc}')
+    result['switch_matches'] = {p.pattern: sum(bool(p.search(line)) for line in stderr.splitlines())
+                                for p in patterns}
+    result['switch_lines'] = [line for line in stderr.splitlines()
+                              if any(p.search(line) for p in patterns)]
+    for metric, expression in [('prompt_tps', r'prompt eval time.*?([\d.]+) tokens per second'),
+                               ('eval_tps', r'(?<!prompt )\beval time.*?([\d.]+) tokens per second'),
+                               ('load_s', r'\bload time\s*=\s*([\d.]+) ms'),
+                               ('eval_tokens', r'(?<!prompt )\beval time.*?/\s*(\d+) (?:runs|tokens)')]:
+        matches = re.findall(expression, stderr)
+        try:
+            value = float(matches[-1]) if matches else None
+        except ValueError:
+            value = None
+        if metric == 'load_s' and value is not None:
+            value /= 1000
+        put(metric, value, 'performance line absent or invalid')
+
+    # Preserve both the benchmark average and the clock-ramp-discarded mean.
+    try:
+        bench = json.loads(stdout)
+    except ValueError:
+        bench = []
+    if isinstance(bench, dict):
+        bench = [bench]
+    if not isinstance(bench, list):
+        bench = []
+    result['bench'] = {'pp': [], 'tg': []}
+    for row in bench:
+        if not isinstance(row, dict):
+            continue
+        kind = ('pp' if row.get('n_prompt') and not row.get('n_gen') else
+                'tg' if row.get('n_gen') and not row.get('n_prompt') else None)
+        if kind is None:
+            continue
+        samples = row.get('samples_ts', [])
+        samples = samples if isinstance(samples, list) else []
+        clean = all(numeric(x) for x in samples)
+        steady = statistics.mean(samples[1:]) if len(samples) > 1 and clean else None
+        avg = row.get('avg_ts') if numeric(row.get('avg_ts')) else None
+        result['bench'][kind].append({'avg_ts': avg, 'samples_ts': samples, 'steady': steady})
+        for suffix, value in [('avg_ts', avg), ('samples_ts', samples), ('steady', steady)]:
+            put(f'{kind}_{suffix}', value, 'need at least two finite benchmark samples')
+        metric = 'prompt_tps' if kind == 'pp' else 'eval_tps'
+        put(metric, avg, 'benchmark avg_ts missing')
+        if kind == 'tg' and numeric(row.get('n_gen')):
+            put('eval_tokens', row['n_gen'])
+    for kind in ('pp', 'tg'):
+        for suffix in ('avg_ts', 'samples_ts', 'steady'):
+            if f'{kind}_{suffix}' not in result:
+                put(f'{kind}_{suffix}', None, 'no matching llama-bench JSON row')
+
+    values = {}
+    swap_derived = []
+    unavailable = {}
+    factors = {'B': 1 / 1024, 'KiB': 1, 'MiB': 1024, 'GiB': 1024 ** 2,
+               'kB': 1000 / 1024}
+    for line in read('telemetry.jsonl').splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            result['warnings'].append('ignored malformed telemetry line')
+            continue
+        if not isinstance(row, dict):
+            continue
+        local = {}
+        metrics = row.get('metrics', [])
+        for metric in metrics if isinstance(metrics, list) else []:
+            if not isinstance(metric, dict) or not numeric(metric.get('value')):
+                continue
+            name, value = metric.get('name'), metric['value']
+            if not isinstance(name, str):
+                continue
+            if name == 'device_read':
+                factor = factors.get(metric.get('unit', 'KiB'))
+                if factor is None:
+                    unavailable[name] = 'unsupported device_read unit'
+                    continue
+                value *= factor
+            elif name in ('mem_available', 'swap_used', 'swap_total', 'swap_free'):
+                factor = factors.get(metric.get('unit', 'MiB'))
+                if factor is None:
+                    continue
+                value *= factor / 1024
+            values.setdefault(name, []).append(value)
+            local[name] = value
+        if 'swap_total' in local and 'swap_free' in local:
+            swap_derived.append(local['swap_total'] - local['swap_free'])
+        missing = row.get('unavailable', [])
+        for metric in missing if isinstance(missing, list) else []:
+            if isinstance(metric, dict):
+                unavailable[metric.get('name')] = str(metric.get('reason') or 'unavailable')
+
+    def delta(name):
+        v = values.get(name, [])
+        return max(v) - min(v) if len(v) >= 2 else None
+
+    read_kib, ios = delta('device_read'), delta('device_read_ios')
+    put('nvme_gib', read_kib / 1024 ** 2 if read_kib is not None else None,
+        unavailable.get('device_read', 'need two device_read samples'))
+    put('avg_kib_per_io', read_kib / ios if read_kib is not None and ios and ios > 0 else None,
+        'need device_read and positive device_read_ios delta')
+    tokens = result['eval_tokens']
+    put('nvme_gib_per_token', result['nvme_gib'] / tokens
+        if result['nvme_gib'] is not None and tokens and tokens > 0 else None,
+        'need NVMe delta and positive eval token count')
+    for key, names, fn in [('mem_available_min_mib', ['mem_available'], min),
+                           ('swap_max_mib', ['swap_used'], max),
+                           ('gpu_freq_median', ['gpu_freq', 'gpu_freq_cur'], statistics.median)]:
+        samples = next((values[n] for n in names if values.get(n)), [])
+        if key == 'swap_max_mib':
+            samples = samples + swap_derived
+        put(key, fn(samples) if samples else None,
+            '; '.join(unavailable.get(n, f'{n} not recorded') for n in names))
+    if write:
+        try:
+            (directory / 'summary.json').write_text(json.dumps(result, indent=2) + '\n')
+        except OSError as exc:
+            result['warnings'].append(f'cannot write summary.json: {exc.strerror}')
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('dirs', nargs='+')
+    parser.add_argument('--json', action='store_true')
+    parser.add_argument('--no-write', action='store_true')
+    parser.add_argument('--switch-regex', action='append', default=[])
+    args = parser.parse_args()
+    summaries = [summarize(d, args.switch_regex, not args.no_write) for d in args.dirs]
+    if args.json:
+        print(json.dumps(summaries[0] if len(summaries) == 1 else summaries, indent=2))
+    else:
+        for summary in summaries:
+            print(json.dumps(summary))
+
+
+if __name__ == '__main__':
+    main()
+#!/usr/bin/env python3
+"""A/A-aware, higher-is-better performance gate for labelled summaries."""
+import argparse
+import json
+import math
+from pathlib import Path
+import statistics
+
+
+def finite(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def evaluate(arms, metric='eval_tps', base='base'):
+    inputs = {arm: [run.get(metric) for run in runs] for arm, runs in arms.items()}
+    means, gaps = {}, {}
+    reasons = []
+    for arm, numbers in inputs.items():
+        valid = bool(numbers) and all(finite(n) and n > 0 for n in numbers)
+        means[arm] = statistics.mean(numbers) if valid else None
+        gaps[arm] = ((max(numbers) - min(numbers)) / means[arm]
+                     if valid and len(numbers) >= 2 else None)
+        if not valid:
+            reasons.append(f'{arm}: missing/nonpositive/nonfinite {metric}')
+        if any(r.get('status', 'ok') != 'ok' for r in arms[arm]):
+            reasons.append(f'{arm}: unsuccessful run')
+    base_values = inputs.get(base, [])
+    drift_halves = None
+    drift = None
+    if means.get(base) and len(base_values) >= 2:
+        split = len(base_values) // 2
+        drift_halves = [statistics.mean(base_values[:split]), statistics.mean(base_values[split:])]
+        drift = abs(drift_halves[1] - drift_halves[0]) / means[base]
+    aa_gap = max((gap for gap in gaps.values() if gap is not None), default=0.0)
+    threshold = max(0.03, 2 * aa_gap, 2 * (drift or 0.0))
+    if base not in arms:
+        reasons.append(f'base arm {base!r} absent')
+    comparisons = {}
+    for arm in arms:
+        if arm == base:
+            continue
+        ratio = means[arm] / means[base] if means[arm] and means.get(base) else None
+        verdict = 'null'
+        if ratio is not None and not reasons:
+            if ratio - 1 > threshold and not math.isclose(ratio - 1, threshold, rel_tol=1e-12):
+                verdict = 'improved'
+            elif 1 - ratio > threshold and not math.isclose(1 - ratio, threshold, rel_tol=1e-12):
+                verdict = 'regressed'
+        comparisons[arm] = {'mean': means[arm], 'base_mean': means.get(base),
+                            'ratio': ratio, 'change': ratio - 1 if ratio is not None else None,
+                            'threshold': threshold, 'verdict': verdict}
+    hashes = {arm: [run.get('output_sha') for run in runs] for arm, runs in arms.items()}
+    flat = [value for values in hashes.values() for value in values]
+    if not flat or any(value is None for value in flat):
+        output = {'class': 'unknown', 'reason': 'output hash missing', 'hashes': hashes}
+    elif len(set(flat)) == 1:
+        output = {'class': 'identical', 'hashes': hashes}
+    else:
+        reference = next(iter(hashes.get(base, [])), flat[0])
+        output = {'class': 'differs', 'hashes': hashes,
+                  'differs': {arm: [{'run_index': i, 'output_sha': h} for i, h in enumerate(values)
+                                    if h != reference] for arm, values in hashes.items()
+                              if any(h != reference for h in values)},
+                  'reference_sha': reference}
+    secondary = {}
+    for arm, runs in arms.items():
+        secondary[arm] = {}
+        for field in ('nvme_gib_per_token', 'prompt_tps', 'eval_tps'):
+            values = [r[field] for r in runs if finite(r.get(field))]
+            secondary[arm][field] = statistics.mean(values) if values else None
+    return {'secondary_metrics': secondary, 'metric': metric, 'base': base, 'inputs': inputs, 'means': means,
+            'aa_gaps': gaps, 'aa_gap': aa_gap, 'drift_halves': drift_halves,
+            'drift': drift, 'threshold': threshold, 'minimum_effect': 0.03,
+            'noise_multiplier': 2, 'comparisons': comparisons, 'output': output,
+            'reasons': reasons}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('summaries', help='JSON object: arm -> summary objects or summary.json paths')
+    parser.add_argument('--metric', default='eval_tps')
+    parser.add_argument('--base', default='base')
+    args = parser.parse_args()
+    arms = json.loads(Path(args.summaries).read_text())
+    arms = {arm: [json.loads(Path(r).read_text()) if isinstance(r, str) else r for r in runs]
+            for arm, runs in arms.items()}
+    print(json.dumps(evaluate(arms, args.metric, args.base), indent=2))
+
+
+if __name__ == '__main__':
+    main()
+
+exec
+/bin/bash -lc "cat cc/abrun/regate.py; rg -n 'secondary|eval_tps|metric|direction' cc/abrun/abrun.py; cat cc/resource_observe/resource_observe.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+#!/usr/bin/env python3
+"""Recompute a gate from saved summaries without changing original evidence."""
+import argparse
+import json
+from pathlib import Path
+import sys
+
+if __package__:
+    from . import abrun, gate, run_summary
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from cc.abrun import abrun, gate, run_summary
+
+
+def recompute(outdir, exclude=(), metric=None, reason=''):
+    outdir = Path(outdir)
+    spec = json.loads((outdir / 'spec.json').read_text())
+    grouped = {arm: [] for arm in spec['arms']}
+    paths = sorted(outdir.glob('*/summary.json'))
+    known = {p.parent.name for p in paths}
+    excluded = list(dict.fromkeys(exclude))
+    unknown = set(excluded) - known
+    if unknown:
+        raise ValueError('unknown excluded run IDs: ' + ', '.join(sorted(unknown)))
+    included, invalid = [], []
+    for path in paths:
+        run_id = path.parent.name
+        if run_id in excluded:
+            continue
+        arm = run_id.split('-', 1)[1]
+        if arm not in grouped:
+            raise ValueError(f'{run_id}: unknown arm {arm!r}')
+        summary = json.loads(path.read_text())
+        # Older saved summaries predate per-pattern counts; inspect logs read-only.
+        if 'switch_matches' not in summary:
+            observed = run_summary.summarize(path.parent, abrun.switch_patterns(spec), write=False)
+            summary.update({key: observed[key] for key in ('switch_matches', 'switch_lines')})
+        invalid.extend(f'{run_id}: {error}' for error in abrun.switch_errors(spec, arm, summary))
+        grouped[arm].append(summary)
+        included.append(run_id)
+    verdict = gate.evaluate(grouped, metric or spec.get('metric', 'eval_tps'))
+    invalid.extend(verdict['reasons'])
+    verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+                   excluded_runs=excluded, included_runs=included, reason=reason)
+    if invalid:
+        for comparison in verdict['comparisons'].values():
+            comparison['verdict'] = 'null'
+    return verdict
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('outdir', type=Path)
+    parser.add_argument('--exclude', nargs='+', action='extend', default=[], metavar='RUN_ID')
+    parser.add_argument('--metric')
+    parser.add_argument('--reason', default='')
+    parser.add_argument('--no-write', action='store_true')
+    args = parser.parse_args()
+    try:
+        verdict = recompute(args.outdir, args.exclude, args.metric, args.reason)
+        text = json.dumps(verdict, indent=2) + '\n'
+        if not args.no_write:
+            (args.outdir / 'verdict-regate.json').write_text(text)
+        print(text, end='')
+    except (OSError, ValueError, KeyError) as exc:
+        parser.exit(1, f'regate: {exc}\n')
+
+
+if __name__ == '__main__':
+    main()
+67:    if not isinstance(spec.get('metric', 'eval_tps'), str):
+68:        raise ValueError('metric must be a summary field name')
+136:    metric = spec.get('metric', 'eval_tps')
+140:        lines.append(f"| {row['index']} | {row['arm']} | {s['status']} | {s.get(metric)} | {s['wall_s']} | {s['output_sha']} | {matches} |")
+141:    lines += ['', f'Metric: {metric} (higher is better)', '', '| Arm | Mean | B/A | Gate |',
+146:    lines += ['', '## Secondary metrics (descriptive; no verdict)', '',
+149:    for arm, metrics in verdict['secondary_metrics'].items():
+150:        lines.append('| ' + ' | '.join(str(v) for v in [arm, *metrics.values()]) + ' |')
+184:    verdict = gate.evaluate(grouped, spec.get('metric', 'eval_tps'))
+#!/usr/bin/env python3
+"""Portable resource observation: tegrastats / proc / sysfs_tegra / nvml -> JSONL (resource-observe/0)."""
+import argparse, glob, hashlib, json, os, re, shutil, socket, subprocess, sys, threading, queue, time
+from datetime import datetime, timezone
+from io_watchdog import IOSampler, watchdog
+
+SCHEMA = "resource-observe/0"
+GPU_DEVFREQ = "/sys/devices/platform/17000000.gpu/devfreq/17000000.gpu"
+ALL_BACKENDS = ["tegrastats", "proc", "sysfs_tegra", "nvml", "io"]
+
+
+def M(name, value, unit, scope, source):
+    return {"name": name, "value": value, "unit": unit, "scope": scope, "source": source}
+
+
+def U(name, backend, reason):
+    return {"name": name, "backend": backend, "reason": reason}
+
+
+def campaign_host_id():
+    try:
+        with open(os.path.expanduser("~/.config/siminfeng/host_id")) as f:
+            return f.read().strip() or socket.gethostname()
+    except OSError:
+        return socket.gethostname()
+
+
+def record(backend, seq, metrics, unavailable=(), parse_errors=(), host_id=None, mono=None):
+    return {"schema": SCHEMA, "ts": datetime.now(timezone.utc).isoformat(),
+            "mono_s": time.monotonic() if mono is None else mono,
+            "host_id": host_id or campaign_host_id(), "backend": backend, "seq": seq,
+            "metrics": list(metrics), "unavailable": list(unavailable), "parse_errors": list(parse_errors)}
+
+
+def _read(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+# ---------------- tegrastats ----------------
+_RAM = re.compile(r"RAM (\d+)/(\d+)MB(?: \(lfb (\d+)x(\d+)MB\))?")
+_SWAP = re.compile(r"SWAP (\d+)/(\d+)MB(?: \(cached (\d+)MB\))?")
+_CPU = re.compile(r"CPU \[([^\]]*)\]")
+_GR3D = re.compile(r"GR3D_FREQ (\d+)%(?:@\[?(\d+)\]?)?")
+_EMC = re.compile(r"EMC_FREQ (\d+)%(?:@(\d+))?")
+_TEMP = re.compile(r"\b([A-Za-z0-9_]+)@(-?\d+(?:\.\d+)?)C\b")
+_RAIL = re.compile(r"\b([A-Z][A-Z0-9_]+) (\d+)mW/(\d+)mW")
+
+
+def line_hash(line):
+    return hashlib.sha256(line.encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def parse_tegrastats(line):
+    """Return (metrics, unavailable, parse_errors) for one tegrastats line. Never raises."""
+    line = (line or "").strip()
+    S, B = "system-shared-dram", "tegrastats"
+    if not line:
+        return [], [], [{"error": "empty line", "line_sha256_16": line_hash(line)}]
+    m, un, errs = [], [], []
+    r = _RAM.search(line)
+    if r:
+        m += [M("ram_used", int(r[1]), "MiB", S, B), M("ram_total", int(r[2]), "MiB", S, B)]
+        if r[3]:
+            m.append(M("ram_lfb", int(r[3]) * int(r[4]), "MiB", S, B))
+        else:
+            un.append(U("ram_lfb", B, "lfb not in line"))
+    else:
+        un.append(U("ram_used", B, "RAM field missing or truncated"))
+        errs.append({"error": "RAM field not parsed", "line_sha256_16": line_hash(line)})
+    s = _SWAP.search(line)
+    if s:
+        m += [M("swap_used", int(s[1]), "MiB", "system", B), M("swap_total", int(s[2]), "MiB", "system", B)]
+        if s[3] is not None:
+            m.append(M("swap_cached", int(s[3]), "MiB", "system", B))
+    else:
+        un.append(U("swap_used", B, "SWAP field missing"))
+    c = _CPU.search(line)
+    if c:
+        for i, ent in enumerate(x.strip() for x in c[1].split(",")):
+            cm = re.fullmatch(r"(\d+)%(?:@(\d+))?", ent)
+            if cm:
+                m.append(M("cpu%d_load" % i, int(cm[1]), "percent", "system", B))
+                if cm[2]:
+                    m.append(M("cpu%d_freq" % i, int(cm[2]), "MHz", "system", B))
+            elif ent == "off":
+                un.append(U("cpu%d_load" % i, B, "core offline"))
+            else:
+                errs.append({"error": "bad cpu entry %r" % ent, "line_sha256_16": line_hash(line)})
+    else:
+        un.append(U("cpu_load", B, "CPU field missing"))
+    g = _GR3D.search(line)
+    if g:
+        m.append(M("gpu_util", int(g[1]), "percent", "gpu", B))
+        if g[2]:
+            m.append(M("gpu_freq", int(g[2]), "MHz", "gpu", B))
+        else:
+            un.append(U("gpu_freq", B, "no @MHz in GR3D_FREQ"))
+    else:
+        un.append(U("gpu_util", B, "GR3D_FREQ missing"))
+    e = _EMC.search(line)
+    if e:
+        m.append(M("emc_util", int(e[1]), "percent", "system", B))
+        if e[2]:
+            m.append(M("emc_freq", int(e[2]), "MHz", "system", B))
+    else:
+        un.append(U("emc_freq", B, "EMC_FREQ not reported on this board/release"))
+    for name, val in _TEMP.findall(line):
+        m.append(M("temp_" + name, float(val), "celsius", "sensor", B))
+    for name, inst, avg in _RAIL.findall(line):
+        m += [M("power_%s_instant" % name, int(inst), "mW", "rail", B),
+              M("power_%s_avg" % name, int(avg), "mW", "rail", B)]
+    if not m:
+        errs.append({"error": "no fields parsed", "line_sha256_16": line_hash(line)})
+    return m, un, errs
+
+
+class TegrastatsReader:
+    def __init__(self, interval_ms, cmd=None):
+        self.q = queue.Queue()
+        self.p = subprocess.Popen(cmd or ["tegrastats", "--interval", str(interval_ms)], stdout=subprocess.PIPE,
+                                  stderr=subprocess.DEVNULL, text=True, errors="replace")
+        threading.Thread(target=lambda: [self.q.put(l) for l in self.p.stdout], daemon=True).start()
+
+    def drain(self):
+        out = []
+        while True:
+            try:
+                out.append(self.q.get_nowait())
+            except queue.Empty:
+                return out
+
+    def close(self):
+        self.p.terminate()
+
+
+def tegrastats_available():
+    return (True, "") if shutil.which("tegrastats") else (False, "tegrastats not on PATH")
+
+
+# ---------------- proc ----------------
+_NVMAP = re.compile(r"^(NvMap\w*|Nvmap\w*)")
+
+
+def parse_meminfo(text):
+    d = {}
+    for l in (text or "").splitlines():
+        k, _, v = l.partition(":")
+        p = v.split()
+        if p and p[0].isdigit():
+            d[k] = int(p[0]) * (1 if len(p) > 1 and p[1] == "B" else 1024) if len(p) > 1 else int(p[0])
+    return d
+
+
+def parse_status_kb(text, key):
+    mm = re.search(r"^%s:\s+(\d+) kB" % key, text or "", re.M)
+    return int(mm[1]) * 1024 if mm else None
+
+
+def proc_sample(root="/proc", pid=None, cgroup=None, cgroup_root="/sys/fs/cgroup"):
+    B = "proc"
+    m, un = [], []
+    mi = _read(os.path.join(root, "meminfo"))
+    if mi is None:
+        un.append(U("meminfo", B, "%s/meminfo unreadable" % root))
+    else:
+        d = parse_meminfo(mi)
+        for name, key, unit in [("mem_total", "MemTotal", "MiB"), ("mem_available", "MemAvailable", "MiB"),
+                                ("mem_cached", "Cached", "MiB"), ("swap_total", "SwapTotal", "MiB"),
+                                ("swap_free", "SwapFree", "MiB")]:
+            if key in d:
+                m.append(M(name, round(d[key] / 1048576, 3), unit, "system", "meminfo:" + key))
+            else:
+                un.append(U(name, B, "%s absent from meminfo" % key))
+        nv = [k for k in d if _NVMAP.match(k)]
+        for k in nv:
+            m.append(M("meminfo_" + k, round(d[k] / 1048576, 3), "MiB", "system", "meminfo:" + k))
+        if not nv:
+            un.append(U("nvmap", B, "no NvMap* fields in meminfo"))
+    la = _read(os.path.join(root, "loadavg"))
+    p = la.split() if la else []
+    if len(p) >= 3:
+        try:
+            for n, v in zip(("load1", "load5", "load15"), p[:3]):
+                m.append(M(n, float(v), "load", "system", "loadavg"))
+        except ValueError:
+            un.append(U("loadavg", B, "unparseable loadavg"))
+    else:
+        un.append(U("loadavg", B, "loadavg missing/short"))
+    if pid is not None:
+        st = _read(os.path.join(root, str(pid), "status"))
+        for name, key in (("pid_rss", "VmRSS"), ("pid_hwm", "VmHWM")):
+            v = parse_status_kb(st, key) if st else None
+            if v is None:
+                un.append(U(name, B, "pid %s status missing or no %s" % (pid, key)))
+            else:
+                m.append(M(name, round(v / 1048576, 3), "MiB", "process", "status:" + key))
+    if cgroup:
+        base = os.path.join(cgroup_root, cgroup.lstrip("/")) if not os.path.isabs(cgroup) or not os.path.isdir(cgroup) else cgroup
+        note = "cgroup memory may not include nvmap/driver GPU allocations on Tegra"
+        for name, f in (("cgroup_current", "memory.current"), ("cgroup_peak", "memory.peak"), ("cgroup_max", "memory.max")):
+            t = _read(os.path.join(base, f))
+            t = t.strip() if t else None
+            if t is None:
+                un.append(U(name, B, "%s unreadable in %s" % (f, base)))
+            elif t == "max":
+                un.append(U(name, B, "unlimited (max)"))
+            elif t.isdigit():
+                x = M(name, round(int(t) / 1048576, 3), "MiB", "cgroup", f)
+                x["accounting_note"] = note
+                m.append(x)
+            else:
+                un.append(U(name, B, "unparseable %r" % t))
+    return m, un
+
+
+# ---------------- sysfs_tegra ----------------
+def sysfs_sample(devfreq=GPU_DEVFREQ, thermal="/sys/class/thermal", nvpmodel_mode=None, query_nvpmodel=True):
+    B = "sysfs_tegra"
+    m, un = [], []
+    if not os.path.isdir(devfreq):
+        un.append(U("gpu_devfreq", B, "%s absent (not a Jetson?)" % devfreq))
+    else:
+        for n, f in (("gpu_freq_cur", "cur_freq"), ("gpu_freq_min", "min_freq"), ("gpu_freq_max", "max_freq")):
+            t = (_read(os.path.join(devfreq, f)) or "").strip()
+            if t.isdigit():
+                m.append(M(n, int(t) / 1e6, "MHz", "gpu", "devfreq:" + f))
+            else:
+                un.append(U(n, B, "%s unreadable" % f))
+    zones = sorted(glob.glob(os.path.join(thermal, "thermal_zone*")))
+    if not zones:
+        un.append(U("thermal", B, "no thermal zones"))
+    for z in zones:
+        ty = (_read(os.path.join(z, "type")) or "").strip()
+        t = (_read(os.path.join(z, "temp")) or "").strip()
+        zn = os.path.basename(z)
+        if ty and re.fullmatch(r"-?\d+", t):
+            m.append(M("thermal_%s_%s" % (zn, ty), int(t) / 1000.0, "celsius", "sensor", "thermal:" + zn))
+        else:
+            un.append(U("thermal_" + zn, B, "type/temp unreadable"))
+    mode = nvpmodel_mode
+    if mode is None and query_nvpmodel and shutil.which("nvpmodel"):
+        try:
+            out = subprocess.run(["nvpmodel", "-q"], capture_output=True, text=True, timeout=5).stdout
+            mm = re.search(r"NV Power Mode:\s*(\S+)", out)
+            mode = mm[1] if mm else None
+        except Exception:
+            mode = None
+    if mode:
+        m.append(M("nvpmodel_mode", mode, "string", "system", "nvpmodel -q"))
+    else:
+        un.append(U("nvpmodel_mode", B, "not provided and query failed/unavailable"))
+    return m, un
+
+
+# ---------------- nvml ----------------
+GPU_FIELDS = [("gpu_mem_used", "MiB"), ("gpu_mem_total", "MiB"), ("gpu_util", "percent"),
+              ("gpu_sm_clock", "MHz"), ("gpu_temp", "celsius"), ("gpu_power", "W")]
+
+
+def parse_nvml_csv(text, apps_text=""):
+    B, S = "nvml", "device-discrete"
+    m, un = [], []
+    rows = [l for l in (text or "").splitlines() if l.strip()]
+    if not rows:
+        return [], [U("gpu", B, "no nvidia-smi output")]
+    for gi, row in enumerate(rows):
+        cells = [c.strip() for c in row.split(",")]
+        sfx = "" if len(rows) == 1 else str(gi)
+        for (name, unit), c in zip(GPU_FIELDS, cells + [None] * (len(GPU_FIELDS) - len(cells))):
+            try:
+                if c is None or re.search(r"N/A|Not Supported", c, re.I) or c == "":
+                    raise ValueError
+                m.append(M(name + sfx, float(c), unit, S, "nvidia-smi"))
+            except ValueError:
+                un.append(U(name + sfx, B, "field %r N/A or missing" % c))
+    for l in (apps_text or "").splitlines():
+        c = [x.strip() for x in l.split(",")]
+        if len(c) >= 3 and c[0].isdigit() and re.fullmatch(r"\d+(\.\d+)?", c[-1]):
+            m.append(M("gpu_proc_mem_pid%s" % c[0], float(c[-1]), "MiB", "process", "nvidia-smi compute-apps"))
+    return m, un
+
+
+def nvml_available():
+    if not shutil.which("nvidia-smi"):
+        return False, "nvidia-smi not on PATH"
+    return True, ""
+
+
+def nvml_sample(runner=None):
+    runner = runner or (lambda a: subprocess.run(a, capture_output=True, text=True, timeout=10))
+    q = ["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu,clocks.sm,temperature.gpu,power.draw",
+         "--format=csv,noheader,nounits"]
+    try:
+        r = runner(q)
+        if r.returncode != 0:
+            return [], [U("gpu", "nvml", "nvidia-smi failed: %s" % (r.stderr or "").strip()[:100])]
+        a = runner(["nvidia-smi", "--query-compute-apps=pid,used_memory", "--format=csv,noheader,nounits"])
+        m, un = parse_nvml_csv(r.stdout, a.stdout if a.returncode == 0 else "")
+    except Exception as ex:
+        return [], [U("gpu", "nvml", "nvidia-smi error: %s" % ex)]
+    if not m:
+        un.append(U("gpu_mem", "nvml", "no usable memory fields (integrated GPU?)"))
+    return m, un
+
+
+# ---------------- capabilities / sampling ----------------
+def capabilities(devfreq=GPU_DEVFREQ, root="/proc", runner=None):
+    caps = {}
+    ok, why = tegrastats_available()
+    caps["tegrastats"] = {"available": ok, "reason": why or "tegrastats found",
+                          "metrics": ["ram_used", "ram_total", "ram_lfb", "swap_*", "cpuN_load/freq", "gpu_util", "gpu_freq", "emc_freq", "temp_*", "power_*"] if ok else []}
+    pm, pu = proc_sample(root)
+    caps["proc"] = {"available": bool(pm), "reason": "ok" if pm else "no /proc fields", "metrics": [x["name"] for x in pm],
+                    "missing": [x["name"] + ": " + x["reason"] for x in pu]}
+    sm, su = sysfs_sample(devfreq, query_nvpmodel=True)
+    has = os.path.isdir(devfreq)
+    caps["sysfs_tegra"] = {"available": has, "reason": "ok" if has else "no Tegra GPU devfreq node",
+                           "metrics": [x["name"] for x in sm][:6], "missing": [x["name"] + ": " + x["reason"] for x in su][:6]}
+    ok, why = nvml_available()
+    if ok:
+        nm, nu = nvml_sample(runner)
+        ok = bool(nm)
+        why = "ok" if ok else (nu[-1]["reason"] if nu else "no memory fields")
+    caps["nvml"] = {"available": ok, "reason": why or "ok", "metrics": [n for n, _ in GPU_FIELDS] if ok else []}
+    im, iu = IOSampler(procroot=root).sample()
+    caps["io"] = {"available": bool(im), "reason": "ok" if im else "no I/O counters",
+                  "metrics": [x["name"] for x in im], "missing": iu}
+    return caps
+
+
+def resolve_backends(spec):
+    if spec == "auto":
+        c = capabilities()
+        return [b for b in ALL_BACKENDS if c[b]["available"]]
+    bs = [b.strip() for b in spec.split(",") if b.strip()]
+    bad = [b for b in bs if b not in ALL_BACKENDS]
+    if bad:
+        raise SystemExit("unknown backend(s): %s" % bad)
+    return bs
+
+
+def sample_once(backend, seq, a):
+    if backend == "io":
+        m, u = a.io_sampler.sample()
+    elif backend == "proc":
+        m, u = proc_sample(pid=a.pid, cgroup=a.cgroup)
+    elif backend == "sysfs_tegra":
+        m, u = sysfs_sample(nvpmodel_mode=a.nvpmodel_mode)
+    elif backend == "nvml":
+        m, u = nvml_sample()
+    else:
+        raise ValueError(backend)
+    return record(backend, seq, m, u)
+
+
+def cmd_sample(a):
+    a.io_sampler = IOSampler(path=a.path, device=a.device, pid=a.pid,
+                             pid_from_cgroup=a.pid_from_cgroup, cgroup=a.cgroup)
+    backends = resolve_backends(a.backends)
+    seq = 0
+    end = time.monotonic() + a.duration_s if a.duration_s else None
+    tg = None
+    n = 0
+    with open(a.out, "w") as out:
+        def emit(r):
+            out.write(json.dumps(r) + "\n"); out.flush()
+        for b in backends:
+            if b == "tegrastats":
+                ok, why = tegrastats_available()
+                if ok:
+                    tg = TegrastatsReader(a.interval_ms)
+                else:
+                    emit(record(b, seq, [], [U("tegrastats", b, why)])); seq += 1
+        try:
+            while True:
+                t0 = time.monotonic()
+                if tg:
+                    for l in tg.drain():
+                        m, u, e = parse_tegrastats(l)
+                        emit(record("tegrastats", seq, m, u, e)); seq += 1
+                for b in backends:
+                    if b != "tegrastats":
+                        emit(sample_once(b, seq, a)); seq += 1
+                n += 1
+                if end and time.monotonic() >= end:
+                    break
+                time.sleep(max(0, a.interval_ms / 1000 - (time.monotonic() - t0)))
+            if tg:
+                time.sleep(a.interval_ms / 1000 + 0.1)
+                for l in tg.drain():
+                    m, u, e = parse_tegrastats(l)
+                    emit(record("tegrastats", seq, m, u, e)); seq += 1
+        finally:
+            if tg:
+                tg.close()
+    return 0
+
+
+def summarize(path, interval_ms=None):
+    stats, times, nrec, errs = {}, {}, {}, 0
+    for l in open(path):
+        if not l.strip():
+            continue
+        r = json.loads(l)
+        b = r["backend"]
+        nrec[b] = nrec.get(b, 0) + 1
+        times.setdefault(b, []).append(r["mono_s"])
+        errs += len(r.get("parse_errors", []))
+        for x in r["metrics"]:
+            if isinstance(x["value"], (int, float)):
+                stats.setdefault((b, x["name"], x["unit"], x["scope"]), []).append(x["value"])
+    metrics = {"%s/%s" % (k[0], k[1]): {"unit": k[2], "scope": k[3], "n": len(v), "min": min(v), "max": max(v),
+               "mean": sum(v) / len(v), "high_water": max(v)} for k, v in stats.items()}
+    cov = {}
+    for b, ts in times.items():
+        ts = sorted(ts)
+        d = [y - x for x, y in zip(ts, ts[1:])]
+        iv = interval_ms / 1000 if interval_ms else (sorted(d)[len(d) // 2] if d else 0)
+        span = ts[-1] - ts[0]
+        exp = int(round(span / iv)) + 1 if iv else len(ts)
+        gaps = [{"after_mono_s": x, "gap_s": round(y - x, 3)} for x, y in zip(ts, ts[1:]) if iv and y - x > 2 * iv]
+        cov[b] = {"received": len(ts), "expected": exp, "interval_s": iv, "gaps_gt_2x": gaps}
+    return {"metrics": metrics, "coverage": cov, "parse_error_count": errs}
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="resource_observe.py")
+    sp = ap.add_subparsers(dest="cmd", required=True)
+    s = sp.add_parser("sample")
+    s.add_argument("--backends", default="auto")
+    s.add_argument("--interval-ms", type=int, default=500)
+    s.add_argument("--duration-s", type=float, default=0)
+    pids = s.add_mutually_exclusive_group()
+    pids.add_argument("--pid", type=int)
+    pids.add_argument("--pid-from-cgroup")
+    s.add_argument("--path", default=".")
+    s.add_argument("--device")
+    s.add_argument("--cgroup")
+    s.add_argument("--nvpmodel-mode")
+    s.add_argument("--out", required=True)
+    z = sp.add_parser("summarize"); z.add_argument("file"); z.add_argument("--interval-ms", type=int)
+    sp.add_parser("capabilities")
+    w = sp.add_parser("watchdog")
+    w.add_argument("--min-available-mib", type=float, default=900)
+    w.add_argument("--max-swap-used-mib", type=float, default=512)
+    w.add_argument("--max-swap-rate-mibs", type=float, default=20)
+    w.add_argument("--interval-ms", type=int, default=250)
+    target = w.add_mutually_exclusive_group()
+    target.add_argument("--kill-cgroup")
+    target.add_argument("--kill-pid", type=int)
+    target.add_argument("--kill-cmd")
+    w.add_argument("--out", required=True)
+    a = ap.parse_args(argv)
+    if a.cmd in ("sample", "watchdog") and a.interval_ms <= 0:
+        ap.error("--interval-ms must be positive")
+    if a.cmd == "sample" and (a.duration_s < 0 or (a.pid is not None and a.pid <= 0)):
+        ap.error("duration must be nonnegative and pid positive")
+    if a.cmd == "watchdog":
+        if a.kill_pid is not None and a.kill_pid <= 0:
+            ap.error("--kill-pid must be positive (process groups are not allowed)")
+        if any(not __import__('math').isfinite(v) or v < 0 for v in
+               (a.min_available_mib, a.max_swap_used_mib, a.max_swap_rate_mibs)):
+            ap.error("watchdog thresholds must be finite and nonnegative")
+        with open(a.out, "w") as out:
+            seq = 0
+            def emit(event, data):
+                nonlocal seq
+                r = record("watchdog", seq, [])
+                r.update(event=event, **data)
+                out.write(json.dumps(r) + "\n")
+                out.flush()
+                seq += 1
+            return watchdog(a, emit)
+    if a.cmd == "sample":
+        return cmd_sample(a)
+    if a.cmd == "summarize":
+        print(json.dumps(summarize(a.file, a.interval_ms), indent=1)); return 0
+    print(json.dumps(capabilities(), indent=1)); return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+
+exec
+/bin/bash -lc 'cat cc/abrun/test_abrun.py; cat cc/abrun/abrun.py; cat experiments/jetson/OM/J-OM10c/003-pg8i8/result.json; head -4 experiments/jetson/OM/J-OM10c/003-pg8i8/telemetry.jsonl; tail -12 experiments/jetson/OM/J-OM10c/003-pg8i8/stderr.txt; cat experiments/jetson/OM/J-OM10c/spec.json' in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+"""CPU-only acceptance and failure-path tests; fixture writes are confined to tmp."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import statistics
+import subprocess
+import sys
+
+import pytest
+from cc.abrun import abrun, gate, preflight, run_summary
+
+ROOT = Path(__file__).resolve().parents[2]
+FIXTURE = ROOT / 'experiments/jetson/OM/om7-20261110-1555'
+HELP = (Path(__file__).parent / 'fixtures/llama-bench-help.txt').read_text()
+
+
+def test_real_base_summary(tmp_path):
+    target = tmp_path / 'base-a'
+    shutil.copytree(FIXTURE / 'base-a', target)
+    summary = run_summary.summarize(target)
+    assert summary['status'] == 'ok'
+    assert summary['eval_tps'] == 1.18
+    assert summary['prompt_tps'] == 5.69
+    assert summary['nvme_gib'] == pytest.approx(57.2, abs=0.5)
+    assert summary['avg_kib_per_io'] == pytest.approx(95, abs=3)
+    assert summary['load_s'] == pytest.approx(50.26553)
+    assert summary['eval_tokens'] == 63
+    assert summary['nvme_gib_per_token'] == summary['nvme_gib'] / 63
+    assert summary['output_sha'] == hashlib.sha256((target / 'stdout.txt').read_bytes()).hexdigest()[:12]
+    assert json.loads((target / 'summary.json').read_text()) == summary
+
+
+@pytest.mark.parametrize('arm', ['pf-a', 'pf-b'])
+def test_prefetch_fixture(tmp_path, arm):
+    target = tmp_path / arm
+    shutil.copytree(FIXTURE / arm, target)
+    summary = run_summary.summarize(target, [r'expert_prefetch:.*enabled'])
+    assert summary['avg_kib_per_io'] == pytest.approx(5, abs=1)
+    assert len(summary['switch_lines']) == 1
+
+
+def test_llama_bench(tmp_path):
+    source = ROOT / 'experiments/jetson/J-E007-unfuse-by-type/bf16-base-a.json'
+    shutil.copyfile(source, tmp_path / 'stdout.txt')
+    summary = run_summary.summarize(tmp_path)
+    row = json.loads(source.read_text())[0]
+    assert summary['eval_tps'] == row['avg_ts']
+    assert summary['tg_samples_ts'] == row['samples_ts']
+    assert summary['tg_steady'] == statistics.mean(row['samples_ts'][1:])
+    assert 'eval_tps' not in summary['reasons']
+
+
+def test_bench_pp_and_tg(tmp_path):
+    rows = [{'n_prompt': 64, 'n_gen': 0, 'avg_ts': 20, 'samples_ts': [10, 25, 25]},
+            {'n_prompt': 0, 'n_gen': 32, 'avg_ts': 5, 'samples_ts': [3, 6, 6]}]
+    (tmp_path / 'stdout.txt').write_text(json.dumps(rows))
+    s = run_summary.summarize(tmp_path, write=False)
+    assert (s['prompt_tps'], s['eval_tps'], s['pp_steady'], s['tg_steady']) == (20, 5, 25, 6)
+
+
+def test_last_perf_lines(tmp_path):
+    (tmp_path / 'stderr.txt').write_text('\n'.join([
+        'common_perf_print: prompt eval time = 12 ms / 2 tokens (1 tokens per second)',
+        'common_perf_print: eval time = 30 ms / 3 runs (2 tokens per second)',
+        'common_perf_print: prompt eval time = 12 ms / 2 tokens (7 tokens per second)',
+        'common_perf_print: eval time = 30 ms / 3 runs (8 tokens per second)']))
+    s = run_summary.summarize(tmp_path, write=False)
+    assert (s['prompt_tps'], s['eval_tps']) == (7, 8)
+
+
+def test_missing_and_malformed(tmp_path):
+    (tmp_path / 'result.json').write_text('oops')
+    (tmp_path / 'telemetry.jsonl').write_text('broken\nnull\n{"metrics":[null]}\n')
+    s = run_summary.summarize(tmp_path, write=False)
+    for key in ('status', 'wall_s', 'eval_tps', 'nvme_gib', 'avg_kib_per_io',
+                'mem_available_min_mib', 'swap_max_mib', 'gpu_freq_median', 'output_sha'):
+        assert s[key] is None
+        assert s['reasons'][key]
+    assert not (tmp_path / 'summary.json').exists()
+
+
+@pytest.mark.parametrize('unit,factor', [('KiB', 1), ('MiB', 1024)])
+def test_telemetry_units(tmp_path, unit, factor):
+    rows = []
+    for i in (0, 1, 2):
+        rows.append({'metrics': [
+            {'name': 'device_read', 'value': 100 + i * 1024 / factor, 'unit': unit},
+            {'name': 'device_read_ios', 'value': 10 + i * 16},
+            {'name': 'mem_available', 'value': 3000 - i, 'unit': 'MiB'},
+            {'name': 'swap_total', 'value': 4000, 'unit': 'MiB'},
+            {'name': 'swap_free', 'value': 3500 - i, 'unit': 'MiB'},
+            {'name': 'gpu_freq', 'value': [300, 900, 600][i], 'unit': 'MHz'}]})
+    (tmp_path / 'telemetry.jsonl').write_text('\n'.join(json.dumps(r) for r in rows))
+    s = run_summary.summarize(tmp_path, write=False)
+    assert s['nvme_gib'] == 2048 / 1024 ** 2
+    assert s['avg_kib_per_io'] == 64
+    assert s['mem_available_min_mib'] == 2998
+    assert s['swap_max_mib'] == 502
+    assert s['gpu_freq_median'] == 600
+
+
+def test_cli_no_write(tmp_path):
+    target = tmp_path / 'base'
+    shutil.copytree(FIXTURE / 'base-a', target)
+    (target / 'summary.json').unlink(missing_ok=True)
+    result = subprocess.run([sys.executable, str(Path(run_summary.__file__)), str(target),
+                             '--json', '--no-write'], capture_output=True, text=True, check=True)
+    assert json.loads(result.stdout)['eval_tps'] == 1.18
+    assert not (target / 'summary.json').exists()
+
+
+def runs(numbers, sha='aaa'):
+    return [{'eval_tps': n, 'output_sha': sha, 'status': 'ok'} for n in numbers]
+
+
+@pytest.mark.parametrize('b,expected', [(110, 'improved'), (102, 'null'), (90, 'regressed')])
+def test_gate_verdict(b, expected):
+    g = gate.evaluate({'base': runs([100, 100]), 'B': runs([b, b])})
+    assert g['comparisons']['B']['verdict'] == expected
+    assert g['comparisons']['B']['ratio'] == b / 100
+    assert g['inputs']['B'] == [b, b]
+    assert g['threshold'] == .03
+    assert g['output']['class'] == 'identical'
+
+
+def test_gate_noise_and_drift():
+    g = gate.evaluate({'base': runs([90, 110]), 'B': runs([120, 120])})
+    assert g['aa_gap'] == .2
+    assert g['drift'] == .2
+    assert g['drift_halves'] == [90, 110]
+    assert g['threshold'] == .4
+    assert g['comparisons']['B']['verdict'] == 'null'
+
+
+def test_output_differs():
+    g = gate.evaluate({'base': runs([1, 1]), 'B': runs([2, 2], 'bbb')})
+    assert g['output']['class'] == 'differs'
+    assert list(g['output']['differs']) == ['B']
+    assert len(g['output']['differs']['B']) == 2
+
+
+@pytest.mark.parametrize('bad', [None, 0, float('nan')])
+def test_missing_gate_metric(bad):
+    g = gate.evaluate({'base': runs([1, 1]), 'B': runs([bad, 2])})
+    assert g['reasons']
+    assert g['comparisons']['B']['verdict'] == 'null'
+
+
+def test_preflight_reject_and_cache(tmp_path):
+    calls = []
+    def fake(image, tool):
+        calls.append((image, tool))
+        return HELP
+    with pytest.raises(ValueError, match='unsupported flags: -c'):
+        preflight.check('img', 'llama-bench', ['-c', '4096'], fake, tmp_path)
+    preflight.check('img', 'llama-bench', ['-m', '/m', '-n', '32', '-ngl', '99', '--output=json'], fake, tmp_path)
+    assert calls == [('img', 'llama-bench')]
+    with pytest.raises(ValueError, match='--n-gpu'):
+        preflight.check('img', 'llama-bench', ['--n-gpu'], fake, tmp_path)
+    preflight.check('img2', 'llama-bench', ['-n', '-1'], fake, tmp_path)
+    assert len(calls) == 2
+
+
+def spec(tmp_path, count=2):
+    arms = {'base': {'image': 'test', 'env': {}},
+            'pf': {'image': 'test', 'env': {'SWITCH': '1'}, 'expect_switch': True}}
+    if count == 3:
+        arms['pfn'] = {'image': 'test', 'env': {'SWITCH': '2'}, 'expect_switch': True}
+    return {'id': 'test', 'outdir_base': str(tmp_path / 'outputs'), 'runner': 'om_run',
+            'tool': 'llama-bench', 'argv': ['-n', '32'], 'arms': arms,
+            'switch_regex': ['switch active'], 'metric': 'eval_tps',
+            'order': 'ABBA' if count == 2 else 'ABCCBA', 'rounds': 1}
+
+
+@pytest.mark.parametrize('count,order', [(2, ['base', 'pf', 'pf', 'base']),
+                                       (3, ['base', 'pf', 'pfn', 'pfn', 'pf', 'base'])])
+def test_dry_run(tmp_path, count, order):
+    s = spec(tmp_path, count)
+    path = tmp_path / 'spec.json'
+    path.write_text(json.dumps(s))
+    result = subprocess.run([sys.executable, str(Path(abrun.__file__)), str(path), '--dry-run'],
+                            capture_output=True, text=True, check=True)
+    assert result.stdout.splitlines()[0] == 'Order: ' + ', '.join(order)
+    assert sum(line.startswith('Run ') for line in result.stdout.splitlines()) == len(order)
+    assert not (tmp_path / 'outputs').exists()
+
+
+def test_rounds_explicit_and_mirrored(tmp_path):
+    s = spec(tmp_path, 3)
+    s.update(order='explicit', explicit_order=['base', 'pf', 'pfn'], rounds=2)
+    assert abrun.planned_order(s) == ['base', 'pf', 'pfn'] * 2
+    s['arms']['fourth'] = {'image': 'test', 'env': {}}
+    s.update(order='mirrored', rounds=1)
+    assert abrun.planned_order(s) == ['base', 'pf', 'pfn', 'fourth', 'fourth', 'pfn', 'pf', 'base']
+
+
+@pytest.mark.parametrize('mode,expected_count,status', [('inert', 2, 'INVALID'),
+                                                       ('leak', 1, 'INVALID'),
+                                                       ('ok', 4, 'completed'),
+                                                       ('fail', 1, 'INVALID')])
+def test_fake_execution(tmp_path, mode, expected_count, status):
+    s = spec(tmp_path)
+    path = tmp_path / 'spec.json'
+    path.write_text(json.dumps(s))
+    fake = tmp_path / 'runner.py'
+    fake.write_text('''import json, os, pathlib, sys
+out, image, env, tool, *argv = sys.argv[1:]
+p = pathlib.Path(out); p.mkdir(parents=True)
+mode = os.environ['TEST_MODE']
+active = (mode == 'ok' and 'SWITCH' in env) or mode == 'leak'
+(p/'stderr.txt').write_text(('switch active\\n' if active else '') + 'common_perf_print: eval time = 1000 ms / 10 runs (10 tokens per second)')
+(p/'stdout.txt').write_text('same output')
+(p/'result.json').write_text(json.dumps({'status':'failed' if mode=='fail' else 'ok', 'wall_s':1}))
+sys.exit(1 if mode=='fail' else 0)
+''')
+    helper = tmp_path / 'help.py'
+    helper.write_text('import pathlib,sys\np=pathlib.Path(__file__).with_suffix(".calls")\np.write_text(p.read_text()+"x" if p.exists() else "x")\nprint("-n --help")\n')
+    env = dict(os.environ, ABRUN_RUNNER=f'{sys.executable} {fake}',
+               ABRUN_PREFLIGHT_RUNNER=f'{sys.executable} {helper}',
+               ABRUN_PREFLIGHT_CACHE_DIR=str(tmp_path / 'help-cache'), TEST_MODE=mode)
+    result = subprocess.run([sys.executable, str(Path(abrun.__file__)), str(path)],
+                            capture_output=True, text=True, env=env)
+    out = tmp_path / 'outputs/test'
+    verdict = json.loads((out / 'verdict.json').read_text())
+    assert result.returncode == (0 if status == 'completed' else 1), result.stderr
+    assert verdict['status'] == status
+    assert len(verdict['executed_order']) == expected_count
+    assert len(list(out.glob('*/summary.json'))) == expected_count
+    assert (out / 'REPORT.md').exists()
+    assert helper.with_suffix('.calls').read_text() == 'x'
+    if mode == 'inert':
+        assert any('switch inert' in reason for reason in verdict['invalid_reasons'])
+    if mode == 'leak':
+        assert any('switch leaked' in reason for reason in verdict['invalid_reasons'])
+
+
+@pytest.mark.parametrize('b', [97, 103])
+def test_gate_strict_threshold(b):
+    g = gate.evaluate({'base': runs([100, 100]), 'B': runs([b, b])})
+    assert g['comparisons']['B']['verdict'] == 'null'
+
+
+def test_real_om7_gate(tmp_path):
+    grouped = {'base': [], 'pf': [], 'pfn': []}
+    expected = {'base-a': 1.18, 'base-b': 1.22, 'pf-a': .72, 'pf-b': .76,
+                'pfn-a': .64, 'pfn-b': .65}
+    for name in ['base-a', 'pf-a', 'pfn-a', 'pfn-b', 'pf-b', 'base-b']:
+        target = tmp_path / name
+        shutil.copytree(FIXTURE / name, target)
+        summary = run_summary.summarize(target, ['expert_prefetch:.*enabled'])
+        assert summary['eval_tps'] == expected[name]
+        arm = name.rsplit('-', 1)[0]
+        assert bool(summary['switch_lines']) == (arm != 'base')
+        grouped[arm].append(summary)
+    verdict = gate.evaluate(grouped)
+    assert verdict['means']['base'] == 1.2
+    assert verdict['output']['class'] == 'identical'
+    assert all(c['verdict'] == 'regressed' for c in verdict['comparisons'].values())
+
+
+def test_preflight_failure_report(tmp_path, monkeypatch):
+    s = spec(tmp_path)
+    out, plan = abrun.plan(s)
+    def reject(*args):
+        raise ValueError('unsupported flags: -n')
+    monkeypatch.setattr(preflight, 'check', reject)
+    assert abrun.execute(s, out, plan) == 1
+    verdict = json.loads((out / 'verdict.json').read_text())
+    assert verdict['status'] == 'INVALID'
+    assert verdict['executed_order'] == []
+    assert 'unsupported flags: -n' in verdict['invalid_reasons']
+    assert not list(out.glob('*/summary.json'))
+
+
+def test_submit_is_one_gpu_job(tmp_path, monkeypatch):
+    s = spec(tmp_path)
+    path = tmp_path / 'spec.json'
+    path.write_text(json.dumps(s))
+    calls = []
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+    # The submission adapter needs only existence; supply a temporary queue path.
+    fake_root = tmp_path / 'repo'
+    (fake_root / 'bin').mkdir(parents=True)
+    (fake_root / 'bin/jobq').touch()
+    monkeypatch.setattr(abrun, 'ROOT', fake_root)
+    monkeypatch.setattr(abrun.subprocess, 'run', fake_run)
+    monkeypatch.setattr(sys, 'argv', ['abrun.py', str(path), '--submit'])
+    assert abrun.main() == 0
+    assert len(calls) == 1
+    assert calls[0][1:6] == ['submit', '--class', 'gpu', '--name', 'test']
+    assert '--submit' not in calls[0]
+    assert not (tmp_path / 'outputs').exists()
+
+
+def test_per_arm_all_matches_and_legacy_or(tmp_path):
+    s = spec(tmp_path)
+    s['switch_regex'] = ['legacy active', 'legacy alternative']
+    s['arms']['pf']['switch_regex'] = ['fill enabled', 'random enabled']
+    abrun.validate(s)
+    (tmp_path / 'stderr.txt').write_text('legacy active\nfill enabled\nfill enabled\n')
+    summary = run_summary.summarize(tmp_path, abrun.switch_patterns(s), write=False)
+    assert summary['switch_matches'] == {'legacy active': 1, 'legacy alternative': 0,
+                                         'fill enabled': 2, 'random enabled': 0}
+    errors = abrun.switch_errors(s, 'pf', summary)
+    assert len(errors) == 1 and 'random enabled' in errors[0]
+    with (tmp_path / 'stderr.txt').open('a') as stream:
+        stream.write('random enabled\n')
+    summary = run_summary.summarize(tmp_path, abrun.switch_patterns(s), write=False)
+    assert abrun.switch_errors(s, 'pf', summary) == []
+    del s['switch_regex']
+    abrun.validate(s)  # Per-arm signatures alone suffice.
+    assert abrun.switch_errors(s, 'pf', summary) == []
+
+
+def test_cross_arm_leak_in_nonbase_control(tmp_path, monkeypatch):
+    s = spec(tmp_path, 3)
+    s.pop('switch_regex')
+    s['arms']['pf'].update(expect_switch=False)
+    s['arms']['pfn']['switch_regex'] = ['next prefetch enabled']
+    abrun.validate(s)
+    monkeypatch.setattr(preflight, 'check', lambda *args: None)
+    def fake_run(command, **kwargs):
+        directory = Path(command[-1])
+        directory.mkdir()
+        (directory/'stderr.txt').write_text(
+            ('next prefetch enabled\n' if directory.name.endswith('-pf') else '') +
+            'eval time = 1000 ms / 10 runs (10 tokens per second)\n')
+        (directory/'stdout.txt').write_text('same')
+        (directory/'result.json').write_text(json.dumps({'status': 'ok', 'wall_s': 1}))
+        return subprocess.CompletedProcess(command, 0)
+    monkeypatch.setattr(abrun.subprocess, 'run', fake_run)
+    out, planned = abrun.plan(s)
+    for row in planned:
+        row['command'] = ['fake-runner', row['dir']]
+    assert abrun.execute(s, out, planned) == 1
+    verdict = json.loads((out/'verdict.json').read_text())
+    assert verdict['executed_order'] == ['base', 'pf']
+    assert any('pf: switch leaked' in r for r in verdict['invalid_reasons'])
+    report = (out/'REPORT.md').read_text()
+    assert 'Switch matches' in report and 'next prefetch enabled' in report
+    assert 'Secondary metrics' in report
+
+
+def test_regate_exclude_and_preserve_data(tmp_path):
+    from cc.abrun import regate
+    s = spec(tmp_path)
+    s.pop('switch_regex')
+    s['arms']['pf']['expect_switch'] = False
+    (tmp_path/'spec.json').write_text(json.dumps(s))
+    for run_id, speed in [('001-base', 50), ('002-pf', 110), ('003-pf', 110), ('004-base', 100)]:
+        directory = tmp_path/run_id
+        directory.mkdir()
+        summary = runs([speed])[0]
+        summary.update(prompt_tps=20, nvme_gib_per_token=.5, switch_matches={}, switch_lines=[])
+        (directory/'summary.json').write_text(json.dumps(summary))
+    original = {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    assert regate.recompute(tmp_path)['comparisons']['pf']['verdict'] == 'null'
+    args = [sys.executable, regate.__file__, str(tmp_path), '--exclude', '001-base',
+            '--reason', 'overlap', '--metric', 'eval_tps']
+    result = subprocess.run([*args, '--no-write'], capture_output=True, text=True, check=True)
+    verdict = json.loads(result.stdout)
+    assert verdict['excluded_runs'] == ['001-base']
+    assert verdict['reason'] == 'overlap'
+    assert verdict['comparisons']['pf']['verdict'] == 'improved'
+    assert verdict['secondary_metrics']['pf'] == dict(nvme_gib_per_token=.5, prompt_tps=20, eval_tps=110)
+    assert not (tmp_path/'verdict-regate.json').exists()
+    subprocess.run(args, capture_output=True, text=True, check=True)
+    assert json.loads((tmp_path/'verdict-regate.json').read_text()) == verdict
+    assert all(p.read_bytes() == content for p, content in original.items())
+    with pytest.raises(ValueError, match='unknown excluded'):
+        regate.recompute(tmp_path, ['999-typo'])
+
+
+def test_secondary_metrics_do_not_affect_gate():
+    arms = {'base': runs([100, 100]), 'pf': runs([110, 110])}
+    for arm in arms.values():
+        arm[0].update(nvme_gib_per_token=2, prompt_tps=10)
+        arm[1].update(nvme_gib_per_token=4, prompt_tps=None)
+    verdict = gate.evaluate(arms)
+    assert verdict['comparisons']['pf']['verdict'] == 'improved'
+    assert verdict['secondary_metrics']['pf'] == dict(nvme_gib_per_token=3, prompt_tps=10, eval_tps=110)
+#!/usr/bin/env python3
+"""Plan and execute a declarative counterbalanced experiment."""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
+
+if __package__:
+    from . import gate, preflight, run_summary
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from cc.abrun import gate, preflight, run_summary
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def validate(spec):
+    for key in ('id', 'outdir_base', 'runner', 'tool', 'argv', 'arms', 'order'):
+        if key not in spec:
+            raise ValueError(f'missing spec field: {key}')
+    safe = r'[A-Za-z0-9][A-Za-z0-9_.-]*'
+    if not isinstance(spec['id'], str) or not re.fullmatch(safe, spec['id']):
+        raise ValueError('id must be a safe path component')
+    if spec['runner'] != 'om_run':
+        raise ValueError('only runner=om_run is supported')
+    if not isinstance(spec['tool'], str) or not re.fullmatch(safe, spec['tool']):
+        raise ValueError('tool must be a binary name')
+    if not isinstance(spec['outdir_base'], str) or not spec['outdir_base']:
+        raise ValueError('outdir_base must be a nonempty path')
+    if not isinstance(spec['argv'], list) or not all(isinstance(x, str) for x in spec['argv']):
+        raise ValueError('argv must be an array of strings')
+    arms = spec['arms']
+    if not isinstance(arms, dict) or len(arms) < 2 or 'base' not in arms:
+        raise ValueError('arms must contain base and at least one treatment')
+    for name, arm in arms.items():
+        if not re.fullmatch(safe, name) or not isinstance(arm, dict):
+            raise ValueError('invalid arm')
+        if not isinstance(arm.get('image'), str) or not arm['image']:
+            raise ValueError(f'{name}: missing image')
+        env = arm.get('env', {})
+        if not isinstance(env, dict) or any(not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', k)
+                                           or not isinstance(v, str) or re.search(r'\s', v)
+                                           for k, v in env.items()):
+            raise ValueError(f'{name}: env must map names to strings without whitespace (om_run restriction)')
+        if not isinstance(arm.get('expect_switch', False), bool):
+            raise ValueError('expect_switch must be boolean')
+    for owner in [spec, *arms.values()]:
+        regexes = owner.get('switch_regex', [])
+        if not isinstance(regexes, list) or not all(isinstance(r, str) for r in regexes):
+            raise ValueError('switch_regex must be an array of regex strings')
+        for pattern in regexes:
+            re.compile(pattern)
+    for arm in arms.values():
+        if arm.get('expect_switch') and not (spec.get('switch_regex') or arm.get('switch_regex')):
+            raise ValueError('expect_switch requires switch_regex')
+    if arms['base'].get('expect_switch'):
+        raise ValueError('base cannot expect a switch')
+    rounds = spec.get('rounds', 1)
+    if not isinstance(rounds, int) or isinstance(rounds, bool) or rounds < 1:
+        raise ValueError('rounds must be a positive integer')
+    if not isinstance(spec.get('metric', 'eval_tps'), str):
+        raise ValueError('metric must be a summary field name')
+    planned_order(spec)
+
+
+def planned_order(spec):
+    arms = list(spec['arms'])
+    arms = ['base'] + [name for name in arms if name != 'base']
+    order = spec['order']
+    if order == 'explicit':
+        names = spec.get('explicit_order')
+        if not isinstance(names, list) or not names or any(n not in arms for n in names):
+            raise ValueError('explicit_order must be a nonempty list of known arms')
+        if set(names) != set(arms):
+            raise ValueError('explicit_order must include every arm')
+    else:
+        expected = ''.join(chr(65 + i) for i in range(len(arms)))
+        expected += expected[::-1]
+        if order not in (expected, 'mirrored'):
+            raise ValueError(f'{len(arms)} arms require order={expected!r} or mirrored')
+        names = arms + arms[::-1]
+    return names * spec.get('rounds', 1)
+
+
+def plan(spec):
+    out = Path(spec['outdir_base']).expanduser() / spec['id']
+    if not out.is_absolute():
+        out = ROOT / out
+    runs = []
+    for index, arm in enumerate(planned_order(spec), 1):
+        config = spec['arms'][arm]
+        directory = out / f'{index:03d}-{arm}'
+        env_flags = ' '.join(f'-e {k}={v}' for k, v in config.get('env', {}).items())
+        override = os.environ.get('ABRUN_RUNNER')
+        runner = shlex.split(override) if override else [str(ROOT / 'cc/om_run/om_run.sh')]
+        command = runner + [str(directory), config['image'], env_flags, spec['tool']] + spec['argv']
+        if not override:
+            command = [str(ROOT / 'bin/run_op'), '--agent', 'abrun', '--task', spec['id'], '--'] + command
+        runs.append({'index': index, 'arm': arm, 'dir': str(directory), 'command': command})
+    return out, runs
+
+
+def switch_patterns(spec):
+    """All signatures are observed on every run to detect cross-arm leaks."""
+    return list(dict.fromkeys([*spec.get('switch_regex', []),
+                              *(p for arm in spec['arms'].values()
+                                for p in arm.get('switch_regex', []))]))
+
+
+def switch_errors(spec, arm, summary):
+    config = spec['arms'][arm]
+    matches = summary.get('switch_matches', {})
+    if not config.get('expect_switch', False):
+        if any(matches.get(p, 0) for p in switch_patterns(spec)) or summary.get('switch_lines'):
+            return [f'{arm}: switch leaked (switch_lines present)']
+        return []
+    errors = [f'{arm}: switch inert (no matches for {p!r})'
+              for p in config.get('switch_regex', []) if not matches.get(p, 0)]
+    legacy = spec.get('switch_regex', [])
+    if legacy and not any(matches.get(p, 0) for p in legacy):
+        errors.append(f'{arm}: switch inert (no switch_lines matching spec switch_regex)')
+    return errors
+
+
+def write_report(out, spec, runs, verdict):
+    (out / 'verdict.json').write_text(json.dumps(verdict, indent=2) + '\n')
+    lines = [f"# {spec['id']}", '', f"Status: {verdict['status']}", '',
+             '| # | Arm | Status | Metric | Wall s | Output SHA | Switch matches |',
+             '|---|---|---|---:|---:|---|---|']
+    metric = spec.get('metric', 'eval_tps')
+    for row in runs:
+        s = row['summary']
+        matches = json.dumps(s.get('switch_matches', {})).replace('|', '&#124;')
+        lines.append(f"| {row['index']} | {row['arm']} | {s['status']} | {s.get(metric)} | {s['wall_s']} | {s['output_sha']} | {matches} |")
+    lines += ['', f'Metric: {metric} (higher is better)', '', '| Arm | Mean | B/A | Gate |',
+              '|---|---:|---:|---|']
+    for arm, mean in verdict['means'].items():
+        comparison = verdict['comparisons'].get(arm, {})
+        lines.append(f"| {arm} | {mean} | {comparison.get('ratio', '—')} | {comparison.get('verdict', 'base')} |")
+    lines += ['', '## Secondary metrics (descriptive; no verdict)', '',
+              '| Arm | NVMe GiB/token | Prompt t/s | Eval t/s |',
+              '|---|---:|---:|---:|']
+    for arm, metrics in verdict['secondary_metrics'].items():
+        lines.append('| ' + ' | '.join(str(v) for v in [arm, *metrics.values()]) + ' |')
+    lines += ['', f"A/A gap: {verdict['aa_gap']}; drift: {verdict['drift']}; threshold: {verdict['threshold']}",
+              '', f"Output class: {verdict['output']['class']}", '',
+              'Output details: `' + json.dumps(verdict['output']) + '`', '',
+              *verdict.get('invalid_reasons', []), *verdict.get('reasons', [])]
+    (out / 'REPORT.md').write_text('\n'.join(lines) + '\n')
+
+
+def execute(spec, out, runs):
+    # Exclusive creation refuses accidental overwrite/replay into prior results.
+    out.mkdir(parents=True, exist_ok=False)
+    (out / 'spec.json').write_text(json.dumps(spec, indent=2) + '\n')
+    grouped = {arm: [] for arm in spec['arms']}
+    completed, invalid = [], []
+    try:
+        checked = set()
+        for arm in spec['arms'].values():
+            key = (arm['image'], spec['tool'])
+            if key not in checked:
+                preflight.check(*key, spec['argv'])
+                checked.add(key)
+        for run in runs:
+            rc = subprocess.run(run['command'], cwd=ROOT).returncode
+            summary = run_summary.summarize(run['dir'], switch_patterns(spec))
+            run['summary'] = summary
+            completed.append(run)
+            grouped[run['arm']].append(summary)
+            invalid.extend(switch_errors(spec, run['arm'], summary))
+            if rc != 0 or summary['status'] != 'ok':
+                invalid.append(f"{run['arm']}: runner rc={rc}, status={summary['status']}")
+            if invalid:
+                break
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        invalid.append(str(exc))
+    verdict = gate.evaluate(grouped, spec.get('metric', 'eval_tps'))
+    if verdict['reasons']:
+        invalid.extend(verdict['reasons'])
+    verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+                   planned_order=[r['arm'] for r in runs],
+                   executed_order=[r['arm'] for r in completed])
+    if invalid:
+        for comparison in verdict['comparisons'].values():
+            comparison['verdict'] = 'null'
+    write_report(out, spec, completed, verdict)
+    print(json.dumps(verdict, indent=2))
+    return 1 if invalid else 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('spec')
+    parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--submit', action='store_true')
+    args = parser.parse_args()
+    try:
+        path = Path(args.spec).resolve()
+        spec = json.loads(path.read_text())
+        validate(spec)
+        out, runs = plan(spec)
+        if args.dry_run:
+            print('Order: ' + ', '.join(r['arm'] for r in runs))
+            for run in runs:
+                print(f"Run {run['index']}: {run['arm']}  {shlex.join(run['command'])}")
+            return 0
+        if args.submit:
+            queue = ROOT / 'bin/jobq'
+            if not queue.exists():
+                raise ValueError('--submit requires bin/jobq')
+            return subprocess.run([str(queue), 'submit', '--class', 'gpu', '--name', spec['id'],
+                                   '--', sys.executable, str(Path(__file__).resolve()), str(path)],
+                                  cwd=ROOT).returncode
+        return execute(spec, out, runs)
+    except (OSError, ValueError, TypeError, re.error) as exc:
+        parser.exit(1, f'abrun: {exc}\n')
+
+
+if __name__ == '__main__':
+    sys.exit(main())
+{
+ "exit_code": 0,
+ "wall_s": 143.18,
+ "oom_killed": false,
+ "watchdog_trips": 0,
+ "status": "ok",
+ "host_id": "jetson-arm",
+ "image": "campaign/llamacpp:jetson-up1108-om10b",
+ "env": "-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=8 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=8",
+ "argv": [
+  "llama-completion",
+  "-m",
+  "/om/model.gguf",
+  "-f",
+  "/om/prompts/p1.txt",
+  "-n",
+  "64",
+  "-c",
+  "4096",
+  "--temp",
+  "0",
+  "-s",
+  "1",
+  "-no-cnv",
+  "-ngl",
+  "99",
+  "-lm",
+  "mmap",
+  "-cmoe",
+  "-lv",
+  "4"
+ ]
+}{"schema": "resource-observe/0", "ts": "2026-11-11T14:25:13.506079+00:00", "mono_s": 847187.220192769, "host_id": "jetson-arm", "backend": "io", "seq": 0, "metrics": [{"name": "pgmajfault", "value": 63957229, "unit": "count", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgfault", "value": 766484764, "unit": "count", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgpgin", "value": 6252875017, "unit": "KiB", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgpgout", "value": 135512286, "unit": "KiB", "scope": "system", "source": "/proc/vmstat"}, {"name": "pswpin", "value": 7444086, "unit": "pages", "scope": "system", "source": "/proc/vmstat"}, {"name": "pswpout", "value": 13230724, "unit": "pages", "scope": "system", "source": "/proc/vmstat"}, {"name": "workingset_refault_file", "value": 980383749, "unit": "count", "scope": "system", "source": "/proc/vmstat"}, {"name": "device_read", "value": 6106321.5947265625, "unit": "MiB", "scope": "device", "source": "/sys/block/nvme0n1/stat"}, {"name": "device_read_ios", "value": 113264432, "unit": "count", "scope": "device", "source": "/sys/block/nvme0n1/stat"}, {"name": "device_io_ticks", "value": 24268312, "unit": "ms", "scope": "device", "source": "/sys/block/nvme0n1/stat"}], "unavailable": [{"name": "pgmajfault_delta", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "pgmajfault_rate", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "pgfault_delta", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "pgfault_rate", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "pgpgin_delta", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "pgpgin_rate", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "pgpgout_delta", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "pgpgout_rate", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "pswpin_delta", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "pswpin_rate", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "pswpout_delta", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "pswpout_rate", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "workingset_refault_file_delta", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "workingset_refault_file_rate", "backend": "io", "scope": "system", "reason": "first observation; interval unavailable"}, {"name": "device_read_delta", "backend": "io", "scope": "device", "reason": "first observation; interval unavailable"}, {"name": "device_read_rate", "backend": "io", "scope": "device", "reason": "first observation; interval unavailable"}, {"name": "device_read_ios_delta", "backend": "io", "scope": "device", "reason": "first observation; interval unavailable"}, {"name": "device_read_ios_rate", "backend": "io", "scope": "device", "reason": "first observation; interval unavailable"}, {"name": "device_io_ticks_delta", "backend": "io", "scope": "device", "reason": "first observation; interval unavailable"}, {"name": "device_io_ticks_rate", "backend": "io", "scope": "device", "reason": "first observation; interval unavailable"}, {"name": "device_util", "backend": "io", "scope": "device", "reason": "first observation; interval unavailable"}], "parse_errors": []}
+{"schema": "resource-observe/0", "ts": "2026-11-11T14:25:13.506696+00:00", "mono_s": 847187.220785231, "host_id": "jetson-arm", "backend": "proc", "seq": 1, "metrics": [{"name": "mem_total", "value": 7607.184, "unit": "MiB", "scope": "system", "source": "meminfo:MemTotal"}, {"name": "mem_available", "value": 5414.773, "unit": "MiB", "scope": "system", "source": "meminfo:MemAvailable"}, {"name": "mem_cached", "value": 3466.836, "unit": "MiB", "scope": "system", "source": "meminfo:Cached"}, {"name": "swap_total", "value": 3803.578, "unit": "MiB", "scope": "system", "source": "meminfo:SwapTotal"}, {"name": "swap_free", "value": 2911.289, "unit": "MiB", "scope": "system", "source": "meminfo:SwapFree"}, {"name": "load1", "value": 5.86, "unit": "load", "scope": "system", "source": "loadavg"}, {"name": "load5", "value": 2.8, "unit": "load", "scope": "system", "source": "loadavg"}, {"name": "load15", "value": 1.23, "unit": "load", "scope": "system", "source": "loadavg"}], "unavailable": [{"name": "nvmap", "backend": "proc", "reason": "no NvMap* fields in meminfo"}], "parse_errors": []}
+{"schema": "resource-observe/0", "ts": "2026-11-11T14:25:14.006762+00:00", "mono_s": 847187.720865254, "host_id": "jetson-arm", "backend": "io", "seq": 2, "metrics": [{"name": "pgmajfault", "value": 63957312, "unit": "count", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgmajfault_delta", "value": 83, "unit": "count", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgmajfault_rate", "value": 165.8031362873761, "unit": "count/s", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgfault", "value": 766496507, "unit": "count", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgfault_delta", "value": 11743, "unit": "count", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgfault_rate", "value": 23458.147342441658, "unit": "count/s", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgpgin", "value": 6252932845, "unit": "KiB", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgpgin_delta", "value": 57828, "unit": "KiB", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgpgin_rate", "value": 115518.8405448962, "unit": "KiB/s", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgpgout", "value": 135512286, "unit": "KiB", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgpgout_delta", "value": 0, "unit": "KiB", "scope": "system", "source": "/proc/vmstat"}, {"name": "pgpgout_rate", "value": 0.0, "unit": "KiB/s", "scope": "system", "source": "/proc/vmstat"}, {"name": "pswpin", "value": 7444087, "unit": "pages", "scope": "system", "source": "/proc/vmstat"}, {"name": "pswpin_delta", "value": 1, "unit": "pages", "scope": "system", "source": "/proc/vmstat"}, {"name": "pswpin_rate", "value": 1.997628148040676, "unit": "pages/s", "scope": "system", "source": "/proc/vmstat"}, {"name": "pswpout", "value": 13230724, "unit": "pages", "scope": "system", "source": "/proc/vmstat"}, {"name": "pswpout_delta", "value": 0, "unit": "pages", "scope": "system", "source": "/proc/vmstat"}, {"name": "pswpout_rate", "value": 0.0, "unit": "pages/s", "scope": "system", "source": "/proc/vmstat"}, {"name": "workingset_refault_file", "value": 980388018, "unit": "count", "scope": "system", "source": "/proc/vmstat"}, {"name": "workingset_refault_file_delta", "value": 4269, "unit": "count", "scope": "system", "source": "/proc/vmstat"}, {"name": "workingset_refault_file_rate", "value": 8527.874563985646, "unit": "count/s", "scope": "system", "source": "/proc/vmstat"}, {"name": "device_read", "value": 6106378.0986328125, "unit": "MiB", "scope": "device", "source": "/sys/block/nvme0n1/stat"}, {"name": "device_read_delta", "value": 56.50390625, "unit": "MiB", "scope": "device", "source": "/sys/block/nvme0n1/stat"}, {"name": "device_read_rate", "value": 112.87379359925147, "unit": "MiB/s", "scope": "device", "source": "/sys/block/nvme0n1/stat"}, {"name": "device_read_ios", "value": 113264948, "unit": "count", "scope": "device", "source": "/sys/block/nvme0n1/stat"}, {"name": "device_read_ios_delta", "value": 516, "unit": "count", "scope": "device", "source": "/sys/block/nvme0n1/stat"}, {"name": "device_read_ios_rate", "value": 1030.7761243889888, "unit": "count/s", "scope": "device", "source": "/sys/block/nvme0n1/stat"}, {"name": "device_io_ticks", "value": 24268708, "unit": "ms", "scope": "device", "source": "/sys/block/nvme0n1/stat"}, {"name": "device_io_ticks_delta", "value": 396, "unit": "ms", "scope": "device", "source": "/sys/block/nvme0n1/stat"}, {"name": "device_io_ticks_rate", "value": 791.0607466241077, "unit": "ms/s", "scope": "device", "source": "/sys/block/nvme0n1/stat"}, {"name": "device_util", "value": 79.10607466241076, "unit": "percent", "scope": "device", "source": "/sys/block/nvme0n1/stat"}], "unavailable": [], "parse_errors": []}
+{"schema": "resource-observe/0", "ts": "2026-11-11T14:25:14.007392+00:00", "mono_s": 847187.721480533, "host_id": "jetson-arm", "backend": "proc", "seq": 3, "metrics": [{"name": "mem_total", "value": 7607.184, "unit": "MiB", "scope": "system", "source": "meminfo:MemTotal"}, {"name": "mem_available", "value": 5288.715, "unit": "MiB", "scope": "system", "source": "meminfo:MemAvailable"}, {"name": "mem_cached", "value": 3523.262, "unit": "MiB", "scope": "system", "source": "meminfo:Cached"}, {"name": "swap_total", "value": 3803.578, "unit": "MiB", "scope": "system", "source": "meminfo:SwapTotal"}, {"name": "swap_free", "value": 2911.289, "unit": "MiB", "scope": "system", "source": "meminfo:SwapFree"}, {"name": "load1", "value": 5.71, "unit": "load", "scope": "system", "source": "loadavg"}, {"name": "load5", "value": 2.82, "unit": "load", "scope": "system", "source": "loadavg"}, {"name": "load15", "value": 1.25, "unit": "load", "scope": "system", "source": "loadavg"}], "unavailable": [{"name": "nvmap", "backend": "proc", "reason": "no NvMap* fields in meminfo"}], "parse_errors": []}
+2.20.928.549 I common_perf_print:        load time =   60357.82 ms
+2.20.928.580 I common_perf_print: prompt eval time =   34010.11 ms /   195 tokens (  174.41 ms per token,     5.73 tokens per second)
+2.20.928.587 I common_perf_print:        eval time =   45141.77 ms /    63 runs   (  716.54 ms per token,     1.40 tokens per second)
+2.20.928.589 I common_perf_print:       total time =   79269.33 ms /   258 tokens
+2.20.928.594 I common_perf_print: unaccounted time =      50.21 ms /   0.1 %      (total - sampling - prompt eval - eval) / (total)
+2.20.928.595 I common_perf_print:    graphs reused =         61
+2.20.928.595 I common_perf_print:   graph reallocs =          1    /     0        (same size) / (changed size)
+2.20.943.409 I common_memory_breakdown_print: | memory breakdown [MiB] | total   free     self   model   context   compute    unaccounted |
+2.20.943.416 I common_memory_breakdown_print: |   - CUDA0 (Orin)       |  7607 = 3309 + ( 2718 =  2038 +     142 +     537) +        1579 |
+2.20.943.416 I common_memory_breakdown_print: |   - Host               |                 19295 = 19275 +       0 +      20                |
+2.20.949.609 I expert_pregate: stats predictions=2457 arrivals=2457 hits=15908 actual=19656 predicted=19656 recall_at_k=0.809320 precision=0.809320 async_bytes_read=9136136192 async_reads=40437 async_errors=0 dropped=0 cancelled_jobs=2309 cancelled_bytes=1698582528 inflight_at_arrival=1227 inflight_reads=6523 pending_reads=8896 sync_bytes_with_prediction=5004955648 sync_bytes_without_prediction=603017216 sync_calls_with_prediction=2457 sync_calls_without_prediction=63 skips=0
+2.20.949.623 I expert_fill: stats calls=2520 ranges=60480 bytes_requested=38969561088 bytes_skipped_resident=33361588224 bytes_read=5607972864 read_syscalls=23924 total_fill_wall_ns=17232259935 max_single_fill_ns=50183373 prompt_calls=0 prompt_bytes_read=0 prompt_fill_wall_ns=0 decode_calls=2520 decode_bytes_read=5607972864 decode_fill_wall_ns=17232259935 populate_calls=0 populate_ns=0 populate_errors=0
+{
+  "id": "J-OM10c",
+  "outdir_base": "experiments/jetson/OM",
+  "runner": "om_run",
+  "tool": "llama-completion",
+  "argv": [
+    "-m",
+    "/om/model.gguf",
+    "-f",
+    "/om/prompts/p1.txt",
+    "-n",
+    "64",
+    "-c",
+    "4096",
+    "--temp",
+    "0",
+    "-s",
+    "1",
+    "-no-cnv",
+    "-ngl",
+    "99",
+    "-lm",
+    "mmap",
+    "-cmoe",
+    "-lv",
+    "4"
+  ],
+  "metric": "eval_tps",
+  "arms": {
+    "base": {
+      "image": "campaign/llamacpp:jetson-up1108-om10b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "0",
+        "LLAMA_EXPERT_FILL_RANDOM": "0",
+        "LLAMA_EXPERT_FILL_THREADS": "8",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "1024",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "0"
+      },
+      "expect_switch": false,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode"
+      ]
+    },
+    "pg8b": {
+      "image": "campaign/llamacpp:jetson-up1108-om10b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "8",
+        "LLAMA_EXPERT_PREGATE_ORDER": "after",
+        "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "4"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active",
+        "expert_pregate: stats"
+      ]
+    },
+    "pg8i8": {
+      "image": "campaign/llamacpp:jetson-up1108-om10b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "8",
+        "LLAMA_EXPERT_PREGATE_ORDER": "after",
+        "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "8"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active",
+        "expert_pregate: stats"
+      ]
+    },
+    "pg8i12": {
+      "image": "campaign/llamacpp:jetson-up1108-om10b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "8",
+        "LLAMA_EXPERT_PREGATE_ORDER": "after",
+        "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "12"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active",
+        "expert_pregate: stats"
+      ]
+    },
+    "pg10i8": {
+      "image": "campaign/llamacpp:jetson-up1108-om10b",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_MMAP_ADVICE": "default",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "10",
+        "LLAMA_EXPERT_PREGATE_ORDER": "after",
+        "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "8"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active",
+        "expert_pregate: stats"
+      ]
+    }
+  },
+  "order": "explicit",
+  "explicit_order": [
+    "base",
+    "pg8b",
+    "pg8i8",
+    "pg8i12",
+    "pg10i8",
+    "pg10i8",
+    "pg8i12",
+    "pg8i8",
+    "pg8b",
+    "base"
+  ]
+}
+
+exec
+/bin/bash -lc "cat cc/resource_observe/test_resource_observe.py; rg -n 'mono|exit|timestamp|telemetry|started|ended' cc/om_run/om_run.sh; ls /sys/class/devfreq; cat c2/METHODS.md | tail -30" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+import json, os, subprocess, sys
+import pytest
+import resource_observe as ro
+
+FX = os.path.join(os.path.dirname(__file__), "fixtures")
+def fx(n): return open(os.path.join(FX, n)).read()
+def names(ms): return {m["name"]: m for m in ms}
+
+def test_real_fixture():
+    for line in fx("tegrastats-idle-orin-nano-r36.5.txt").splitlines():
+        m, u, e = ro.parse_tegrastats(line)
+        d = names(m)
+        assert not e
+        assert d["ram_used"]["value"] == 1539 and d["ram_total"]["value"] == 7607
+        assert d["ram_used"]["scope"] == "system-shared-dram" and d["ram_used"]["unit"] == "MiB"
+        assert d["ram_lfb"]["value"] == 52 and d["swap_total"]["value"] == 3804 and d["swap_cached"]["value"] == 0
+        assert len([k for k in d if k.endswith("_load") and k.startswith("cpu")]) == 6
+        assert d["cpu4_freq"]["unit"] == "MHz"
+        assert d["gpu_util"]["value"] == 0 and d["temp_tj"]["unit"] == "celsius"
+        assert d["power_VDD_IN_instant"]["value"] > 4000 and d["power_VDD_IN_avg"]["unit"] == "mW"
+        assert "power_VDD_CPU_GPU_CV_avg" in d
+        assert any(x["name"] == "gpu_freq" for x in u) and any(x["name"] == "emc_freq" for x in u)
+        assert "gpu_freq" not in d and "emc_freq" not in d  # no false values
+
+def test_gr3d_and_emc_with_freq():
+    m, u, e = ro.parse_tegrastats("RAM 1/2MB SWAP 0/1MB CPU [1%@100,off] GR3D_FREQ 50%@[612] EMC_FREQ 7%@2133")
+    d = names(m)
+    assert d["gpu_freq"]["value"] == 612 and d["emc_freq"]["value"] == 2133 and d["emc_util"]["value"] == 7
+    assert any(x["name"] == "cpu1_load" and "offline" in x["reason"] for x in u)
+
+def test_empty_and_garbage():
+    m, u, e = ro.parse_tegrastats("")
+    assert not m and e and "line_sha256_16" in e[0]
+    m, u, e = ro.parse_tegrastats("complete garbage \x00")
+    assert not m and e and len(e[0]["line_sha256_16"]) == 16
+    assert ro.parse_tegrastats(None)[2]
+
+def test_truncated_and_missing_ram():
+    full = fx("tegrastats-idle-orin-nano-r36.5.txt").splitlines()[0]
+    m, u, e = ro.parse_tegrastats(full[:60])  # cut inside SWAP
+    assert "ram_used" in names(m)
+    m, u, e = ro.parse_tegrastats(full.replace("RAM 1539/7607MB (lfb 13x4MB) ", ""))
+    assert "ram_used" not in names(m) and e and any(x["name"] == "ram_used" for x in u)
+    assert "gpu_util" in names(m)  # rest still parsed
+
+def test_unknown_rails_and_extra_fields():
+    m, u, e = ro.parse_tegrastats("RAM 1/2MB SWAP 0/1MB CPU [1%@1] GR3D_FREQ 0% NEWFIELD 5 foo@12.5C VDD_WEIRD_X9 10mW/20mW")
+    d = names(m)
+    assert not e and d["power_VDD_WEIRD_X9_avg"]["value"] == 20 and d["temp_foo"]["value"] == 12.5
+
+def test_proc_fixtures(tmp_path):
+    (tmp_path / "meminfo").write_text(fx("proc-meminfo-orin-nano.txt"))
+    (tmp_path / "loadavg").write_text(fx("proc-loadavg-orin-nano.txt"))
+    m, u = ro.proc_sample(str(tmp_path))
+    d = names(m)
+    assert d["mem_total"]["value"] == pytest.approx(7789756 / 1024, rel=1e-6) and d["mem_total"]["unit"] == "MiB"
+    assert d["load1"]["value"] == 0.56
+    assert any(x["name"] == "nvmap" for x in u)
+
+def test_proc_missing_fields(tmp_path):
+    (tmp_path / "meminfo").write_text("MemTotal: 1024 kB\nNvMapMemUsed: 2048 kB\n")
+    m, u = ro.proc_sample(str(tmp_path))
+    d = names(m)
+    assert d["mem_total"]["value"] == 1.0 and d["meminfo_NvMapMemUsed"]["value"] == 2.0
+    un = {x["name"] for x in u}
+    assert {"mem_available", "swap_total", "loadavg"} <= un and "mem_available" not in d
+    m, u = ro.proc_sample(str(tmp_path / "nope"))
+    assert not m and u
+
+def test_pid_and_cgroup(tmp_path):
+    (tmp_path / "42").mkdir()
+    (tmp_path / "42" / "status").write_text("VmHWM:\t 2048 kB\nVmRSS:\t 1024 kB\n")
+    cg = tmp_path / "cg"; cg.mkdir()
+    (cg / "memory.current").write_text("1048576\n"); (cg / "memory.max").write_text("max\n")
+    m, u = ro.proc_sample(str(tmp_path), pid=42, cgroup=str(cg))
+    d = names(m)
+    assert d["pid_rss"]["value"] == 1.0 and d["pid_rss"]["scope"] == "process" and d["pid_hwm"]["value"] == 2.0
+    assert d["cgroup_current"]["scope"] == "cgroup" and "accounting_note" in d["cgroup_current"]
+    un = {x["name"] for x in u}
+    assert "cgroup_peak" in un and "cgroup_max" in un and "cgroup_max" not in d
+    m, u = ro.proc_sample(str(tmp_path), pid=999)
+    assert any(x["name"] == "pid_rss" for x in u) and "pid_rss" not in names(m)
+
+def test_no_double_count_scopes(tmp_path):
+    (tmp_path / "meminfo").write_text(fx("proc-meminfo-orin-nano.txt"))
+    (tmp_path / "7").mkdir(); (tmp_path / "7" / "status").write_text("VmRSS: 1024 kB\n")
+    cg = tmp_path / "cg"; cg.mkdir(); (cg / "memory.current").write_text("4096")
+    tm, _, _ = ro.parse_tegrastats(fx("tegrastats-idle-orin-nano-r36.5.txt").splitlines()[0])
+    pm, _ = ro.proc_sample(str(tmp_path), pid=7, cgroup=str(cg))
+    scopes = {x["scope"] for x in tm + pm if "ram" in x["name"] or "mem" in x["name"] or "pid" in x["name"] or "cgroup" in x["name"]}
+    assert {"system-shared-dram", "process", "cgroup"} <= scopes
+    # no metric aggregates across scopes
+    assert not [x for x in tm + pm if x["name"] in ("mem_sum", "total_used", "ram_plus_rss")]
+    assert names(tm)["ram_used"]["scope"] != names(pm)["pid_rss"]["scope"]
+
+def test_nvml_csv_with_na():
+    m, u = ro.parse_nvml_csv("1024, 8192, 37, 1500, 55, [N/A]\n", "123, python, 512\n")
+    d = names(m)
+    assert d["gpu_mem_used"]["value"] == 1024 and d["gpu_mem_used"]["scope"] == "device-discrete"
+    assert "gpu_power" not in d and any(x["name"] == "gpu_power" for x in u)
+    assert d["gpu_proc_mem_pid123"]["value"] == 512
+
+def test_nvml_all_na_is_unavailable_on_orin():
+    class R: returncode = 0; stdout = "[N/A], [N/A], [N/A], [N/A], [N/A], [N/A]\n"; stderr = ""
+    m, u = ro.nvml_sample(lambda a: R())
+    assert not m and any(x["name"] == "gpu_mem" for x in u)
+
+def test_sysfs_fixture_roots(tmp_path):
+    dv = tmp_path / "dv"; dv.mkdir()
+    for f, v in (("cur_freq", "306000000"), ("min_freq", "306000000"), ("max_freq", "1020000000")): (dv / f).write_text(v)
+    tz = tmp_path / "th" / "thermal_zone0"; tz.mkdir(parents=True)
+    (tz / "type").write_text("gpu-thermal\n"); (tz / "temp").write_text("48500\n")
+    m, u = ro.sysfs_sample(str(dv), str(tmp_path / "th"), nvpmodel_mode="MAXN_SUPER")
+    d = names(m)
+    assert d["gpu_freq_max"]["value"] == 1020 and d["thermal_thermal_zone0_gpu-thermal"]["value"] == 48.5
+    assert d["nvpmodel_mode"]["value"] == "MAXN_SUPER" and not u
+    m, u = ro.sysfs_sample(str(tmp_path / "none"), str(tmp_path / "none"), query_nvpmodel=False)
+    assert not m and len(u) >= 3
+
+def _write(path, recs):
+    with open(path, "w") as f:
+        for i, t in enumerate(recs):
+            f.write(json.dumps(ro.record("proc", i, [ro.M("x", float(i), "MiB", "system", "t")], mono=t)) + "\n")
+
+def test_summarize_gap_detection(tmp_path):
+    p = tmp_path / "a.jsonl"
+    _write(p, [0, 0.5, 1.0, 2.5, 3.0])
+    s = ro.summarize(str(p), interval_ms=500)
+    c = s["coverage"]["proc"]
+    assert c["received"] == 5 and c["expected"] == 7 and len(c["gaps_gt_2x"]) == 1 and c["gaps_gt_2x"][0]["gap_s"] == 1.5
+    x = s["metrics"]["proc/x"]
+    assert (x["min"], x["max"], x["high_water"]) == (0.0, 4.0, 4.0) and x["mean"] == 2.0
+
+def test_summarize_no_gaps(tmp_path):
+    p = tmp_path / "b.jsonl"; _write(p, [0, 0.5, 1.0])
+    assert ro.summarize(str(p), 500)["coverage"]["proc"]["gaps_gt_2x"] == []
+
+def test_cli_sample_fake_and_summarize(tmp_path):
+    out = tmp_path / "o.jsonl"
+    here = os.path.dirname(__file__)
+    r = subprocess.run([sys.executable, os.path.join(here, "resource_observe.py"), "sample", "--backends", "proc",
+                        "--interval-ms", "100", "--duration-s", "0.3", "--out", str(out)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    recs = [json.loads(l) for l in open(out)]
+    assert len(recs) >= 3 and all(x["schema"] == ro.SCHEMA and x["backend"] == "proc" for x in recs)
+    assert recs[0]["seq"] == 0 and {"ts", "mono_s", "host_id", "metrics", "unavailable", "parse_errors"} <= set(recs[0])
+
+
+def test_campaign_host_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(ro.socket, "gethostname", lambda: "fallback-host")
+    assert ro.record("proc", 0, [])['host_id'] == "fallback-host"
+    path = tmp_path / ".config" / "siminfeng" / "host_id"
+    path.parent.mkdir(parents=True)
+    path.write_text("jetson-arm\n")
+    assert ro.record("proc", 0, [])['host_id'] == "jetson-arm"
+    assert ro.record("proc", 0, [], host_id="explicit")['host_id'] == "explicit"
+    path.write_text("\n")
+    assert ro.record("proc", 0, [])['host_id'] == "fallback-host"
+17:   -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro "$IMG" /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
+22:   --duration-s ${OM_MAX_S:-1800} --out "$OUT/telemetry.jsonl" >/dev/null 2>&1 & SM=$!
+48:json.dump(dict(exit_code=code,wall_s=round(float(t1)-float(t0),2),
+15340000.vic
+15380000.nvjpg
+15480000.nvdec
+15540000.nvjpg
+15a50000.ofa
+17000000.gpu
+- Avoid whole-file MADV_RANDOM (D033), cross-workload static hot sets, separate
+  GPU expert banks on UMA (D030/D032), or interpreting hit rate as speed.
+- Do not use cgroup/--memory as a Tegra CUDA/shared-DRAM cap (D028), NUMA on a
+  single node as readahead control, batch-512 ppl as decode qualification, or
+  Q8_0 gate/up unfusing on Orin (D027). Keep negative/null results.
+- Do not compare raw t/s across hosts or binary hashes as build equivalence.
+- Never wait/kill by pgrep -f/pkill -f shell patterns: self-match caused 8.7 h
+  idle and killed a closeout shell. Use job IDs/PIDs and owned process groups.
+- sudo needs the owner's password; agents cannot supply it. No unassigned
+  clocks, power, drivers, runtime configuration or root profiler changes.
+- Older shells lack new docker group membership: use DOCKER_CMD_PREFIX='sg
+  docker -c' where supported. Keep the entire Docker command one quoted argument;
+  D029's unquoted nested kill command ran Docker help instead of killing.
+- Host binaries may retain RUNPATH to deleted staging: set LD_LIBRARY_PATH to
+  actual retained libraries. Images require --runtime nvidia even for CPU tools;
+  generic arm64 images need NVIDIA_VISIBLE_DEVICES=all and
+  NVIDIA_DRIVER_CAPABILITIES=compute,utility (D022).
+- System numpy is broken here; converters use ~/venvs/convert; stdlib tooling
+  avoids that dependency. Strata's x86-only Nix flake is not a Jetson build path.
+- nsys stale SQLite exports can yield zero-byte CSV: use --force-export=true and
+  inspect rows. Do not hide command exit status behind a pipe to tail.
+- D024: never stage a live build directory. Keep archives/build/staging outputs
+  gitignored, inspect staged stats before any authorized commit, retain recipes
+  and identity records. Retrying means new output paths, not overwritten evidence.
+- Test fixtures must be captured from real tool output, never hand-written. kernel_screen's fixture used `q4_k`
+  (real ggml name `q4_K`), so tests passed while every q4_K screen matched zero cases (KS-20261110-1620,
+  KS-q4K-20261111; c2/worklog.jsonl). Same rule for log-line regexes used as switch-active checks.
+- Any worker not started through jobq (Codex, check-in agents) is invisible to the contamination rule: J-OM8 run
+  001-base overlapped two Codex sessions. Launch workers as jobq `cpu` jobs (c2/codex_job.sh) and run check-ins
+  only when no gpu job is running.
+
+exec
+/bin/bash -lc "cat experiments/jetson/OM/J-OM10c/003-pg8i8/result.json; cat cc/om_run/om_run.sh; sed -n '125,195p' cc/abrun/abrun.py; head -2 experiments/jetson/OM/J-OM10c/003-pg8i8/stderr.txt; tail -1 experiments/jetson/OM/J-OM10c/003-pg8i8/telemetry.jsonl; ls /sys/class/devfreq/17000000.gpu; rg --files cc/abrun cc/resource_observe -g AGENTS.md" in /home/muk/projects/siminfeng/campaign
+ exited 1 in 0ms:
+{
+ "exit_code": 0,
+ "wall_s": 143.18,
+ "oom_killed": false,
+ "watchdog_trips": 0,
+ "status": "ok",
+ "host_id": "jetson-arm",
+ "image": "campaign/llamacpp:jetson-up1108-om10b",
+ "env": "-e LLAMA_EXPERT_FILL=1 -e LLAMA_EXPERT_FILL_RANDOM=decode -e LLAMA_EXPERT_FILL_THREADS=16 -e LLAMA_EXPERT_FILL_CHUNK_KIB=2048 -e LLAMA_EXPERT_PREFETCH=0 -e LLAMA_EXPERT_PREFETCH_NEXT=0 -e LLAMA_MMAP_ADVICE=default -e LLAMA_EXPERT_FILL_MAX_TOKENS=1 -e LLAMA_EXPERT_FILL_MIN_TOKENS=0 -e LLAMA_EXPERT_FILL_POPULATE=0 -e LLAMA_EXPERT_PREGATE=1 -e LLAMA_EXPERT_PREGATE_K=8 -e LLAMA_EXPERT_PREGATE_ORDER=after -e LLAMA_EXPERT_PREGATE_MAX_INFLIGHT=8",
+ "argv": [
+  "llama-completion",
+  "-m",
+  "/om/model.gguf",
+  "-f",
+  "/om/prompts/p1.txt",
+  "-n",
+  "64",
+  "-c",
+  "4096",
+  "--temp",
+  "0",
+  "-s",
+  "1",
+  "-no-cnv",
+  "-ngl",
+  "99",
+  "-lm",
+  "mmap",
+  "-cmoe",
+  "-lv",
+  "4"
+ ]
+}#!/usr/bin/env bash
+# om_run.sh — guarded over-memory engine run on jetson-arm.
+# usage: om_run.sh OUTDIR IMAGE "ENV_FLAGS" TOOL ARGS...
+#   e.g. om_run.sh experiments/jetson/OM/b1-r1 campaign/llamacpp:jetson-c1-p03 "" llama-bench -m /om/model.gguf -lm mmap -ngl 99 -cmoe -p 64 -n 32 -r 2
+# Model dir ~/models/campaign/qwen36-35b-a3b is mounted read-only at /om. Watchdog kills ONLY this container
+# when MemAvailable < OM_MIN_AVAIL_MIB (default 700) or zram swap used > OM_MAX_SWAP_MIB (default 1536).
+set -u
+OUT=$1; IMG=$2; ENVF=$3; TOOL=$4; shift 4
+R=$(cd "$(dirname "$0")/../.." && pwd); mkdir -p "$OUT"
+NAME="om-$(date +%s)-$$"
+MODELDIR=${OM_MODELDIR:-$HOME/models/campaign/qwen36-35b-a3b}
+DATADIR=$HOME/models/campaign/data/wikitext/wikitext-2-raw
+DP=${DOCKER_CMD_PREFIX:-}
+dk(){ if [ -n "$DP" ]; then $DP "docker $*"; else docker "$@"; fi; }
+printf '%s\n' "$IMG" "$ENVF" "$TOOL $*" > "$OUT/cmd.txt"
+dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
+   -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro "$IMG" /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
+if [ -n "$DP" ]; then KILLCMD="$DP 'docker kill $NAME'"; else KILLCMD="docker kill $NAME"; fi
+python3 "$R/cc/resource_observe/resource_observe.py" watchdog --min-available-mib ${OM_MIN_AVAIL_MIB:-600} \
+   --max-swap-used-mib ${OM_MAX_SWAP_MIB:-2560} --max-swap-rate-mibs ${OM_MAX_SWAP_RATE:-1000} --interval-ms 250 --kill-cmd "$KILLCMD" --out "$OUT/watchdog.jsonl" & WD=$!
+python3 "$R/cc/resource_observe/resource_observe.py" sample --backends io,proc,tegrastats --path "$MODELDIR" --interval-ms 500 \
+   --duration-s ${OM_MAX_S:-1800} --out "$OUT/telemetry.jsonl" >/dev/null 2>&1 & SM=$!
+T0=$(date +%s.%N)
+RC=$(dk wait "$NAME"); T1=$(date +%s.%N)
+kill $WD $SM 2>/dev/null; wait $WD 2>/dev/null; WDRC=$?
+dk logs "$NAME" > "$OUT/stdout.txt" 2> "$OUT/stderr.txt"
+OOM=$(dk inspect "$NAME" --format '{{.State.OOMKilled}}')
+dk rm "$NAME" > /dev/null
+TRIP=$(grep -c watchdog_trip "$OUT/watchdog.jsonl" 2>/dev/null); TRIP=${TRIP:-0}
+python3 - "$OUT" "$RC" "$T0" "$T1" "$OOM" "$TRIP" "$IMG" "$ENVF" "$TOOL" "$@" <<'PY'
+import json,sys,os,socket
+o,rc,t0,t1,oom,trip,image,env,*argv=sys.argv[1:]
+code=int(rc.strip() or -1)
+tripped=int(trip)>0
+if tripped and code in (137, -9):
+    status="watchdog_tripped_killed"
+elif tripped and code == 0:
+    status="watchdog_tripped_survived"
+elif oom.strip()=="true":
+    status="oom_killed"
+else:
+    status="ok" if code == 0 else "failed"
+try:
+    with open(os.path.expanduser("~/.config/siminfeng/host_id")) as f:
+        host_id=f.read().strip() or socket.gethostname()
+except OSError:
+    host_id=socket.gethostname()
+json.dump(dict(exit_code=code,wall_s=round(float(t1)-float(t0),2),
+  oom_killed=oom.strip()=="true",watchdog_trips=int(trip),status=status,
+  host_id=host_id,image=image,env=env,argv=argv),open(o+"/result.json","w"),indent=1)
+print(open(o+"/result.json").read())
+PY
+    legacy = spec.get('switch_regex', [])
+    if legacy and not any(matches.get(p, 0) for p in legacy):
+        errors.append(f'{arm}: switch inert (no switch_lines matching spec switch_regex)')
+    return errors
+
+
+def write_report(out, spec, runs, verdict):
+    (out / 'verdict.json').write_text(json.dumps(verdict, indent=2) + '\n')
+    lines = [f"# {spec['id']}", '', f"Status: {verdict['status']}", '',
+             '| # | Arm | Status | Metric | Wall s | Output SHA | Switch matches |',
+             '|---|---|---|---:|---:|---|---|']
+    metric = spec.get('metric', 'eval_tps')
+    for row in runs:
+        s = row['summary']
+        matches = json.dumps(s.get('switch_matches', {})).replace('|', '&#124;')
+        lines.append(f"| {row['index']} | {row['arm']} | {s['status']} | {s.get(metric)} | {s['wall_s']} | {s['output_sha']} | {matches} |")
+    lines += ['', f'Metric: {metric} (higher is better)', '', '| Arm | Mean | B/A | Gate |',
+              '|---|---:|---:|---|']
+    for arm, mean in verdict['means'].items():
+        comparison = verdict['comparisons'].get(arm, {})
+        lines.append(f"| {arm} | {mean} | {comparison.get('ratio', '—')} | {comparison.get('verdict', 'base')} |")
+    lines += ['', '## Secondary metrics (descriptive; no verdict)', '',
+              '| Arm | NVMe GiB/token | Prompt t/s | Eval t/s |',
+              '|---|---:|---:|---:|']
+    for arm, metrics in verdict['secondary_metrics'].items():
+        lines.append('| ' + ' | '.join(str(v) for v in [arm, *metrics.values()]) + ' |')
+    lines += ['', f"A/A gap: {verdict['aa_gap']}; drift: {verdict['drift']}; threshold: {verdict['threshold']}",
+              '', f"Output class: {verdict['output']['class']}", '',
+              'Output details: `' + json.dumps(verdict['output']) + '`', '',
+              *verdict.get('invalid_reasons', []), *verdict.get('reasons', [])]
+    (out / 'REPORT.md').write_text('\n'.join(lines) + '\n')
+
+
+def execute(spec, out, runs):
+    # Exclusive creation refuses accidental overwrite/replay into prior results.
+    out.mkdir(parents=True, exist_ok=False)
+    (out / 'spec.json').write_text(json.dumps(spec, indent=2) + '\n')
+    grouped = {arm: [] for arm in spec['arms']}
+    completed, invalid = [], []
+    try:
+        checked = set()
+        for arm in spec['arms'].values():
+            key = (arm['image'], spec['tool'])
+            if key not in checked:
+                preflight.check(*key, spec['argv'])
+                checked.add(key)
+        for run in runs:
+            rc = subprocess.run(run['command'], cwd=ROOT).returncode
+            summary = run_summary.summarize(run['dir'], switch_patterns(spec))
+            run['summary'] = summary
+            completed.append(run)
+            grouped[run['arm']].append(summary)
+            invalid.extend(switch_errors(spec, run['arm'], summary))
+            if rc != 0 or summary['status'] != 'ok':
+                invalid.append(f"{run['arm']}: runner rc={rc}, status={summary['status']}")
+            if invalid:
+                break
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        invalid.append(str(exc))
+    verdict = gate.evaluate(grouped, spec.get('metric', 'eval_tps'))
+    if verdict['reasons']:
+        invalid.extend(verdict['reasons'])
+    verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+                   planned_order=[r['arm'] for r in runs],
+                   executed_order=[r['arm'] for r in completed])
+    if invalid:
+        for comparison in verdict['comparisons'].values():
+            comparison['verdict'] = 'null'
+    write_report(out, spec, completed, verdict)
+    print(json.dumps(verdict, indent=2))
+    return 1 if invalid else 0
+0.00.017.949 I llama_completion: llama backend init
+0.00.017.969 I llama_completion: load the model and apply lora adapter, if any
+{"schema": "resource-observe/0", "ts": "2026-11-11T14:27:36.155702+00:00", "mono_s": 847329.869798093, "host_id": "jetson-arm", "backend": "proc", "seq": 852, "metrics": [{"name": "mem_total", "value": 7607.184, "unit": "MiB", "scope": "system", "source": "meminfo:MemTotal"}, {"name": "mem_available", "value": 5429.184, "unit": "MiB", "scope": "system", "source": "meminfo:MemAvailable"}, {"name": "mem_cached", "value": 3183.754, "unit": "MiB", "scope": "system", "source": "meminfo:Cached"}, {"name": "swap_total", "value": 3803.578, "unit": "MiB", "scope": "system", "source": "meminfo:SwapTotal"}, {"name": "swap_free", "value": 2864.359, "unit": "MiB", "scope": "system", "source": "meminfo:SwapFree"}, {"name": "load1", "value": 6.41, "unit": "load", "scope": "system", "source": "loadavg"}, {"name": "load5", "value": 3.65, "unit": "load", "scope": "system", "source": "loadavg"}, {"name": "load15", "value": 1.74, "unit": "load", "scope": "system", "source": "loadavg"}], "unavailable": [{"name": "nvmap", "backend": "proc", "reason": "no NvMap* fields in meminfo"}], "parse_errors": []}
+available_frequencies
+available_governors
+cur_freq
+device
+governor
+max_freq
+min_freq
+name
+polling_interval
+power
+subsystem
+target_freq
+timer
+trans_stat
+uevent
+
+codex
+The logs have relative engine timestamps, but no absolute start mapping. I’ll anchor decode end to the last telemetry sample and subtract `eval_ms_total`, as specified. The summary will record sampling uncertainty and the unknown exit delay. Historical regating will recompute from stderr and telemetry in read-only mode.
+
+exec
+/bin/bash -lc "cat > /tmp/h5_edit.py <<'PY'
+from pathlib import Path
+p=Path('cc/abrun/run_summary.py')
+s=p.read_text().replace(\"    # Preserve both the benchmark average\", \"\"\"    for key, expression in [
+            ('eval_ms_per_token', r'(?<"'!prompt )'"\\\\beval time.*?\\\\(\\\\s*([\\\\d.]+) ms per token'),
+            ('prompt_ms_per_token', r'prompt eval time.*?\\\\(\\\\s*([\\\\d.]+) ms per token'),
+            ('eval_ms_total', r'(?<"'!prompt )'"\\\\beval time\\\\s*=\\\\s*([\\\\d.]+) ms'),
+            ('eval_runs', r'(?<"'!prompt )'"\\\\beval time.*?/\\\\s*(\\\\d+) (?:runs|tokens)'),
+            ('load_ms', r'\\\\bload time\\\\s*=\\\\s*([\\\\d.]+) ms')]:
+        matches = re.findall(expression, stderr)
+        value = float(matches[-1]) if matches else None
+        put(key, int(value) if key == 'eval_runs' and value is not None else value,
+            'performance line absent or invalid')
+
+    # Preserve both the benchmark average\"\"\")
+s=s.replace('    values = {}', '    values = {}\\n    timed = {}\\n    clocks = {}')
+s=s.replace(\"            values.setdefault(name, []).append(value)\", \"\"\"            elif name in ('gpu_freq', 'gpu_freq_cur', 'emc_freq') and metric.get('unit') == 'Hz':
+                value /= 1e6  # Summary clocks are MHz, including legacy telemetry.
+            values.setdefault(name, []).append(value)
+            clock = row.get('mono_s')
+            if numeric(clock):
+                timed.setdefault(name, []).append((clock, value))\"\"\")
+s=s.replace(\"        local = {}\", \"\"\"        if numeric(row.get('mono_s')):
+            clocks.setdefault(str(row.get('backend', 'unknown')), []).append(row['mono_s'])
+        local = {}\"\"\")
+pos=s.index('    if write:')
+s=s[:pos]+'''    # Legacy stderr timestamps have no origin on the telemetry clock. Never
+    # equate them to host uptime. Use the explicit, auditable fallback below.
+    all_times = [t for ts in clocks.values() for t in ts]
+    duration = result['eval_ms_total']
+    start = end = load_start = load_end = None
+    if all_times:
+        load_start, end = min(all_times), max(all_times)
+        if numeric(duration) and duration > 0:
+            start = end - duration / 1000
+        if numeric(result['load_ms']) and result['load_ms'] >= 0:
+            load_end = load_start + result['load_ms'] / 1000
+    intervals = [b - a for ts in clocks.values()
+                 for a, b in zip(sorted(set(ts)), sorted(set(ts))[1:])]
+    result['phase_windows'] = {
+        'clock': 'mono_s', 'method': 'last_telemetry_before_exit_minus_eval_ms_total',
+        'decode_start': start, 'decode_end': end, 'load_start': load_start, 'load_end': load_end,
+        'sampling_error_bound_s': max(intervals) if intervals else None,
+        'absolute_error_bound_s': None,
+        'error_note': 'Endpoint sampling error is at most the largest observed backend interval '
+                      'assuming sampling continued until exit. Engine teardown/exit lag is unknown; '
+                      'no finite absolute phase alignment bound is available. Load begins at first '
+                      'telemetry sample; startup offset is also unknown.'}
+
+    def series(name):
+        return sorted(dict(timed.get(name, [])).items())
+
+    def clipped(name, lo, hi):
+        points = series(name)
+        if lo is None or hi is None or hi <= lo or len(points) < 2:
+            return []
+        if lo < points[0][0] or hi > points[-1][0]:
+            return []  # No extrapolation across missing coverage.
+        def at(t):
+            for (a, x), (b, y) in zip(points, points[1:]):
+                if a <= t <= b:
+                    return x + (y - x) * (t - a) / (b - a)
+        return [(lo, at(lo)), *[(t, v) for t, v in points if lo < t < hi], (hi, at(hi))]
+
+    # Different backends are emitted sequentially. Clip the endpoint to the
+    # last available counter/power sample (normally microseconds earlier).
+    def covered_end(name, hi):
+        points = series(name)
+        return min(hi, points[-1][0]) if hi is not None and points else hi
+
+    def phase_read(lo, hi):
+        points = clipped('device_read', lo, covered_end('device_read', hi))
+        if not points or any(b < a for (_, a), (_, b) in zip(points, points[1:])):
+            return None
+        return (points[-1][1] - points[0][1]) / 1024 ** 2
+
+    put('nvme_gib_decode', phase_read(start, end), 'need decode timing and covered device_read counters')
+    put('nvme_gib_load', phase_read(load_start, load_end), 'need load timing and covered device_read counters')
+    runs = result['eval_runs']
+    put('nvme_gib_per_token_decode', result['nvme_gib_decode'] / runs
+        if result['nvme_gib_decode'] is not None and runs and runs > 0 else None,
+        'need decode NVMe delta and positive eval_runs')
+    def window_values(names):
+        return next(([v for t, v in series(n) if start <= t <= end]
+                     for n in names if timed.get(n)), []) if start is not None else []
+
+    for key, names, fn in [
+            ('gpu_util_median', ['gpu_util'], statistics.median),
+            ('gpu_util_p90', ['gpu_util'], lambda v: sorted(v)[math.ceil(.9 * len(v)) - 1]),
+            ('device_util_median', ['device_util'], statistics.median),
+            ('power_in_w_median', ['power_VDD_IN_instant'], lambda v: statistics.median(v) / 1000),
+            ('temp_tj_max', ['temp_tj'], max),
+            ('gpu_freq_median', ['gpu_freq', 'gpu_freq_cur'], statistics.median),
+            ('emc_freq_median', ['emc_freq'], statistics.median)]:
+        samples = window_values(names)
+        # Keep legacy whole-run frequency support when no decode timing exists.
+        if key == 'gpu_freq_median' and start is None:
+            samples = next((values[n] for n in names if values.get(n)), [])
+        put(key, fn(samples) if samples else None, 'no decode-window samples: ' + ', '.join(names))
+    power = clipped('power_VDD_IN_instant', start,
+                    covered_end('power_VDD_IN_instant', end))
+    joules = sum((b - a) * (x + y) / 2000
+                 for (a, x), (b, y) in zip(power, power[1:])) if power else None
+    put('energy_j_per_token', joules / runs if joules is not None and runs and runs > 0 else None,
+        'need covered instant VDD_IN power, decode timing and positive eval_runs')
+''' +s[pos:]
+p.write_text(s)
+PY
+python3 /tmp/h5_edit.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc "cat > /tmp/h5_resource.py <<'PY'
+from pathlib import Path
+p=Path('cc/resource_observe/resource_observe.py')
+s=p.read_text().replace('GPU_DEVFREQ = \"/sys/devices/platform/17000000.gpu/devfreq/17000000.gpu\"','DEVFREQ_ROOT = \"/sys/class/devfreq\"')
+marker='# ---------------- sysfs_tegra ----------------\\n'
+s=s.replace(marker, marker+'''def discover_gpu_devfreq(root=DEVFREQ_ROOT):
+    return next(iter(sorted(glob.glob(os.path.join(root, \"*.gpu\")))) , None)
+
+
+def frequency_sample(devfreq=None, devfreq_root=DEVFREQ_ROOT):
+    \"\"\"Read public devfreq clocks without sudo; raw frequencies are Hz.\"\"\"
+    devfreq = devfreq or discover_gpu_devfreq(devfreq_root)
+    m, un = [], []
+    t = (_read(os.path.join(devfreq, \"cur_freq\")) or \"\").strip() if devfreq else \"\"
+    if t.isdigit():
+        m.append(M(\"gpu_freq\", int(t), \"Hz\", \"gpu\", str(devfreq) + \"/cur_freq\"))
+    else:
+        un.append(U(\"gpu_freq\", \"sysfs_tegra\", \"*.gpu/cur_freq absent or unreadable\"))
+    emc = sorted(glob.glob(os.path.join(devfreq_root, \"*emc*\")))
+    for path in emc:
+        t = (_read(os.path.join(path, \"cur_freq\")) or \"\").strip()
+        if t.isdigit():
+            m.append(M(\"emc_freq\", int(t), \"Hz\", \"system\", path + \"/cur_freq\"))
+            break
+    return m, un
+
+
+''')
+s=s.replace('def sysfs_sample(devfreq=GPU_DEVFREQ,', 'def sysfs_sample(devfreq=None,')
+s=s.replace('    if not os.path.isdir(devfreq):', '    devfreq = devfreq or discover_gpu_devfreq()\\n    if not devfreq or not os.path.isdir(devfreq):',1)
+s=s.replace('    zones = sorted(glob.glob', '    fm, fu = frequency_sample(devfreq)\\n    m.extend(fm)\\n    un.extend(fu)\\n    zones = sorted(glob.glob',1)
+s=s.replace('def capabilities(devfreq=GPU_DEVFREQ,', 'def capabilities(devfreq=None,')
+s=s.replace('    has = os.path.isdir(devfreq)', '    has = bool(devfreq and os.path.isdir(devfreq)) if devfreq else bool(discover_gpu_devfreq())')
+# Existing runners request tegrastats explicitly: augment those samples as well.
+s=s.replace('def cmd_sample(a):', '''def observed_tegrastats(line):
+    m, u, e = parse_tegrastats(line)
+    clocks, missing = frequency_sample()
+    have = {x[\"name\"] for x in clocks}
+    m = [x for x in m if x[\"name\"] not in have] + clocks
+    u = [x for x in u if x[\"name\"] not in have]
+    u.extend(x for x in missing if not any(y[\"name\"] == x[\"name\"] for y in m + u))
+    return m, u, e
+
+
+def cmd_sample(a):''')
+s=s.replace('m, u, e = parse_tegrastats(l)', 'm, u, e = observed_tegrastats(l)')
+p.write_text(s)
+PY
+python3 /tmp/h5_resource.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+exec
+/bin/bash -lc 'python3 cc/resource_observe/resource_observe.py --help; python3 cc/resource_observe/resource_observe.py sample --backends sysfs_tegra --duration-s 3 --out /tmp/h5-gpu-sample.jsonl; python3 cc/abrun/run_summary.py experiments/jetson/OM/J-OM10c/003-pg8i8 --no-write --json' in /home/muk/projects/siminfeng/campaign
+ succeeded in 3411ms:
+usage: resource_observe.py [-h] {sample,summarize,capabilities,watchdog} ...
+
+positional arguments:
+  {sample,summarize,capabilities,watchdog}
+
+options:
+  -h, --help            show this help message and exit
+{
+  "dir": "experiments/jetson/OM/J-OM10c/003-pg8i8",
+  "reasons": {
+    "pp_avg_ts": "no matching llama-bench JSON row",
+    "pp_samples_ts": "no matching llama-bench JSON row",
+    "pp_steady": "no matching llama-bench JSON row",
+    "tg_avg_ts": "no matching llama-bench JSON row",
+    "tg_samples_ts": "no matching llama-bench JSON row",
+    "tg_steady": "no matching llama-bench JSON row",
+    "gpu_freq_median": "no decode-window samples: gpu_freq, gpu_freq_cur",
+    "emc_freq_median": "no decode-window samples: emc_freq"
+  },
+  "warnings": [],
+  "status": "ok",
+  "wall_s": 143.18,
+  "output_sha": "7a1541792364",
+  "switch_matches": {},
+  "switch_lines": [],
+  "prompt_tps": 5.73,
+  "eval_tps": 1.4,
+  "load_s": 60.35782,
+  "eval_tokens": 63.0,
+  "eval_ms_per_token": 716.54,
+  "prompt_ms_per_token": 174.41,
+  "eval_ms_total": 45141.77,
+  "eval_runs": 63,
+  "load_ms": 60357.82,
+  "bench": {
+    "pp": [],
+    "tg": []
+  },
+  "pp_avg_ts": null,
+  "pp_samples_ts": null,
+  "pp_steady": null,
+  "tg_avg_ts": null,
+  "tg_samples_ts": null,
+  "tg_steady": null,
+  "nvme_gib": 54.24807357788086,
+  "avg_kib_per_io": 96.33730369085745,
+  "nvme_gib_per_token": 0.8610805329822359,
+  "mem_available_min_mib": 2982.152,
+  "swap_max_mib": 1270.0,
+  "gpu_freq_median": null,
+  "phase_windows": {
+    "clock": "mono_s",
+    "method": "last_telemetry_before_exit_minus_eval_ms_total",
+    "decode_start": 847284.728028093,
+    "decode_end": 847329.869798093,
+    "load_start": 847187.220192769,
+    "load_end": 847247.578012769,
+    "sampling_error_bound_s": 1.0011363259982318,
+    "absolute_error_bound_s": null,
+    "error_note": "Endpoint sampling error is at most the largest observed backend interval assuming sampling continued until exit. Engine teardown/exit lag is unknown; no finite absolute phase alignment bound is available. Load begins at first telemetry sample; startup offset is also unknown."
+  },
+  "nvme_gib_decode": 15.255615626200779,
+  "nvme_gib_load": 22.817959868456455,
+  "nvme_gib_per_token_decode": 0.24215262898731396,
+  "gpu_util_median": 18.0,
+  "gpu_util_p90": 36,
+  "device_util_median": 89.48544627653185,
+  "power_in_w_median": 7.158,
+  "temp_tj_max": 52.093,
+  "emc_freq_median": null,
+  "energy_j_per_token": 5.130958057657607
+}
+
+exec
+/bin/bash -lc "cat > /tmp/h5_gate.py <<'PY'
+from pathlib import Path
+p=Path('cc/abrun/gate.py'); s=p.read_text().replace('A/A-aware, higher-is-better performance gate', 'A/A-aware, direction-aware performance gate')
+s=s.replace(\"def evaluate(arms, metric='eval_tps', base='base'):\", \"\"\"SECONDARY_FIELDS = ('nvme_gib_per_token', 'prompt_tps', 'eval_tps', 'eval_ms_per_token',
+                    'nvme_gib_per_token_decode', 'gpu_util_median', 'energy_j_per_token')
+
+
+def metric_direction(metric, direction=None):
+    direction = direction or ('lower' if metric == 'eval_ms_per_token' else 'higher')
+    if direction not in ('lower', 'higher'):
+        raise ValueError('direction must be lower or higher')
+    return direction
+
+
+def secondary_table(verdict):
+    fields = ('eval_ms_per_token', 'nvme_gib_per_token_decode', 'gpu_util_median',
+              'energy_j_per_token', 'nvme_gib_per_token', 'prompt_tps', 'eval_tps')
+    lines = ['| Arm | ms/token | NVMe GiB/token (decode) | gpu_util med (%) | J/token | NVMe GiB/token (whole) | Prompt t/s | Eval t/s |',
+             '|---|---:|---:|---:|---:|---:|---:|---:|']
+    for arm, metrics in verdict['secondary_metrics'].items():
+        values = [format(metrics[f], '.6g') if finite(metrics.get(f)) else '—' for f in fields]
+        lines.append('| ' + ' | '.join([arm, *values]) + ' |')
+    return '\\\\n'.join(lines)
+
+
+def evaluate(arms, metric='eval_tps', base='base', direction=None):
+    direction = metric_direction(metric, direction)\"\"\")
+s=s.replace(\"        verdict = 'null'\", \"        if ratio is not None and direction == 'lower':\\n            ratio = 1 / ratio\\n        verdict = 'null'\")
+s=s.replace(\"for field in ('nvme_gib_per_token', 'prompt_tps', 'eval_tps'):\", 'for field in SECONDARY_FIELDS:')
+s=s.replace(\"'metric': metric, 'base': base\", \"'metric': metric, 'direction': direction, 'base': base\")
+s=s.replace(\"parser.add_argument('--metric', default='eval_tps')\", \"parser.add_argument('--metric', default='eval_ms_per_token')\\n    parser.add_argument('--direction', choices=['lower', 'higher'])\")
+s=s.replace('evaluate(arms, args.metric, args.base)', 'evaluate(arms, args.metric, args.base, args.direction)')
+p.write_text(s)
+p=Path('cc/abrun/abrun.py'); s=p.read_text().replace(\"spec.get('metric', 'eval_tps')\", \"spec.get('metric', 'eval_ms_per_token')\")
+s=s.replace(\"        raise ValueError('metric must be a summary field name')\", \"        raise ValueError('metric must be a summary field name')\\n    gate.metric_direction(spec.get('metric', 'eval_ms_per_token'), spec.get('direction'))\")
+s=s.replace(\"f'Metric: {metric} (higher is better)'\", \"f\\\"Metric: {metric} ({verdict['direction']} is better)\\\"\")
+s=s.replace(\"'| Arm | Mean | B/A | Gate |'\", \"f\\\"| Arm | Mean | {'A/B' if verdict['direction'] == 'lower' else 'B/A'} | Gate |\\\"\")
+a=s.index(\"    lines += ['', '## Secondary metrics\"); b=s.index(\"    lines += ['', f\\\"A/A gap\",a)
+s=s[:a]+\"    lines += ['', '## Secondary metrics (descriptive; no verdict)', '', gate.secondary_table(verdict)]\\n\"+s[b:]
+s=s.replace(\"gate.evaluate(grouped, spec.get('metric', 'eval_ms_per_token'))\", \"gate.evaluate(grouped, spec.get('metric', 'eval_ms_per_token'), direction=spec.get('direction'))\")
+p.write_text(s)
+p=Path('cc/abrun/regate.py'); s=p.read_text(); a=s.index('        # Older saved summaries'); b=s.index('        invalid.extend',a)
+s=s[:a]+'''        # Recompute available raw evidence, including precision and phase metrics.
+        # Summary-only archives remain readable; never overwrite their files.
+        if (path.parent / 'stderr.txt').exists():
+            observed = run_summary.summarize(path.parent, abrun.switch_patterns(spec), write=False)
+            summary.update(observed)
+        elif 'switch_matches' not in summary:
+            observed = run_summary.summarize(path.parent, abrun.switch_patterns(spec), write=False)
+            summary.update({key: observed[key] for key in ('switch_matches', 'switch_lines')})
+'''+s[b:]
+s=s.replace(\"gate.evaluate(grouped, metric or spec.get('metric', 'eval_tps'))\", \"gate.evaluate(grouped, metric or spec.get('metric', 'eval_ms_per_token'),\\n                            direction=spec.get('direction') if metric is None else None)\")
+s=s.replace(\"    parser.add_argument('--no-write', action='store_true')\", \"    parser.add_argument('--no-write', action='store_true')\\n    parser.add_argument('--dry', action='store_true', help='print secondary table without writing any files')\")
+s=s.replace('        if not args.no_write:', '        if not args.no_write and not args.dry:')
+s=s.replace(\"        print(text, end='')\", \"        if args.dry:\\n            print(f'{args.outdir.name}: metric={verdict[\\\"metric\\\"]}, direction={verdict[\\\"direction\\\"]}')\\n            print(gate.secondary_table(verdict))\\n        else:\\n            print(text, end='')\")
+p.write_text(s)
+PY
+python3 /tmp/h5_gate.py
+python3 cc/abrun/regate.py experiments/jetson/OM/J-OM10c --dry
+python3 -m pytest cc/abrun cc/resource_observe -q" in /home/muk/projects/siminfeng/campaign
+ exited 1 in 6270ms:
+J-OM10c: metric=eval_tps, direction=higher
+| Arm | ms/token | NVMe GiB/token (decode) | gpu_util med (%) | J/token | NVMe GiB/token (whole) | Prompt t/s | Eval t/s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| base | 840.975 | 0.253062 | 16.5 | 5.5484 | 0.873321 | 5.295 | 1.19 |
+| pg8b | 723.15 | 0.232149 | 18 | 5.14456 | 0.855608 | 5.58 | 1.385 |
+| pg8i8 | 720.34 | 0.244159 | 18 | 5.1594 | 0.865933 | 5.525 | 1.39 |
+| pg8i12 | 723.03 | 0.246511 | 18 | 5.17242 | 0.867498 | 5.675 | 1.38 |
+| pg10i8 | 712.8 | 0.237081 | 18 | 5.11002 | 0.860619 | 5.285 | 1.4 |
+.................................FF..................................    [100%]
+=================================== FAILURES ===================================
+____________________ test_regate_exclude_and_preserve_data _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-muk/pytest-47/test_regate_exclude_and_preser0')
+
+    def test_regate_exclude_and_preserve_data(tmp_path):
+        from cc.abrun import regate
+        s = spec(tmp_path)
+        s.pop('switch_regex')
+        s['arms']['pf']['expect_switch'] = False
+        (tmp_path/'spec.json').write_text(json.dumps(s))
+        for run_id, speed in [('001-base', 50), ('002-pf', 110), ('003-pf', 110), ('004-base', 100)]:
+            directory = tmp_path/run_id
+            directory.mkdir()
+            summary = runs([speed])[0]
+            summary.update(prompt_tps=20, nvme_gib_per_token=.5, switch_matches={}, switch_lines=[])
+            (directory/'summary.json').write_text(json.dumps(summary))
+        original = {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+        assert regate.recompute(tmp_path)['comparisons']['pf']['verdict'] == 'null'
+        args = [sys.executable, regate.__file__, str(tmp_path), '--exclude', '001-base',
+                '--reason', 'overlap', '--metric', 'eval_tps']
+        result = subprocess.run([*args, '--no-write'], capture_output=True, text=True, check=True)
+        verdict = json.loads(result.stdout)
+        assert verdict['excluded_runs'] == ['001-base']
+        assert verdict['reason'] == 'overlap'
+        assert verdict['comparisons']['pf']['verdict'] == 'improved'
+>       assert verdict['secondary_metrics']['pf'] == dict(nvme_gib_per_token=.5, prompt_tps=20, eval_tps=110)
+E       AssertionError: assert {'nvme_gib_pe...n': None, ...} == {'nvme_gib_pe...val_tps': 110}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Left contains 4 more items:
+E         {'energy_j_per_token': None,
+E          'eval_ms_per_token': None,
+E          'gpu_util_median': None,
+E          'nvme_gib_per_token_decode': None}
+E         Use -v to get more diff
+
+cc/abrun/test_abrun.py:369: AssertionError
+__________________ test_secondary_metrics_do_not_affect_gate ___________________
+
+    def test_secondary_metrics_do_not_affect_gate():
+        arms = {'base': runs([100, 100]), 'pf': runs([110, 110])}
+        for arm in arms.values():
+            arm[0].update(nvme_gib_per_token=2, prompt_tps=10)
+            arm[1].update(nvme_gib_per_token=4, prompt_tps=None)
+        verdict = gate.evaluate(arms)
+        assert verdict['comparisons']['pf']['verdict'] == 'improved'
+>       assert verdict['secondary_metrics']['pf'] == dict(nvme_gib_per_token=3, prompt_tps=10, eval_tps=110)
+E       AssertionError: assert {'nvme_gib_pe...n': None, ...} == {'nvme_gib_pe...val_tps': 110}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Left contains 4 more items:
+E         {'energy_j_per_token': None,
+E          'eval_ms_per_token': None,
+E          'gpu_util_median': None,
+E          'nvme_gib_per_token_decode': None}
+E         Use -v to get more diff
+
+cc/abrun/test_abrun.py:385: AssertionError
+=========================== short test summary info ============================
+FAILED cc/abrun/test_abrun.py::test_regate_exclude_and_preserve_data - Assert...
+FAILED cc/abrun/test_abrun.py::test_secondary_metrics_do_not_affect_gate - As...
+2 failed, 67 passed in 4.30s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+import json, shutil, hashlib
+src=Path('experiments/jetson/OM/J-OM10c/003-pg8i8')
+dst=Path('cc/abrun/tests/fixtures/J-OM10c-003-pg8i8'); dst.mkdir(parents=True, exist_ok=True)
+lines=(src/'stderr.txt').read_text().splitlines(keepends=True)
+(dst/'stderr.txt').write_text(''.join(line for i,line in enumerate(lines) if i in (0,len(lines)-1) or 'common_perf_print:' in line))
+lines=(src/'telemetry.jsonl').read_text().splitlines(keepends=True)
+(dst/'telemetry.jsonl').write_text(''.join(line for i,line in enumerate(lines) if i in (0,len(lines)-1) or json.loads(line)['backend'] in ('io','tegrastats')))
+for name in ('result.json','stdout.txt'):
+    shutil.copyfile(src/name,dst/name)
+(dst/'README.md').write_text('Captured verbatim from "'`experiments/jetson/OM/J-OM10c/003-pg8i8` on 2026-11-11.'"\\n\\n"'`stderr.txt` retains the first and last lines and all common_perf_print lines.'"\\n"'`telemetry.jsonl` retains every io and tegrastats record plus the first/last records'"\\n(to preserve the run clock endpoints). No retained line or numeric value was changed.\\n"'`result.json` and `stdout.txt` are exact copies. Tests verify provenance against the source.'"\\n')
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 7ms:
+codex
+The read-only J-OM10c table shows base at 840.975 ms/token and pg arms at 712.8–723.15 ms/token. Base decode-window NVMe reads are 0.253 GiB/token versus 0.873 for the whole run. The 3-second sysfs sample completed; I’m adding captured-fixture tests and updating two existing assertions for the expanded secondary metrics.
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/abrun/test_abrun.py'); s=p.read_text(); s=s.replace(\"dict(nvme_gib_per_token=.5, prompt_tps=20, eval_tps=110)\",\"dict(nvme_gib_per_token=.5, prompt_tps=20, eval_tps=110,\\n        eval_ms_per_token=None, nvme_gib_per_token_decode=None, gpu_util_median=None, energy_j_per_token=None)\"); s=s.replace(\"dict(nvme_gib_per_token=3, prompt_tps=10, eval_tps=110)\",\"dict(nvme_gib_per_token=3, prompt_tps=10, eval_tps=110,\\n        eval_ms_per_token=None, nvme_gib_per_token_decode=None, gpu_util_median=None, energy_j_per_token=None)\")
+p.write_text(s)
+PY
+cat >> cc/abrun/test_abrun.py <<'PY'
+
+
+CAPTURED = Path(__file__).parent / 'tests/fixtures/J-OM10c-003-pg8i8'
+
+
+def test_captured_h5_metrics_and_provenance():
+    source = ROOT / 'experiments/jetson/OM/J-OM10c/003-pg8i8'
+    for name in ('stderr.txt', 'telemetry.jsonl'):
+        original = set((source / name).read_text().splitlines())
+        assert set((CAPTURED / name).read_text().splitlines()) <= original
+    s = run_summary.summarize(CAPTURED, write=False)
+    assert s['eval_ms_per_token'] == 716.54
+    assert s['prompt_ms_per_token'] == 174.41
+    assert s['eval_ms_total'] == 45141.77
+    assert s['eval_runs'] == 63
+    assert s['load_ms'] == 60357.82
+    assert s['eval_tps'] == 1.4
+    window = s['phase_windows']
+    assert window['decode_end'] - window['decode_start'] == pytest.approx(45.14177)
+    assert window['absolute_error_bound_s'] is None  # No absolute log origin was captured.
+    assert s['nvme_gib_per_token_decode'] == s['nvme_gib_decode'] / s['eval_runs']
+    assert 0 < s['nvme_gib_per_token_decode'] < s['nvme_gib_per_token']
+    assert s['nvme_gib_load'] > 0
+    assert s['gpu_util_median'] == 18
+    assert s['gpu_util_p90'] == 36
+    assert s['power_in_w_median'] == 7.158
+    assert s['temp_tj_max'] == 52.093
+    assert 0 < s['device_util_median'] <= 100
+    assert s['energy_j_per_token'] == pytest.approx(5.130958057657607)
+    # The trimmed capture preserves the same clock endpoints and phase results.
+    full = run_summary.summarize(source, write=False)
+    for field in ('nvme_gib_decode', 'nvme_gib_load', 'energy_j_per_token',
+                  'gpu_util_median', 'device_util_median'):
+        assert s[field] == full[field]
+
+
+def test_captured_window_integration(tmp_path):
+    # Use actual power and counter samples, truncating only stderr-free metadata.
+    shutil.copytree(CAPTURED, tmp_path / 'run')
+    s = run_summary.summarize(tmp_path / 'run', write=False)
+    rows = [json.loads(line) for line in (CAPTURED / 'telemetry.jsonl').read_text().splitlines()]
+    lo, hi = s['phase_windows']['decode_start'], s['phase_windows']['decode_end']
+    def points(name):
+        return sorted((r['mono_s'], m['value']) for r in rows for m in r['metrics'] if m['name'] == name)
+    def integral(samples):
+        total = 0
+        for (a, x), (b, y) in zip(samples, samples[1:]):
+            left, right = max(a, lo), min(b, hi)
+            if right > left:
+                vl = x + (y-x) * (left-a) / (b-a)
+                vr = x + (y-x) * (right-a) / (b-a)
+                total += (right-left) * (vl+vr) / 2
+        return total
+    assert s['energy_j_per_token'] == pytest.approx(integral(points('power_VDD_IN_instant')) / 1000 / s['eval_runs'])
+    reads = points('device_read')
+    # Cumulative-counter delta equals integrated interval read rate.
+    delta = sum((y-x) * max(0, min(b, hi)-max(a, lo)) / (b-a)
+                for (a,x),(b,y) in zip(reads, reads[1:]))
+    assert s['nvme_gib_decode'] == pytest.approx(delta / 1024**2)
+
+
+def test_lower_gate_and_default_spec(tmp_path):
+    s = spec(tmp_path)
+    s.pop('metric')
+    abrun.validate(s)
+    s['direction'] = 'sideways'
+    with pytest.raises(ValueError, match='direction'):
+        abrun.validate(s)
+    base = run_summary.summarize(ROOT / 'experiments/jetson/OM/J-OM10c/001-base', write=False)
+    pg = run_summary.summarize(CAPTURED, write=False)
+    verdict = gate.evaluate({'base': [base, base], 'pg': [pg, pg]}, 'eval_ms_per_token', direction='lower')
+    c = verdict['comparisons']['pg']
+    assert c['ratio'] == base['eval_ms_per_token'] / pg['eval_ms_per_token']
+    assert c['verdict'] == 'improved'
+    reversed_gate = gate.evaluate({'base': [pg, pg], 'pg': [base, base]}, 'eval_ms_per_token')
+    assert reversed_gate['comparisons']['pg']['verdict'] == 'regressed'
+
+
+def test_real_regate_dry_recomputes_without_writes(tmp_path):
+    from cc.abrun import regate
+    source = ROOT / 'experiments/jetson/OM/J-OM10c'
+    original = {p: hashlib.sha256(p.read_bytes()).digest() for p in source.rglob('*') if p.is_file()}
+    result = subprocess.run([sys.executable, regate.__file__, str(source), '--dry'],
+                            capture_output=True, text=True, check=True)
+    assert 'ms/token' in result.stdout and '| base | 840.975 |' in result.stdout
+    assert '| pg8i8 | 720.34 |' in result.stdout
+    verdict = regate.recompute(source, metric='eval_ms_per_token')
+    assert verdict['direction'] == 'lower'
+    assert verdict['inputs']['pg8i8'][0] == 716.54
+    assert all(c['verdict'] == 'improved' for c in verdict['comparisons'].values())
+    assert original == {p: hashlib.sha256(p.read_bytes()).digest() for p in source.rglob('*') if p.is_file()}
+    # A spec without a primary metric selects the new precise default.
+    spec_data = json.loads((source / 'spec.json').read_text())
+    spec_data.pop('metric')
+    (tmp_path / 'spec.json').write_text(json.dumps(spec_data))
+    shutil.copytree(CAPTURED, tmp_path / '001-pg8i8')
+    summary = run_summary.summarize(tmp_path / '001-pg8i8')
+    verdict = regate.recompute(tmp_path)
+    assert verdict['metric'] == 'eval_ms_per_token'
+PY
+cat >> cc/resource_observe/test_resource_observe.py <<'PY'
+
+
+def test_discovered_gpu_frequency_hz(tmp_path):
+    # Values are captured from the existing Orin devfreq fixture test above.
+    gpu = tmp_path / 'different-address.gpu'
+    gpu.mkdir()
+    for f, v in ((\"cur_freq\", \"306000000\"), (\"min_freq\", \"306000000\"), (\"max_freq\", \"1020000000\")):
+        (gpu / f).write_text(v)
+    assert ro.discover_gpu_devfreq(str(tmp_path)) == str(gpu)
+    metrics, unavailable = ro.frequency_sample(devfreq_root=str(tmp_path))
+    assert names(metrics)['gpu_freq']['value'] == 306000000
+    assert names(metrics)['gpu_freq']['unit'] == 'Hz'
+    assert not unavailable
+    (gpu / 'cur_freq').unlink()
+    metrics, unavailable = ro.frequency_sample(devfreq_root=str(tmp_path))
+    assert not metrics and unavailable[0]['name'] == 'gpu_freq'
+
+
+def test_tegrastats_sampling_adds_discovered_frequency(monkeypatch):
+    real = ro.frequency_sample()
+    if 'gpu_freq' not in names(real[0]):
+        pytest.skip('no readable GPU sysfs frequency on this host')
+    m, u, e = ro.observed_tegrastats(fx('tegrastats-idle-orin-nano-r36.5.txt').splitlines()[0])
+    assert names(m)['gpu_freq']['unit'] == 'Hz'
+    assert not any(x['name'] == 'gpu_freq' for x in u)
+PY
+python3 -m pytest cc/abrun cc/resource_observe -q" in /home/muk/projects/siminfeng/campaign
+ exited 1 in 8147ms:
+....................................F................................... [ 96%]
+...                                                                      [100%]
+=================================== FAILURES ===================================
+_______________________ test_captured_window_integration _______________________
+
+tmp_path = PosixPath('/tmp/pytest-of-muk/pytest-48/test_captured_window_integrati0')
+
+    def test_captured_window_integration(tmp_path):
+        # Use actual power and counter samples, truncating only stderr-free metadata.
+        shutil.copytree(CAPTURED, tmp_path / 'run')
+        s = run_summary.summarize(tmp_path / 'run', write=False)
+        rows = [json.loads(line) for line in (CAPTURED / 'telemetry.jsonl').read_text().splitlines()]
+        lo, hi = s['phase_windows']['decode_start'], s['phase_windows']['decode_end']
+        def points(name):
+            return sorted((r['mono_s'], m['value']) for r in rows for m in r['metrics'] if m['name'] == name)
+        def integral(samples):
+            total = 0
+            for (a, x), (b, y) in zip(samples, samples[1:]):
+                left, right = max(a, lo), min(b, hi)
+                if right > left:
+                    vl = x + (y-x) * (left-a) / (b-a)
+                    vr = x + (y-x) * (right-a) / (b-a)
+                    total += (right-left) * (vl+vr) / 2
+            return total
+        assert s['energy_j_per_token'] == pytest.approx(integral(points('power_VDD_IN_instant')) / 1000 / s['eval_runs'])
+        reads = points('device_read')
+        # Cumulative-counter delta equals integrated interval read rate.
+        delta = sum((y-x) * max(0, min(b, hi)-max(a, lo)) / (b-a)
+                    for (a,x),(b,y) in zip(reads, reads[1:]))
+>       assert s['nvme_gib_decode'] == pytest.approx(delta / 1024**2)
+E       assert 15.255615626200779 == 0.01489806213496198 ± 1.5e-08
+E         
+E         comparison failed
+E         Obtained: 15.255615626200779
+E         Expected: 0.01489806213496198 ± 1.5e-08
+
+cc/abrun/test_abrun.py:446: AssertionError
+=========================== short test summary info ============================
+FAILED cc/abrun/test_abrun.py::test_captured_window_integration - assert 15.2...
+1 failed, 74 passed in 7.55s
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+import shutil
+source = Path('/sys/class/devfreq/17000000.gpu')
+target = Path('cc/resource_observe/tests/fixtures/gpu-devfreq')
+target.mkdir(parents=True, exist_ok=True)
+for name in ('cur_freq','min_freq','max_freq'):
+    shutil.copyfile(source/name, target/name)
+(target/'README.md').write_text('Captured verbatim from "'`/sys/class/devfreq/17000000.gpu/{cur_freq,min_freq,max_freq}`'"\\non jetson-arm, 2026-11-11, during an idle CPU-only resource observation.\\nNo root, Docker, or GPU workload was used. Frequency files contain Hz.\\n')
+p=Path('cc/resource_observe/test_resource_observe.py'); s=p.read_text().replace('import json, os, subprocess, sys', 'import json, os, subprocess, sys\\nfrom pathlib import Path\\nimport shutil')
+s=s.replace('    # Values are captured from the existing Orin devfreq fixture test above.','    captured = Path(__file__).parent / \"tests/fixtures/gpu-devfreq\"')
+s=s.replace('    for f, v in ((\"cur_freq\", \"306000000\"), (\"min_freq\", \"306000000\"), (\"max_freq\", \"1020000000\")):\\n        (gpu / f).write_text(v)', '    for name in (\"cur_freq\", \"min_freq\", \"max_freq\"):\\n        shutil.copyfile(captured / name, gpu / name)')
+s=s.replace(\"assert names(metrics)['gpu_freq']['value'] == 306000000\", \"assert names(metrics)['gpu_freq']['value'] == int((captured / 'cur_freq').read_text())\")
+p.write_text(s)
+PY
+cat >> cc/abrun/README.md <<'EOF'
+
+H5 measurement fields (2026-11-11): new specs default to "'`eval_ms_per_token`
+with `direction: "lower"`; explicitly declared `eval_tps` specs retain higher-is-better
+behavior. `direction` accepts `lower` or `higher`. Gate ratios are A/B for lower
+and B/A for higher, with the same A/A noise, drift, and strict threshold rule.
+The Python `gate.evaluate` API retains its legacy `eval_tps` default; callers may
+pass `metric='"'eval_ms_per_token', direction='lower'"'`. Printed ms/token is parsed
+from the last common_perf_print line (716.54 in the captured J-OM10c/003 fixture),
+not reconstructed from rounded t/s. `eval_ms_total`, `eval_runs`, `load_ms`, and
+`prompt_ms_per_token` preserve the other performance fields.
+
+`regate.py OUTDIR --dry` prints the secondary table and writes nothing.
+`--no-write` retains JSON output. Both recompute raw stderr/telemetry metrics even
+when an old summary.json exists. Existing specs keep their original primary metric;
+use `--metric eval_ms_per_token` to regate an old spec on the precise metric.
+
+Decode uses the telemetry `mono_s` clock. Current relative stderr timestamps
+(e.g. `2.20.928.587`) have no recorded absolute origin, so the fallback sets decode
+end to the final telemetry sample before exit, and start to end minus
+`eval_ms_total / 1000`. Load is estimated from the first telemetry sample through
+`load_ms / 1000` seconds later. These are approximate elapsed phase windows:
+eval time may contain inter-token gaps and the model'"'s first generated token is
+accounted in prompt evaluation. Teardown, startup, or unmeasured gaps can shift
+the windows. "'`phase_windows` records endpoints, method and error information.
+The observed maximum per-backend sampling gap is a conditional endpoint sampling
+bound (roughly 0.5 s normally, occasionally 1 s in J-OM10c); unknown engine-to-exit
+lag prevents a finite absolute alignment bound. No exact per-token IO claim follows.
+
+NVMe phase deltas linearly interpolate cumulative read-only counters at the phase
+boundaries, with no extrapolation. Sequentially emitted backends end microseconds
+apart: each integration clips its end to that metric'"'s last available sample.
+"'`nvme_gib_per_token_decode` divides decode-only reads by `eval_runs`; legacy
+`nvme_gib_per_token` remains the whole-run value. Counter resets invalidate phase
+IO. Power uses trapezoidal integration of instantaneous `power_VDD_IN_instant`
+mW, converts to joules, then divides by `eval_runs`; it includes system power.
+Decode samples supply gpu_util median and nearest-rank p90, device_util median,
+instant VDD_IN watts median, temp_tj maximum, and GPU/EMC frequency medians (MHz;
+raw sysfs telemetry is Hz). Missing timing/coverage/metrics yield null plus a reason.
+All IO, device busy, and power values remain system-wide, subject to contamination.
+EOF
+cat >> cc/resource_observe/README.md <<'"'EOF'
+
+GPU clock sampling (H5): discover "'`/sys/class/devfreq/*.gpu` by name and read its
+public `cur_freq` as metric `gpu_freq` in Hz. `sysfs_tegra` also keeps the legacy
+`gpu_freq_cur/min/max` MHz fields. Tegrastats samples include this sysfs reading,
+so existing runners requesting `io,proc,tegrastats` gain the clock without a runner
+change. A readable `*emc*/cur_freq` devfreq node adds `emc_freq` in Hz; otherwise
+tegrastats'"' @MHz field is used when present. Unreadable clocks are never invented.
+A CPU-only three-second check requires no Docker or GPU job:
+
+"'```sh
+python3 cc/resource_observe/resource_observe.py sample --backends sysfs_tegra --duration-s 3 --out /tmp/resource-clocks.jsonl
+```
+EOF
+cat >> c2/METHODS.md <<'"'EOF'
+
+### H5: precise time and phase measurements (2026-11-11)
+
+New abrun specs default to printed "'`eval_ms_per_token`, direction `lower` (A/B
+ratio); old explicitly declared t/s specs retain their metric. Regating reads
+stderr and telemetry again; `regate.py OUTDIR --dry` prints a table without writes.
+The threshold and A/A/drift rules remain unchanged. t/s remains descriptive.
+
+Relative engine log timestamps have no host clock origin in the old captures.
+Decode is therefore estimated on telemetry mono_s by anchoring its end at the
+last sample before exit and subtracting printed eval_ms_total. Estimated load
+starts at first telemetry and lasts load_ms. The maximum observed per-backend
+sampling interval bounds endpoint quantization only if sampling continued through
+exit. Unknown startup/teardown lag means no finite absolute alignment bound can
+be claimed; summaries explicitly report this unknown bound. These elapsed windows
+cannot resolve individual tokens, overlap, or first-token work charged to prefill.
+
+Read counters are interpolated at window boundaries (no extrapolation; resets
+invalidate the phase delta), excluding model load from decode GiB/token and
+using eval_runs as denominator. Instantaneous VDD_IN is integrated trapezoidally
+and converted from mW seconds to J/token; this is system energy. Sequential backend
+emission clips integration ends to each metric'"'s last available sample. Decode
+samples give GPU util median/p90 (nearest rank), IO device util median, power W
+median, temp_tj max, and GPU/EMC MHz median. Public devfreq *.gpu/cur_freq is
+sampled in Hz without root, including when tegrastats omits its GPU frequency.
+System-wide counters and coarse sampling still limit causal IO/power claims.
+EOF" in /home/muk/projects/siminfeng/campaign
+ succeeded in 4ms:
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/abrun/test_abrun.py'); s=p.read_text().replace(\"return sorted((r['mono_s'], m['value']) for r in rows for m in r['metrics'] if m['name'] == name)\", \"return sorted((r['mono_s'], m['value'] * ({'B': 1, 'KiB': 1024, 'MiB': 1024**2, 'GiB': 1024**3}[m['unit']]\\n                      if name == 'device_read' else 1))\\n                      for r in rows for m in r['metrics'] if m['name'] == name)\")
+s=s.replace(\"pytest.approx(delta / 1024**2)\",\"pytest.approx(delta / 1024**3)\")
+p.write_text(s)
+PY
+python3 -m pytest cc/abrun cc/resource_observe -q
+python3 - <<'PY'
+import json
+rows=[json.loads(l) for l in open('/tmp/h5-gpu-sample.jsonl')]
+clocks=[m for r in rows for m in r['metrics'] if m['name']=='gpu_freq']
+print('3 s sample:',len(rows),'records;',len(clocks),'gpu_freq readings; first:',clocks[0] if clocks else None)
+PY" in /home/muk/projects/siminfeng/campaign
+exec
+/bin/bash -lc "ls /sys/kernel; ls /sys/kernel/debug; rg -n 'emc|freq' cc/resource_observe/README.md; du -h cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/*; sed -n '40,90p' cc/abrun/abrun.py; sed -n '1,150p' cc/abrun/gate.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+cgroup
+config
+debug
+fscaps
+iommu_groups
+irq
+kexec_crash_loaded
+kexec_crash_size
+kexec_loaded
+mm
+notes
+nvpmodel_clk_cap
+oops_count
+profiling
+rcu_expedited
+rcu_normal
+reboot
+security
+slab
+software_nodes
+sunrpc
+tracing
+uevent_seqnum
+vmcoreinfo
+warn_count
+ls: cannot open directory '/sys/kernel/debug': Permission denied
+20:- sysfs_tegra: GPU devfreq (MHz), thermal zones (celsius, unreadable zones listed unavailable), nvpmodel mode (`nvpmodel -q`, query only, or `--nvpmodel-mode`).
+76:GPU clock sampling (H5): discover `/sys/class/devfreq/*.gpu` by name and read its
+77:public `cur_freq` as metric `gpu_freq` in Hz. `sysfs_tegra` also keeps the legacy
+78:`gpu_freq_cur/min/max` MHz fields. Tegrastats samples include this sysfs reading,
+80:change. A readable `*emc*/cur_freq` devfreq node adds `emc_freq` in Hz; otherwise
+4.0K	cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/README.md
+4.0K	cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/result.json
+4.0K	cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/stderr.txt
+4.0K	cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/stdout.txt
+2.0M	cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/telemetry.jsonl
+        raise ValueError('arms must contain base and at least one treatment')
+    for name, arm in arms.items():
+        if not re.fullmatch(safe, name) or not isinstance(arm, dict):
+            raise ValueError('invalid arm')
+        if not isinstance(arm.get('image'), str) or not arm['image']:
+            raise ValueError(f'{name}: missing image')
+        env = arm.get('env', {})
+        if not isinstance(env, dict) or any(not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', k)
+                                           or not isinstance(v, str) or re.search(r'\s', v)
+                                           for k, v in env.items()):
+            raise ValueError(f'{name}: env must map names to strings without whitespace (om_run restriction)')
+        if not isinstance(arm.get('expect_switch', False), bool):
+            raise ValueError('expect_switch must be boolean')
+    for owner in [spec, *arms.values()]:
+        regexes = owner.get('switch_regex', [])
+        if not isinstance(regexes, list) or not all(isinstance(r, str) for r in regexes):
+            raise ValueError('switch_regex must be an array of regex strings')
+        for pattern in regexes:
+            re.compile(pattern)
+    for arm in arms.values():
+        if arm.get('expect_switch') and not (spec.get('switch_regex') or arm.get('switch_regex')):
+            raise ValueError('expect_switch requires switch_regex')
+    if arms['base'].get('expect_switch'):
+        raise ValueError('base cannot expect a switch')
+    rounds = spec.get('rounds', 1)
+    if not isinstance(rounds, int) or isinstance(rounds, bool) or rounds < 1:
+        raise ValueError('rounds must be a positive integer')
+    if not isinstance(spec.get('metric', 'eval_ms_per_token'), str):
+        raise ValueError('metric must be a summary field name')
+    gate.metric_direction(spec.get('metric', 'eval_ms_per_token'), spec.get('direction'))
+    planned_order(spec)
+
+
+def planned_order(spec):
+    arms = list(spec['arms'])
+    arms = ['base'] + [name for name in arms if name != 'base']
+    order = spec['order']
+    if order == 'explicit':
+        names = spec.get('explicit_order')
+        if not isinstance(names, list) or not names or any(n not in arms for n in names):
+            raise ValueError('explicit_order must be a nonempty list of known arms')
+        if set(names) != set(arms):
+            raise ValueError('explicit_order must include every arm')
+    else:
+        expected = ''.join(chr(65 + i) for i in range(len(arms)))
+        expected += expected[::-1]
+        if order not in (expected, 'mirrored'):
+            raise ValueError(f'{len(arms)} arms require order={expected!r} or mirrored')
+        names = arms + arms[::-1]
+    return names * spec.get('rounds', 1)
+
+#!/usr/bin/env python3
+"""A/A-aware, direction-aware performance gate for labelled summaries."""
+import argparse
+import json
+import math
+from pathlib import Path
+import statistics
+
+
+def finite(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+SECONDARY_FIELDS = ('nvme_gib_per_token', 'prompt_tps', 'eval_tps', 'eval_ms_per_token',
+                    'nvme_gib_per_token_decode', 'gpu_util_median', 'energy_j_per_token')
+
+
+def metric_direction(metric, direction=None):
+    direction = direction or ('lower' if metric == 'eval_ms_per_token' else 'higher')
+    if direction not in ('lower', 'higher'):
+        raise ValueError('direction must be lower or higher')
+    return direction
+
+
+def secondary_table(verdict):
+    fields = ('eval_ms_per_token', 'nvme_gib_per_token_decode', 'gpu_util_median',
+              'energy_j_per_token', 'nvme_gib_per_token', 'prompt_tps', 'eval_tps')
+    lines = ['| Arm | ms/token | NVMe GiB/token (decode) | gpu_util med (%) | J/token | NVMe GiB/token (whole) | Prompt t/s | Eval t/s |',
+             '|---|---:|---:|---:|---:|---:|---:|---:|']
+    for arm, metrics in verdict['secondary_metrics'].items():
+        values = [format(metrics[f], '.6g') if finite(metrics.get(f)) else '—' for f in fields]
+        lines.append('| ' + ' | '.join([arm, *values]) + ' |')
+    return '\n'.join(lines)
+
+
+def evaluate(arms, metric='eval_tps', base='base', direction=None):
+    direction = metric_direction(metric, direction)
+    inputs = {arm: [run.get(metric) for run in runs] for arm, runs in arms.items()}
+    means, gaps = {}, {}
+    reasons = []
+    for arm, numbers in inputs.items():
+        valid = bool(numbers) and all(finite(n) and n > 0 for n in numbers)
+        means[arm] = statistics.mean(numbers) if valid else None
+        gaps[arm] = ((max(numbers) - min(numbers)) / means[arm]
+                     if valid and len(numbers) >= 2 else None)
+        if not valid:
+            reasons.append(f'{arm}: missing/nonpositive/nonfinite {metric}')
+        if any(r.get('status', 'ok') != 'ok' for r in arms[arm]):
+            reasons.append(f'{arm}: unsuccessful run')
+    base_values = inputs.get(base, [])
+    drift_halves = None
+    drift = None
+    if means.get(base) and len(base_values) >= 2:
+        split = len(base_values) // 2
+        drift_halves = [statistics.mean(base_values[:split]), statistics.mean(base_values[split:])]
+        drift = abs(drift_halves[1] - drift_halves[0]) / means[base]
+    aa_gap = max((gap for gap in gaps.values() if gap is not None), default=0.0)
+    threshold = max(0.03, 2 * aa_gap, 2 * (drift or 0.0))
+    if base not in arms:
+        reasons.append(f'base arm {base!r} absent')
+    comparisons = {}
+    for arm in arms:
+        if arm == base:
+            continue
+        ratio = means[arm] / means[base] if means[arm] and means.get(base) else None
+        if ratio is not None and direction == 'lower':
+            ratio = 1 / ratio
+        verdict = 'null'
+        if ratio is not None and not reasons:
+            if ratio - 1 > threshold and not math.isclose(ratio - 1, threshold, rel_tol=1e-12):
+                verdict = 'improved'
+            elif 1 - ratio > threshold and not math.isclose(1 - ratio, threshold, rel_tol=1e-12):
+                verdict = 'regressed'
+        comparisons[arm] = {'mean': means[arm], 'base_mean': means.get(base),
+                            'ratio': ratio, 'change': ratio - 1 if ratio is not None else None,
+                            'threshold': threshold, 'verdict': verdict}
+    hashes = {arm: [run.get('output_sha') for run in runs] for arm, runs in arms.items()}
+    flat = [value for values in hashes.values() for value in values]
+    if not flat or any(value is None for value in flat):
+        output = {'class': 'unknown', 'reason': 'output hash missing', 'hashes': hashes}
+    elif len(set(flat)) == 1:
+        output = {'class': 'identical', 'hashes': hashes}
+    else:
+        reference = next(iter(hashes.get(base, [])), flat[0])
+        output = {'class': 'differs', 'hashes': hashes,
+                  'differs': {arm: [{'run_index': i, 'output_sha': h} for i, h in enumerate(values)
+                                    if h != reference] for arm, values in hashes.items()
+                              if any(h != reference for h in values)},
+                  'reference_sha': reference}
+    secondary = {}
+    for arm, runs in arms.items():
+        secondary[arm] = {}
+        for field in SECONDARY_FIELDS:
+            values = [r[field] for r in runs if finite(r.get(field))]
+            secondary[arm][field] = statistics.mean(values) if values else None
+    return {'secondary_metrics': secondary, 'metric': metric, 'direction': direction, 'base': base, 'inputs': inputs, 'means': means,
+            'aa_gaps': gaps, 'aa_gap': aa_gap, 'drift_halves': drift_halves,
+            'drift': drift, 'threshold': threshold, 'minimum_effect': 0.03,
+            'noise_multiplier': 2, 'comparisons': comparisons, 'output': output,
+            'reasons': reasons}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('summaries', help='JSON object: arm -> summary objects or summary.json paths')
+    parser.add_argument('--metric', default='eval_ms_per_token')
+    parser.add_argument('--direction', choices=['lower', 'higher'])
+    parser.add_argument('--base', default='base')
+    args = parser.parse_args()
+    arms = json.loads(Path(args.summaries).read_text())
+    arms = {arm: [json.loads(Path(r).read_text()) if isinstance(r, str) else r for r in runs]
+            for arm, runs in arms.items()}
+    print(json.dumps(evaluate(arms, args.metric, args.base, args.direction), indent=2))
+
+
+if __name__ == '__main__':
+    main()
+
+ succeeded in 7761ms:
+........................................................................ [ 96%]
+...                                                                      [100%]
+75 passed in 7.21s
+3 s sample: 7 records; 7 gpu_freq readings; first: {'name': 'gpu_freq', 'value': 306000000, 'unit': 'Hz', 'scope': 'gpu', 'source': '/sys/class/devfreq/17000000.gpu/cur_freq'}
+
+exec
+/bin/bash -lc "git diff -- cc/resource_observe/resource_observe.py cc/resource_observe/test_resource_observe.py; sed -n '190,335p' cc/abrun/run_summary.py; cat cc/abrun/regate.py" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+diff --git a/campaign/cc/resource_observe/resource_observe.py b/campaign/cc/resource_observe/resource_observe.py
+index 7790e6b..08ce832 100644
+--- a/campaign/cc/resource_observe/resource_observe.py
++++ b/campaign/cc/resource_observe/resource_observe.py
+@@ -5,7 +5,7 @@ from datetime import datetime, timezone
+ from io_watchdog import IOSampler, watchdog
+ 
+ SCHEMA = "resource-observe/0"
+-GPU_DEVFREQ = "/sys/devices/platform/17000000.gpu/devfreq/17000000.gpu"
++DEVFREQ_ROOT = "/sys/class/devfreq"
+ ALL_BACKENDS = ["tegrastats", "proc", "sysfs_tegra", "nvml", "io"]
+ 
+ 
+@@ -17,10 +17,18 @@ def U(name, backend, reason):
+     return {"name": name, "backend": backend, "reason": reason}
+ 
+ 
++def campaign_host_id():
++    try:
++        with open(os.path.expanduser("~/.config/siminfeng/host_id")) as f:
++            return f.read().strip() or socket.gethostname()
++    except OSError:
++        return socket.gethostname()
++
++
+ def record(backend, seq, metrics, unavailable=(), parse_errors=(), host_id=None, mono=None):
+     return {"schema": SCHEMA, "ts": datetime.now(timezone.utc).isoformat(),
+             "mono_s": time.monotonic() if mono is None else mono,
+-            "host_id": host_id or socket.gethostname(), "backend": backend, "seq": seq,
++            "host_id": host_id or campaign_host_id(), "backend": backend, "seq": seq,
+             "metrics": list(metrics), "unavailable": list(unavailable), "parse_errors": list(parse_errors)}
+ 
+ 
+@@ -210,10 +218,33 @@ def proc_sample(root="/proc", pid=None, cgroup=None, cgroup_root="/sys/fs/cgroup
+ 
+ 
+ # ---------------- sysfs_tegra ----------------
+-def sysfs_sample(devfreq=GPU_DEVFREQ, thermal="/sys/class/thermal", nvpmodel_mode=None, query_nvpmodel=True):
++def discover_gpu_devfreq(root=DEVFREQ_ROOT):
++    return next(iter(sorted(glob.glob(os.path.join(root, "*.gpu")))) , None)
++
++
++def frequency_sample(devfreq=None, devfreq_root=DEVFREQ_ROOT):
++    """Read public devfreq clocks without sudo; raw frequencies are Hz."""
++    devfreq = devfreq or discover_gpu_devfreq(devfreq_root)
++    m, un = [], []
++    t = (_read(os.path.join(devfreq, "cur_freq")) or "").strip() if devfreq else ""
++    if t.isdigit():
++        m.append(M("gpu_freq", int(t), "Hz", "gpu", str(devfreq) + "/cur_freq"))
++    else:
++        un.append(U("gpu_freq", "sysfs_tegra", "*.gpu/cur_freq absent or unreadable"))
++    emc = sorted(glob.glob(os.path.join(devfreq_root, "*emc*")))
++    for path in emc:
++        t = (_read(os.path.join(path, "cur_freq")) or "").strip()
++        if t.isdigit():
++            m.append(M("emc_freq", int(t), "Hz", "system", path + "/cur_freq"))
++            break
++    return m, un
++
++
++def sysfs_sample(devfreq=None, thermal="/sys/class/thermal", nvpmodel_mode=None, query_nvpmodel=True):
+     B = "sysfs_tegra"
+     m, un = [], []
+-    if not os.path.isdir(devfreq):
++    devfreq = devfreq or discover_gpu_devfreq()
++    if not devfreq or not os.path.isdir(devfreq):
+         un.append(U("gpu_devfreq", B, "%s absent (not a Jetson?)" % devfreq))
+     else:
+         for n, f in (("gpu_freq_cur", "cur_freq"), ("gpu_freq_min", "min_freq"), ("gpu_freq_max", "max_freq")):
+@@ -222,6 +253,9 @@ def sysfs_sample(devfreq=GPU_DEVFREQ, thermal="/sys/class/thermal", nvpmodel_mod
+                 m.append(M(n, int(t) / 1e6, "MHz", "gpu", "devfreq:" + f))
+             else:
+                 un.append(U(n, B, "%s unreadable" % f))
++    fm, fu = frequency_sample(devfreq)
++    m.extend(fm)
++    un.extend(fu)
+     zones = sorted(glob.glob(os.path.join(thermal, "thermal_zone*")))
+     if not zones:
+         un.append(U("thermal", B, "no thermal zones"))
+@@ -300,7 +334,7 @@ def nvml_sample(runner=None):
+ 
+ 
+ # ---------------- capabilities / sampling ----------------
+-def capabilities(devfreq=GPU_DEVFREQ, root="/proc", runner=None):
++def capabilities(devfreq=None, root="/proc", runner=None):
+     caps = {}
+     ok, why = tegrastats_available()
+     caps["tegrastats"] = {"available": ok, "reason": why or "tegrastats found",
+@@ -309,7 +343,7 @@ def capabilities(devfreq=GPU_DEVFREQ, root="/proc", runner=None):
+     caps["proc"] = {"available": bool(pm), "reason": "ok" if pm else "no /proc fields", "metrics": [x["name"] for x in pm],
+                     "missing": [x["name"] + ": " + x["reason"] for x in pu]}
+     sm, su = sysfs_sample(devfreq, query_nvpmodel=True)
+-    has = os.path.isdir(devfreq)
++    has = bool(devfreq and os.path.isdir(devfreq)) if devfreq else bool(discover_gpu_devfreq())
+     caps["sysfs_tegra"] = {"available": has, "reason": "ok" if has else "no Tegra GPU devfreq node",
+                            "metrics": [x["name"] for x in sm][:6], "missing": [x["name"] + ": " + x["reason"] for x in su][:6]}
+     ok, why = nvml_available()
+@@ -349,6 +383,16 @@ def sample_once(backend, seq, a):
+     return record(backend, seq, m, u)
+ 
+ 
++def observed_tegrastats(line):
++    m, u, e = parse_tegrastats(line)
++    clocks, missing = frequency_sample()
++    have = {x["name"] for x in clocks}
++    m = [x for x in m if x["name"] not in have] + clocks
++    u = [x for x in u if x["name"] not in have]
++    u.extend(x for x in missing if not any(y["name"] == x["name"] for y in m + u))
++    return m, u, e
++
++
+ def cmd_sample(a):
+     a.io_sampler = IOSampler(path=a.path, device=a.device, pid=a.pid,
+                              pid_from_cgroup=a.pid_from_cgroup, cgroup=a.cgroup)
+@@ -372,7 +416,7 @@ def cmd_sample(a):
+                 t0 = time.monotonic()
+                 if tg:
+                     for l in tg.drain():
+-                        m, u, e = parse_tegrastats(l)
++                        m, u, e = observed_tegrastats(l)
+                         emit(record("tegrastats", seq, m, u, e)); seq += 1
+                 for b in backends:
+                     if b != "tegrastats":
+@@ -384,7 +428,7 @@ def cmd_sample(a):
+             if tg:
+                 time.sleep(a.interval_ms / 1000 + 0.1)
+                 for l in tg.drain():
+-                    m, u, e = parse_tegrastats(l)
++                    m, u, e = observed_tegrastats(l)
+                     emit(record("tegrastats", seq, m, u, e)); seq += 1
+         finally:
+             if tg:
+diff --git a/campaign/cc/resource_observe/test_resource_observe.py b/campaign/cc/resource_observe/test_resource_observe.py
+index a2f3526..051a8df 100644
+--- a/campaign/cc/resource_observe/test_resource_observe.py
++++ b/campaign/cc/resource_observe/test_resource_observe.py
+@@ -1,4 +1,6 @@
+ import json, os, subprocess, sys
++from pathlib import Path
++import shutil
+ import pytest
+ import resource_observe as ro
+ 
+@@ -144,3 +146,41 @@ def test_cli_sample_fake_and_summarize(tmp_path):
+     recs = [json.loads(l) for l in open(out)]
+     assert len(recs) >= 3 and all(x["schema"] == ro.SCHEMA and x["backend"] == "proc" for x in recs)
+     assert recs[0]["seq"] == 0 and {"ts", "mono_s", "host_id", "metrics", "unavailable", "parse_errors"} <= set(recs[0])
++
++
++def test_campaign_host_id(tmp_path, monkeypatch):
++    monkeypatch.setenv("HOME", str(tmp_path))
++    monkeypatch.setattr(ro.socket, "gethostname", lambda: "fallback-host")
++    assert ro.record("proc", 0, [])['host_id'] == "fallback-host"
++    path = tmp_path / ".config" / "siminfeng" / "host_id"
++    path.parent.mkdir(parents=True)
++    path.write_text("jetson-arm\n")
++    assert ro.record("proc", 0, [])['host_id'] == "jetson-arm"
++    assert ro.record("proc", 0, [], host_id="explicit")['host_id'] == "explicit"
++    path.write_text("\n")
++    assert ro.record("proc", 0, [])['host_id'] == "fallback-host"
++
++
++def test_discovered_gpu_frequency_hz(tmp_path):
++    captured = Path(__file__).parent / "tests/fixtures/gpu-devfreq"
++    gpu = tmp_path / 'different-address.gpu'
++    gpu.mkdir()
++    for name in ("cur_freq", "min_freq", "max_freq"):
++        shutil.copyfile(captured / name, gpu / name)
++    assert ro.discover_gpu_devfreq(str(tmp_path)) == str(gpu)
++    metrics, unavailable = ro.frequency_sample(devfreq_root=str(tmp_path))
++    assert names(metrics)['gpu_freq']['value'] == int((captured / 'cur_freq').read_text())
++    assert names(metrics)['gpu_freq']['unit'] == 'Hz'
++    assert not unavailable
++    (gpu / 'cur_freq').unlink()
++    metrics, unavailable = ro.frequency_sample(devfreq_root=str(tmp_path))
++    assert not metrics and unavailable[0]['name'] == 'gpu_freq'
++
++
++def test_tegrastats_sampling_adds_discovered_frequency(monkeypatch):
++    real = ro.frequency_sample()
++    if 'gpu_freq' not in names(real[0]):
++        pytest.skip('no readable GPU sysfs frequency on this host')
++    m, u, e = ro.observed_tegrastats(fx('tegrastats-idle-orin-nano-r36.5.txt').splitlines()[0])
++    assert names(m)['gpu_freq']['unit'] == 'Hz'
++    assert not any(x['name'] == 'gpu_freq' for x in u)
+    all_times = [t for ts in clocks.values() for t in ts]
+    duration = result['eval_ms_total']
+    start = end = load_start = load_end = None
+    if all_times:
+        load_start, end = min(all_times), max(all_times)
+        if numeric(duration) and duration > 0:
+            start = end - duration / 1000
+        if numeric(result['load_ms']) and result['load_ms'] >= 0:
+            load_end = load_start + result['load_ms'] / 1000
+    intervals = [b - a for ts in clocks.values()
+                 for a, b in zip(sorted(set(ts)), sorted(set(ts))[1:])]
+    result['phase_windows'] = {
+        'clock': 'mono_s', 'method': 'last_telemetry_before_exit_minus_eval_ms_total',
+        'decode_start': start, 'decode_end': end, 'load_start': load_start, 'load_end': load_end,
+        'sampling_error_bound_s': max(intervals) if intervals else None,
+        'absolute_error_bound_s': None,
+        'error_note': 'Endpoint sampling error is at most the largest observed backend interval '
+                      'assuming sampling continued until exit. Engine teardown/exit lag is unknown; '
+                      'no finite absolute phase alignment bound is available. Load begins at first '
+                      'telemetry sample; startup offset is also unknown.'}
+
+    def series(name):
+        return sorted(dict(timed.get(name, [])).items())
+
+    def clipped(name, lo, hi):
+        points = series(name)
+        if lo is None or hi is None or hi <= lo or len(points) < 2:
+            return []
+        if lo < points[0][0] or hi > points[-1][0]:
+            return []  # No extrapolation across missing coverage.
+        def at(t):
+            for (a, x), (b, y) in zip(points, points[1:]):
+                if a <= t <= b:
+                    return x + (y - x) * (t - a) / (b - a)
+        return [(lo, at(lo)), *[(t, v) for t, v in points if lo < t < hi], (hi, at(hi))]
+
+    # Different backends are emitted sequentially. Clip the endpoint to the
+    # last available counter/power sample (normally microseconds earlier).
+    def covered_end(name, hi):
+        points = series(name)
+        return min(hi, points[-1][0]) if hi is not None and points else hi
+
+    def phase_read(lo, hi):
+        points = clipped('device_read', lo, covered_end('device_read', hi))
+        if not points or any(b < a for (_, a), (_, b) in zip(points, points[1:])):
+            return None
+        return (points[-1][1] - points[0][1]) / 1024 ** 2
+
+    put('nvme_gib_decode', phase_read(start, end), 'need decode timing and covered device_read counters')
+    put('nvme_gib_load', phase_read(load_start, load_end), 'need load timing and covered device_read counters')
+    runs = result['eval_runs']
+    put('nvme_gib_per_token_decode', result['nvme_gib_decode'] / runs
+        if result['nvme_gib_decode'] is not None and runs and runs > 0 else None,
+        'need decode NVMe delta and positive eval_runs')
+    def window_values(names):
+        return next(([v for t, v in series(n) if start <= t <= end]
+                     for n in names if timed.get(n)), []) if start is not None else []
+
+    for key, names, fn in [
+            ('gpu_util_median', ['gpu_util'], statistics.median),
+            ('gpu_util_p90', ['gpu_util'], lambda v: sorted(v)[math.ceil(.9 * len(v)) - 1]),
+            ('device_util_median', ['device_util'], statistics.median),
+            ('power_in_w_median', ['power_VDD_IN_instant'], lambda v: statistics.median(v) / 1000),
+            ('temp_tj_max', ['temp_tj'], max),
+            ('gpu_freq_median', ['gpu_freq', 'gpu_freq_cur'], statistics.median),
+            ('emc_freq_median', ['emc_freq'], statistics.median)]:
+        samples = window_values(names)
+        # Keep legacy whole-run frequency support when no decode timing exists.
+        if key == 'gpu_freq_median' and start is None:
+            samples = next((values[n] for n in names if values.get(n)), [])
+        put(key, fn(samples) if samples else None, 'no decode-window samples: ' + ', '.join(names))
+    power = clipped('power_VDD_IN_instant', start,
+                    covered_end('power_VDD_IN_instant', end))
+    joules = sum((b - a) * (x + y) / 2000
+                 for (a, x), (b, y) in zip(power, power[1:])) if power else None
+    put('energy_j_per_token', joules / runs if joules is not None and runs and runs > 0 else None,
+        'need covered instant VDD_IN power, decode timing and positive eval_runs')
+    if write:
+        try:
+            (directory / 'summary.json').write_text(json.dumps(result, indent=2) + '\n')
+        except OSError as exc:
+            result['warnings'].append(f'cannot write summary.json: {exc.strerror}')
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('dirs', nargs='+')
+    parser.add_argument('--json', action='store_true')
+    parser.add_argument('--no-write', action='store_true')
+    parser.add_argument('--switch-regex', action='append', default=[])
+    args = parser.parse_args()
+    summaries = [summarize(d, args.switch_regex, not args.no_write) for d in args.dirs]
+    if args.json:
+        print(json.dumps(summaries[0] if len(summaries) == 1 else summaries, indent=2))
+    else:
+        for summary in summaries:
+            print(json.dumps(summary))
+
+
+if __name__ == '__main__':
+    main()
+#!/usr/bin/env python3
+"""Recompute a gate from saved summaries without changing original evidence."""
+import argparse
+import json
+from pathlib import Path
+import sys
+
+if __package__:
+    from . import abrun, gate, run_summary
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from cc.abrun import abrun, gate, run_summary
+
+
+def recompute(outdir, exclude=(), metric=None, reason=''):
+    outdir = Path(outdir)
+    spec = json.loads((outdir / 'spec.json').read_text())
+    grouped = {arm: [] for arm in spec['arms']}
+    paths = sorted(outdir.glob('*/summary.json'))
+    known = {p.parent.name for p in paths}
+    excluded = list(dict.fromkeys(exclude))
+    unknown = set(excluded) - known
+    if unknown:
+        raise ValueError('unknown excluded run IDs: ' + ', '.join(sorted(unknown)))
+    included, invalid = [], []
+    for path in paths:
+        run_id = path.parent.name
+        if run_id in excluded:
+            continue
+        arm = run_id.split('-', 1)[1]
+        if arm not in grouped:
+            raise ValueError(f'{run_id}: unknown arm {arm!r}')
+        summary = json.loads(path.read_text())
+        # Recompute available raw evidence, including precision and phase metrics.
+        # Summary-only archives remain readable; never overwrite their files.
+        if (path.parent / 'stderr.txt').exists():
+            observed = run_summary.summarize(path.parent, abrun.switch_patterns(spec), write=False)
+            summary.update(observed)
+        elif 'switch_matches' not in summary:
+            observed = run_summary.summarize(path.parent, abrun.switch_patterns(spec), write=False)
+            summary.update({key: observed[key] for key in ('switch_matches', 'switch_lines')})
+        invalid.extend(f'{run_id}: {error}' for error in abrun.switch_errors(spec, arm, summary))
+        grouped[arm].append(summary)
+        included.append(run_id)
+    verdict = gate.evaluate(grouped, metric or spec.get('metric', 'eval_ms_per_token'),
+                            direction=spec.get('direction') if metric is None else None)
+    invalid.extend(verdict['reasons'])
+    verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+                   excluded_runs=excluded, included_runs=included, reason=reason)
+    if invalid:
+        for comparison in verdict['comparisons'].values():
+            comparison['verdict'] = 'null'
+    return verdict
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('outdir', type=Path)
+    parser.add_argument('--exclude', nargs='+', action='extend', default=[], metavar='RUN_ID')
+    parser.add_argument('--metric')
+    parser.add_argument('--reason', default='')
+    parser.add_argument('--no-write', action='store_true')
+    parser.add_argument('--dry', action='store_true', help='print secondary table without writing any files')
+    args = parser.parse_args()
+    try:
+        verdict = recompute(args.outdir, args.exclude, args.metric, args.reason)
+        text = json.dumps(verdict, indent=2) + '\n'
+        if not args.no_write and not args.dry:
+            (args.outdir / 'verdict-regate.json').write_text(text)
+        if args.dry:
+            print(f'{args.outdir.name}: metric={verdict["metric"]}, direction={verdict["direction"]}')
+            print(gate.secondary_table(verdict))
+        else:
+            print(text, end='')
+    except (OSError, ValueError, KeyError) as exc:
+        parser.exit(1, f'regate: {exc}\n')
+
+
+if __name__ == '__main__':
+    main()
+
+codex
+All 75 abrun/resource_observe tests pass. The captured fixture reports exactly 716.54 ms/token, and the 3-second sample emitted seven `gpu_freq` readings in Hz. The docs describe the phase estimates, interpolation, and unknown absolute timing bound. I’m checking the final dry-run output and file scope.
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cc/abrun/gate.py')
+s=p.read_text().replace(\"        ratio = means[arm] / means[base] if means[arm] and means.get(base) else None\\n        if ratio is not None and direction == 'lower':\\n            ratio = 1 / ratio\", \"        ratio = None\\n        if means[arm] and means.get(base):\\n            ratio = (means[base] / means[arm] if direction == 'lower'\\n                     else means[arm] / means[base])\")
+p.write_text(s)
+p=Path('cc/resource_observe/resource_observe.py')
+s=p.read_text().replace('return next(iter(sorted(glob.glob(os.path.join(root, \"*.gpu\")))) , None)', 'return next(iter(sorted(glob.glob(os.path.join(root, \"*.gpu\")))), None)')
+p.write_text(s)
+PY
+python3 -m pytest cc/abrun cc/resource_observe -q
+python3 cc/abrun/regate.py experiments/jetson/OM/J-OM10c --dry" in /home/muk/projects/siminfeng/campaign
+exec
+/bin/bash -lc "git diff --check -- cc/resource_observe cc/abrun; python3 - <<'PY'
+from pathlib import Path
+import time
+# List files touched during H5, excluding bytecode and pre-existing work.
+for base in ('cc/abrun','cc/resource_observe','c2/METHODS.md'):
+    p=Path(base)
+    paths=p.rglob('*') if p.is_dir() else [p]
+    for f in paths:
+        if f.is_file() and '__pycache__' not in str(f) and time.time()-f.stat().st_mtime < 2400:
+            print(f)
+PY" in /home/muk/projects/siminfeng/campaign
+ succeeded in 0ms:
+cc/abrun/abrun.py
+cc/abrun/regate.py
+cc/abrun/run_summary.py
+cc/abrun/gate.py
+cc/abrun/test_abrun.py
+cc/abrun/README.md
+cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/result.json
+cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/stderr.txt
+cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/telemetry.jsonl
+cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/stdout.txt
+cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/README.md
+cc/resource_observe/resource_observe.py
+cc/resource_observe/README.md
+cc/resource_observe/test_resource_observe.py
+cc/resource_observe/tests/fixtures/gpu-devfreq/min_freq
+cc/resource_observe/tests/fixtures/gpu-devfreq/max_freq
+cc/resource_observe/tests/fixtures/gpu-devfreq/cur_freq
+cc/resource_observe/tests/fixtures/gpu-devfreq/README.md
+c2/METHODS.md
+
+ succeeded in 9009ms:
+........................................................................ [ 96%]
+...                                                                      [100%]
+75 passed in 7.28s
+J-OM10c: metric=eval_tps, direction=higher
+| Arm | ms/token | NVMe GiB/token (decode) | gpu_util med (%) | J/token | NVMe GiB/token (whole) | Prompt t/s | Eval t/s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| base | 840.975 | 0.253062 | 16.5 | 5.5484 | 0.873321 | 5.295 | 1.19 |
+| pg8b | 723.15 | 0.232149 | 18 | 5.14456 | 0.855608 | 5.58 | 1.385 |
+| pg8i8 | 720.34 | 0.244159 | 18 | 5.1594 | 0.865933 | 5.525 | 1.39 |
+| pg8i12 | 723.03 | 0.246511 | 18 | 5.17242 | 0.867498 | 5.675 | 1.38 |
+| pg10i8 | 712.8 | 0.237081 | 18 | 5.11002 | 0.860619 | 5.285 | 1.4 |
+
+codex
+Implemented; **75 tests pass**. `python3 cc/abrun/regate.py experiments/jetson/OM/J-OM10c --dry`:
+
+| Arm | ms/token | NVMe GiB/token (decode) | gpu_util med (%) | J/token | NVMe GiB/token (whole) | Prompt t/s | Eval t/s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| base | 840.975 | 0.253062 | 16.5 | 5.5484 | 0.873321 | 5.295 | 1.19 |
+| pg8b | 723.15 | 0.232149 | 18 | 5.14456 | 0.855608 | 5.58 | 1.385 |
+| pg8i8 | 720.34 | 0.244159 | 18 | 5.1594 | 0.865933 | 5.525 | 1.39 |
+| pg8i12 | 723.03 | 0.246511 | 18 | 5.17242 | 0.867498 | 5.675 | 1.38 |
+| pg10i8 | 712.8 | 0.237081 | 18 | 5.11002 | 0.860619 | 5.285 | 1.4 |
+
+Captured fixture asserts **716.54 ms/token**; 3-second sampling emitted seven `gpu_freq` readings in Hz.
+Phase method and timing uncertainty documented. No Docker/GPU jobs, commits, or writes under experiments/evidence.
+tokens used
+62,861
+Implemented; **75 tests pass**. `python3 cc/abrun/regate.py experiments/jetson/OM/J-OM10c --dry`:
+
+| Arm | ms/token | NVMe GiB/token (decode) | gpu_util med (%) | J/token | NVMe GiB/token (whole) | Prompt t/s | Eval t/s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| base | 840.975 | 0.253062 | 16.5 | 5.5484 | 0.873321 | 5.295 | 1.19 |
+| pg8b | 723.15 | 0.232149 | 18 | 5.14456 | 0.855608 | 5.58 | 1.385 |
+| pg8i8 | 720.34 | 0.244159 | 18 | 5.1594 | 0.865933 | 5.525 | 1.39 |
+| pg8i12 | 723.03 | 0.246511 | 18 | 5.17242 | 0.867498 | 5.675 | 1.38 |
+| pg10i8 | 712.8 | 0.237081 | 18 | 5.11002 | 0.860619 | 5.285 | 1.4 |
+
+Captured fixture asserts **716.54 ms/token**; 3-second sampling emitted seven `gpu_freq` readings in Hz.
+Phase method and timing uncertainty documented. No Docker/GPU jobs, commits, or writes under experiments/evidence.
