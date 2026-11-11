@@ -53,3 +53,8 @@ Use unique output directories per repetition. Run balanced orders such as base/p
 Snapshot the same physical NVMe device's `/sys/class/block/<device>/stat` at each window boundary (do not sum a partition and its parent). With deltas in completed reads (field 1) and sectors read (field 3), compute `NVMe GiB = sectors * 512 / 2^30` and `avg KiB/IO = sectors * 0.5 / reads`, undefined when reads is zero. Linux block-stat sectors are 512 bytes regardless of logical sector size. Report both metrics alongside decode tokens/s, advice calls/bytes/failures, prediction hits/total, refaults, minimum MemAvailable, and output equality. Include temperature/power and the exact image/source/patch identity. Compare with D033's roughly 56 GiB and 93-95 KiB/IO baseline versus 24 GiB and 4 KiB/IO whole-file RANDOM result; do not infer disk traffic from advice counters. A useful result needs lower NVMe bytes while retaining larger IO and improving decode speed.
 
 Validation performed here: combined `git apply --check` against the pinned reference and whitespace checking of the resulting patch. Compilation, execution, IO behavior, output equality, and prediction quality remain for the build/run owner, as required by the no-build/no-GPU assignment.
+
+J-OM12: `patches/09-thread-names.patch` follows 01..08 and names expert-fill
+workers `xfill-N`. `patches/combined-01-02-03-04-05-06-07-08-09.patch` is the
+single patch for fresh cf34d311. Syntax-only and byte-equality verification is
+in `../expert_fill/COMPILE-CHECK.txt` under 09; no engine image was built.

@@ -144,3 +144,14 @@ from leak detection; signatures belonging to other arms still count as leaks.
 The flag defaults to false, preserving existing activation checks. It requires
 a nonempty per-arm regex list and a boolean value. Treatment arms keep the
 ordinary ALL-match checks for effective values and component activation.
+
+J-OM12 adds optional top-level `"threads": true`. It places `OM_THREADS=1` in
+all planned runner commands; om_run starts an unprivileged host proc sampler
+following container startup and writes `threads.jsonl`, `threads.summary.json`,
+and `threads.log`. With the variable unset, the Docker run command is unchanged.
+Per-arm `"extra_argv": ["-t", "4"]` appends to common argv and is included in
+image/tool preflight validation. `run_summary` recomputes the thread decode
+window from the last eval timing and includes `threads.cpu_workers_r_fraction`,
+`threads.main_workers_d_fraction`, and `threads.majflt_per_token` in the descriptive
+secondary table. See [thread sampler](../thread_sampler/README.md) for the schema,
+measured overhead, and phase alignment limits.

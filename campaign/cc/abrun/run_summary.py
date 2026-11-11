@@ -7,6 +7,10 @@ import math
 from pathlib import Path
 import re
 import statistics
+import sys
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 def numeric(value):
@@ -264,6 +268,25 @@ def summarize(directory, switch_regex=(), write=True):
                  for (a, x), (b, y) in zip(power, power[1:])) if power else None
     put('energy_j_per_token', joules / runs if joules is not None and runs and runs > 0 else None,
         'need covered instant VDD_IN power, decode timing and positive eval_runs')
+    # Use the thread capture's own last sample as the exit endpoint, like telemetry.
+    thread_path = directory / 'threads.jsonl'
+    thread_summary = None
+    if thread_path.exists():
+        try:
+            from cc.thread_sampler.thread_sampler import aggregate
+            thread_summary = aggregate(thread_path, result['eval_ms_total'], result['eval_runs'])
+            if write:
+                (directory / 'threads.summary.json').write_text(json.dumps(thread_summary, indent=2) + '\n')
+        except (OSError, ValueError, KeyError) as exc:
+            result['warnings'].append(f'threads: {exc}')
+    elif (directory / 'threads.summary.json').exists():
+        try:
+            thread_summary = json.loads((directory / 'threads.summary.json').read_text())
+        except (OSError, ValueError) as exc:
+            result['warnings'].append(f'threads: {exc}')
+    for field in ('cpu_workers_r_fraction', 'main_workers_d_fraction', 'majflt_per_token'):
+        value = thread_summary.get(field) if isinstance(thread_summary, dict) else None
+        put('threads.' + field, value, 'thread capture or decode window unavailable')
     if write:
         try:
             (directory / 'summary.json').write_text(json.dumps(result, indent=2) + '\n')

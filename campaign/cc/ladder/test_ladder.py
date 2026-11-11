@@ -136,7 +136,7 @@ def test_speed_plan_counterbalanced(capsys, tmp_path):
     assert output.count('om_run.sh') == 6
     assert output.count('-n 256 --temp 0 -s 1') == 12  # om_run + container preview
     assert ladder.SPEED_ORDER == tuple(reversed(ladder.SPEED_ORDER))
-    assert '--reasoning off' in output and 'enable_thinking' in output
+    assert '--reasoning off' in output and '--chat-template-kwargs' not in output  # unsupported by llama-completion at cf34d311
     assert list(tmp_path.iterdir()) == []
 
 

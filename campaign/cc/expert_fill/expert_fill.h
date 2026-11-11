@@ -22,6 +22,7 @@
 #include <string>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <pthread.h>
 #include <thread>
 #include <unistd.h>
 #include <vector>
@@ -434,6 +435,11 @@ private:
         for (auto & t : workers_) { t.join(); }
     }
     void worker(size_t index) {
+#if defined(__linux__)
+        char name[16];
+        snprintf(name, sizeof(name), "xfill-%zu", index);
+        (void) pthread_setname_np(pthread_self(), name);
+#endif
         for (;;) {
             Range job {};
             Async async;

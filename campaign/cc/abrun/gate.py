@@ -12,7 +12,9 @@ def finite(value):
 
 
 SECONDARY_FIELDS = ('nvme_gib_per_token', 'prompt_tps', 'eval_tps', 'eval_ms_per_token',
-                    'nvme_gib_per_token_decode', 'gpu_util_median', 'energy_j_per_token')
+                    'nvme_gib_per_token_decode', 'gpu_util_median', 'energy_j_per_token',
+                    'threads.cpu_workers_r_fraction', 'threads.main_workers_d_fraction',
+                    'threads.majflt_per_token')
 
 
 def metric_direction(metric, direction=None):
@@ -24,9 +26,11 @@ def metric_direction(metric, direction=None):
 
 def secondary_table(verdict):
     fields = ('eval_ms_per_token', 'nvme_gib_per_token_decode', 'gpu_util_median',
-              'energy_j_per_token', 'nvme_gib_per_token', 'prompt_tps', 'eval_tps')
-    lines = ['| Arm | ms/token | NVMe GiB/token (decode) | gpu_util med (%) | J/token | NVMe GiB/token (whole) | Prompt t/s | Eval t/s |',
-             '|---|---:|---:|---:|---:|---:|---:|---:|']
+              'energy_j_per_token', 'nvme_gib_per_token', 'prompt_tps', 'eval_tps',
+              'threads.cpu_workers_r_fraction', 'threads.main_workers_d_fraction',
+              'threads.majflt_per_token')
+    lines = ['| Arm | ms/token | NVMe GiB/token (decode) | gpu_util med (%) | J/token | NVMe GiB/token (whole) | Prompt t/s | Eval t/s | CPU workers R | Main+workers D | Threads majflt/token |',
+             '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
     for arm, metrics in verdict['secondary_metrics'].items():
         values = [format(metrics[f], '.6g') if finite(metrics.get(f)) else '—' for f in fields]
         lines.append('| ' + ' | '.join([arm, *values]) + ' |')

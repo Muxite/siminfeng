@@ -35,6 +35,8 @@ def validate(spec):
         raise ValueError('outdir_base must be a nonempty path')
     if not isinstance(spec['argv'], list) or not all(isinstance(x, str) for x in spec['argv']):
         raise ValueError('argv must be an array of strings')
+    if not isinstance(spec.get('threads', False), bool):
+        raise ValueError('threads must be boolean')
     arms = spec['arms']
     if not isinstance(arms, dict) or len(arms) < 2 or 'base' not in arms:
         raise ValueError('arms must contain base and at least one treatment')
@@ -43,6 +45,9 @@ def validate(spec):
             raise ValueError('invalid arm')
         if not isinstance(arm.get('image'), str) or not arm['image']:
             raise ValueError(f'{name}: missing image')
+        extra = arm.get('extra_argv', [])
+        if not isinstance(extra, list) or not all(isinstance(x, str) for x in extra):
+            raise ValueError(f'{name}: extra_argv must be an array of strings')
         env = arm.get('env', {})
         if not isinstance(env, dict) or any(not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', k)
                                            or not isinstance(v, str) or re.search(r'\s', v)
@@ -104,7 +109,9 @@ def plan(spec):
         env_flags = ' '.join(f'-e {k}={v}' for k, v in config.get('env', {}).items())
         override = os.environ.get('ABRUN_RUNNER')
         runner = shlex.split(override) if override else [str(ROOT / 'cc/om_run/om_run.sh')]
-        command = runner + [str(directory), config['image'], env_flags, spec['tool']] + spec['argv']
+        command = runner + [str(directory), config['image'], env_flags, spec['tool']] + spec['argv'] + config.get('extra_argv', [])
+        if spec.get('threads'):
+            command = ['env', 'OM_THREADS=1'] + command
         if not override:
             command = [str(ROOT / 'bin/run_op'), '--agent', 'abrun', '--task', spec['id'], '--'] + command
         runs.append({'index': index, 'arm': arm, 'dir': str(directory), 'command': command})
@@ -175,9 +182,10 @@ def execute(spec, out, runs):
     try:
         checked = set()
         for arm in spec['arms'].values():
-            key = (arm['image'], spec['tool'])
+            argv = spec['argv'] + arm.get('extra_argv', [])
+            key = (arm['image'], spec['tool'], tuple(argv))
             if key not in checked:
-                preflight.check(*key, spec['argv'])
+                preflight.check(arm['image'], spec['tool'], argv)
                 checked.add(key)
         for run in runs:
             rc = subprocess.run(run['command'], cwd=ROOT).returncode

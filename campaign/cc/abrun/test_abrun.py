@@ -367,7 +367,9 @@ def test_regate_exclude_and_preserve_data(tmp_path):
     assert verdict['reason'] == 'overlap'
     assert verdict['comparisons']['pf']['verdict'] == 'improved'
     assert verdict['secondary_metrics']['pf'] == dict(nvme_gib_per_token=.5, prompt_tps=20, eval_tps=110,
-        eval_ms_per_token=None, nvme_gib_per_token_decode=None, gpu_util_median=None, energy_j_per_token=None)
+        eval_ms_per_token=None, nvme_gib_per_token_decode=None, gpu_util_median=None, energy_j_per_token=None,
+        **{'threads.cpu_workers_r_fraction': None, 'threads.main_workers_d_fraction': None,
+           'threads.majflt_per_token': None})
     assert not (tmp_path/'verdict-regate.json').exists()
     subprocess.run(args, capture_output=True, text=True, check=True)
     assert json.loads((tmp_path/'verdict-regate.json').read_text()) == verdict
@@ -384,7 +386,9 @@ def test_secondary_metrics_do_not_affect_gate():
     verdict = gate.evaluate(arms)
     assert verdict['comparisons']['pf']['verdict'] == 'improved'
     assert verdict['secondary_metrics']['pf'] == dict(nvme_gib_per_token=3, prompt_tps=10, eval_tps=110,
-        eval_ms_per_token=None, nvme_gib_per_token_decode=None, gpu_util_median=None, energy_j_per_token=None)
+        eval_ms_per_token=None, nvme_gib_per_token_decode=None, gpu_util_median=None, energy_j_per_token=None,
+        **{'threads.cpu_workers_r_fraction': None, 'threads.main_workers_d_fraction': None,
+           'threads.majflt_per_token': None})
 
 
 CAPTURED = Path(__file__).parent / 'tests/fixtures/J-OM10c-003-pg8i8'

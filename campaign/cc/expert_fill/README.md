@@ -437,3 +437,12 @@ K and lookahead, on the same line. The base has no env and uses
 `switch_regex_is_config` to assert disabled defaults without treating its own
 effective-config line as activation; other arm activation signatures still fail
 that control. All ordinary switch checks preserve their previous semantics.
+
+### 09 / J-OM12 thread names
+
+`09-thread-names.patch` adds `pthread_setname_np(pthread_self(), "xfill-N")`
+at each expert-fill worker's entry, guarded by `__linux__`. The return value is
+ignored: naming is diagnostic and does not affect scheduling, dispatch, or IO.
+The canonical header and combined 01..09 patch contain the same change.
+Fresh zero-fuzz application, tree/header equality, and all five touched C++
+syntax checks are recorded in `COMPILE-CHECK.txt` under 09.

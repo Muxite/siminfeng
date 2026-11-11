@@ -682,3 +682,140 @@ Source sites: ExpertConfig::read -> integer(K,8,1,32) -> invalid -> std::abort;
 ExpertConfig::print -> fprintf("expert_config: effective ..."), called once in context constructor.
 Arrival snapshots and cancellation are under the same per-file dispatch lock.
 No Docker, GPU, full engine build, commits, or evidence edits performed.
+
+09 / J-OM12 thread names: fresh cf34d311, no Docker/GPU/full build.
+$ patch -p1 -F0 --batch -i /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/01-mmap-advice-random.patch
+cwd: /tmp/j-om12-check-seq
+patching file src/llama-mmap.cpp
+
+(stderr empty)
+exit 0
+$ patch -p1 -F0 --batch -i /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/02-router-prefetch.patch
+cwd: /tmp/j-om12-check-seq
+patching file ggml/include/ggml-backend.h
+patching file ggml/src/ggml-backend.cpp
+patching file src/llama-context.cpp
+patching file src/llama-context.h
+patching file src/llama-mmap.cpp
+patching file src/llama-model-loader.cpp
+patching file src/llama-model.cpp
+patching file src/llama-model.h
+
+(stderr empty)
+exit 0
+$ patch -p1 -F0 --batch -i /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/03-expert-fill.patch
+cwd: /tmp/j-om12-check-seq
+patching file src/llama-context.cpp
+patching file src/llama-context.h
+patching file src/llama-expert-fill.h
+patching file src/llama-mmap.cpp
+patching file src/llama-model-loader.cpp
+patching file src/llama-model.cpp
+patching file src/llama-model.h
+
+(stderr empty)
+exit 0
+$ patch -p1 -F0 --batch -i /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/04-fill-phase.patch
+cwd: /tmp/j-om12-check-seq
+patching file src/llama-context.cpp
+patching file src/llama-context.h
+patching file src/llama-expert-fill.h
+
+(stderr empty)
+exit 0
+$ patch -p1 -F0 --batch -i /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/05-fill-diag.patch
+cwd: /tmp/j-om12-check-seq
+patching file src/llama-context.cpp
+patching file src/llama-context.h
+patching file src/llama-expert-fill.h
+
+(stderr empty)
+exit 0
+$ patch -p1 -F0 --batch -i /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/06-pregate.patch
+cwd: /tmp/j-om12-check-seq
+patching file src/llama-context.cpp
+patching file src/llama-context.h
+patching file src/llama-expert-fill.h
+patching file src/llama-model.cpp
+patching file src/llama-model.h
+
+(stderr empty)
+exit 0
+$ patch -p1 -F0 --batch -i /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/07-pregate-sched.patch
+cwd: /tmp/j-om12-check-seq
+patching file src/llama-context.cpp
+patching file src/llama-context.h
+patching file src/llama-expert-fill.h
+
+(stderr empty)
+exit 0
+$ patch -p1 -F0 --batch -i /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/08-pregate-observe.patch
+cwd: /tmp/j-om12-check-seq
+patching file src/llama-context.cpp
+patching file src/llama-context.h
+patching file src/llama-expert-fill.h
+patching file src/llama-mmap.cpp
+patching file src/llama-model-loader.cpp
+patching file src/llama-model.cpp
+
+(stderr empty)
+exit 0
+$ patch -p1 -F0 --batch -i /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/09-thread-names.patch
+cwd: /tmp/j-om12-check-seq
+patching file src/llama-expert-fill.h
+
+(stderr empty)
+exit 0
+$ patch -p1 -F0 --batch -i /home/muk/projects/siminfeng/campaign/cc/mmap_advice/patches/combined-01-02-03-04-05-06-07-08-09.patch
+cwd: /tmp/j-om12-check-combined
+patching file ggml/include/ggml-backend.h
+patching file ggml/src/ggml-backend.cpp
+patching file src/llama-context.cpp
+patching file src/llama-context.h
+patching file src/llama-expert-fill.h
+patching file src/llama-mmap.cpp
+patching file src/llama-model-loader.cpp
+patching file src/llama-model.cpp
+patching file src/llama-model.h
+
+(stderr empty)
+exit 0
+$ diff -r /tmp/j-om12-check-seq /tmp/j-om12-check-combined
+cwd: /home/muk/projects/siminfeng/campaign
+(stdout empty)
+(stderr empty)
+exit 0
+$ cmp /home/muk/projects/siminfeng/campaign/cc/expert_fill/expert_fill.h /tmp/j-om12-check-combined/src/llama-expert-fill.h
+cwd: /home/muk/projects/siminfeng/campaign
+(stdout empty)
+(stderr empty)
+exit 0
+Combined added-header extraction: byte equal to canonical header.
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src ggml/src/ggml-backend.cpp
+cwd: /tmp/j-om12-check-combined
+(stdout empty)
+(stderr empty)
+exit 0
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-context.cpp
+cwd: /tmp/j-om12-check-combined
+(stdout empty)
+(stderr empty)
+exit 0
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-mmap.cpp
+cwd: /tmp/j-om12-check-combined
+(stdout empty)
+(stderr empty)
+exit 0
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model-loader.cpp
+cwd: /tmp/j-om12-check-combined
+(stdout empty)
+(stderr empty)
+exit 0
+$ g++ -std=c++17 -fsyntax-only -pthread -Iinclude -Iggml/include -Isrc -Iggml/src src/llama-model.cpp
+cwd: /tmp/j-om12-check-combined
+(stdout empty)
+(stderr empty)
+exit 0
+SHA256 0b4768b97ea4a563b1d9042b22e9df2bc4948127329ac3df75fae4736b98d030 09-thread-names.patch
+SHA256 639a5f475106689dac3a8408bfa26c5ad175702026a2310cb0027b0cb37748f4 combined-01-02-03-04-05-06-07-08-09.patch
+PASS 09: sequential 01..09 == combined with patch -F0; canonical/applied/extracted headers byte equal; five syntax checks exit 0.

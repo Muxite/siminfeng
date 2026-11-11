@@ -27,6 +27,9 @@ Stopped: container `euaaa-llm-gpu-1` (`docker start euaaa-llm-gpu-1`) and user u
 ## Resume
 `pip`-free: python3 stdlib + PyYAML/pytest. Re-create the lab: `bin/lab image add llamacpp-31288c9 ghcr.io/ggml-org/llama.cpp@sha256:395d01bb47eb23d5e967129c6ebd2b5969365401621e16dd3db33e50fa7462e3`; build an engine: `python3 cc/build_engine/build_engine.py --source <llama.cpp> --commit 31288c9c6 [--patch P] [--extra-target T] --tag X --out builds/results/Y` (needs BASE_RUNTIME digest, see cc/build_engine/README.md).
 
+## Unified-memory lane c2 (Jetson Orin Nano, branch main / jetson/c1) — ACTIVE 2026-11-11
+**Read `c2/STATUS.md` first** (goal: best model on 8 GB at >=2/5/10 tok/s; current results; tooling map). Plan: `c2/PLAN.md`; methods: `c2/METHODS.md`; decisions D034-D036.
+
 ## Jetson lane (jetson-arm, branch jetson/c1) — CLOSED OUT 2026-11-10
 **Read `CLOSEOUT.md` first** (full experiment/attempt ledger, predictions vs observations, CC candidates, resume steps). Then `handoff/jetson-checkpoint-1.md`, `handoff/jetson/REPLY-1.md`, `research/x86-c2-digest.md`.
 Decision numbering: Jetson D021–D033 collide with x86 D021–D048 (proposal: rename ours J-D0xx; not yet agreed).

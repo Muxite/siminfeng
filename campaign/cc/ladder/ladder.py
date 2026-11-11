@@ -89,7 +89,6 @@ def completion_argv(model, config, prompt, tokens):
     return [*config['argv'], '-m', '/om/' + Path(model['path']).name,
             '-p', prompt, '-n', str(tokens), '--temp', '0', '-s', '1',
             '-cnv', '-st', '--jinja', '--reasoning', 'off',
-            '--chat-template-kwargs', json.dumps(model['template_kwargs'], separators=(',', ':')),
             '--ignore-eos', '--no-display-prompt']
 
 
