@@ -3,7 +3,7 @@ name: engine-build
 description: Use when building a pinned inference engine or applying a candidate patch through Build CC on this lab.
 ---
 
-Work from /home/muk/projects/siminfeng/campaign.
+Work from /home/muk/projects/siminfeng.
 Read cc/build_engine/README.md and c2/METHODS.md build identity/ops guidance.
 Read decisions/D024-bulk-build-outputs-nearly-pushed.md and
 decisions/D026-ccache-verified-binaries-not-reproducible.md.

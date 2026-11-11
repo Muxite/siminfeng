@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""perf_summary JOB [JOB2 ...]: per-test across attempts: attempt mean (tokens/s), first-sample vs rest, across-attempt spread. Keeps raw samples; flags non-exclusive runs."""
+import json, glob, os, sys, statistics as st
+LAB = os.path.expanduser("~/projects/siminfeng/lab")
+for job in sys.argv[1:]:
+    per = {}
+    for f in sorted(glob.glob(f"{LAB}/jobs/{job}/att-*/result.json")):
+        r = json.load(open(f))
+        if r["execution"]["status"] != "completed": print("skip", f, r["execution"]["status"]); continue
+        if not r["performance"].get("exclusive_before_after", False): print("WARN non-exclusive:", f)
+        for t, v in r["quality"]["tests"].items():
+            for s in v.get("samples", []):
+                key = f"{t.split('#')[0]}:{'pp' if s['n_prompt'] and not s['n_gen'] else 'tg' if s['n_gen'] and not s['n_prompt'] else 'pg'}"
+                per.setdefault(key, []).append((r["attempt"], s["avg_ts"], s["samples_ts"]))
+    print(f"== {job}")
+    for k, rows in per.items():
+        means = [m for _, m, _ in rows]; first = [x[2][0] for x in rows if x[2]]; rest = [statistics_mean for x in rows if x[2] for statistics_mean in [st.mean(x[2][1:])]]
+        spread = (max(means) - min(means)) / st.mean(means) * 100
+        print(f"{k:22s} n_att={len(rows)} mean_of_means={st.mean(means):10.1f} t/s  across-attempt spread={spread:5.2f}%  first-sample/rest={st.mean(first)/st.mean(rest):.3f}  within-attempt cv={st.mean([st.pstdev(x[2])/st.mean(x[2])*100 for x in rows if x[2]]):.2f}%")

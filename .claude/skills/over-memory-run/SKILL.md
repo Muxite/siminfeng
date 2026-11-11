@@ -3,7 +3,7 @@ name: over-memory-run
 description: Use when running or assessing inference with weights larger than Jetson physical DRAM, including loader and cache comparisons.
 ---
 
-Work from /home/muk/projects/siminfeng/campaign.
+Work from /home/muk/projects/siminfeng.
 Read c2/METHODS.md over-memory/IO methods, cc/om_run/om_run.sh,
 cc/resource_observe/README.md and decisions/D028 through D033 as relevant.
 

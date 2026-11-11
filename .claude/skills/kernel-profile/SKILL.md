@@ -3,7 +3,7 @@ name: kernel-profile
 description: Use when investigating decode kernel costs with Nsight Systems or screening a kernel-local patch before a full engine experiment.
 ---
 
-Work from /home/muk/projects/siminfeng/campaign.
+Work from /home/muk/projects/siminfeng.
 Read c2/METHODS.md profiling methods, cc/kernel_screen/README.md,
 experiments/jetson/J-P001-nsys-decode/FINDINGS.md,
 decisions/D025-jetson-moe-gateup-mmf-decode-gain.md and

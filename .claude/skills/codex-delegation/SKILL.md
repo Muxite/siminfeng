@@ -3,7 +3,7 @@ name: codex-delegation
 description: Use when assigning bounded campaign work to a Codex worker and arranging independent acceptance check-in.
 ---
 
-Work from /home/muk/projects/siminfeng/campaign.
+Work from /home/muk/projects/siminfeng.
 Read c2/PLAN.md, c2/METHODS.md delegation protocol, c2/launch_codex.sh,
 assignments/H1-jobq.md and assignments/J-OM8-expert-pread-fill.md.
 

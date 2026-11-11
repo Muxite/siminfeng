@@ -1,0 +1,503 @@
+#!/usr/bin/env python3
+"""lab — feasibility core of a "lab": image(container) + tests -> job -> attempts -> evidence. No UI. Discovery prototype.
+  lab image add NAME REF [--declared] [--platform P] [--requirements BUILD.json]   register an image by immutable id/digest
+  lab submit --image N --model P --tests a,b --key K [--res cpus=8,memory=16g,timeout_s=300]   idempotent by key; job.json is immutable
+  lab run JOB                       new attempt (retry = new attempt); no GPU admission control (lock removed)
+  lab cancel JOB ATT                request cancellation (confirmed only when owned containers are gone)
+  lab status [JOB]                  states
+  lab reconcile                     inspect non-terminal attempts against REAL processes/containers; never trusts heartbeats
+  lab register JOB ATT              register result into index (idempotent; stale/conflicting rejected)
+Tegrastats inherits the runner process group and is closed on exit/signals.
+SIGKILL of the runner can orphan it; reconcile kills the recorded lab child
+using owner.json PID + process start time.
+Store: $LAB/{images,jobs,index}. Fault injection for recovery tests: LAB_FAULT=die_after_start|die_in_export
+"""
+import atexit, signal, json, sys, os, re, time, uuid, hashlib, fcntl, subprocess, argparse, shutil, datetime as dt, glob, shlex, importlib.util, math
+LAB = os.environ.get("LAB", os.path.expanduser("~/projects/siminfeng/lab"))
+CID = os.environ.get("CAMPAIGN_ID", "c1")
+now = lambda: dt.datetime.now(dt.timezone.utc).isoformat()
+def jd(o): return json.dumps(o, sort_keys=True)
+def sha(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""): h.update(b)
+    return h.hexdigest()
+def sha_s(s): return hashlib.sha256(s.encode()).hexdigest()
+ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+def docker_argv(cmd):
+    prefix = os.environ.get("DOCKER_CMD_PREFIX", "")
+    return shlex.split(prefix) + [shlex.join(cmd)] if prefix and cmd[0] == "docker" else cmd
+
+def sh(cmd, **kw): return subprocess.run(docker_argv(cmd), capture_output=True, text=True, **kw)
+
+def load_host(host_id=None):
+    if host_id is None:
+        try: host_id = open(os.path.expanduser("~/.config/siminfeng/host_id")).read().strip()
+        except FileNotFoundError: host_id = "x86-main"
+        host_id = host_id or "x86-main"
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", host_id): raise ValueError("invalid host id")
+    path = os.path.join(ROOT, "lab", "hosts", host_id + ".json")
+    try: profile = json.load(open(path))
+    except FileNotFoundError:
+        print("ERROR: unknown host or missing profile; expected " + path); sys.exit(12)
+    if profile["host_id"] != host_id: raise ValueError("host profile id mismatch")
+    return profile, sha(path)
+
+def gpu_request(host):
+    if host["gpu"]["request"] == "gpus-all": return ["--gpus", "all"]
+    if host["gpu"]["request"] == "nvidia-runtime-env":
+        return ["--runtime", "nvidia", "-e", "NVIDIA_VISIBLE_DEVICES=all", "-e", "NVIDIA_DRIVER_CAPABILITIES=compute,utility"]
+    raise ValueError("unsupported GPU request")
+
+def memory_bytes(value):
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([bkmg]?)(?:b)?", str(value).lower())
+    if not m: raise ValueError("invalid memory: " + str(value))
+    return float(m[1]) * 1024 ** ("bkmg".index(m[2]) if m[2] else 0)
+
+def admission(img, spec, host, profile_sha):
+    try: return _admission(img, spec, host, profile_sha)
+    except Exception as ex:
+        return dict(decision="needs_information", reasons=["admission error: " + str(ex)], host_id=host["host_id"], host_profile_sha256=profile_sha)
+
+def _admission(img, spec, host, profile_sha):
+    rejected, missing, notes = [], [], []
+    if img.get("unknown_record"):
+        return dict(decision="needs_information", reasons=["unknown image record " + img["unknown_record"]], host_id=host["host_id"], host_profile_sha256=profile_sha)
+    if img.get("verified_locally") is False: missing.append("image not verified on this host")
+    req = img.get("target_requirements") or {}
+    legacy = host["host_id"] == "x86-main" and not img.get("platform") and not req
+    if legacy: notes.append("legacy image record: platform unverified")
+    else:
+        if not img.get("platform"): missing.append("image platform missing")
+        if not req: missing.append("image target_requirements missing")
+        for source in (img, req):
+            if source.get("platform") and source["platform"] != host["platform"]: rejected.append("platform mismatch: " + str(source["platform"]))
+        for key, expected in (("cuda_arch", host["gpu"]["arch"]), ("l4t_major", host.get("l4t_major"))):
+            if key in req and str(req[key]) != str(expected): rejected.append(key + " mismatch")
+        if req:
+            for key in ("platform", "cuda_arch", "runtime") + (("l4t_major",) if host.get("l4t_major") else ()):
+                if not req.get(key): missing.append("image requirement missing: " + key)
+    for key in ("cpus", "memory"):
+        try:
+            convert = float if key == "cpus" else memory_bytes
+            value = convert(spec["resources"][key]); limit = convert(host["resources_max"][key])
+            if not math.isfinite(value) or value <= 0 or value > limit: rejected.append(key + " exceeds host max or is invalid")
+        except (ValueError, TypeError): rejected.append("invalid resource: " + key)
+    for test in spec["tests"]:
+        td = TESTS.get(test, {})
+        if td.get("memory") and memory_bytes(td["memory"]) > memory_bytes(host["resources_max"]["memory"]): rejected.append("test memory exceeds host max: " + test)
+        if td.get("needs_data") and not spec.get("data"): missing.append("data path missing")
+        if td.get("model_file") and not os.path.isfile(os.path.join(os.path.dirname(spec["model"]), td["model_file"])): missing.append("test model path missing: " + test)
+    for key in ("model", "data"):
+        if (key == "model" or spec.get(key)) and not os.path.isfile(spec.get(key) or ""): missing.append(key + " path missing")
+    return dict(decision="rejected" if rejected else "needs_information" if missing else "accepted", reasons=list(dict.fromkeys(rejected + missing + notes)),
+                host_id=host["host_id"], host_profile_sha256=profile_sha)
+
+def require_admission(*decisions):
+    for decision in decisions:
+        if decision and decision["decision"] != "accepted":
+            print("REJECT: " + decision["decision"] + ": " + "; ".join(decision["reasons"])); sys.exit(10)
+
+_observer = None
+def observer():
+    global _observer
+    if _observer is None:
+        spec = importlib.util.spec_from_file_location("lab_resource_observe", os.path.join(ROOT, "cc/resource_observe/resource_observe.py"))
+        _observer = importlib.util.module_from_spec(spec); spec.loader.exec_module(_observer)
+    return _observer
+
+def parse_memory(text, backend):
+    if backend == "tegrastats":
+        metrics, unavailable, errors = observer().parse_tegrastats(text)
+        value = next((m["value"] for m in metrics if m["name"] == "ram_used"), None)
+        return value, None if value is not None else "tegrastats RAM field missing or unparseable"
+    text = text.strip()
+    if re.fullmatch(r"\d+", text): return int(text), None
+    return None, "nvidia-smi memory.used unavailable or unparseable: " + repr(text)
+
+class MemorySampler:
+    def __init__(self, host):
+        self.backend = host["gpu"]["sampler"]; self.reader = None; self.reason = None
+        if self.backend == "tegrastats":
+            try:
+                self.reader = observer().TegrastatsReader(250)
+                # Reader inherits the runner process group (no new session).
+                atexit.register(self.close)
+            except OSError as ex: self.reason = str(ex)
+    def baseline(self):
+        deadline = time.monotonic() + 2
+        while True:
+            value, reason = self.sample()
+            remaining = deadline - time.monotonic()
+            if value is not None or self.backend != "tegrastats" or remaining <= 0 or not self.reader:
+                return value, reason
+            time.sleep(min(0.025, remaining))
+    def sample(self):
+        if self.backend == "tegrastats":
+            lines = self.reader.drain() if self.reader else []
+            return parse_memory(lines[-1], self.backend) if lines else (None, self.reason or "no tegrastats sample available")
+        try:
+            r = sh(["nvidia-smi","--query-gpu=memory.used","--format=csv,noheader,nounits"])
+            return parse_memory(r.stdout, self.backend) if not r.returncode else (None, "nvidia-smi failed: " + r.stderr.strip())
+        except OSError as ex: return None, str(ex)
+    def close(self):
+        if self.reader:
+            reader, self.reader = self.reader, None
+            try: reader.close()
+            except ProcessLookupError: pass
+            try: reader.p.wait(timeout=2)
+            except subprocess.TimeoutExpired: reader.p.kill(); reader.p.wait()
+
+def append(path, rec):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try: fcntl.flock(fd, fcntl.LOCK_EX); os.write(fd, (jd(rec) + "\n").encode()); os.fsync(fd)
+    finally: os.close(fd)
+def proc_start(pid):
+    try: return open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[19]
+    except Exception: return None
+def last_state(adir):
+    p = os.path.join(adir, "state.jsonl")
+    rows = [json.loads(l) for l in open(p)] if os.path.exists(p) else []
+    return rows[-1] if rows else None
+
+# ---- test definitions: how an image's tools are exercised and judged (the "tests" half of a lab) ----
+def load_tests():
+    t = {}
+    import glob as g
+    for f in sorted(g.glob(os.path.join(LAB, "tests", "*.json"))): t.update(json.load(open(f)))
+    return t
+TESTS = load_tests()
+def assess(test, out, err, rc):
+    txt = out + "\n" + err
+    if TESTS[test].get("parser") == "ppl":
+        m = re.search(r"Final estimate: PPL = ([\d.]+) \+/- ([\d.]+)", txt)
+        return dict(ok=rc == 0 and bool(m), ppl=float(m.group(1)) if m else None, ppl_stderr=float(m.group(2)) if m else None)
+    if TESTS[test].get("parser") == "kl":
+        g = lambda pat: (lambda m: float(m.group(1)) if m else None)(re.search(pat, txt))
+        return dict(ok=rc == 0 and g(r"Mean\s+KLD:\s+([\d.]+)") is not None, kld=g(r"Mean\s+KLD:\s+([\d.]+)"), kld_p99=g(r"99.0%\s+KLD:\s+([\d.]+)"),
+                    top1_pct=g(r"Same top p:\s+([\d.]+)"), ppl_ratio=g(r"Mean PPL\(Q\)/PPL\(base\)\s*:\s+([\d.]+)"), ppl=g(r"Mean PPL\(Q\)\s*:\s+([\d.]+)"))
+    if TESTS[test].get("parser") == "completion":
+        m = re.findall(r"\beval time =\s+([\d.]+) ms /\s+(\d+) (?:runs|tokens).*?([\d.]+) tokens per second", txt)
+        pe = re.findall(r"prompt eval time =\s+([\d.]+) ms /\s+(\d+) tokens.*?([\d.]+) tokens per second", txt)
+        dec = [x for x in m]   # lines starting with 'eval time' (decode); 'prompt eval time' captured separately
+        return dict(ok=rc == 0 and bool(dec), decode_tps=float(dec[-1][2]) if dec else None, decode_tokens=int(dec[-1][1]) if dec else None,
+                    prefill_tps=float(pe[-1][2]) if pe else None, prefill_tokens=int(pe[-1][1]) if pe else None, text_head=out.strip()[-160:])
+    if TESTS[test].get("parser") == "gen":
+        return dict(ok=rc == 0 and len(out.strip()) > 20, chars=len(out.strip()), head=out.strip()[:120])
+    if TESTS[test].get("parser") == "bench_json":
+        try: rows = json.loads(out[out.index("["):out.rindex("]") + 1])
+        except Exception: return dict(ok=False, parse_error=True)
+        return dict(ok=rc == 0 and bool(rows), samples=[dict(n_prompt=r["n_prompt"], n_gen=r["n_gen"], avg_ts=r["avg_ts"], samples_ts=r.get("samples_ts")) for r in rows])
+    return dict(ok=rc == 0)
+
+def gpu_state(host=None):
+    host = host or load_host()[0]
+    if host["gpu"]["sampler"] == "tegrastats":
+        return dict(gpu=None, compute_apps=None, unavailable=["GPU memory and compute-app enumeration unavailable on shared DRAM; tegrastats RAM is system-shared-dram"])
+    try:
+        r = sh(["nvidia-smi","--query-gpu=memory.used,clocks.sm,temperature.gpu,power.draw","--format=csv,noheader"])
+        a = sh(["nvidia-smi","--query-compute-apps=pid,used_memory","--format=csv,noheader"])
+        q = r.stdout.strip(); apps = a.stdout.strip().splitlines()
+        if r.returncode or not q or re.search(r"N/A|Not Supported", q.split(",")[0], re.I):
+            return dict(gpu=None, compute_apps=None, unavailable=["nvidia-smi fields unavailable: " + (r.stderr + a.stderr + q).strip()])
+        return dict(gpu=q, compute_apps=None if a.returncode else apps)
+    except OSError as ex: return dict(gpu=None, compute_apps=None, unavailable=[str(ex)])
+
+def read_int(path):
+    try: return int(open(path).read().strip())
+    except Exception: return None
+
+def cid_cgroup(cname):
+    cid = sh(["docker", "inspect", "-f", "{{.Id}}", cname]).stdout.strip()
+    return f"/sys/fs/cgroup/system.slice/docker-{cid}.scope" if cid else None
+
+def cmd_image(a):
+    ref = a.ref
+    declared = getattr(a, "declared", False)
+    if declared and not getattr(a, "platform", None): sys.exit("--declared requires --platform")
+    r = None if declared else sh(["docker", "image", "inspect", ref, "-f", "{{.Id}}|{{json .RepoDigests}}|{{.Created}}"])
+    if r and r.returncode: sys.exit("image not present locally: " + r.stderr)
+    iid, rd, created = (None, "[]", None) if declared else r.stdout.strip().split("|")
+    rec = dict(name=a.name, ref=ref, image_id=iid, repo_digests=json.loads(rd), created=created, registered=now(), verified_locally=not declared, provenance="declared" if declared else "local")
+    requirements = getattr(a, "requirements", None)
+    if requirements:
+        build = json.load(open(requirements)); rec["target_requirements"] = build.get("target_requirements", {})
+        rec["platform"] = build.get("platform") or rec["target_requirements"].get("platform")
+    if getattr(a, "platform", None): rec["platform"] = a.platform
+    p = os.path.join(LAB, "images", a.name + ".json"); os.makedirs(os.path.dirname(p), exist_ok=True)
+    if os.path.exists(p):
+        old = json.load(open(p))
+        if old["image_id"] != iid or old.get("platform") != rec.get("platform") or (iid is None and old.get("ref") != ref):
+            sys.exit("name already bound to a different image id/platform (images are immutable)")
+    json.dump(rec, open(p, "w"), indent=1); print(jd(rec))
+
+def archive_ids(path):
+    """Identities read from the docker-save archive itself: config digest (image config) and top-level index digest (what the containerd store reports as Id)."""
+    import tarfile
+    out = dict(config=None, index=None)
+    with tarfile.open(path) as t:
+        names = t.getnames()
+        if "manifest.json" in names:
+            m = json.load(t.extractfile("manifest.json"))
+            if m and m[0].get("Config", "").startswith("blobs/sha256/"): out["config"] = "sha256:" + m[0]["Config"].split("/")[-1]
+        if "index.json" in names:
+            ms = json.load(t.extractfile("index.json")).get("manifests", [])
+            out["index_entries"] = [m.get("digest") for m in ms]
+            if len(ms) == 1: out["index"] = ms[0].get("digest")
+    return out
+
+def cmd_imageload(a):
+    """Admit an engine image delivered as a docker archive. Order: (1) archive bytes hash, (2) archive's own config digest vs expected,
+    (3) docker load, (4) loaded image id must equal the archive's index digest (the containerd store's notion of Id)."""
+    got = sha(a.archive)
+    if got != a.sha256: print(f"REJECT: archive sha256 mismatch (expected {a.sha256[:12]}..., got {got[:12]}...)"); sys.exit(10)
+    ids = archive_ids(a.archive)
+    if ids["config"] != a.expect_config_id: print(f"REJECT: archive config digest {str(ids['config'])[:19]}... != expected {a.expect_config_id[:19]}..."); sys.exit(12)
+    r = sh(["docker", "load", "-i", a.archive])
+    if r.returncode: print("REJECT: docker load failed:", r.stderr[-300:]); sys.exit(11)
+    cands = ids.get("index_entries") or [ids["index"] or ids["config"]]
+    want = next((c for c in cands if sh(["docker", "image", "inspect", c, "-f", "{{.Id}}"]).stdout.strip() == c), None)
+    if want is None: print(f"REJECT: no loaded image has an id among the archive's index entries {[c[:19] for c in cands]}"); sys.exit(13)
+    a.ref = want; a.op = "add"; cmd_image(a); print("admitted:", a.name, "config", ids["config"][:19], "docker-id", want[:19])
+
+def cmd_chaos(a):
+    ow = json.load(open(os.path.join(LAB, "jobs", a.job, a.att, "owner.json"))); cs = owned_containers(a.att, ow["token"])
+    for c in cs: sh(["docker", "kill", c])
+    append(os.path.join(LAB, "jobs", a.job, a.att, "chaos.jsonl"), dict(ts=now(), action="kill-sandbox", containers=cs)); print("killed owned containers:", cs)
+
+def cmd_submit(a):
+    try: img = json.load(open(os.path.join(LAB, "images", a.image + ".json")))
+    except FileNotFoundError: img = dict(image_id=None, unknown_record=a.image)
+    host, profile_sha = load_host()
+    res = dict(cpus=str(host["resources_max"]["cpus"]), memory=host["resources_max"]["memory"], pids="512", timeout_s="300", gpu_wait_s="600"); res.update(dict(kv.split("=") for kv in (a.res or "").split(",") if kv))
+    spec = dict(image=a.image, image_id=img["image_id"], model=os.path.abspath(a.model), model_sha256=a.model_sha256 or (sha(a.model) if os.path.isfile(a.model) else None),
+                data=a.data, data_sha256=(sha(a.data) if a.data and os.path.isfile(a.data) else None), tests=a.tests.split(","), resources=res, key=a.key)
+    jid = "job-" + sha_s(a.key)[:10]; jdir = os.path.join(LAB, "jobs", jid); p = os.path.join(jdir, "job.json")
+    if os.path.exists(p):
+        old = json.load(open(p))["spec"]
+        if old != spec: sys.exit(f"idempotency key reused with DIFFERENT spec -> rejected (job {jid})")
+        print(f"duplicate submission: existing {jid}"); return
+    decision = admission(img, spec, host, profile_sha)
+    os.makedirs(jdir)
+    apath = os.path.join(jdir, "admission.json")
+    json.dump(decision, open(apath, "w"), indent=1); os.chmod(apath, 0o444)
+    json.dump(dict(job=jid, submitted=now(), spec=spec, spec_sha256=sha_s(jd(spec)), admission_sha256=sha(apath)), open(p, "w"), indent=1); os.chmod(p, 0o444)
+    append(os.path.join(jdir, "job.log"), dict(ts=now(), ev="submitted")); print(jid)
+
+def owned_containers(att, token=None):
+    r = sh(["docker", "ps", "-aq", "--filter", f"label=lab_attempt={att}"]).stdout.split(); out = []
+    for c in r:
+        lab = json.loads(sh(["docker", "inspect", c, "-f", "{{json .Config.Labels}}"]).stdout)
+        if token is None or lab.get("lab_token") == token: out.append(c)
+    return out
+
+
+def container_argv(host, job, att, token, cname, spec, img, td):
+    res = spec["resources"]
+    cmd = ["docker","run","--rm","--name",cname,"--label",f"campaign={CID}","--label",f"lab_job={job}","--label",f"lab_attempt={att}","--label",f"lab_token={token}",
+           *sum([["-e", f"{k}={v}"] for k, v in td.get("env", {}).items()], []),*gpu_request(host),"--cpus",res["cpus"],"--memory",td.get("memory", res["memory"]),"--memory-swap",td.get("memory", res["memory"]),"--pids-limit",res["pids"],"-v",f"{os.path.dirname(spec['model'])}:/m:ro",*td.get("docker_args", [])]
+    if spec.get("data"): cmd += ["-v", f"{os.path.dirname(spec['data'])}:/d:ro"]
+    mfile = td.get("model_file", os.path.basename(spec["model"]))
+    cmd += ["--entrypoint","/app/"+td["tool"], img["image_id"], "-m", "/m/"+mfile]
+    if td.get("needs_data"): cmd += ["-f", "/d/"+os.path.basename(spec["data"])]
+    cmd += td["args"]
+    return cmd
+
+def check_run_admission(job, apath, img, spec, host, profile_sha):
+    expected = job.get("admission_sha256")
+    if not os.path.exists(apath) and not expected:
+        return None, "legacy-unrecorded"
+    if os.path.exists(apath) and not expected:   # J-T4-era job: admission recorded before hashes existed
+        rec = json.load(open(apath)); require_admission(rec, admission(img, spec, host, profile_sha))
+        return None, "recorded-unhashed (pre-J-T4b)"
+    if not os.path.exists(apath) or sha(apath) != expected:
+        print("REJECT: admission hash mismatch"); sys.exit(11)
+    require_admission(json.load(open(apath)), admission(img, spec, host, profile_sha))
+    return expected, "accepted"
+
+def exclusive_state(post):
+    return None if post["compute_apps"] is None else post["compute_apps"] == []
+
+def sampler_signal(signum, frame):
+    for sampler in list(_samplers): sampler.close()
+    raise SystemExit(128 + signum)
+
+_samplers = []
+def record_sampler(sampler, owner_path):
+    _samplers.append(sampler)
+    if sampler.reader:
+        child = sampler.reader.p
+        owner = json.load(open(owner_path))
+        owner.update(tegrastats_pid=child.pid, tegrastats_start=proc_start(child.pid))
+        json.dump(owner, open(owner_path, "w"))
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(sig, sampler_signal)
+
+def cleanup_sampler(owner):
+    # SIGKILL cannot run handlers and can orphan tegrastats. Reconcile kills
+    # only the recorded lab child, checking start time to avoid PID reuse.
+    pid, start = owner.get("tegrastats_pid"), owner.get("tegrastats_start")
+    if pid and start and proc_start(pid) == start:
+        try: os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError: pass
+
+def begin_attempt(jdir, job, admission_sha, admission_status):
+    n = len(glob.glob(os.path.join(jdir, "att-*"))) + 1; att = f"att-{n}"; adir = os.path.join(jdir, att); os.makedirs(adir)
+    token = uuid.uuid4().hex
+    json.dump(dict(attempt=att, runner_pid=os.getpid(), runner_start=proc_start(os.getpid()), token=token, started=now()), open(os.path.join(adir, "owner.json"), "w"))
+    S = lambda s, **kw: append(os.path.join(adir, "state.jsonl"), dict(ts=now(), job=job, attempt=att, state=s, **kw))
+    S("queued", admission_sha256=admission_sha, admission=admission_status)
+    return att, adir, token, S
+
+def cmd_run(a):
+    job = json.load(open(os.path.join(LAB, "jobs", a.job, "job.json"))); spec = job["spec"]; jdir = os.path.join(LAB, "jobs", a.job)
+    try: img = json.load(open(os.path.join(LAB, "images", spec["image"] + ".json")))
+    except FileNotFoundError: img = dict(image_id=None, unknown_record=spec["image"])
+    host, profile_sha = load_host()
+    apath = os.path.join(jdir, "admission.json")
+    admission_sha, admission_status = check_run_admission(job, apath, img, spec, host, profile_sha)
+    for prev in sorted(glob.glob(os.path.join(jdir, "att-*"))):   # duplicate-delivery / replacement guard
+        ls = last_state(prev); pa = os.path.basename(prev)
+        if ls and ls["state"] != "terminal":
+            ow = json.load(open(os.path.join(prev, "owner.json")))
+            if proc_start(ow["runner_pid"]) == ow["runner_start"] or owned_containers(pa, ow["token"]):
+                print(f"REJECT: {pa} is still active (runner alive or owned containers present); no duplicate execution"); sys.exit(8)
+            print(f"REJECT: {pa} is non-terminal and its owner is gone; run `lab reconcile` to confirm it stopped before replacement"); sys.exit(9)
+    att, adir, token, S = begin_attempt(jdir, a.job, admission_sha, admission_status)
+    res = spec["resources"]
+    S("preparing")
+    if sha(spec["model"]) != spec["model_sha256"]: S("terminal", execution="not_started", reason="model hash mismatch"); sys.exit(4)
+    S("running", admission="none (gpu lock removed by user decision)", gpu_pre=gpu_state(host))
+    results = {}; cancelled = False; interrupted = False; sandbox_died = False
+    for ti, tfull in enumerate(spec["tests"]):
+        t = tfull; td = TESTS[t]; cname = f"lab-{CID}-{a.job}-{att}-{t}-{ti}".lower()
+        cmd = container_argv(host, a.job, att, token, cname, spec, img, td)
+        mfile = td.get("model_file", os.path.basename(spec["model"]))
+        if td.get("cold_cache"):   # evict ONLY this model file's cached pages (posix_fadvise); never a host-wide flush
+            fd = os.open(os.path.join(os.path.dirname(spec["model"]), mfile), os.O_RDONLY); os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED); os.close(fd)
+        o, e = os.path.join(adir, f"{t}#{ti}.stdout"), os.path.join(adir, f"{t}#{ti}.stderr"); ts = time.monotonic()
+        with open(o,"w") as fo, open(e,"w") as fe:
+            sampler = MemorySampler(host)
+            try:
+                record_sampler(sampler, os.path.join(adir, "owner.json"))
+                base_gpu, baseline_reason = sampler.baseline()
+                p = subprocess.Popen(docker_argv(cmd), stdout=fo, stderr=fe, start_new_session=True)
+                S("running", test=t, container=cname)
+                if os.environ.get("LAB_FAULT") == "die_after_start": time.sleep(1.5); os.kill(os.getpid(), 9)
+                sample_reason = baseline_reason
+                peak_gpu, peak_host, io_rbytes, cg = base_gpu, 0, 0, None
+                nsamp = int(base_gpu is not None); tlast = 0
+                while p.poll() is None:
+                    if time.monotonic() - tlast > 0.25:   # memory sampler: GPU total used (device is otherwise idle) + container cgroup
+                        tlast = time.monotonic(); g, why = sampler.sample()
+                        if why and peak_gpu is None: sample_reason = why
+                        if g is not None: sample_reason = None
+                        if g is not None: peak_gpu = max(peak_gpu, g) if peak_gpu is not None else g; nsamp += 1
+                        cg = cg or cid_cgroup(cname)
+                        if cg:
+                            v = read_int(cg + "/memory.peak") or read_int(cg + "/memory.current"); peak_host = max(peak_host, v or 0)
+                            try: io_rbytes = max(io_rbytes, sum(int(x.split("=")[1]) for l in open(cg + "/io.stat") for x in l.split() if x.startswith("rbytes=")))
+                            except Exception: pass
+                    if os.path.exists(os.path.join(adir, "cancel_requested")): cancelled = True; sh(["docker","kill",cname]); break
+                    if time.monotonic() - ts > float(res["timeout_s"]): sh(["docker","kill",cname]); interrupted = True; break
+                    time.sleep(0.3)
+                rc = p.wait()
+            finally:
+                sampler.close()
+        died = (not cancelled) and (not interrupted) and rc in (137, 143)   # SIGKILL/SIGTERM not requested by us: sandbox/container terminated externally (or OOM)
+        results[f"{t}#{ti}"] = dict(exit_code=rc, elapsed_s=round(time.monotonic()-ts,3), partial=died, mem=dict(gpu_peak_mib=peak_gpu if sampler.backend == "nvml" else None, gpu_baseline_mib=base_gpu if sampler.backend == "nvml" else None, gpu_delta_mib=(peak_gpu-base_gpu if sampler.backend == "nvml" and peak_gpu is not None and base_gpu is not None else None), host_cgroup_peak_mib=round(peak_host/2**20,1), io_read_mib=round(io_rbytes/2**20,1), samples=nsamp, method="nvidia-smi memory.used polled 4Hz (device otherwise idle; includes CUDA context) + cgroup memory.peak"), **assess(t, open(o, errors="replace").read(), open(e, errors="replace").read(), rc))
+        mem = results[f"{t}#{ti}"]["mem"]
+        if sampler.backend == "tegrastats":
+            mem.update(shared_dram_peak_mib=peak_gpu, shared_dram_baseline_mib=base_gpu, scope="system-shared-dram", method="tegrastats RAM used polled 4Hz + cgroup memory.peak", gpu_memory_reason="shared DRAM is not GPU memory")
+        if base_gpu is None: mem["baseline_unavailable"] = baseline_reason or "no baseline sample"
+        if sample_reason or peak_gpu is None:
+            mem["unavailable"] = sample_reason or "no memory samples"
+        if died: sandbox_died = True; S("sandbox_terminated", test=t, exit_code=rc, last_durable_bytes=os.path.getsize(o), last_durable_mtime=dt.datetime.fromtimestamp(os.path.getmtime(o), dt.timezone.utc).isoformat())
+        if cancelled or interrupted or died: break
+    post = gpu_state(host)
+    S("assessing")
+    left = owned_containers(att, token)
+    if cancelled: S("cancel_confirmed" if not left else "cancel_unconfirmed", owned_left=left)
+    files = {f: sha(os.path.join(adir, f)) for f in sorted(os.listdir(adir)) if f.endswith((".stdout",".stderr"))}
+    result = dict(job=a.job, attempt=att, image_id=spec["image_id"], token_sha=sha_s(token),
+      execution=dict(status="cancelled" if cancelled else "interrupted_sandbox_terminated" if sandbox_died else "timeout_killed" if interrupted else "completed" if all(r["exit_code"]==0 for r in results.values()) else "failed"),
+      quality=dict(tests=results, all_ok=(not cancelled and not interrupted and not sandbox_died and len(results)==len(spec["tests"]) and all(r["ok"] for r in results.values()))),
+      performance=dict(gpu_post=post, exclusive_before_after=exclusive_state(post), note="exclusivity = no compute apps visible at end; during-run interference not observed by lab"),
+      evidence=dict(files=files, coverage=dict(tests_expected=len(spec["tests"]), tests_started=len(results), tests_completed_cleanly=sum(1 for r in results.values() if not r.get("partial") and r["exit_code"]==0), interrupted=sandbox_died or interrupted or cancelled, note="incomplete data is never scored; affected comparisons invalid")), cleanup=dict(owned_containers_left=left, confirmed=not left))
+    json.dump(result, open(os.path.join(adir,"result.json"),"w"), indent=1)
+    S("exporting"); export(a.job, att, adir)
+    S("terminal", result_sha256=sha(os.path.join(adir,"result.json"))); print(jd(result)[:700])
+
+def export(job, att, adir):
+    """stage -> fsync -> rename; staged copy is retained until the durable copy verifies."""
+    dest = os.path.join(LAB, "export", job, att); stage = dest + ".staging"
+    shutil.rmtree(stage, ignore_errors=True); os.makedirs(os.path.dirname(dest), exist_ok=True); shutil.copytree(adir, stage)
+    if os.environ.get("LAB_FAULT") == "die_in_export": os.kill(os.getpid(), 9)
+    manifest = {f: sha(os.path.join(stage, f)) for f in sorted(os.listdir(stage))}
+    json.dump(manifest, open(os.path.join(stage, "MANIFEST.json"), "w"), indent=1)
+    shutil.rmtree(dest, ignore_errors=True); os.rename(stage, dest)
+    ok = all(sha(os.path.join(dest, f)) == h for f, h in manifest.items())
+    if not ok: raise SystemExit("export verify failed; staging lost?")
+
+def cmd_cancel(a):
+    adir = os.path.join(LAB, "jobs", a.job, a.att); open(os.path.join(adir, "cancel_requested"), "w").write(now())
+    append(os.path.join(adir, "state.jsonl"), dict(ts=now(), attempt=a.att, state="cancel_requested")); print("cancel requested (NOT confirmed)")
+
+def cmd_status(a):
+    for path in sorted(glob.glob(os.path.join(LAB, "jobs", a.job or "*", "job.json"))):
+        apath = os.path.join(os.path.dirname(path), "admission.json")
+        decision = json.load(open(apath)) if os.path.exists(apath) else {"decision": "legacy-unrecorded"}
+        print(os.path.basename(os.path.dirname(path)), "admission=" + decision["decision"], "; ".join(decision.get("reasons", [])))
+    for adir in sorted(glob.glob(os.path.join(LAB, "jobs", a.job or "*", "att-*"))):
+        s = last_state(adir); print(adir.split("jobs/")[1], s["state"] if s else None, {k: v for k, v in (s or {}).items() if k in ("execution","reason","test")})
+
+def cmd_reconcile(a):
+    for adir in sorted(glob.glob(os.path.join(LAB, "jobs", "*", "att-*"))):
+        job, att = adir.split("jobs/")[1].split("/"); s = last_state(adir); ow = json.load(open(os.path.join(adir, "owner.json")))
+        stage = os.path.join(LAB, "export", job, att + ".staging")
+        alive = proc_start(ow["runner_pid"]) == ow["runner_start"]
+        if not alive: cleanup_sampler(ow)
+        if s and s["state"] == "terminal" and not os.path.exists(stage): continue
+        owned = owned_containers(att, ow["token"]); S = lambda st, **kw: append(os.path.join(adir, "state.jsonl"), dict(ts=now(), job=job, attempt=att, state=st, reconciler=True, **kw))
+        if alive: print(job, att, "runner ALIVE (pid %d) -> leave alone; state=%s" % (ow["runner_pid"], s["state"])); continue
+        if s["state"] == "terminal" and os.path.exists(stage):   # died mid-export after terminal? finish export from retained staging
+            print(job, att, "staged export retained -> completing"); export(job, att, adir); continue
+        print(job, att, f"runner DEAD; last={s['state']}; owned containers still present: {owned}")
+        for c in owned: sh(["docker", "kill", c]); sh(["docker", "rm", "-f", c])
+        left = owned_containers(att, ow["token"])
+        if os.path.exists(os.path.join(adir, "result.json")):   # result was already produced: NEVER overwrite; just finish durable export
+            print(job, att, "result.json already exists -> resuming export only (no rescoring, no overwrite)")
+            S("exporting", resumed=True); export(job, att, adir)
+            S("terminal", execution="completed_before_runner_death", result_sha256=sha(os.path.join(adir, "result.json")), killed=owned); continue
+        partial = sorted(f for f in os.listdir(adir) if f.endswith((".stdout", ".stderr")))
+        res = dict(job=job, attempt=att, execution=dict(status="interrupted"), quality=dict(assessed=False, note="incomplete data is never scored"),
+                   evidence=dict(partial_files=partial), cleanup=dict(owned_containers_left=left, confirmed=not left))
+        json.dump(res, open(os.path.join(adir, "result.json"), "w"), indent=1); S("exporting")
+        if os.environ.get("LAB_FAULT") != "die_in_export": export(job, att, adir)
+        S("terminal", execution="interrupted", result_sha256=sha(os.path.join(adir, "result.json")), killed=owned)
+
+def cmd_register(a):
+    adir = os.path.join(LAB, "jobs", a.job, a.att); res = json.load(open(os.path.join(adir, "result.json"))); ow = json.load(open(os.path.join(adir, "owner.json")))
+    idx = os.path.join(LAB, "index", "results.jsonl"); os.makedirs(os.path.dirname(idx), exist_ok=True)
+    key = (a.job, a.att); rsha = sha(os.path.join(adir, "result.json")); rows = [json.loads(l) for l in open(idx)] if os.path.exists(idx) else []
+    if res.get("token_sha") and res["token_sha"] != sha_s(ow["token"]): print("REJECT: stale/foreign attempt token"); sys.exit(5)
+    for r in rows:
+        if (r["job"], r["attempt"]) == key:
+            if r["result_sha256"] == rsha: print("already registered (identical) -> no-op"); return
+            print("REJECT: conflicting result for an accepted attempt"); sys.exit(6)
+    if not os.path.exists(os.path.join(LAB, "export", a.job, a.att, "MANIFEST.json")): print("REJECT: no confirmed durable export"); sys.exit(7)
+    append(idx, dict(job=a.job, attempt=a.att, result_sha256=rsha, registered=now())); print("registered")
+
+ap = argparse.ArgumentParser(); sp = ap.add_subparsers(dest="c", required=True)
+p = sp.add_parser("image"); p.add_argument("op"); p.add_argument("name"); p.add_argument("ref"); p.add_argument("--platform"); p.add_argument("--requirements"); p.add_argument("--declared", action="store_true"); p.set_defaults(f=cmd_image)
+p = sp.add_parser("submit"); [p.add_argument("--" + x) for x in ("image","model","model-sha256","data","tests","key","res")]; p.set_defaults(f=cmd_submit)
+p = sp.add_parser("image-load"); p.add_argument("name"); p.add_argument("--archive", required=True); p.add_argument("--sha256", required=True); p.add_argument("--expect-config-id", required=True); p.add_argument("--platform"); p.add_argument("--requirements"); p.set_defaults(f=cmd_imageload)
+p = sp.add_parser("chaos"); p.add_argument("job"); p.add_argument("att"); p.set_defaults(f=cmd_chaos)
+p = sp.add_parser("run"); p.add_argument("job"); p.set_defaults(f=cmd_run)
+p = sp.add_parser("cancel"); p.add_argument("job"); p.add_argument("att"); p.set_defaults(f=cmd_cancel)
+p = sp.add_parser("status"); p.add_argument("job", nargs="?"); p.set_defaults(f=cmd_status)
+p = sp.add_parser("reconcile"); p.set_defaults(f=cmd_reconcile)
+p = sp.add_parser("register"); p.add_argument("job"); p.add_argument("att"); p.set_defaults(f=cmd_register)
+if __name__ == "__main__":
+    a = ap.parse_args(); a.model_sha256 = getattr(a, "model_sha256", None); a.f(a)

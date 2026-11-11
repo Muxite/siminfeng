@@ -3,7 +3,7 @@ name: engine-ab-experiment
 description: Use when planning, running, or assessing a counterbalanced inference-engine A/B experiment in this lab.
 ---
 
-Work from /home/muk/projects/siminfeng/campaign.
+Work from /home/muk/projects/siminfeng.
 Read c2/METHODS.md methods and cc/abrun/README.md; use the latter's actual schema.
 
 1. State the hypothesis, host/model/type/batch scope, quality budget and D012 claim

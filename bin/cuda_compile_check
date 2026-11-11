@@ -1,0 +1,16 @@
+#!/bin/bash
+# cuda_compile_check PATCH [files...]: apply PATCH to a temp copy of ref/llama.cpp (git archive) and compile the touched .cu files with nvcc sm_120 in campaign/cuda-tools:c1 (no GPU). Fast feedback loop for engine patches.
+set -e
+R=/home/muk/projects/siminfeng; P=$(realpath "$1"); W=$(mktemp -d $R/artifacts/ccheck-XXXX)
+git -C $R/ref/llama.cpp archive HEAD | tar -x -C $W
+git -C $W init -q 2>/dev/null; (cd $W && git apply --check "$P" && git apply "$P") || { echo "PATCH DOES NOT APPLY"; exit 2; }
+FILES=$(cd $W && git diff --name-only 2>/dev/null; cd $W && grep -E '^\+\+\+ b/.*\.cu$' "$P" | sed 's#+++ b/##')
+FILES=$(echo "$FILES" | grep '\.cu$' | sort -u)
+echo "compiling: $FILES"
+docker run --rm --label campaign=c1 --cpus 6 --memory 12g --pids-limit 512 -v $W:/src:ro -v $W/.out:/out campaign/cuda-tools:c1 bash -c '
+ mkdir -p /out; rc=0
+ for f in '"$FILES"'; do
+   echo "== $f"; nvcc -arch=sm_120 -std=c++17 -c /src/$f -o /out/$(basename $f).o -I/src/ggml/include -I/src/ggml/src -I/src/ggml/src/ggml-cuda -DGGML_USE_CUDA -DGGML_CUDA_USE_GRAPHS -DGGML_BUILD -DGGML_SHARED -DGGML_VERSION=\"x\" -DGGML_COMMIT=\"x\" 2>&1 | grep -E "error|Error" | head -20 || true
+   [ -f /out/$(basename $f).o ] || rc=1
+ done; exit $rc'
+echo "exit=$?"
