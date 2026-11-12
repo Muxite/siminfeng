@@ -1,0 +1,228 @@
+{
+ "traced": true,
+ "note": "Nsight Systems trace; timing is perturbed, use for breakdown only",
+ "report_bytes": 14349284,
+ "missing": [],
+ "kernels": {
+  "total_ms": 10103.292,
+  "entries": 49,
+  "top": [
+   {
+    "name": "mul_mat_vec_q<(ggml_type)8, (int)1, (bool)0, (bool)0, (bool)0>",
+    "percent": 52.3,
+    "total_ms": 5279.06,
+    "count": 5798
+   },
+   {
+    "name": "mul_mat_vec_q<(ggml_type)8, (int)1, (bool)1, (bool)0, (bool)0>",
+    "percent": 11.3,
+    "total_ms": 1145.884,
+    "count": 4979
+   },
+   {
+    "name": "mul_mat_q<(ggml_type)12, (int)8, (bool)0, (ggml_prec)30, (bool)0>",
+    "percent": 6.9,
+    "total_ms": 700.552,
+    "count": 76
+   },
+   {
+    "name": "gated_delta_net_cuda<(int)128, (bool)0, (bool)0, (int)4>",
+    "percent": 4.1,
+    "total_ms": 417.201,
+    "count": 1950
+   },
+   {
+    "name": "mul_mat_q<(ggml_type)13, (int)8, (bool)0, (ggml_prec)30, (bool)0>",
+    "percent": 4.1,
+    "total_ms": 410.572,
+    "count": 38
+   },
+   {
+    "name": "mul_mat_vec_f<float, float, (int)1, (int)256, (bool)0, (bool)0>",
+    "percent": 3.0,
+    "total_ms": 302.249,
+    "count": 8863
+   },
+   {
+    "name": "mul_mat_q<(ggml_type)8, (int)112, (bool)0, (ggml_prec)30, (bool)0>",
+    "percent": 2.7,
+    "total_ms": 277.163,
+    "count": 169
+   },
+   {
+    "name": "k_get_rows_float_vec<float>",
+    "percent": 2.6,
+    "total_ms": 258.625,
+    "count": 1950
+   },
+   {
+    "name": "mul_mat_vec_q<(ggml_type)8, (int)1, (bool)0, (bool)1, (bool)0>",
+    "percent": 1.5,
+    "total_ms": 151.476,
+    "count": 2522
+   },
+   {
+    "name": "concat_non_cont<unsigned int, (int)0>",
+    "percent": 1.2,
+    "total_ms": 119.174,
+    "count": 60
+   }
+  ]
+ },
+ "cuda_api": {
+  "total_ms": 59942.083,
+  "entries": 37,
+  "top": [
+   {
+    "name": "cudaMemcpyAsync",
+    "percent": 71.2,
+    "total_ms": 42663.701,
+    "count": 15871
+   },
+   {
+    "name": "cudaStreamSynchronize",
+    "percent": 20.9,
+    "total_ms": 12498.602,
+    "count": 20524
+   },
+   {
+    "name": "cudaMalloc",
+    "percent": 4.1,
+    "total_ms": 2456.799,
+    "count": 8
+   },
+   {
+    "name": "cudaGraphLaunch_v10000",
+    "percent": 1.5,
+    "total_ms": 916.68,
+    "count": 2505
+   },
+   {
+    "name": "cudaLaunchKernel",
+    "percent": 0.7,
+    "total_ms": 410.103,
+    "count": 8501
+   },
+   {
+    "name": "cudaFree",
+    "percent": 0.6,
+    "total_ms": 379.837,
+    "count": 9
+   },
+   {
+    "name": "cudaMemGetInfo",
+    "percent": 0.5,
+    "total_ms": 292.045,
+    "count": 12
+   },
+   {
+    "name": "cudaGraphInstantiate_v12000",
+    "percent": 0.2,
+    "total_ms": 116.767,
+    "count": 41
+   },
+   {
+    "name": "cuLibraryLoadData",
+    "percent": 0.1,
+    "total_ms": 66.693,
+    "count": 4
+   },
+   {
+    "name": "cudaMemsetAsync",
+    "percent": 0.0,
+    "total_ms": 29.559,
+    "count": 4
+   }
+  ]
+ },
+ "os_runtime": {
+  "total_ms": 3811309.653,
+  "entries": 32,
+  "top": [
+   {
+    "name": "pthread_cond_wait",
+    "percent": 58.6,
+    "total_ms": 2235259.116,
+    "count": 267606
+   },
+   {
+    "name": "futex",
+    "percent": 19.8,
+    "total_ms": 756359.502,
+    "count": 110901
+   },
+   {
+    "name": "pread",
+    "percent": 18.6,
+    "total_ms": 709358.621,
+    "count": 68719
+   },
+   {
+    "name": "poll",
+    "percent": 1.3,
+    "total_ms": 49370.303,
+    "count": 10
+   },
+   {
+    "name": "mmap",
+    "percent": 1.0,
+    "total_ms": 39781.579,
+    "count": 112
+   },
+   {
+    "name": "ioctl",
+    "percent": 0.4,
+    "total_ms": 15005.079,
+    "count": 17290
+   },
+   {
+    "name": "pthread_mutex_lock",
+    "percent": 0.1,
+    "total_ms": 3748.172,
+    "count": 14627
+   },
+   {
+    "name": "pthread_cond_broadcast",
+    "percent": 0.0,
+    "total_ms": 1731.92,
+    "count": 23036
+   },
+   {
+    "name": "munmap",
+    "percent": 0.0,
+    "total_ms": 383.824,
+    "count": 46
+   },
+   {
+    "name": "fopen",
+    "percent": 0.0,
+    "total_ms": 221.23,
+    "count": 5869
+   }
+  ]
+ },
+ "memcpy": {
+  "total_ms": 17657.25,
+  "entries": 3,
+  "top": [
+   {
+    "name": "[CUDA memcpy Host-to-Device]",
+    "percent": 99.8,
+    "total_ms": 17621.905,
+    "count": 10645
+   },
+   {
+    "name": "[CUDA memcpy Device-to-Host]",
+    "percent": 0.1,
+    "total_ms": 25.013,
+    "count": 5226
+   },
+   {
+    "name": "[CUDA memset]",
+    "percent": 0.1,
+    "total_ms": 10.331,
+    "count": 4
+   }
+  ]
+ }
+}

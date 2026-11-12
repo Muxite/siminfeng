@@ -13,8 +13,17 @@ DATADIR=$HOME/models/campaign/data/wikitext/wikitext-2-raw
 DP=${DOCKER_CMD_PREFIX:-}
 dk(){ if [ -n "$DP" ]; then $DP "docker $*"; else docker "$@"; fi; }
 printf '%s\n' "$IMG" "$ENVF" "$TOOL $*" > "$OUT/cmd.txt"
+# OM_NSYS=1: run the engine under Nsight Systems (mounted read-only from the host install).
+# Traced runs perturb timing; use them for breakdowns only, never as speed evidence.
+NSYS_MOUNT=""; NSYS_PREFIX=""
+if [ "${OM_NSYS:-0}" = 1 ]; then
+    NSYS_DIR=${OM_NSYS_DIR:-/opt/nvidia/nsight-systems/2024.5.4}
+    [ -x "$NSYS_DIR/target-linux-tegra-armv8/nsys" ] || { echo "NSYS_MISSING $NSYS_DIR" > "$OUT/status"; exit 2; }
+    NSYS_MOUNT="-v $NSYS_DIR:/nsys:ro -v $(cd "$OUT" && pwd):/prof"
+    NSYS_PREFIX="/nsys/target-linux-tegra-armv8/nsys profile -t cuda,nvtx,osrt --cuda-graph-trace=node --sample=none --cpuctxsw=none -f true -o /prof/nsys"
+fi
 dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
-   -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro "$IMG" /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
+   -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro $NSYS_MOUNT "$IMG" $NSYS_PREFIX /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
 if [ "${OM_THREADS:-0}" = 1 ]; then
     python3 "$R/cc/thread_sampler/thread_sampler.py" --container "$NAME" --hz "${OM_THREADS_HZ:-100}" \
         --out "$OUT/threads.jsonl" --summary "$OUT/threads.summary.json" \
@@ -36,6 +45,21 @@ if [ "${OM_THREADS:-0}" = 1 ]; then
             --stderr "$OUT/stderr.txt" --summary "$OUT/threads.summary.json" \
             >>"$OUT/threads.log" 2>&1 || echo "thread summary failed; see threads.log" >&2
     fi
+fi
+if [ "${OM_NSYS:-0}" = 1 ]; then
+    # nsys appends its own progress text to the engine's stdout; move it out so the output check sees only the engine.
+    python3 - "$OUT" <<'PY'
+import sys
+o=sys.argv[1]; s=open(o+"/stdout.txt","rb").read(); i=s.find(b"Collecting data...")
+if i >= 0:
+    open(o+"/nsys.stdout.txt","wb").write(s[i:]); open(o+"/stdout.txt","wb").write(s[:i])
+PY
+fi
+if [ "${OM_NSYS:-0}" = 1 ] && [ -s "$OUT/nsys.nsys-rep" ]; then
+    # Flat CSV summaries next to the other run files; the SQLite export is regenerable and large.
+    nsys stats -q -r cuda_gpu_kern_sum,cuda_api_sum,osrt_sum,cuda_gpu_mem_time_sum --format csv \
+        -o "$OUT/nsys" "$OUT/nsys.nsys-rep" > "$OUT/nsys.log" 2>&1 || echo "nsys stats failed; see nsys.log" >&2
+    rm -f "$OUT/nsys.sqlite"
 fi
 OOM=$(dk inspect "$NAME" --format '{{.State.OOMKilled}}')
 dk rm "$NAME" > /dev/null
