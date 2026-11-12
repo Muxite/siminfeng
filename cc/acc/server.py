@@ -225,7 +225,15 @@ class Server(OwnedContainer):
         self.port = port or free_port()
         self.health_timeout = health_timeout
         self.url = f"http://127.0.0.1:{self.port}"
-        argv = [*engine_argv, "-m", "/om/" + Path(model).name, "--host", "127.0.0.1",
+        # Scoring never reuses prompts; llama-server's host prompt cache (default 8192 MiB) and
+        # per-slot context checkpoints (default 32; hybrid/recurrent models) grow until an 8 GB
+        # box swaps (qwen35-9b acc killed twice by the swap watchdog, 2026-11-11).
+        extra = []
+        if not {"-cram", "--cache-ram"} & set(engine_argv):
+            extra += ["--cache-ram", "0"]
+        if not {"-ctxcp", "--ctx-checkpoints", "--swa-checkpoints"} & set(engine_argv):
+            extra += ["--ctx-checkpoints", "0"]
+        argv = [*engine_argv, *extra, "-m", "/om/" + Path(model).name, "--host", "127.0.0.1",
                 "--port", str(self.port), "--jinja"]
         super().__init__(image, model, outdir, "llama-server", argv, env)
 

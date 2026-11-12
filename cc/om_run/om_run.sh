@@ -16,7 +16,7 @@ printf '%s\n' "$IMG" "$ENVF" "$TOOL $*" > "$OUT/cmd.txt"
 dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
    -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro "$IMG" /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
 if [ "${OM_THREADS:-0}" = 1 ]; then
-    python3 "$R/cc/thread_sampler/thread_sampler.py" --container "$NAME" \
+    python3 "$R/cc/thread_sampler/thread_sampler.py" --container "$NAME" --hz "${OM_THREADS_HZ:-100}" \
         --out "$OUT/threads.jsonl" --summary "$OUT/threads.summary.json" \
         >"$OUT/threads.log" 2>&1 & TS=$!
 fi

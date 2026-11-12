@@ -179,8 +179,24 @@ trials, speed skips successful slots and retries failed slots in fresh owned
 attempt directories, and acc resumes fsynced item IDs. Model size/mtime, image,
 placement, prompts and dataset/corpus identity guard resume; the acc/KL harnesses
 also retain full-file hashes. `--new-run` requests an independent replication.
-A changed immutable image or model stat cannot silently select an old fit.
-A failed final fit is complete evidence (exit 1); use `--new-run` to reprobe.
+Fit, speed and acc keys also include an ordered SHA256 of the **full** candidate
+list (including argv, env and switch_regex), protocol, and effective
+`OM_MIN_AVAIL_MIB` watchdog floor (default 600 MiB). `step.json` and `summary.json`
+retain the identity inputs; dry-run prints them and the key. A changed key starts
+a new directory and leaves previous evidence untouched. Downstream automatic
+selection accepts only successful fits with current identity inputs and a valid
+key; legacy summaries without those inputs are ignored. Fit selection scope
+(`--config`, `--all`) also guards resume.
+
+A failed final fit is complete evidence (exit 1). `fit --refit` ignores previous
+fits even with an identical key and starts a new directory; `--new-run` also
+remains available. Neither option moves or deletes old directories. A preflight
+rejection or unsupported-flags error aborts fit immediately with exit 3 and
+`status: harness_error`; its trial has `fits: null`, not a failed placement.
+Each trial's metrics retain `watchdog_floor_mib`, `mem_available_min_mib` (null
+when no measurement exists), and `failure_kind`: `oom_error`, `watchdog_trip`,
+`other`, or null for success. Engine allocation errors are recognized from
+stderr even when Docker's `oom_killed` is false.
 
 SIGTERM/deadline cleanup stops the child process group, then removes only saved
 container IDs or generated acc container names owned by this step. SIGKILL or

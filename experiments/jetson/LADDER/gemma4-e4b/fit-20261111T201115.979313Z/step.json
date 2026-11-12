@@ -1,0 +1,109 @@
+{
+  "identity": {
+    "protocol": "ladder-v1-chat-greedy-ignore-eos-c4096-n256-ABC-CBA",
+    "model": {
+      "path": "/home/muk/models/campaign/gemma4-e4b/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf",
+      "size": 4215695776,
+      "mtime_ns": 1794422940713823702
+    },
+    "image": "campaign/llamacpp:jetson-up1108-om11",
+    "step": "fit",
+    "config": [
+      {
+        "id": "gpu",
+        "argv": [
+          "-ngl",
+          "99",
+          "-fa",
+          "on",
+          "-c",
+          "4096"
+        ],
+        "env": {},
+        "switch_regex": []
+      },
+      {
+        "id": "gpu-kvq8",
+        "argv": [
+          "-ngl",
+          "99",
+          "-fa",
+          "on",
+          "-c",
+          "4096",
+          "-ctk",
+          "q8_0",
+          "-ctv",
+          "q8_0"
+        ],
+        "env": {},
+        "switch_regex": []
+      },
+      {
+        "id": "gpu-mmap",
+        "argv": [
+          "-ngl",
+          "99",
+          "-lm",
+          "mmap",
+          "-c",
+          "4096"
+        ],
+        "env": {},
+        "switch_regex": []
+      },
+      {
+        "id": "partial-24",
+        "argv": [
+          "-ngl",
+          "24",
+          "-fa",
+          "on",
+          "-lm",
+          "mmap",
+          "-c",
+          "4096"
+        ],
+        "env": {},
+        "switch_regex": []
+      },
+      {
+        "id": "partial-12",
+        "argv": [
+          "-ngl",
+          "12",
+          "-fa",
+          "on",
+          "-lm",
+          "mmap",
+          "-c",
+          "4096"
+        ],
+        "env": {},
+        "switch_regex": []
+      },
+      {
+        "id": "partial-0",
+        "argv": [
+          "-ngl",
+          "0",
+          "-fa",
+          "on",
+          "-lm",
+          "mmap",
+          "-c",
+          "4096"
+        ],
+        "env": {},
+        "switch_regex": []
+      }
+    ],
+    "prompts": {
+      "code": "e01bf10790f12a7b45980b0028c41efb0130248ceb1935335960b2d047adeaa0",
+      "chat": "4ef3e94c9f74b5c24e59af2a42843daefe54b4822e66c3e24c92d7789cebe3d6",
+      "reason": "75a5f4d6206c1f944c0bc7f36b4a6966b17afb55fc97d27cd033b2b7ab2fd853"
+    },
+    "all": false
+  },
+  "key": "28cdfe342f6649f01bfa3e4cef53660f7c6417442c24860642b39e90249a4712"
+}

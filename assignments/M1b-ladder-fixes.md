@@ -1,0 +1,10 @@
+# Assignment M1b — ladder robustness fixes (worker Codex)
+Repo root: /home/muk/projects/siminfeng (layout changed today: no campaign/ prefix). Files: cc/ladder/* only. Read cc/ladder/README.md, c2/worklog.jsonl events for ladder-fit-qwen9 (failure) and experiments/jetson/LADDER/qwen35-9b/_superseded/README.txt.
+Problems: (1) `fit` reports "Already complete" and exits non-zero when a previous fit with chosen=null exists, even if the candidate configs/argv changed; (2) a preflight rejection (unsupported flag) is recorded as "does not fit" and the ladder moves on, hiding a harness bug; (3) a re-fit requires manually moving result dirs.
+Deliverables:
+1. identity_key for fit/speed/acc must include a hash of the full candidate config list (argv+env+switch_regex), the protocol, image and model identity, and the watchdog floor (OM_MIN_AVAIL_MIB value in effect). A previous result with a different key is ignored (not deleted) and a new step dir is created; `chosen_config` selects only fits with the current key.
+2. `--refit` flag on fit: ignore previous fits even with same key (new dir); old dirs untouched.
+3. Preflight rejection (preflight.py non-zero / "unsupported flags") → abort the whole fit immediately with exit code 3 and status `harness_error` in summary.json; never counted as "not fit".
+4. fit summary records per trial: watchdog floor, mem_available_min_mib, failure kind (oom_error from engine stderr `cudaMalloc failed: out of memory`/`unable to allocate`, watchdog_trip, other).
+5. Tests (mock om_run/preflight; captured real summary.json from experiments/jetson/LADDER/qwen35-9b/fit-20261111T194923.506211Z as fixture): key change creates new dir; --refit; preflight abort exit 3; oom classification from a captured real stderr line (take it from experiments/jetson/LADDER/qwen35-9b/fit-20261111T194923.506211Z/gpu/stderr.txt).
+Acceptance: A1 pytest cc/ladder passes (count); A2 the four tests above by name; A3 `ladder.py fit qwen35-9b --dry-run` shows the identity key inputs. No docker/GPU/network; no commits; do not touch experiments/. Time 40 min. Final <= 8 lines.

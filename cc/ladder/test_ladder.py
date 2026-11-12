@@ -71,7 +71,8 @@ def test_dense_ladder_order_and_pinned_context():
     assert candidates[0]['argv'] == ['-ngl', '99', '-fa', 'on', '-c', '4096']
     assert candidates[1]['argv'][-4:] == ['-ctk', 'q8_0', '-ctv', 'q8_0']
     assert '-lm' in candidates[2]['argv']
-    assert [c['argv'][1] for c in candidates[3:]] == ['24', '12', '0']
+    assert [c['argv'][1] for c in candidates if c['id'].startswith('partial')] == ['24', '12', '0']
+    assert all('-c' in c['argv'] for c in candidates)
     for model in SPEC['models'].values():
         ladder.configs(model)
 
@@ -172,12 +173,17 @@ def test_step_resume_identity(tmp_path):
 def test_chosen_config_does_not_reuse_other_image_or_model(tmp_path):
     args = argparse.Namespace(out=tmp_path, model_id='qwen35-9b', config=None, dry_run=False)
     identity = dict(path='SHAPE_ONLY', size=1)
-    ladder.write(tmp_path / args.model_id / 'fit-captured/summary.json', dict(
-        complete=True, chosen=MODEL['configs'][1], image='same', model_identity=identity))
     with mock.patch.object(ladder, 'model_identity', return_value=identity):
+        inputs = dict(ladder.identity_inputs(MODEL, 'same'), step='fit')
+        ladder.write(tmp_path / args.model_id / 'fit-captured/summary.json', dict(
+            complete=True, chosen=MODEL['configs'][1], image='same', model_identity=identity,
+            identity_inputs=inputs, identity_key=ladder.fingerprint(inputs)))
         assert ladder.chosen_config(args, MODEL, 'same') == MODEL['configs'][1]
         with pytest.raises(ValueError, match='fit'):
             ladder.chosen_config(args, MODEL, 'changed')
+        with mock.patch.object(ladder, 'model_identity', return_value=dict(identity, size=2)):
+            with pytest.raises(ValueError, match='fit'):
+                ladder.chosen_config(args, MODEL, 'same')
 
 
 def test_report_from_captured_summaries_and_accuracy_protocol(tmp_path):

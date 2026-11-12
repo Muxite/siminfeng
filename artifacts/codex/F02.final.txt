@@ -1,0 +1,34 @@
+Implemented five new files:
+
+- [__init__.py](/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/__init__.py)
+- [store.py](/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/store.py)
+- [api.py](/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/api.py)
+- [test_store.py](/home/muk/projects/jiuwenswarm/tests/factory/test_store.py)
+- [test_api.py](/home/muk/projects/jiuwenswarm/tests/factory/test_api.py)
+
+Validation: **41 factory tests passed**, including all required names. **A2 remains unverified**: both verbatim runs collected 103 tests, then hung at the first MCP initialization and were stopped. No CC v2 changes were made. Unrelated workspace changes were preserved; no commits.
+
+Integration signatures, omitting `self`:
+
+```python
+Store(home: Path, fault=None)
+create_task(record)
+get_task(task_id)
+scoped(task_id, readable=frozenset())
+advance_decision(task_id, expected_rev, record)
+append_observation(task_id, record)
+put_artifact(task_id, artifact_id, data, media_type, producer_attempt)
+read_artifact(task_id, artifact_id)
+artifact_bytes(task_id, artifact_id)
+read(task_id, record_id)
+query(task_id, *, kinds=None, text=None, since=0, limit=50)
+dump(task_id)
+create_attempt(task_id, record)
+transition_attempt(task_id, attempt_id, state, *,
+                   expected_state=None, **changes)
+add_evaluation(task_id, record)
+add_upload(task_id, record)
+close()
+```
+
+Read grants never authorize writes. Decision revisions start at zero; `since` is an evidence cursor. Artifact locations are store-relative, and `data` accepts bytes or a path. Fault callbacks receive `before_commit`, `artifact_temp_fsynced`, `artifact_renamed`, or `artifact_dir_fsynced`.

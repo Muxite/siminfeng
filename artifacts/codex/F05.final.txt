@@ -1,0 +1,45 @@
+Implemented the controller, shared CLI, login handling, durable resume, scrubbed transcripts, task schema, and demo task.
+
+Validation: **137 factory tests passed**; **38 Codex runtime tests passed**. Both CLI help commands work. The legacy-config command exits **2** with the migration message. No real agent, network, Docker/GPU run, or commits.
+
+Task schema: [task.schema.json](/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/schemas/task.schema.json). Required fields are `objective`, `constraints`, `allowed_effects`, `target`, `budget`, `contract_id`, `initial_run_config`, `component_cc`, and `source`. Optional fields are `task_id` and `operator_labels`.
+
+The [demo task](/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/tasks/demo-qwen36.json) contains J-OM11 pg8 settings with `LLAMA_EXPERT_PREGATE_K: "48"` and the exact controlled-invalid label.
+
+For the live review, set `FACTORY_SOURCE_REPO` to a local repository containing `e14b87603`, then run:
+
+```bash
+cd /home/muk/projects/jiuwenswarm
+export FACTORY_HOME="$PWD/artifacts/factory-demo"
+export FACTORY_SOURCE_REPO=/absolute/path/to/local/llama.cpp-with-e14b87603
+
+mkdir -p "$FACTORY_HOME/agent-workspace" \
+  "$FACTORY_HOME/agent-data/subscription/codex-home"
+cp -n "$HOME/.codex/auth.json" \
+  "$FACTORY_HOME/agent-data/subscription/codex-home/auth.json"
+chmod 600 "$FACTORY_HOME/agent-data/subscription/codex-home/auth.json"
+
+git -C "$FACTORY_SOURCE_REPO" rev-parse --verify 'e14b87603^{commit}'
+git clone --local --no-hardlinks "$FACTORY_SOURCE_REPO" \
+  "$FACTORY_HOME/agent-workspace/llama.cpp"
+git -C "$FACTORY_HOME/agent-workspace/llama.cpp" checkout --detach e14b87603
+
+.venv/bin/jiuwenswarm-factory auth-status
+# If sign-in is needed:
+# .venv/bin/jiuwenswarm-factory login
+
+FACTORY_DEMO_TASK=$(.venv/bin/jiuwenswarm-factory init \
+  jiuwenswarm/factory/tasks/demo-qwen36.json)
+printf '%s\n' "$FACTORY_DEMO_TASK" > "$FACTORY_HOME/demo-task-id"
+
+.venv/bin/jiuwenswarm-factory run "$FACTORY_DEMO_TASK" \
+  --grant process.exec --grant workspace.read \
+  --grant workspace.write --grant gpu.use
+
+.venv/bin/jiuwenswarm-factory status "$FACTORY_DEMO_TASK" --json
+.venv/bin/jiuwenswarm-factory show "$FACTORY_DEMO_TASK"
+```
+
+Use `resume TASK_ID` with the same grant flags after restart, or `cancel TASK_ID` to cancel active attempts. `jiuwenswarm factory` accepts the same commands.
+
+The [operator guide](/home/muk/projects/jiuwenswarm/docs/architecture/factory/CONTROLLER.md) lists job-worker and hardware prerequisites. The demo forbids commits; missing authority or prerequisites must produce a bounded stop. Scored acceptance also requires the operator-frozen reference contract.

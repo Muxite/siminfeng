@@ -1,0 +1,58 @@
+Implemented durable Jobs, Builder worker, dependency preparation, evidence ingestion, and API dispatch.
+
+Acceptance command passed: **82 tests**. Tests used temporary queues and fake build tools; no campaign queue, network, real Docker/GPU, or commits. CCv2 suite left for the reviewer as requested.
+
+```python
+Jobs(store, jobq_bin=Path('/home/muk/projects/siminfeng/bin/jobq'),
+     jobq_dir=None)
+submit(task_id, kind, request, idem_key, job_class,
+       argv, timeout_s, env_extra) -> attempt
+status(attempt_id) -> attempt
+cancel(attempt_id) -> attempt
+retry(attempt_id, new_idem_key) -> attempt
+result(attempt_id) -> {attempt_id, state, result_refs}
+```
+
+Module-level Builder interfaces:
+
+```python
+builder.submit(store, task_id, request, idem_key)
+builder.status(store, attempt_id)
+builder.cancel(store, attempt_id)
+builder.result(store, attempt_id)
+```
+
+`Builder(store, jobq_bin=..., jobq_dir=None)` exposes the same methods without the `store` argument.
+
+Worker CLI:
+
+```sh
+python -m jiuwenswarm.factory.build_job \
+  --task T --attempt A --request request.json
+```
+
+Observation schema:
+
+```json
+{
+  "kind": "build_result",
+  "values": {
+    "status": "...",
+    "failure_stage": null,
+    "image_id": "...",
+    "tag": "...",
+    "source_commit": "...",
+    "source_tree": "...",
+    "patch_sha256": null,
+    "toolchain": {},
+    "base_images": {},
+    "build_wall_seconds": 0,
+    "cache_hit": true
+  },
+  "source_artifacts": [],
+  "error": {},
+  "host_run": {"attempt_id": "...", "jobq_id": "...", "receipt": {}}
+}
+```
+
+Cleanup records process-group reaping; Docker container cleanup remains explicitly unverified.

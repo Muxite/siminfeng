@@ -1,0 +1,4 @@
+sg docker -c 'docker run -d --name acc-cc020d2b2c6c49f48e435c404ae0cc63 --runtime nvidia --network host --label campaign=c2 --label acc=1 --label jobq_job=job-d1860c8bc71d436c8169b562a76060bd -e NVIDIA_DRIVER_CAPABILITIES=compute,utility -e NVIDIA_VISIBLE_DEVICES=all -v /home/muk/models/campaign/qwen36-35b-a3b:/om:ro campaign/llamacpp:jetson-up1108-om11 /app/llama-server -np 1 --reasoning off -ngl 99 -lm mmap -cmoe -c 4096 --cache-ram 0 --ctx-checkpoints 0 -m /om/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf --host 127.0.0.1 --port 34263 --jinja'
+# finally / atexit / SIGTERM cleanup:
+sg docker -c 'docker kill acc-cc020d2b2c6c49f48e435c404ae0cc63'
+sg docker -c 'docker rm -f acc-cc020d2b2c6c49f48e435c404ae0cc63'

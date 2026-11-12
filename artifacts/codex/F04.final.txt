@@ -1,0 +1,34 @@
+Implemented all six capsules under [factory/ccs](/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/ccs), plus the component schema and inspector.
+
+**Acceptance:** E1 **19 passed**; E2 **41 passed**. E3 skipped as requested. No commits, network, real Docker, or GPU runs.
+
+All capsule IDs use the `factory.` prefix. `?` denotes optional inputs/outputs.
+
+| Capsule / capability | Takes | Gives |
+|---|---|---|
+| `engine_component` | Passive | Component manifest, hashed patches, README |
+| `integration_skill` | Passive | INTEGRATE, REPAIR, PREFLIGHT |
+| `engine_inspector.inspect` | `source` workspace handle, `subpath?`, `image?` | `source`, `host`, `image?`, `evidence` |
+| `engine_inspector.preflight` | `image`, `tool`, `argv` | `ok`, `unsupported_flags`, `help_sha256`, `image`, `evidence` |
+| `engine_inspector.verify_effective_config` | `image`, `env` | `requested`, `effective`, `mismatches`, `image`, `exit_status`, `aborted`, `invalid_line?`, `evidence` |
+| `builder.submit` | `request`, `idem_key` | `attempt_id`, `state`, `jobq_id` |
+| `lab_client.submit` | `image`, `build_attempt_id`, `contract_id`, `run_config`, `idem_key` | `attempt_id`, `state`, `jobq_id` |
+| `builder` / `lab_client`: `status`, `cancel` | `attempt_id` | Full attempt record |
+| `builder` / `lab_client`: `result` | `attempt_id` | `attempt_id`, `state`, `result_refs` |
+| `evidence.query` | `kinds?`, `text?`, `since?`, `limit?`, `task_id?` | `items`, `cursor` |
+| `evidence.read` | `id`, `task_id?` | `record` |
+| `evidence.publish` | `type`, `record`, `expected_rev?` | `record` |
+
+Full attempt outputs match F03: `attempt_id`, `task_id`, `kind`, `idem_key`, `fingerprint`, `request`, `state`, `jobq_id`, `owner`, `started`, `ended`, `resources`, `result_refs`, `cleanup_state`, `history`. Lab calls currently return `NOT_IMPLEMENTED`.
+
+Inspector error codes: `CONFIG_REJECTED`, `CONFIG_MISMATCH`, `CONFIG_MISSING`, `UNSUPPORTED_FLAG`, `IMAGE_NOT_FOUND`, `SOURCE_INVALID`, `HELP_FAILED`, `PROBE_FAILED`, `PROCESS_FAILED`, `CLEANUP_FAILED`, `TIMEOUT`, `INVALID_INPUT`. Rejected probes produce failed receipts with observation/artifact references.
+
+F05 must pass:
+
+- `PYTHONPATH=/home/muk/projects/jiuwenswarm` for native API imports.
+- `FACTORY_HOME` and `FACTORY_TASK_ID`; the task must already exist.
+- `FACTORY_WORKSPACE` for authorized artifact paths; inspection additionally needs a host-bound workspace handle.
+- Optional `FACTORY_READ_TASKS` and `DOCKER_CMD_PREFIX='sg docker -c'`.
+- `FACTORY_DOCKER` only for offline fake-Docker execution.
+
+Grant `process.exec`, plus `workspace.read` for inspection or `gpu.use` for NVIDIA-runtime probes. Config verification accepts only `LLAMA_EXPERT_*` settings.

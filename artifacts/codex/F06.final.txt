@@ -1,0 +1,29 @@
+Implemented F06. Acceptance command passed: **137 tests**. No network, real Docker/GPU, commits, or F05 file edits.
+
+```python
+Manager(store, spool_root)
+admit(task_id, image_ref, build_attempt_id)
+submit_run(task_id, admission_id, contract_id, run_config, idem_key)
+status(attempt_id)
+cancel(attempt_id)
+result(attempt_id)  # evaluation + evidence_refs
+ingest_upload(task_id, lab_run_id, bundle_dir)
+
+contract.load(contract_id)
+contract.freeze(contract, reference_run)
+contract.evaluate(contract, run)
+```
+
+Outcomes: `ok`, `config_rejected`, `measurement_failed`, `candidate_failed`, `wrong_target`, `bad_digest`, `cancelled`, `upload_pending`. Correctness and evidence completeness are separate fields.
+
+[Contract file](/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/contracts/qwen36-greedy-v1.json) uses the exact pg8 environment and remains unfrozen. API errors now include bounded, redacted reasons; inspector abort detection covers exit 133 and 134.
+
+With a jobq worker running against the same queue:
+
+```sh
+.venv/bin/python -m jiuwenswarm.factory.manager freeze-reference \
+  --contract qwen36-greedy-v1 \
+  --image campaign/llamacpp:jetson-up1108-om11
+```
+
+This runs the reference through the lab pipeline and prints its SHA256 after freezing. Pending uploads can be recovered with `python -m jiuwenswarm.factory.manager retry-spool`.

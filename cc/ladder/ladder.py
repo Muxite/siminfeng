@@ -65,7 +65,8 @@ def configs(model):
 def successful(summary, tokens=32):
     # common_perf counts the first generated token as prompt evaluation.
     count = summary.get('eval_runs', summary.get('eval_tokens'))
-    return (summary.get('status') == 'ok' and not summary.get('watchdog_trips', 0)
+    return (summary.get('status') == 'ok' and not summary.get('failure_kind')
+            and not summary.get('watchdog_trips', 0)
             and not summary.get('oom_killed', False) and finite(count) and count >= tokens - 1
             and finite(summary.get('eval_ms_per_token')) and summary['eval_ms_per_token'] > 0
             and summary.get('activation_ok', True))
@@ -76,6 +77,9 @@ def select_fit(model, probe, all_configs=False):
     trials, chosen = [], None
     for config in configs(model):
         summary = probe(config)
+        if summary.get('status') == 'harness_error':
+            trials.append(dict(config=config, fits=None, metrics=summary))
+            break
         fits = successful(summary)
         trials.append(dict(config=config, fits=fits, metrics=summary))
         if fits and chosen is None:
@@ -170,10 +174,35 @@ def run_checked(command, deadline, env=None):
         raise RuntimeError(f'command exited {rc}: {shlex.join(command)}')
 
 
+class PreflightError(RuntimeError):
+    """The harness cannot run this command; this is not placement evidence."""
+
+
 def preflight(image, tool, argv, out, deadline):
     env = dict(os.environ, ABRUN_PREFLIGHT_CACHE_DIR=str(out / 'preflight'))
-    run_checked([sys.executable, str(ROOT / 'cc/abrun/preflight.py'), image, tool, '--', *argv],
-                deadline, env)
+    try:
+        run_checked([sys.executable, str(ROOT / 'cc/abrun/preflight.py'), image, tool, '--', *argv],
+                    deadline, env)
+    except (RuntimeError, subprocess.SubprocessError) as exc:
+        raise PreflightError(str(exc)) from exc
+
+
+def watchdog_floor():
+    # Match om_run.sh's ${OM_MIN_AVAIL_MIB:-600}, including an empty override.
+    value = float(os.environ.get('OM_MIN_AVAIL_MIB') or '600')
+    if not math.isfinite(value) or value < 0:
+        raise ValueError('OM_MIN_AVAIL_MIB must be a finite nonnegative number')
+    return value
+
+
+def failure_kind(summary, stderr):
+    if re.search(r'cudaMalloc failed:\s*out of memory|unable to allocate', stderr, re.I):
+        return 'oom_error'
+    if summary.get('watchdog_trips') or str(summary.get('status', '')).startswith('watchdog_tripped'):
+        return 'watchdog_trip'
+    if summary.get('oom_killed'):
+        return 'oom_error'
+    return None if successful(summary) else 'other'
 
 
 def probe_om(out, image, model, config, prompt, tokens, deadline):
@@ -181,6 +210,7 @@ def probe_om(out, image, model, config, prompt, tokens, deadline):
     preflight(image, 'llama-completion', argv, out, deadline)
     refuse_busy()
     env = dict(os.environ, OM_MODELDIR=str(Path(model['path']).expanduser().parent),
+               OM_MIN_AVAIL_MIB=str(watchdog_floor()),
                OM_MAX_S=str(math.ceil(max(1, deadline - time.monotonic()))))
     try:
         rc = bounded(om_command(out, image, config, argv), deadline, env)
@@ -190,12 +220,16 @@ def probe_om(out, image, model, config, prompt, tokens, deadline):
     record = read(out / 'result.json') if (out / 'result.json').exists() else {}
     summary.update(watchdog_trips=record.get('watchdog_trips'), oom_killed=record.get('oom_killed'))
     text = (out / 'stderr.txt').read_text() if (out / 'stderr.txt').exists() else ''
+    if re.search(r'unsupported flags', text, re.I):
+        raise PreflightError(f'unsupported flags in engine stderr: {out / "stderr.txt"}')
     patterns = config.get('switch_regex', [])
     summary['activation_ok'] = all(re.search(p, text, re.M) for p in patterns)
     if not config['env'] and re.search(r'expert_(?:fill|pregate): active', text):
         summary['activation_ok'] = False
     if rc:
         summary['status'] = 'runner_failed'
+    summary['watchdog_floor_mib'] = watchdog_floor()
+    summary['failure_kind'] = failure_kind(summary, text)
     write(out / 'summary.json', summary)
     return summary
 
@@ -214,12 +248,21 @@ def model_identity(model, required=True):
     return dict(path=str(path.resolve()), size=stat.st_size, mtime_ns=stat.st_mtime_ns)
 
 
+def identity_inputs(model, image, required=True):
+    return dict(protocol=PROTOCOL, model=model_identity(model, required=required), image=image,
+                candidate_configs_sha256=fingerprint(configs(model)),
+                watchdog_floor_mib=watchdog_floor(),
+                prompts={n: fingerprint((HERE / f'prompts/{n}.txt').read_text())
+                         for n in sorted(set(SPEED_ORDER))})
+
+
 def step_directory(args, identity):
     parent = args.out / args.model_id
     key = fingerprint(identity)
-    if not args.new_run:
+    if not args.new_run and not getattr(args, 'refit', False):
         for manifest in sorted(parent.glob(f'{args.step}-*/step.json'), reverse=True):
-            if read(manifest).get('identity') == identity:
+            if (read(manifest).get('key') == key
+                    and read(manifest).get('identity') == identity):
                 return manifest.parent, key
     timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
     path = parent / f'{args.step}-{timestamp}'
@@ -231,18 +274,20 @@ def chosen_config(args, model, image):
     candidates = configs(model)
     if args.config:
         return next(c for c in candidates if c['id'] == args.config)
-    identity = model_identity(model, required=not args.dry_run)
+    current = identity_inputs(model, image, required=not args.dry_run)
     for path in sorted((args.out / args.model_id).glob('fit-*/summary.json'), reverse=True):
         record = read(path)
-        if (record.get('complete') and record.get('chosen') and record.get('image') == image
-                and record.get('model_identity') == identity):
+        saved = record.get('identity_inputs', {})
+        if (record.get('complete') and record.get('chosen') and saved.get('step') == 'fit'
+                and all(saved.get(k) == v for k, v in current.items())
+                and record.get('identity_key') == fingerprint(saved)):
             chosen = record['chosen']
             if chosen in candidates:
                 return chosen
     if args.dry_run:
         print('# no matching fit yet; previewing the first candidate')
         return candidates[0]
-    raise ValueError('no successful fit for current model/image; run fit first or select --config explicitly')
+    raise ValueError('no successful fit for current identity key; run fit first or select --config explicitly')
 
 
 def engine_options(config, context=True):
@@ -365,13 +410,18 @@ def fit_step(args, model, image, out, deadline):
             summary = probe_om(directory, image, model, config,
                                (HERE / 'prompts/chat.txt').read_text().strip(), 32, deadline)
         except RuntimeError as exc:
-            summary = dict(status='probe_failed', reason=str(exc))
+            harness = isinstance(exc, PreflightError) or 'unsupported flags' in str(exc).lower()
+            summary = dict(status='harness_error' if harness else 'probe_failed', reason=str(exc),
+                           watchdog_floor_mib=watchdog_floor(), mem_available_min_mib=None,
+                           failure_kind='other')
             write(directory / 'summary.json', summary)
         if directory.name != config['id']:
             write(out / config['id'] / 'summary.json', summary)
         return summary
     chosen, trials = select_fit(model, probe, args.all)
-    return dict(chosen=chosen, trials=trials, complete=True)
+    harness = any(t['metrics'].get('status') == 'harness_error' for t in trials)
+    return dict(chosen=None if harness else chosen, trials=trials, complete=True,
+                status='harness_error' if harness else ('ok' if chosen else 'does_not_fit'))
 
 
 def fresh_attempt(base):
@@ -433,7 +483,8 @@ def acc_step(args, model, image, config, out, deadline):
     command = acc_command(args, image, model, config, out / 'acc')
     preflight(image, 'llama-server', [*config['argv'], '-np', '1', '--jinja', '--reasoning', 'off'], out, deadline)
     refuse_busy()
-    run_checked(command, deadline, dict(os.environ, OM_MAX_S=str(args.max_seconds)))
+    run_checked(command, deadline, dict(os.environ, OM_MAX_S=str(args.max_seconds),
+                                       OM_MIN_AVAIL_MIB=str(watchdog_floor())))
     validate_sessions(out / 'acc/sessions', config)
     result = read(out / 'acc/summary.json')
     template = read(out / 'acc/template.json')
@@ -686,6 +737,7 @@ def parser():
         cmd.add_argument('--new-run', action='store_true', help='Start fresh instead of resuming identical settings')
         if name == 'fit':
             cmd.add_argument('--all', action='store_true')
+            cmd.add_argument('--refit', action='store_true', help='Reprobe in a new directory; retain previous fits')
         if name == 'acc':
             cmd.add_argument('--set', choices=['mmlu_pro_140', 'mmlu_pro_70'], default=None)
             cmd.add_argument('--data', type=Path, help='Frozen JSONL override')
@@ -725,9 +777,14 @@ def main(argv=None):
         configs(model)
         if args.config and args.config not in {c['id'] for c in configs(model)}:
             raise ValueError('unknown config ID')
-        if args.step == 'fit' and args.config:
-            model = dict(model, configs=[c for c in configs(model) if c['id'] == args.config])
-        config = configs(model)[0] if args.step == 'fit' else chosen_config(args, model, image)
+        config = (next((c for c in configs(model) if c['id'] == args.config), configs(model)[0])
+                  if args.step == 'fit' else chosen_config(args, model, image))
+        identity = dict(identity_inputs(model, image, required=not args.dry_run), step=args.step,
+                        config=config if args.step != 'fit' else configs(model))
+        if args.step == 'fit':
+            identity.update(all=args.all, selected_config=args.config)
+            if args.config:
+                model = dict(model, configs=[config])
         if args.step == 'acc':
             args.set = args.set or ('mmlu_pro_70' if model['over_memory'] else 'mmlu_pro_140')
             args.data = (args.data or Path('~/models/campaign/data/acc') / (args.set + '.jsonl')).expanduser().resolve()
@@ -743,6 +800,8 @@ def main(argv=None):
             refargs.model_id, refargs.config = args.ref, args.ref_config
             refconfig = chosen_config(refargs, reference, image)
         if args.dry_run:
+            print('# identity key inputs: ' + json.dumps(identity, sort_keys=True))
+            print('# identity_key: ' + fingerprint(identity))
             out = args.out / args.model_id / (args.step + '-DRY-RUN')
             if args.step in ('fit', 'speed'):
                 selected = configs(model) if args.step == 'fit' and args.all else [config]
@@ -762,13 +821,8 @@ def main(argv=None):
                 for action, subject, placement in [('reference', reference, refconfig), ('candidate', model, config)]:
                     print(shlex.join(kl_command(args, image, subject, placement, out / action, logits, chunks, action) + ['--dry-run']))
             return 0
-        model_id = model_identity(model)
-        identity = dict(protocol=PROTOCOL, model=model_id, image=image, step=args.step,
-                        config=config if args.step != 'fit' else configs(model),
-                        prompts={n: fingerprint((HERE / f'prompts/{n}.txt').read_text()) for n in set(SPEED_ORDER)})
-        if args.step == 'fit':
-            identity['all'] = args.all
-        elif args.step == 'acc':
+        model_id = identity['model']
+        if args.step == 'acc':
             identity.update(dataset_set=args.set, dataset_sha256=common.sha256(args.data))
         elif args.step == 'kld':
             identity.update(reference=model_identity(reference), ref_config=refconfig,
@@ -784,6 +838,8 @@ def main(argv=None):
                 summary_path = out / 'summary.json'
                 if summary_path.exists() and read(summary_path).get('complete'):
                     print(f'already complete: {summary_path}')
+                    if read(summary_path).get('status') == 'harness_error':
+                        return 3
                     return 0 if args.step != 'fit' or read(summary_path).get('chosen') else 1
                 try:
                     if args.step == 'fit':
@@ -795,13 +851,16 @@ def main(argv=None):
                     else:
                         result = kld_step(args, model, image, config, out, deadline, reference, refconfig)
                     result.update(ladder_schema=1, model_id=args.model_id, model_identity=model_id,
-                                  step=args.step, image=image, identity_key=key, protocol=PROTOCOL)
+                                  step=args.step, image=image, identity_key=key, protocol=PROTOCOL,
+                                  identity_inputs=identity)
                     write(summary_path, result)
                     print(json.dumps(result, indent=2))
                 finally:
                     clean_owned(out)
         finally:
             signal.signal(signal.SIGTERM, previous)
+        if result.get('status') == 'harness_error':
+            return 3
         return 1 if args.step == 'fit' and not result['chosen'] else 0
     except (OSError, ValueError, RuntimeError, StopIteration, subprocess.SubprocessError) as exc:
         p.exit(1, f'ladder: {exc}\n')

@@ -1,0 +1,12 @@
+<|channel>thought
+Here's a thinking process that leads to the suggested solution:
+
+1.  **Understand the Goal:** The request is to write a Python function that removes duplicate elements from a list *while preserving the original order* of the elements. I also need to explain the mechanism and the time complexity.
+
+2.  **Analyze the Constraints (Order Preservation):**
+    *   If I use a standard Python `set()`, it removes duplicates, but sets are inherently unordered (or ordered by hash, which is not guaranteed to match the input order). This fails the requirement.
+    *   If I use a loop and check `if item not in result_list: result_list.append(item)`, this works, but checking `item not in result_list` takes $O(k)$ time, where $k$ is the current size of the result list. If the input list has $N$ elements, the total time complexity becomes $O(N^2)$. This is inefficient.
+
+3.  **Determine the Optimal Approach (Efficiency + Order):**
+    *   To achieve $O(N)$ time complexity, we need a way to check if an element has been seen *in $O(1)$
+

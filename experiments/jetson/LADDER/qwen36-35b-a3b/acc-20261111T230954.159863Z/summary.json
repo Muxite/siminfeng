@@ -1,0 +1,100 @@
+{
+  "config": {
+    "id": "mmap-cmoe",
+    "argv": [
+      "-ngl",
+      "99",
+      "-lm",
+      "mmap",
+      "-cmoe",
+      "-c",
+      "4096"
+    ],
+    "env": {},
+    "switch_regex": [
+      "expert_config: effective fill=0 .*pregate=0 "
+    ]
+  },
+  "complete": true,
+  "dataset_set": "mmlu_pro_70",
+  "dataset_sha256": "79a6b8b85703128baf08ed27371e6d56a67a564f1b4251b57b8c36f05b7f0b8b",
+  "accuracy": {
+    "n": 70,
+    "correct": 44,
+    "acc": 0.6285714285714286,
+    "wilson95_lo": 0.5114720115842711,
+    "wilson95_hi": 0.7322934866530887,
+    "no_letter": 0,
+    "mean_ms_per_item": 33971.204204589594,
+    "prompt_tokens_total": 16174,
+    "mean_decode_tps": 0.0,
+    "items_file": "items.jsonl",
+    "expected_n": 70,
+    "complete": true,
+    "mode": "mcq",
+    "protocol": {
+      "prompt_format": "Question: {question}\n{lettered_choices}\nAnswer with the letter only.\nAnswer:",
+      "system": "You are a helpful assistant.",
+      "system_policy": "omit when template caps explicitly forbid system role",
+      "max_tokens": 1,
+      "temperature": 0,
+      "top_logprobs": 20,
+      "letter_variants": [
+        "L",
+        " L"
+      ],
+      "variant_aggregation": "max",
+      "non_thinking": "enable_thinking=false when template uses variable"
+    },
+    "dataset_sha256": "79a6b8b85703128baf08ed27371e6d56a67a564f1b4251b57b8c36f05b7f0b8b"
+  },
+  "template_kwargs_used": {
+    "enable_thinking": false
+  },
+  "ladder_schema": 1,
+  "model_id": "qwen36-35b-a3b",
+  "model_identity": {
+    "path": "/home/muk/models/campaign/qwen36-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+    "size": 22360456160,
+    "mtime_ns": 1794284367714538384
+  },
+  "step": "acc",
+  "image": "campaign/llamacpp:jetson-up1108-om11",
+  "identity_key": "fe4837a3b41452e19e19c30d30a64607689cfe5ea19aabb30e38c838ef687498",
+  "protocol": "ladder-v1-chat-greedy-ignore-eos-c4096-n256-ABC-CBA",
+  "identity_inputs": {
+    "protocol": "ladder-v1-chat-greedy-ignore-eos-c4096-n256-ABC-CBA",
+    "model": {
+      "path": "/home/muk/models/campaign/qwen36-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+      "size": 22360456160,
+      "mtime_ns": 1794284367714538384
+    },
+    "image": "campaign/llamacpp:jetson-up1108-om11",
+    "candidate_configs_sha256": "d841ffb3ca581143c1b12a63755e3c19e6f6fe37c930299bb9587ba3eb812e44",
+    "watchdog_floor_mib": 600.0,
+    "prompts": {
+      "chat": "4ef3e94c9f74b5c24e59af2a42843daefe54b4822e66c3e24c92d7789cebe3d6",
+      "code": "e01bf10790f12a7b45980b0028c41efb0130248ceb1935335960b2d047adeaa0",
+      "reason": "75a5f4d6206c1f944c0bc7f36b4a6966b17afb55fc97d27cd033b2b7ab2fd853"
+    },
+    "step": "acc",
+    "config": {
+      "id": "mmap-cmoe",
+      "argv": [
+        "-ngl",
+        "99",
+        "-lm",
+        "mmap",
+        "-cmoe",
+        "-c",
+        "4096"
+      ],
+      "env": {},
+      "switch_regex": [
+        "expert_config: effective fill=0 .*pregate=0 "
+      ]
+    },
+    "dataset_set": "mmlu_pro_70",
+    "dataset_sha256": "79a6b8b85703128baf08ed27371e6d56a67a564f1b4251b57b8c36f05b7f0b8b"
+  }
+}

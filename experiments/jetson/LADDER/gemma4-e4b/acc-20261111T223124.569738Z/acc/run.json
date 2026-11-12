@@ -1,0 +1,36 @@
+{
+  "mode": "mcq",
+  "dataset_sha256": "8b9c467568d0e49791238471f60eac46b312ccbe0c5c6f77f33b748d95ca0886",
+  "image": "campaign/llamacpp:jetson-up1108-om11",
+  "model": "/home/muk/models/campaign/gemma4-e4b/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf",
+  "model_size": 4215695776,
+  "model_mtime_ns": 1794422940713823702,
+  "model_sha256": "df0fd4ee07072c607c29a0a1cb4f98918426cca12f45a2776bdd6ee6d09a4de3",
+  "engine_argv": [
+    "-np",
+    "1",
+    "--reasoning",
+    "off",
+    "-ngl",
+    "99",
+    "-fa",
+    "on",
+    "-c",
+    "4096"
+  ],
+  "env": [],
+  "protocol": {
+    "prompt_format": "Question: {question}\n{lettered_choices}\nAnswer with the letter only.\nAnswer:",
+    "system": "You are a helpful assistant.",
+    "system_policy": "omit when template caps explicitly forbid system role",
+    "max_tokens": 1,
+    "temperature": 0,
+    "top_logprobs": 20,
+    "letter_variants": [
+      "L",
+      " L"
+    ],
+    "variant_aggregation": "max",
+    "non_thinking": "enable_thinking=false when template uses variable"
+  }
+}

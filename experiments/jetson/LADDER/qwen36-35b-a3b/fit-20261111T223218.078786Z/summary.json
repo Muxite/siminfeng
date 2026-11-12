@@ -1,0 +1,328 @@
+{
+  "chosen": {
+    "id": "mmap-cmoe",
+    "argv": [
+      "-ngl",
+      "99",
+      "-lm",
+      "mmap",
+      "-cmoe",
+      "-c",
+      "4096"
+    ],
+    "env": {},
+    "switch_regex": [
+      "expert_config: effective fill=0 .*pregate=0 "
+    ]
+  },
+  "trials": [
+    {
+      "config": {
+        "id": "mmap-cmoe-frd16-pg8",
+        "argv": [
+          "-ngl",
+          "99",
+          "-lm",
+          "mmap",
+          "-cmoe",
+          "-c",
+          "4096"
+        ],
+        "env": {
+          "LLAMA_EXPERT_FILL": "1",
+          "LLAMA_EXPERT_FILL_RANDOM": "decode",
+          "LLAMA_EXPERT_FILL_THREADS": "16",
+          "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+          "LLAMA_EXPERT_PREFETCH": "0",
+          "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+          "LLAMA_MMAP_ADVICE": "default",
+          "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+          "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+          "LLAMA_EXPERT_FILL_POPULATE": "0",
+          "LLAMA_EXPERT_PREGATE": "1",
+          "LLAMA_EXPERT_PREGATE_K": "8",
+          "LLAMA_EXPERT_PREGATE_ORDER": "after",
+          "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "4",
+          "LLAMA_EXPERT_PREGATE_LOOKAHEAD": "1"
+        },
+        "switch_regex": [
+          "expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=\\(unset\\) prefetch=0 prefetch_next=0$",
+          "expert_fill: active",
+          "expert_fill: random advice applied at decode",
+          "expert_pregate: active k=8 ",
+          "expert_pregate: stats"
+        ]
+      },
+      "fits": false,
+      "metrics": {
+        "dir": "/home/muk/projects/siminfeng/experiments/jetson/LADDER/qwen36-35b-a3b/fit-20261111T223218.078786Z/mmap-cmoe-frd16-pg8",
+        "reasons": {
+          "pp_avg_ts": "no matching llama-bench JSON row",
+          "pp_samples_ts": "no matching llama-bench JSON row",
+          "pp_steady": "no matching llama-bench JSON row",
+          "tg_avg_ts": "no matching llama-bench JSON row",
+          "tg_samples_ts": "no matching llama-bench JSON row",
+          "tg_steady": "no matching llama-bench JSON row",
+          "emc_freq_median": "no decode-window samples: emc_freq",
+          "threads.cpu_workers_r_fraction": "thread capture or decode window unavailable",
+          "threads.main_workers_d_fraction": "thread capture or decode window unavailable",
+          "threads.majflt_per_token": "thread capture or decode window unavailable"
+        },
+        "warnings": [],
+        "status": "ok",
+        "wall_s": 106.49,
+        "output_sha": "efa913eb4dec",
+        "switch_matches": {
+          "expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=\\(unset\\) prefetch=0 prefetch_next=0$": 2,
+          "expert_fill: active": 0,
+          "expert_fill: random advice applied at decode": 0,
+          "expert_pregate: active k=8 ": 0,
+          "expert_pregate: stats": 0
+        },
+        "switch_lines": [
+          "expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=(unset) prefetch=0 prefetch_next=0",
+          "expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=(unset) prefetch=0 prefetch_next=0"
+        ],
+        "prompt_tps": 1.45,
+        "eval_tps": 1.04,
+        "load_s": 53.394510000000004,
+        "eval_tokens": 31.0,
+        "eval_ms_per_token": 964.7,
+        "prompt_ms_per_token": 690.72,
+        "eval_ms_total": 29905.59,
+        "eval_runs": 31,
+        "load_ms": 53394.51,
+        "bench": {
+          "pp": [],
+          "tg": []
+        },
+        "pp_avg_ts": null,
+        "pp_samples_ts": null,
+        "pp_steady": null,
+        "tg_avg_ts": null,
+        "tg_samples_ts": null,
+        "tg_steady": null,
+        "nvme_gib": 45.683937072753906,
+        "avg_kib_per_io": 90.81565796358507,
+        "nvme_gib_per_token": 1.4736753894436745,
+        "mem_available_min_mib": 2668.988,
+        "swap_max_mib": 909.1010000000001,
+        "gpu_freq_median": 306.0,
+        "phase_windows": {
+          "clock": "mono_s",
+          "method": "last_telemetry_before_exit_minus_eval_ms_total",
+          "decode_start": 876492.513394513,
+          "decode_end": 876522.418984513,
+          "load_start": 876416.301535257,
+          "load_end": 876469.696045257,
+          "sampling_error_bound_s": 1.001500086975284,
+          "absolute_error_bound_s": null,
+          "error_note": "Endpoint sampling error is at most the largest observed backend interval assuming sampling continued until exit. Engine teardown/exit lag is unknown; no finite absolute phase alignment bound is available. Load begins at first telemetry sample; startup offset is also unknown."
+        },
+        "nvme_gib_decode": 11.670093334263584,
+        "nvme_gib_load": 24.269897887867046,
+        "nvme_gib_per_token_decode": 0.37645462368592203,
+        "gpu_util_median": 13,
+        "gpu_util_p90": 22,
+        "device_util_median": 96.27245999954874,
+        "power_in_w_median": 7.079,
+        "temp_tj_max": 52.687,
+        "emc_freq_median": null,
+        "energy_j_per_token": 6.7848669605821526,
+        "threads.cpu_workers_r_fraction": null,
+        "threads.main_workers_d_fraction": null,
+        "threads.majflt_per_token": null,
+        "watchdog_trips": 0,
+        "oom_killed": false,
+        "activation_ok": false,
+        "watchdog_floor_mib": 600.0,
+        "failure_kind": "other"
+      }
+    },
+    {
+      "config": {
+        "id": "mmap-cmoe",
+        "argv": [
+          "-ngl",
+          "99",
+          "-lm",
+          "mmap",
+          "-cmoe",
+          "-c",
+          "4096"
+        ],
+        "env": {},
+        "switch_regex": [
+          "expert_config: effective fill=0 .*pregate=0 "
+        ]
+      },
+      "fits": true,
+      "metrics": {
+        "dir": "/home/muk/projects/siminfeng/experiments/jetson/LADDER/qwen36-35b-a3b/fit-20261111T223218.078786Z/mmap-cmoe",
+        "reasons": {
+          "pp_avg_ts": "no matching llama-bench JSON row",
+          "pp_samples_ts": "no matching llama-bench JSON row",
+          "pp_steady": "no matching llama-bench JSON row",
+          "tg_avg_ts": "no matching llama-bench JSON row",
+          "tg_samples_ts": "no matching llama-bench JSON row",
+          "tg_steady": "no matching llama-bench JSON row",
+          "emc_freq_median": "no decode-window samples: emc_freq",
+          "threads.cpu_workers_r_fraction": "thread capture or decode window unavailable",
+          "threads.main_workers_d_fraction": "thread capture or decode window unavailable",
+          "threads.majflt_per_token": "thread capture or decode window unavailable"
+        },
+        "warnings": [],
+        "status": "ok",
+        "wall_s": 111.01,
+        "output_sha": "efa913eb4dec",
+        "switch_matches": {
+          "expert_config: effective fill=0 .*pregate=0 ": 2
+        },
+        "switch_lines": [
+          "expert_config: effective fill=0 random=0 max_tokens=0 threads=8 chunk_kib=1024 pregate=0 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=(unset) prefetch=0 prefetch_next=0",
+          "expert_config: effective fill=0 random=0 max_tokens=0 threads=8 chunk_kib=1024 pregate=0 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=(unset) prefetch=0 prefetch_next=0"
+        ],
+        "prompt_tps": 1.46,
+        "eval_tps": 0.85,
+        "load_s": 51.359809999999996,
+        "eval_tokens": 31.0,
+        "eval_ms_per_token": 1178.3,
+        "prompt_ms_per_token": 686.65,
+        "eval_ms_total": 36527.35,
+        "eval_runs": 31,
+        "load_ms": 51359.81,
+        "bench": {
+          "pp": [],
+          "tg": []
+        },
+        "pp_avg_ts": null,
+        "pp_samples_ts": null,
+        "pp_steady": null,
+        "tg_avg_ts": null,
+        "tg_samples_ts": null,
+        "tg_steady": null,
+        "nvme_gib": 45.912845611572266,
+        "avg_kib_per_io": 83.73122169427381,
+        "nvme_gib_per_token": 1.4810595358571699,
+        "mem_available_min_mib": 2936.027,
+        "swap_max_mib": 997.0,
+        "gpu_freq_median": 306.0,
+        "phase_windows": {
+          "clock": "mono_s",
+          "method": "last_telemetry_before_exit_minus_eval_ms_total",
+          "decode_start": 876600.262289291,
+          "decode_end": 876636.789639291,
+          "load_start": 876526.170298009,
+          "load_end": 876577.530108009,
+          "sampling_error_bound_s": 1.0015478399582207,
+          "absolute_error_bound_s": null,
+          "error_note": "Endpoint sampling error is at most the largest observed backend interval assuming sampling continued until exit. Engine teardown/exit lag is unknown; no finite absolute phase alignment bound is available. Load begins at first telemetry sample; startup offset is also unknown."
+        },
+        "nvme_gib_decode": 12.816999549630964,
+        "nvme_gib_load": 23.41326719513745,
+        "nvme_gib_per_token_decode": 0.4134515983751924,
+        "gpu_util_median": 11.0,
+        "gpu_util_p90": 18,
+        "device_util_median": 95.90205637082389,
+        "power_in_w_median": 6.477,
+        "temp_tj_max": 51.75,
+        "emc_freq_median": null,
+        "energy_j_per_token": 7.65465135024877,
+        "threads.cpu_workers_r_fraction": null,
+        "threads.main_workers_d_fraction": null,
+        "threads.majflt_per_token": null,
+        "watchdog_trips": 0,
+        "oom_killed": false,
+        "activation_ok": true,
+        "watchdog_floor_mib": 600.0,
+        "failure_kind": null
+      }
+    }
+  ],
+  "complete": true,
+  "status": "ok",
+  "ladder_schema": 1,
+  "model_id": "qwen36-35b-a3b",
+  "model_identity": {
+    "path": "/home/muk/models/campaign/qwen36-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+    "size": 22360456160,
+    "mtime_ns": 1794284367714538384
+  },
+  "step": "fit",
+  "image": "campaign/llamacpp:jetson-up1108-om11",
+  "identity_key": "5d2bf8c9113a03cdde13689ae5e0cc3da777a74df882bf44f4544d7934409d2b",
+  "protocol": "ladder-v1-chat-greedy-ignore-eos-c4096-n256-ABC-CBA",
+  "identity_inputs": {
+    "protocol": "ladder-v1-chat-greedy-ignore-eos-c4096-n256-ABC-CBA",
+    "model": {
+      "path": "/home/muk/models/campaign/qwen36-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+      "size": 22360456160,
+      "mtime_ns": 1794284367714538384
+    },
+    "image": "campaign/llamacpp:jetson-up1108-om11",
+    "candidate_configs_sha256": "d841ffb3ca581143c1b12a63755e3c19e6f6fe37c930299bb9587ba3eb812e44",
+    "watchdog_floor_mib": 600.0,
+    "prompts": {
+      "chat": "4ef3e94c9f74b5c24e59af2a42843daefe54b4822e66c3e24c92d7789cebe3d6",
+      "code": "e01bf10790f12a7b45980b0028c41efb0130248ceb1935335960b2d047adeaa0",
+      "reason": "75a5f4d6206c1f944c0bc7f36b4a6966b17afb55fc97d27cd033b2b7ab2fd853"
+    },
+    "step": "fit",
+    "config": [
+      {
+        "id": "mmap-cmoe-frd16-pg8",
+        "argv": [
+          "-ngl",
+          "99",
+          "-lm",
+          "mmap",
+          "-cmoe",
+          "-c",
+          "4096"
+        ],
+        "env": {
+          "LLAMA_EXPERT_FILL": "1",
+          "LLAMA_EXPERT_FILL_RANDOM": "decode",
+          "LLAMA_EXPERT_FILL_THREADS": "16",
+          "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+          "LLAMA_EXPERT_PREFETCH": "0",
+          "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+          "LLAMA_MMAP_ADVICE": "default",
+          "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+          "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+          "LLAMA_EXPERT_FILL_POPULATE": "0",
+          "LLAMA_EXPERT_PREGATE": "1",
+          "LLAMA_EXPERT_PREGATE_K": "8",
+          "LLAMA_EXPERT_PREGATE_ORDER": "after",
+          "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "4",
+          "LLAMA_EXPERT_PREGATE_LOOKAHEAD": "1"
+        },
+        "switch_regex": [
+          "expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=\\(unset\\) prefetch=0 prefetch_next=0$",
+          "expert_fill: active",
+          "expert_fill: random advice applied at decode",
+          "expert_pregate: active k=8 ",
+          "expert_pregate: stats"
+        ]
+      },
+      {
+        "id": "mmap-cmoe",
+        "argv": [
+          "-ngl",
+          "99",
+          "-lm",
+          "mmap",
+          "-cmoe",
+          "-c",
+          "4096"
+        ],
+        "env": {},
+        "switch_regex": [
+          "expert_config: effective fill=0 .*pregate=0 "
+        ]
+      }
+    ],
+    "all": false,
+    "selected_config": null
+  }
+}
