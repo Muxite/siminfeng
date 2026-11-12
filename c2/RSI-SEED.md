@@ -3,7 +3,7 @@
 Kept out of the jiuwenswarm repo on purpose, so an improver must find the problem from telemetry and workflow data, not from docs. Share it with the RSI owner, who decides how much to reveal.
 
 ## Seed
-- **Capsule:** `factory.evidence`, capability `query`. It is the most-called capability: the agent queries evidence before every decision.
+- **Capsule:** `factory.evidence`, capability `query`. The agent queries evidence before each decision. In run 4 it made 15 queries; `evidence.read` was the most-called capability, at 164 calls.
 - **Defect:** `jiuwenswarm/factory/store.py` `Store.query` runs an integrity sweep before it answers. It reads and SHA-256-hashes **every artifact blob of the task**, not just the returned page, and throws the bytes away. The result does not depend on that work. Commit eae83eff strengthened it from page-only verification, which the agent's small `since` pages hid: a flat 5 ms in run 4.
 - **Why it's realistic:**
   - It started as integrity checking on the read path.
