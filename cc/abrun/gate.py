@@ -51,6 +51,8 @@ def evaluate(arms, metric='eval_tps', base='base', direction=None):
             reasons.append(f'{arm}: missing/nonpositive/nonfinite {metric}')
         if any(r.get('status', 'ok') != 'ok' for r in arms[arm]):
             reasons.append(f'{arm}: unsuccessful run')
+        if any(r.get('host_contention') for r in arms[arm]):
+            reasons.append(f'{arm}: host_contention')
     base_values = inputs.get(base, [])
     drift_halves = None
     drift = None

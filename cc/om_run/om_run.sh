@@ -27,8 +27,19 @@ fi
 # warm uses OM_CACHE_WARM_RANGES (host JSON) or OM_CACHE_WARM_BYTES (prefix).
 OM_CACHE_ARGV=("$@")
 om_cache_record(){ python3 "$R/cc/page_cache/run_protocol.py" "$1" "$OUT" "$MODELDIR" "${OM_CACHE_ARGV[@]}"; }
-trap 'om_cache_record end || echo "page-cache end recording failed" >&2' EXIT
+CG=
+om_cleanup(){
+    if [ -n "$CG" ]; then kill "$CG" 2>/dev/null; wait "$CG" 2>/dev/null; fi
+    om_cache_record end || echo "page-cache end recording failed" >&2
+}
+trap om_cleanup EXIT
 om_cache_record start || { echo "CACHE_PROTOCOL_FAIL" > "$OUT/status"; exit 2; }
+# Take the first snapshot before engine startup; stop sampling as soon as it exits.
+rm -f "$OUT/contention.json"
+if [ "${OM_CONTENTION_GUARD:-1}" != 0 ]; then
+    python3 "$R/cc/om_run/contention.py" "$OUT/contention.json" "$$" & CG=$!
+    while [ ! -s "$OUT/contention.json" ] && kill -0 "$CG" 2>/dev/null; do sleep .02; done
+fi
 dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
    -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro $NSYS_MOUNT "$IMG" $NSYS_PREFIX /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
 if [ "${OM_THREADS:-0}" = 1 ]; then
@@ -43,6 +54,7 @@ python3 "$R/cc/resource_observe/resource_observe.py" sample --backends io,proc,t
    --duration-s ${OM_MAX_S:-1800} --out "$OUT/telemetry.jsonl" >/dev/null 2>&1 & SM=$!
 T0=$(date +%s.%N)
 RC=$(dk wait "$NAME"); T1=$(date +%s.%N)
+if [ -n "$CG" ]; then kill "$CG" 2>/dev/null; wait "$CG" 2>/dev/null; CG=; fi
 kill $WD $SM 2>/dev/null; wait $WD 2>/dev/null; WDRC=$?
 dk logs "$NAME" > "$OUT/stdout.txt" 2> "$OUT/stderr.txt"
 if [ "${OM_THREADS:-0}" = 1 ]; then

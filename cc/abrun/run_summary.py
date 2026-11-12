@@ -43,6 +43,17 @@ def summarize(directory, switch_regex=(), write=True):
         record = {}
     put('status', record.get('status'), 'result.json status missing or invalid')
     put('wall_s', record.get('wall_s') if numeric(record.get('wall_s')) else None)
+    contention = {}
+    if (directory / 'contention.json').exists():
+        try:
+            contention = json.loads(read('contention.json'))
+            if not isinstance(contention, dict):
+                contention = {}
+        except (ValueError, TypeError):
+            result['warnings'].append('invalid contention.json')
+    count = contention.get('max_foreign_heavy', 0)
+    result['max_foreign_heavy'] = count if numeric(count) and count >= 0 else 0
+    result['host_contention'] = result['max_foreign_heavy'] > 0
     for phase in ('start', 'end'):
         try:
             cache = json.loads(read(f'page_cache.{phase}.json'))

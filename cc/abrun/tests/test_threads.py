@@ -94,6 +94,9 @@ elif len(sys.argv)>1 and sys.argv[1].endswith('thread_sampler.py'):
     # The real sampler itself is covered by local busy-process tests. No proc
     # namespace/container dependency belongs in this shell command comparison.
     if '--out' in sys.argv:open(sys.argv[sys.argv.index('--out')+1],'w').close()
+elif len(sys.argv)>1 and sys.argv[1].endswith('run_protocol.py'):
+    # The copied baseline has no helper tree; cache behavior is tested separately.
+    pass
 else:os.execv({sys.executable!r},[{sys.executable!r}]+sys.argv[1:])
 ''')
     python.chmod(0o755)
@@ -101,13 +104,18 @@ else:os.execv({sys.executable!r},[{sys.executable!r}]+sys.argv[1:])
     baseline = tmp_path / 'original.sh'
     baseline.write_text(original)
     commands = []
-    for script, threads in [(baseline, None), (ROOT / 'cc/om_run/om_run.sh', None), (ROOT / 'cc/om_run/om_run.sh', '1')]:
+    current = ROOT / 'cc/om_run/om_run.sh'
+    for script, threads, guard in [(baseline, None, None), (current, None, None),
+                                   (current, '1', None), (current, None, '0')]:
         idx = len(commands)
         out = tmp_path / f'out{idx}'
         log = tmp_path / f'docker{idx}.jsonl'
         env = dict(os.environ, PATH=str(bindir) + ':' + os.environ['PATH'], DOCKER_LOG=str(log))
         env.pop('DOCKER_CMD_PREFIX', None)
         env.pop('OM_THREADS', None)
+        env.pop('OM_CONTENTION_GUARD', None)
+        if guard is not None:
+            env['OM_CONTENTION_GUARD'] = guard
         if threads:
             env['OM_THREADS'] = threads
         subprocess.run(['bash', str(script), str(out), 'test-image', '-e TEST=1', 'llama-completion', '-t', '4'], env=env, check=True, capture_output=True, timeout=10)
@@ -115,4 +123,8 @@ else:os.execv({sys.executable!r},[{sys.executable!r}]+sys.argv[1:])
         run = next(row for row in rows if row[0] == 'run')
         commands.append([re.sub(r'om-\d+-\d+', 'CONTAINER', arg) for arg in run])
         assert (out / 'threads.jsonl').exists() == bool(threads)
-    assert commands[0] == commands[1] == commands[2]
+        if script == current:
+            assert (out / 'contention.json').exists() == (guard != '0')
+            if guard != '0':
+                assert json.loads((out / 'contention.json').read_text())['samples']
+    assert all(command == commands[0] for command in commands[1:])
