@@ -46,6 +46,7 @@ def recompute(outdir, exclude=(), metric=None, reason=''):
                             direction=spec.get('direction') if metric is None else None)
     invalid.extend(verdict['reasons'])
     verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+                   cache_protocol=spec.get('cache_protocol', 'carryover'),
                    excluded_runs=excluded, included_runs=included, reason=reason)
     if invalid:
         for comparison in verdict['comparisons'].values():

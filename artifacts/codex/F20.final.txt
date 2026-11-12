@@ -1,0 +1,10 @@
+Implemented [expert_trace/2 schema](​/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/views/TRACE-SCHEMA.md) and the offline [J-OM13 sample](​/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/views/sample/j-om13-008.html), normalized as `expert_activity/1`.
+
+- **A:** Selected/predicted expert IDs and readiness per layer/token.
+- **B:** Per-layer recall, demand/speculative bytes, timely/late/unused speculation.
+- **C:** Demand-fill waits versus measured token duration; residual time labelled inferred.
+- **D:** Component → commit/files → decision/evidence → config/image → engagement/A/B.
+
+J-OM13 remains clearly labelled **aggregate, no per-token trace**. Current P12 CSV supplies IDs but lacks readiness, bytes and timing. Filling those gaps requires arrival residency per selected expert, per-layer demand bytes/wait, finalized speculative issued/read/used/wasted counters, lifetime-use tracking, and monotonic arrival/fill/token timestamps. The sample also lacks an immutable image ID and linked factory change records. Missing data stays **UNKNOWN**; trace overhead remains unmeasured until operator A/B.
+
+The exact acceptance command passed: **5 tests**. JavaScript syntax and control-wiring checks passed; browser preview was blocked by the sandbox.

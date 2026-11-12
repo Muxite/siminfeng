@@ -43,6 +43,16 @@ def summarize(directory, switch_regex=(), write=True):
         record = {}
     put('status', record.get('status'), 'result.json status missing or invalid')
     put('wall_s', record.get('wall_s') if numeric(record.get('wall_s')) else None)
+    for phase in ('start', 'end'):
+        try:
+            cache = json.loads(read(f'page_cache.{phase}.json'))
+            value = cache.get('resident_pct') if isinstance(cache, dict) else None
+            error = cache.get('error') if isinstance(cache, dict) else None
+        except (ValueError, TypeError):
+            value, error = None, 'invalid page-cache JSON'
+        put(f'cache_{phase}_resident_pct',
+            value if numeric(value) and 0 <= value <= 100 else None,
+            error or f'page_cache.{phase}.json residency unavailable')
     stderr = read('stderr.txt')
     stdout = read('stdout.txt')
     try:

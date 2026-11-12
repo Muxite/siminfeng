@@ -1,0 +1,12 @@
+Four independent source patches are implemented and CPU-tested. **B2 and B3 pass; B1 is incomplete** because `.git` is read-only, preventing branches, commits, format-patches, and Git worktree checks.
+
+Details and stdout hashes: [F16-check.md](/home/muk/projects/xs-dev/opt-artifacts/F16-check.md).
+
+- **P12:** Buffered selection trace and simulator; 1,814 records analyzed, five synthetic tests pass. Previous-token recall is about 41%, frequency recall about 44%. Useful for finding Satay’s residency opportunities; simulated bytes are estimates.
+- **P13:** Direct mmap population; active test recorded 17,091 calls, 10.0 GB populated, zero fallbacks. Saves scratch-copy bandwidth and later faults, but was slower on this cached fixture and cannot eliminate storage reads.
+- **P14:** Frequency-ranked whole-expert pinning; locked 39 experts using 62.59 MiB. Repeated repinning and zero-memlock fallback pass. Small container limits produce evictable WILLNEED advice. Stable hot sets may win; oversized or stale pins consume Satay’s GPU/page-cache RAM.
+- **P15:** Previous-token temporal prediction and hybrid mode; temporal recall **41.1466%** independently verified. Timely predictions may hide reads; misses waste bandwidth. Score-first hybrid usually retains router top-K. Real Qwen router/hybrid execution remains untested.
+
+The prescribed Granite command uses repacked weights, making fill inactive. Supplemental `LLAMA_ARG_REPACK=0` comparisons exercised the mapped paths and also preserved stdout.
+
+The checkout is clean at `6e9d96cf4`. Four patches and [the Git packaging script](/home/muk/projects/xs-dev/opt-artifacts/finish_f16_git.py) are ready for metadata write access. No pushes, network, Docker, or GPU use.

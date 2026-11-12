@@ -29,6 +29,9 @@ A spec is a JSON object with these fields:
 | `order` | Required `"ABBA"`, `"ABCCBA"`, `"mirrored"`, or `"explicit"` |
 | `explicit_order` | Array of known arm names, required for `"explicit"` |
 | `rounds` | Positive integer repeating the entire order; default 1 |
+| `cache_protocol` | `"carryover"` (default), `"cold"`, or `"warm"`; host env `OM_CACHE_PROTOCOL` |
+| `cache_warm_bytes` | Nonnegative prefix length for warm; host env `OM_CACHE_WARM_BYTES` |
+| `cache_warm_ranges` | Host JSON path for warm; host env `OM_CACHE_WARM_RANGES`; exclusive with `cache_warm_bytes` |
 
 `base` is mandatory and is A; remaining arms follow JSON insertion order.
 Mirrored order visits every arm then reverses, including both end arms.
@@ -43,6 +46,24 @@ or the spec in an `expect_switch: false` run is a leak (including non-base arms)
 Each summary and the per-run report include `switch_matches` (regex -> matched
 line count, including zeroes); a line counts once per pattern.
 The OM7 example uses the original image, argv, env switches, and ABCCBA design.
+
+Page-cache settings are top-level fields shared by every arm, e.g.
+`"cache_protocol": "warm", "cache_warm_bytes": 1073741824`.
+Alternatively warm settings may be supplied in the launcher's host environment.
+Ranges use a JSON list of `{ "name": "expert", "offset": 4096, "size": 8192 }`.
+om_run resolves `-m /om/...` against `OM_MODELDIR`; set `OM_CACHE_MODEL` to
+the host model path for other container locations. Carryover only measures;
+cold requests file eviction; warm evicts then reads the chosen prefix/ranges.
+The runner always writes `page_cache.start.json` and `page_cache.end.json`;
+start contains residency after preparation, plus before/after eviction evidence
+for cold/warm. Recording errors are explicit; preparation errors stop launch.
+Summaries and REPORT.md include `cache_start_resident_pct` and
+`cache_end_resident_pct`. Verdicts state the protocol and add a descriptive
+`cache_confound` note if any arms' observed mean start residency differs by
+more than 10 percentage points; this never changes gate decisions.
+Missing observations are omitted from these means. Measurements are snapshots;
+other mappings, dirty pages, readahead and memory pressure can defeat eviction
+or change residency. Warm reads beyond RAM capacity cannot stay fully resident.
 
 ## Execution and artifacts
 

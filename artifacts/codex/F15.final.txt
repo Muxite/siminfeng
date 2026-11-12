@@ -1,0 +1,19 @@
+Implemented [taskgraph.py](/home/muk/projects/jiuwenswarm-f15/jiuwenswarm/factory/taskgraph.py): immutable patches, CAS revisions, decision citations, atomic decision-plus-patch publication, proposed seeding and one-shot job reconciliation. Extended `factory.evidence` because plans share its evidence and scope boundary. CLI text/DOT/JSON, monitor/story views and telemetry are included.
+
+M1 planning becomes agent-revised graph records; scheduling remains controller plus durable jobs; graph storage becomes append-only evidence replay. The concept-by-concept mapping and revision example are in [TASK-GRAPH.md](/home/muk/projects/jiuwenswarm-f15/docs/architecture/factory/TASK-GRAPH.md).
+
+Acceptance: **255 passed, 1 skipped** using the requested command. The existing socket test skipped; HTTP-handler checks passed. `git diff --check` is clean.
+
+Exact shared-file merge hunks:
+
+| File | Hunk headers | Change |
+|---|---|---|
+| `controller.py` | `@@ -23,0 +24,5 @@`; `@@ -159 +164,4 @@` | Guarded seed import and initialization call |
+| `AGENT.md` | `@@ -27,0 +28,12 @@` | Plan API guidance |
+| `story.py` | `@@ -364,0 +365,4 @@` | Graph rendering |
+| `monitor.py` | `@@ -124,0 +125,3 @@` | `/api/plan` endpoint |
+| `monitor.html` | `@@ -74,0 +75 @@`; `@@ -179 +180,5 @@` | Collapsible panel and fetch |
+
+Each shared file is below 40 changed lines. Manager, components and component directories are untouched. Include the three new files—module, tests and documentation—when merging.
+
+Test scratch files stayed inside the worktree and were removed. No commits, Docker/GPU runs or `~/.jiuwenswarm-factory` writes.

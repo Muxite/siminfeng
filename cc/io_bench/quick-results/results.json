@@ -1,0 +1,817 @@
+{
+  "model": "/home/muk/projects/siminfeng/cc/io_bench/f18-temp-1g.bin",
+  "args": {
+    "model": "/home/muk/projects/siminfeng/cc/io_bench/f18-temp-1g.bin",
+    "model_option": null,
+    "ranges": null,
+    "extract_ranges": null,
+    "raw_file": true,
+    "sizes": null,
+    "concurrency": null,
+    "pattern": "both",
+    "engines": "python,psync,io_uring",
+    "bytes_per_cell": null,
+    "output_dir": "/home/muk/projects/siminfeng/cc/io_bench/quick-results",
+    "quick": true,
+    "seed": 1
+  },
+  "elapsed_s": 11.664542773971334,
+  "cells": [
+    {
+      "pattern": "random-expert",
+      "engine": "python",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 1,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 410313348,
+      "mb_s": 81.77757843744338,
+      "p50_ns": 2112498,
+      "p95_ns": 9611169,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 256,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "psync",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 1,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 1031000000,
+      "mb_s": 32.54552085354025,
+      "p50_ns": 901334,
+      "p95_ns": 8203232,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 256,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "psync",
+      "direct": true,
+      "request_bytes": 262144,
+      "concurrency": 1,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 395000000,
+      "mb_s": 84.94792911392406,
+      "p50_ns": 1260702,
+      "p95_ns": 9376124,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "io_uring",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 1,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "status": "error",
+      "error": "fio: pid=14, err=1/file:engines/io_uring.c:796, func=io_queue_init, error=Operation not permitted\n{\n  \"fio version\" : \"fio-3.28\",\n  \"timestamp\" : 1794506210,\n  \"timestamp_ms\" : 1794506210431,\n  \"time\" : \"Thu Nov 12 17:56:50 2026\",\n  \"global options\" : {\n    \"rw\" : \"read\",\n    \"allow_file_create\" : \"0\",\n    \"ioengine\" : \"io_uring\",\n    \"direct\" : \"0\",\n    \"iodepth\" : \"1\",\n    \"thread\" : \"1\",\n    \"replay_no_stall\" : \"1\",\n    \"log_avg_msec\" : \"0\",\n    \"disable_lat\" : \"0\",\n    \"disable_clat\" : \"0\",\n    \"per_job_logs\" : \"1\"\n  },\n  \"jobs\" : [\n    {\n      \"jobname\" : \"worker0\",\n      \"groupid\" : 0,\n      \"error\" : 1,\n      \"eta\" : 2147483647,\n      \"elapsed\" : 1,\n      \"job options\" : {\n        \"read_iolog\" : \"/home/muk/projects/siminfeng/cc/io_bench/quick-results/cell-004/worker0.iolog\",\n        \"write_lat_log\" : \"/home/muk/projects/siminfeng/cc/io_bench/quick-results/cell-004/lat0\"\n      },\n      \"read\" : {\n        \"io_bytes\" : 0,\n        \"io_kbytes\" : 0,\n        \"bw_bytes\" : 0,\n        \"bw\" : 0,\n        \"iops\" : 0.000000,\n        \"runtime\" : 0,\n        \"total_ios\" : 0,\n        \"short_ios\" : 0,\n        \"drop_ios\" : 0,\n        \"slat_ns\" : {\n          \"min\" : 0,\n          \"max\" : 0,\n          \"mean\" : 0.000000,\n          \"stddev\" : 0.000000,\n          \"N\" : 0\n        },\n        \"clat_ns\" : {\n          \"min\" : 0,\n          \"max\" : 0,\n          \"mean\" : 0.000000,\n          \"stddev\" : 0.000000,\n          \"N\" : 0\n        },\n        \"lat_ns\" : {\n          \"min\" : 0,\n          \"max\" : 0,\n"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "io_uring",
+      "direct": true,
+      "request_bytes": 262144,
+      "concurrency": 1,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "status": "error",
+      "error": "fio: pid=17, err=1/file:engines/io_uring.c:796, func=io_queue_init, error=Operation not permitted\n{\n  \"fio version\" : \"fio-3.28\",\n  \"timestamp\" : 1794506210,\n  \"timestamp_ms\" : 1794506210657,\n  \"time\" : \"Thu Nov 12 17:56:50 2026\",\n  \"global options\" : {\n    \"rw\" : \"read\",\n    \"allow_file_create\" : \"0\",\n    \"ioengine\" : \"io_uring\",\n    \"direct\" : \"1\",\n    \"iodepth\" : \"1\",\n    \"thread\" : \"1\",\n    \"replay_no_stall\" : \"1\",\n    \"log_avg_msec\" : \"0\",\n    \"disable_lat\" : \"0\",\n    \"disable_clat\" : \"0\",\n    \"per_job_logs\" : \"1\"\n  },\n  \"jobs\" : [\n    {\n      \"jobname\" : \"worker0\",\n      \"groupid\" : 0,\n      \"error\" : 1,\n      \"eta\" : 2147483647,\n      \"elapsed\" : 1,\n      \"job options\" : {\n        \"read_iolog\" : \"/home/muk/projects/siminfeng/cc/io_bench/quick-results/cell-005/worker0.iolog\",\n        \"write_lat_log\" : \"/home/muk/projects/siminfeng/cc/io_bench/quick-results/cell-005/lat0\"\n      },\n      \"read\" : {\n        \"io_bytes\" : 0,\n        \"io_kbytes\" : 0,\n        \"bw_bytes\" : 0,\n        \"bw\" : 0,\n        \"iops\" : 0.000000,\n        \"runtime\" : 0,\n        \"total_ios\" : 0,\n        \"short_ios\" : 0,\n        \"drop_ios\" : 0,\n        \"slat_ns\" : {\n          \"min\" : 0,\n          \"max\" : 0,\n          \"mean\" : 0.000000,\n          \"stddev\" : 0.000000,\n          \"N\" : 0\n        },\n        \"clat_ns\" : {\n          \"min\" : 0,\n          \"max\" : 0,\n          \"mean\" : 0.000000,\n          \"stddev\" : 0.000000,\n          \"N\" : 0\n        },\n        \"lat_ns\" : {\n          \"min\" : 0,\n          \"max\" : 0,\n"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "python",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 16,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 162886981,
+      "mb_s": 205.9982436533709,
+      "p50_ns": 19746606,
+      "p95_ns": 33110055,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 256,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "psync",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 16,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 125000000,
+      "mb_s": 268.43545600000004,
+      "p50_ns": 10592184,
+      "p95_ns": 28763489,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 256,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "psync",
+      "direct": true,
+      "request_bytes": 262144,
+      "concurrency": 16,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 104000000,
+      "mb_s": 322.63876923076924,
+      "p50_ns": 12237694,
+      "p95_ns": 15036352,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "io_uring",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 16,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "io_uring",
+      "direct": true,
+      "request_bytes": 262144,
+      "concurrency": 16,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "python",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 1,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 196583866,
+      "mb_s": 170.68761889136925,
+      "p50_ns": 8121470,
+      "p95_ns": 43012047,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 32,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "psync",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 1,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 157000000,
+      "mb_s": 213.72249681528663,
+      "p50_ns": 8796590,
+      "p95_ns": 27223133,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 32,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "psync",
+      "direct": true,
+      "request_bytes": 2097152,
+      "concurrency": 1,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 136000000,
+      "mb_s": 246.72376470588236,
+      "p50_ns": 4622157,
+      "p95_ns": 21377812,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "io_uring",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 1,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "io_uring",
+      "direct": true,
+      "request_bytes": 2097152,
+      "concurrency": 1,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "python",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 16,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 77769532,
+      "mb_s": 431.4598678567334,
+      "p50_ns": 73817312,
+      "p95_ns": 76880712,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 32,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "psync",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 16,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 556000000,
+      "mb_s": 60.349697841726616,
+      "p50_ns": 526444450,
+      "p95_ns": 554997502,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 32,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "psync",
+      "direct": true,
+      "request_bytes": 2097152,
+      "concurrency": 16,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 84000000,
+      "mb_s": 399.4575238095238,
+      "p50_ns": 49188543,
+      "p95_ns": 83562212,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "io_uring",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 16,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "random-expert",
+      "engine": "io_uring",
+      "direct": true,
+      "request_bytes": 2097152,
+      "concurrency": 16,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "python",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 1,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 250377540,
+      "mb_s": 134.01534338902763,
+      "p50_ns": 1322175,
+      "p95_ns": 5839048,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 256,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "psync",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 1,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 158000000,
+      "mb_s": 212.3698227848101,
+      "p50_ns": 718641,
+      "p95_ns": 3149225,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 256,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "psync",
+      "direct": true,
+      "request_bytes": 262144,
+      "concurrency": 1,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 308000000,
+      "mb_s": 108.94296103896103,
+      "p50_ns": 1813130,
+      "p95_ns": 4789648,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "io_uring",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 1,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "io_uring",
+      "direct": true,
+      "request_bytes": 262144,
+      "concurrency": 1,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "python",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 16,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 117840390,
+      "mb_s": 284.7447466865987,
+      "p50_ns": 12956271,
+      "p95_ns": 18708438,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 256,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "psync",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 16,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 102000000,
+      "mb_s": 328.96501960784315,
+      "p50_ns": 10940320,
+      "p95_ns": 21615066,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 251,
+        "resident_fraction": 0.98046875
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "psync",
+      "direct": true,
+      "request_bytes": 262144,
+      "concurrency": 16,
+      "requests": 128,
+      "planned_bytes": 33554432,
+      "actual_request_min": 262144,
+      "actual_request_max": 262144,
+      "residency_before": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 79000000,
+      "mb_s": 424.7396455696202,
+      "p50_ns": 6848736,
+      "p95_ns": 17756928,
+      "residency_after": {
+        "sample_pages": 256,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "io_uring",
+      "direct": false,
+      "request_bytes": 262144,
+      "concurrency": 16,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "io_uring",
+      "direct": true,
+      "request_bytes": 262144,
+      "concurrency": 16,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "python",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 1,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 519118422,
+      "mb_s": 64.63733625696682,
+      "p50_ns": 35596129,
+      "p95_ns": 64367970,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 32,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "psync",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 1,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 152000000,
+      "mb_s": 220.75284210526317,
+      "p50_ns": 9145014,
+      "p95_ns": 22418253,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 32,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "psync",
+      "direct": true,
+      "request_bytes": 2097152,
+      "concurrency": 1,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 207000000,
+      "mb_s": 162.09870531400966,
+      "p50_ns": 12989360,
+      "p95_ns": 25052010,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "io_uring",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 1,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "io_uring",
+      "direct": true,
+      "request_bytes": 2097152,
+      "concurrency": 1,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "python",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 16,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 129558169,
+      "mb_s": 258.9912489423959,
+      "p50_ns": 110631710,
+      "p95_ns": 129137614,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 32,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "psync",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 16,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 114000000,
+      "mb_s": 294.3371228070176,
+      "p50_ns": 107492724,
+      "p95_ns": 113030741,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 32,
+        "resident_fraction": 1.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "psync",
+      "direct": true,
+      "request_bytes": 2097152,
+      "concurrency": 16,
+      "requests": 16,
+      "planned_bytes": 33554432,
+      "actual_request_min": 2097152,
+      "actual_request_max": 2097152,
+      "residency_before": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "bytes_read": 33554432,
+      "elapsed_ns": 137000000,
+      "mb_s": 244.92286131386862,
+      "p50_ns": 71374150,
+      "p95_ns": 136634237,
+      "residency_after": {
+        "sample_pages": 32,
+        "resident_pages": 0,
+        "resident_fraction": 0.0
+      },
+      "status": "ok"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "io_uring",
+      "direct": false,
+      "request_bytes": 2097152,
+      "concurrency": 16,
+      "status": "unsupported (see earlier error)"
+    },
+    {
+      "pattern": "sequential",
+      "engine": "io_uring",
+      "direct": true,
+      "request_bytes": 2097152,
+      "concurrency": 16,
+      "status": "unsupported (see earlier error)"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+Implemented F14.
+
+- Added [`engine.expert_streaming@2.0.0`](/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/ccs/expert_streaming/cc.yaml), guidance, source map, applicability/engagement tools, and relocated components.
+- Updated acceptance, env validation, controller, schemas, story/monitor, docs, tests, and the [`expert-streaming task`](/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/tasks/expert-streaming-qwen36.json).
+- Performance keeps require `improved`. Observability keeps require passing candidate signals, correctness, and `1/ratio - 1 <= max(overhead_bound, threshold)`. Missing sampling yields `invalid`.
+
+Thread sampling is wired through abrun → `OM_THREADS=1` → the sampler.
+
+Validation: **263 passed, 1 skipped** in factory tests; capsule listing passes. G2 hung on its first MCP test and was stopped after five minutes.
+
+No factory-home writes, commits, or live jobs. Store.py retains only the operator’s three-line removal. Directory moves used filesystem moves because `.git` is read-only.
+
+Open: G2 needs outside-sandbox verification; live decode benefit remains unmeasured.

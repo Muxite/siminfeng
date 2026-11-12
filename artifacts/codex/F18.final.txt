@@ -1,0 +1,19 @@
+Implemented and verified:
+
+- `io_bench.py` measures cold buffered/direct read throughput and request latency using Python and fio.
+- P16 measures decode-phase faults, context switches, CPU time, and token-completion intervals.
+
+All 10 tests passed. The CPU build and patch apply check passed. All four Granite runs produced identical stdout hashes; enabled runs printed exactly one stats line.
+
+Run the full sweep as an exclusive queue job:
+
+```sh
+python3 /home/muk/projects/siminfeng/cc/io_bench/io_bench.py \
+  --output-dir /home/muk/projects/siminfeng/cc/io_bench/full-results
+```
+
+[README and quick output](/home/muk/projects/siminfeng/cc/io_bench/README.md) · [Patch](/home/muk/projects/xs-dev/obs-artifacts/16-phase-rusage.patch) · [Verification evidence](/home/muk/projects/xs-dev/obs-artifacts/F18-check.md)
+
+The temp-file quick sweep took 11.7 seconds; its observed ceiling was 431.5 MB/s under concurrent compilation. The model sweep was not run. io_uring was denied by the sandbox. Residency is sampled, and rusage counts do not directly measure time spent faulting or waiting.
+
+No siminfeng commits were made. Patch packaging used a local clone because the source checkout’s `.git` is read-only.

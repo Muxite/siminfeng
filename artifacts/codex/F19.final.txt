@@ -1,0 +1,18 @@
+Delivered [DECISIONS.md](/home/muk/projects/xs-dev/placement/DECISIONS.md), the UMA probe, crossover harness, and executable operator scripts. The private clone is clean at the requested pin. `nvcc -c`, CPU-only build/smoke, shell syntax, and policy checks passed. No Docker or GPU execution occurred.
+
+- **Q1:** Default offload uses the ubatch token count: prefill ≥32 may run expert `MUL_MAT_ID` on GPU; one-token decode remains CPU. Normal routed splits upload the **selected expert union**, grouped by consecutive IDs—typically three copies per group across up/gate/down—not unconditionally all 256. Destination allocation remains full-sized; unmatched callbacks can fall back to whole-tensor copying. See [threshold logic](/home/muk/projects/xs-dev/llama-place/ggml/src/ggml-cuda/ggml-cuda.cu:6385) and [selective copying](/home/muk/projects/xs-dev/llama-place/src/llama-context.cpp:3662).
+- **Q2:** Shared DRAM alone does not permit direct GPU reads of Orin’s pageable mmap. Read-only host registration may permit bounded zero-copy access, subject to attributes and registration success. Registered/pinned memory lacks Orin GPU caching; device memory is cached. Actual attributes and costs await the probe. [NVIDIA Tegra guide](https://docs.nvidia.com/cuda/cuda-for-tegra-appnote/index.html#memory-selection).
+- **Q3 prediction:** CPU likely competes best at N=1–8; 16–32 is transitional; GPU increasingly benefits at 64–512. The staged crossover might lie around 32–128. These remain predictions.
+
+The single candidate is an **opt-in launcher policy**, default off, using existing controls before startup. No engine patch is needed.
+
+After the operator queues `run_build.sh` as class `build`, the ordered GPU jobs are:
+
+1. `run_model.sh baseline` — 2–6 min.
+2. `run_model.sh no-offload` — 2–6 min.
+3. `run_probe_uma.sh` — 10–45 s.
+4. `run_crossover.sh` — 2–8 min.
+5. `F19_ENABLE_AUTO=1 run_model.sh adaptive` — conditional, 2–6 min.
+6. `run_model.sh baseline-replay` — conditional, 2–6 min.
+
+Exact queue commands, outputs, and rejection gates are in the decision record. GPU performance claims remain **pending-operator-run**.

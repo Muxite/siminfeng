@@ -37,6 +37,16 @@ def validate(spec):
         raise ValueError('argv must be an array of strings')
     if not isinstance(spec.get('threads', False), bool):
         raise ValueError('threads must be boolean')
+    if spec.get('cache_protocol', 'carryover') not in ('carryover', 'cold', 'warm'):
+        raise ValueError('cache_protocol must be carryover, cold, or warm')
+    if 'cache_warm_bytes' in spec and (not isinstance(spec['cache_warm_bytes'], int)
+            or isinstance(spec['cache_warm_bytes'], bool) or spec['cache_warm_bytes'] < 0):
+        raise ValueError('cache_warm_bytes must be a nonnegative integer')
+    if 'cache_warm_ranges' in spec and (not isinstance(spec['cache_warm_ranges'], str)
+            or not spec['cache_warm_ranges']):
+        raise ValueError('cache_warm_ranges must be a nonempty host path')
+    if 'cache_warm_bytes' in spec and 'cache_warm_ranges' in spec:
+        raise ValueError('choose cache_warm_bytes or cache_warm_ranges')
     arms = spec['arms']
     if not isinstance(arms, dict) or len(arms) < 2 or 'base' not in arms:
         raise ValueError('arms must contain base and at least one treatment')
@@ -110,6 +120,13 @@ def plan(spec):
         override = os.environ.get('ABRUN_RUNNER')
         runner = shlex.split(override) if override else [str(ROOT / 'cc/om_run/om_run.sh')]
         command = runner + [str(directory), config['image'], env_flags, spec['tool']] + spec['argv'] + config.get('extra_argv', [])
+        cache_env = [f"OM_CACHE_PROTOCOL={spec.get('cache_protocol', 'carryover')}"]
+        if 'cache_warm_bytes' in spec:
+            cache_env += [f"OM_CACHE_WARM_BYTES={spec['cache_warm_bytes']}"]
+            cache_env += ['OM_CACHE_WARM_RANGES=']
+        if 'cache_warm_ranges' in spec:
+            cache_env += [f"OM_CACHE_WARM_RANGES={spec['cache_warm_ranges']}"]
+        command = ['env', *cache_env] + command
         if spec.get('threads'):
             command = ['env', 'OM_THREADS=1'] + command
         if not override:
@@ -153,19 +170,22 @@ def switch_errors(spec, arm, summary):
 def write_report(out, spec, runs, verdict):
     (out / 'verdict.json').write_text(json.dumps(verdict, indent=2) + '\n')
     lines = [f"# {spec['id']}", '', f"Status: {verdict['status']}", '',
-             '| # | Arm | Status | Metric | Wall s | Output SHA | Switch matches |',
-             '|---|---|---|---:|---:|---|---|']
+             f"Page-cache protocol: {spec.get('cache_protocol', 'carryover')}", '',
+             '| # | Arm | Status | Metric | Wall s | Output SHA | Switch matches | Cache start resident % | Cache end resident % |',
+             '|---|---|---|---:|---:|---|---|---:|---:|']
     metric = spec.get('metric', 'eval_ms_per_token')
     for row in runs:
         s = row['summary']
         matches = json.dumps(s.get('switch_matches', {})).replace('|', '&#124;')
-        lines.append(f"| {row['index']} | {row['arm']} | {s['status']} | {s.get(metric)} | {s['wall_s']} | {s['output_sha']} | {matches} |")
+        lines.append(f"| {row['index']} | {row['arm']} | {s['status']} | {s.get(metric)} | {s['wall_s']} | {s['output_sha']} | {matches} | {s.get('cache_start_resident_pct')} | {s.get('cache_end_resident_pct')} |")
     lines += ['', f"Metric: {metric} ({verdict['direction']} is better)", '', f"| Arm | Mean | {'A/B' if verdict['direction'] == 'lower' else 'B/A'} | Gate |",
               '|---|---:|---:|---|']
     for arm, mean in verdict['means'].items():
         comparison = verdict['comparisons'].get(arm, {})
         lines.append(f"| {arm} | {mean} | {comparison.get('ratio', '—')} | {comparison.get('verdict', 'base')} |")
     lines += ['', '## Secondary metrics (descriptive; no verdict)', '', gate.secondary_table(verdict)]
+    if verdict.get('cache_confound'):
+        lines += ['', 'cache_confound: ' + verdict['cache_confound']]
     lines += ['', f"A/A gap: {verdict['aa_gap']}; drift: {verdict['drift']}; threshold: {verdict['threshold']}",
               '', f"Output class: {verdict['output']['class']}", '',
               'Output details: `' + json.dumps(verdict['output']) + '`', '',
@@ -204,6 +224,7 @@ def execute(spec, out, runs):
     if verdict['reasons']:
         invalid.extend(verdict['reasons'])
     verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+                   cache_protocol=spec.get('cache_protocol', 'carryover'),
                    planned_order=[r['arm'] for r in runs],
                    executed_order=[r['arm'] for r in completed])
     if invalid:

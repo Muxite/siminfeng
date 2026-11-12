@@ -22,6 +22,13 @@ if [ "${OM_NSYS:-0}" = 1 ]; then
     NSYS_MOUNT="-v $NSYS_DIR:/nsys:ro -v $(cd "$OUT" && pwd):/prof"
     NSYS_PREFIX="/nsys/target-linux-tegra-armv8/nsys profile -t cuda,nvtx,osrt --cuda-graph-trace=node --sample=none --cpuctxsw=none -f true -o /prof/nsys"
 fi
+# Host-only page-cache protocol; unset means carryover (measure without warming).
+# OM_CACHE_MODEL overrides host model path inference from -m/--model under /om/.
+# warm uses OM_CACHE_WARM_RANGES (host JSON) or OM_CACHE_WARM_BYTES (prefix).
+OM_CACHE_ARGV=("$@")
+om_cache_record(){ python3 "$R/cc/page_cache/run_protocol.py" "$1" "$OUT" "$MODELDIR" "${OM_CACHE_ARGV[@]}"; }
+trap 'om_cache_record end || echo "page-cache end recording failed" >&2' EXIT
+om_cache_record start || { echo "CACHE_PROTOCOL_FAIL" > "$OUT/status"; exit 2; }
 dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
    -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro $NSYS_MOUNT "$IMG" $NSYS_PREFIX /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
 if [ "${OM_THREADS:-0}" = 1 ]; then

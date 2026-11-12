@@ -1,0 +1,14 @@
+Implemented cache measurement/control, per-run start/end JSON, abrun summary/report fields, protocol-labelled verdicts, and descriptive `cache_confound` notes. Added METHODS documentation.
+
+Add top-level spec fields, for example:
+
+```json
+"cache_protocol": "warm",
+"cache_warm_bytes": 1073741824
+```
+
+Protocols: `carryover` (default), `cold`, or `warm`. For selected ranges, replace `cache_warm_bytes` with `cache_warm_ranges`, pointing to a host JSON file.
+
+Acceptance: P1 **87 passed**; P2 valid JSON; P3 shell syntax passes with only additive changes. No Docker/GPU runs or commits.
+
+Eviction is best effort: dirty pages or live mappings may remain resident. Readahead and memory pressure also affect warm starts; recorded residency is the evidence.

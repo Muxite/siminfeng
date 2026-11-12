@@ -5,7 +5,7 @@ T=$1; A=$2; X=${3:-}
 mkdir -p artifacts/codex
 S=$(date -u +%FT%TZ); S0=$(date +%s)
 echo "{\"event\":\"start\",\"task\":\"$T\",\"worker\":\"codex\",\"assignment\":\"$A\",\"ts\":\"$S\"}" >> c2/worklog.jsonl
-codex exec -s workspace-write -C "${CODEX_CWD:-$PWD}" --add-dir /tmp ${CODEX_ADD_DIR:+--add-dir "$CODEX_ADD_DIR"} -o artifacts/codex/$T.final.txt \
+codex exec ${CODEX_ARGS:-} -s workspace-write -C "${CODEX_CWD:-$PWD}" --add-dir /tmp ${CODEX_ADD_DIR:+--add-dir "$CODEX_ADD_DIR"} -o artifacts/codex/$T.final.txt \
   "$(cat $A)
 $X
 You are a Codex worker (siminfeng c2 / Satay factory). Follow the assignment exactly; acceptance commands will be run verbatim by a checker." \

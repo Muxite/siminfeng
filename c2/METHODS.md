@@ -223,6 +223,27 @@ patch, fresh output, target and toolchain recorded. D026 identity is commit +
 patch SHA + toolchain + base digest + build record/archive SHA, not binary hash.
 Accept a build only with successful record, then separate runtime/quality checks.
 
+## Page-cache protocol
+
+Every om_run records model residency with unprivileged mmap/mincore before
+engine launch (after preparation) and at exit in `page_cache.start.json` and
+`page_cache.end.json`. State the protocol in every verdict. abrun specs select
+`cache_protocol`: `carryover` (default) leaves the inherited cache intact and
+measures steady-state streaming as in production; use it for sustained workload
+comparisons, with ABBA/repeats to assess order effects. `cold` requests eviction
+with POSIX_FADV_DONTNEED before each run; use it for worst-case starts after
+eviction. `warm` evicts then sequentially reads a fixed prefix
+(`cache_warm_bytes`) or host JSON range list (`cache_warm_ranges`, entries
+`{name, offset, size}`); use it to compare arms from a controlled read set.
+Direct om_run equivalents are OM_CACHE_PROTOCOL, OM_CACHE_WARM_BYTES and
+OM_CACHE_WARM_RANGES. The measured start state, not the requested state, is
+the evidence: dirty pages or another process mapping the file can resist
+eviction, readahead can warm adjacent pages, and a read set larger than available
+RAM cannot remain fully cached. No sudo/drop_caches is required. Residency is
+a changing snapshot; model loading can change it again before decode. abrun
+flags `cache_confound` when arms' mean start residency differs by more than 10
+percentage points, without changing the performance gate decision.
+
 ## Profilers, tracers and telemetry
 
 `cc/resource_observe/README.md` defines metric scopes and unavailable reasons.

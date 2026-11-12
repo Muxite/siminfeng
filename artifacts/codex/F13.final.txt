@@ -1,0 +1,9 @@
+Implemented both patches and saved [patch 10](/home/muk/projects/xs-dev/10-expert-readiness.patch), [patch 11](/home/muk/projects/xs-dev/11-inflight-join.patch), and [F13-check.md](/home/muk/projects/xs-dev/F13-check.md).
+
+CPU build, sequential patch application, output identity for a–d, validator abort, and focused filler tests passed.
+
+Readiness counts resident/missing bytes by prediction, wasted async bytes, overlapping demand bytes, and probe time. Join counts waits, wait duration, and bytes saved, with reread on async error.
+
+Granite uses `CPU_REPACK` here, making fill inactive; synthetic tests cover the nonzero paths. No live-model performance claim is established.
+
+**A1 remains blocked:** `.git` is read-only, preventing branch commits and worktree creation. Changes remain uncommitted on `xs-dev`; patch verification used a disposable exported source tree.

@@ -98,7 +98,19 @@ def evaluate(arms, metric='eval_tps', base='base', direction=None):
         for field in SECONDARY_FIELDS:
             values = [r[field] for r in runs if finite(r.get(field))]
             secondary[arm][field] = statistics.mean(values) if values else None
-    return {'secondary_metrics': secondary, 'metric': metric, 'direction': direction, 'base': base, 'inputs': inputs, 'means': means,
+    cache_means = {}
+    for arm, runs in arms.items():
+        values = [r['cache_start_resident_pct'] for r in runs
+                  if finite(r.get('cache_start_resident_pct'))
+                  and 0 <= r['cache_start_resident_pct'] <= 100]
+        if values:
+            cache_means[arm] = statistics.mean(values)
+    cache_confound = None
+    if len(cache_means) >= 2 and max(cache_means.values()) - min(cache_means.values()) > 10:
+        cache_confound = ('arms\' mean start residency differs by > 10 percentage points: '
+                          + ', '.join(f'{arm}={value:.2f}%' for arm, value in cache_means.items()))
+    return {'cache_confound': cache_confound,
+            'secondary_metrics': secondary, 'metric': metric, 'direction': direction, 'base': base, 'inputs': inputs, 'means': means,
             'aa_gaps': gaps, 'aa_gap': aa_gap, 'drift_halves': drift_halves,
             'drift': drift, 'threshold': threshold, 'minimum_effect': 0.03,
             'noise_multiplier': 2, 'comparisons': comparisons, 'output': output,
