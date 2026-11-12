@@ -1,0 +1,115 @@
+{
+  "id": "J-OM13",
+  "outdir_base": "experiments/jetson/OM",
+  "runner": "om_run",
+  "tool": "llama-completion",
+  "argv": [
+    "-m",
+    "/om/model.gguf",
+    "-f",
+    "/om/prompts/p1.txt",
+    "-n",
+    "64",
+    "-c",
+    "4096",
+    "--temp",
+    "0",
+    "-s",
+    "1",
+    "-no-cnv",
+    "-ngl",
+    "99",
+    "-lm",
+    "mmap",
+    "-cmoe",
+    "-lv",
+    "4"
+  ],
+  "metric": "eval_ms_per_token",
+  "direction": "lower",
+  "threads": true,
+  "order": "explicit",
+  "explicit_order": [
+    "base",
+    "factory",
+    "factory_t4",
+    "factory_t4",
+    "factory",
+    "base",
+    "base",
+    "factory",
+    "factory_t4",
+    "factory_t4",
+    "factory",
+    "base"
+  ],
+  "arms": {
+    "base": {
+      "image": "factory/llamacpp:bare-cf34d311",
+      "env": {},
+      "expect_switch": false
+    },
+    "factory": {
+      "image": "factory/llamacpp:bd173c08-restored-0b514fba",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_FILL_DIAG": "0",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "8",
+        "LLAMA_EXPERT_PREGATE_LOOKAHEAD": "1",
+        "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "4",
+        "LLAMA_EXPERT_PREGATE_ORDER": "after",
+        "LLAMA_MMAP_ADVICE": "default"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=\\(unset\\) prefetch=0 prefetch_next=0$",
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active k=8 ",
+        "expert_pregate: stats"
+      ]
+    },
+    "factory_t4": {
+      "image": "factory/llamacpp:bd173c08-restored-0b514fba",
+      "env": {
+        "LLAMA_EXPERT_FILL": "1",
+        "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+        "LLAMA_EXPERT_FILL_DIAG": "0",
+        "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+        "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+        "LLAMA_EXPERT_FILL_POPULATE": "0",
+        "LLAMA_EXPERT_FILL_RANDOM": "decode",
+        "LLAMA_EXPERT_FILL_THREADS": "16",
+        "LLAMA_EXPERT_PREFETCH": "0",
+        "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+        "LLAMA_EXPERT_PREGATE": "1",
+        "LLAMA_EXPERT_PREGATE_K": "8",
+        "LLAMA_EXPERT_PREGATE_LOOKAHEAD": "1",
+        "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT": "4",
+        "LLAMA_EXPERT_PREGATE_ORDER": "after",
+        "LLAMA_MMAP_ADVICE": "default"
+      },
+      "expect_switch": true,
+      "switch_regex": [
+        "expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=\\(unset\\) prefetch=0 prefetch_next=0$",
+        "expert_fill: active",
+        "expert_fill: random advice applied at decode",
+        "expert_pregate: active k=8 ",
+        "expert_pregate: stats"
+      ],
+      "extra_argv": [
+        "-t",
+        "4"
+      ]
+    }
+  }
+}

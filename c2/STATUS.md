@@ -13,6 +13,7 @@ Goal set by the owner: best-accuracy model on 8 GB at decode >= 2 tok/s (min), 5
 | Earlier best (patch 07, pg8b) | 1.42 tok/s vs 1.17 base (+22%) | J-OM10b |
 | Lookahead 2 layers | worse (783-843 ms) | J-OM11 |
 | + 4 CPU threads (pg8t4), om12 image | **684.7 ms/token (1.46 tok/s), 1.26x vs base**, output identical; 6 threads 704.8 (1.22x) | experiments/jetson/OM/J-OM12 |
+| **J-OM13** stock llama.cpp vs factory-grown engine (run 4), 4 reps each, ABBA | stock 841.5 ms/token (1.19 tok/s); factory 711.4 (1.41 tok/s, **1.18x**); factory + `-t 4` 659.3 (1.52 tok/s, **1.28x**); all 12 outputs identical; J/token 5.65 -> 4.80 | experiments/jetson/OM/J-OM13 |
 | Where the 35B token goes (pg8) | ~256 ms waiting on SSD fill, ~480 ms unexplained (not expert matmul) → J-OM12 thread profiler | J-OM11 stderr stats |
 
 Published scores (thinking mode, model cards): Qwen3.5-9B MMLU-Pro 82.5 / GPQA-D 81.7; Qwen3.6-35B-A3B 85.2 / 86.0; Gemma-4-E4B 69.4 / 58.6 (research/model-candidates-20261111.md).
