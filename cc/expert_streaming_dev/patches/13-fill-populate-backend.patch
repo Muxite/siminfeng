@@ -1,0 +1,232 @@
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -1253,10 +1253,11 @@
+         fprintf(stderr, "\n");
+         if (expert_diag_csv) { fclose(expert_diag_csv); expert_diag_csv = nullptr; }
+     }
+-    if (!expert_fillers.empty()) {
++    if (!expert_fillers.empty() || expert_config.backend == "populate") {
+         ExpertFiller::Counters sum;
+         for (const auto & entry : expert_fillers) {
+             const auto s = entry.second->counters();
++            sum.populate_bytes += s.populate_bytes; sum.populate_fallbacks += s.populate_fallbacks;
+             sum.populate_calls += s.populate_calls; sum.populate_ns += s.populate_ns; sum.populate_errors += s.populate_errors;
+             sum.calls += s.calls; sum.ranges += s.ranges;
+             sum.bytes_requested += s.bytes_requested; sum.bytes_skipped_resident += s.bytes_skipped_resident;
+@@ -1268,19 +1269,20 @@
+             sum.decode_fill_wall_ns += s.decode_fill_wall_ns;
+             sum.max_single_fill_ns = std::max(sum.max_single_fill_ns, s.max_single_fill_ns);
+         }
+-        LLAMA_LOG_INFO("expert_fill: stats calls=%" PRIu64 " ranges=%" PRIu64 " bytes_requested=%" PRIu64
++        fprintf(stderr, "expert_fill: stats calls=%" PRIu64 " ranges=%" PRIu64 " bytes_requested=%" PRIu64
+             " bytes_skipped_resident=%" PRIu64 " bytes_read=%" PRIu64 " read_syscalls=%" PRIu64
+             " total_fill_wall_ns=%" PRIu64 " max_single_fill_ns=%" PRIu64
+             " prompt_calls=%" PRIu64 " prompt_bytes_read=%" PRIu64 " prompt_fill_wall_ns=%" PRIu64
+             " decode_calls=%" PRIu64 " decode_bytes_read=%" PRIu64 " decode_fill_wall_ns=%" PRIu64
+             " populate_calls=%" PRIu64 " populate_ns=%" PRIu64 " populate_errors=%" PRIu64
+-            " demand_wait_ns_total=%" PRIu64 " demand_wait_ns_per_token=%.3f\n",
++            " demand_wait_ns_total=%" PRIu64 " demand_wait_ns_per_token=%.3f"
++            " populate_bytes=%" PRIu64 " populate_fallbacks=%" PRIu64 "\n",
+             sum.calls, sum.ranges, sum.bytes_requested, sum.bytes_skipped_resident, sum.bytes_read,
+             sum.read_syscalls, sum.total_fill_wall_ns, sum.max_single_fill_ns,
+             sum.prompt_calls, sum.prompt_bytes_read, sum.prompt_fill_wall_ns,
+             sum.decode_calls, sum.decode_bytes_read, sum.decode_fill_wall_ns,
+             sum.populate_calls, sum.populate_ns, sum.populate_errors,
+-            sum.total_fill_wall_ns, expert_demand_tokens ? double(sum.total_fill_wall_ns)/expert_demand_tokens : 0.0);
++            sum.total_fill_wall_ns, expert_demand_tokens ? double(sum.total_fill_wall_ns)/expert_demand_tokens : 0.0, sum.populate_bytes, sum.populate_fallbacks);
+     }
+ #endif
+     if (!expert_prefetch_layers.empty() && expert_prefetch_calls) {
+diff --git a/src/llama-expert-fill.h b/src/llama-expert-fill.h
+--- a/src/llama-expert-fill.h
++++ b/src/llama-expert-fill.h
+@@ -33,7 +33,7 @@
+     size_t fill = 0, threads = 8, chunk_kib = 1024, min_tokens = 0, max_tokens = 0;
+     size_t diag = 0, populate = 0, pregate = 0, k = 8, max_inflight = 4, lookahead = 1;
+     size_t prefetch = 0, prefetch_next = 0;
+-    std::string random = "0", order = "after", diag_csv;
++    std::string random = "0", order = "after", diag_csv, backend = "pread";
+     [[noreturn]] static void invalid(const char * name, const char * value, const std::string & range) {
+         fprintf(stderr, "expert_config: invalid %s=%s (range %s)\n", name, value, range.c_str());
+         fflush(stderr);
+@@ -72,7 +72,7 @@
+             "LLAMA_EXPERT_FILL_DIAG", "LLAMA_EXPERT_FILL_DIAG_CSV", "LLAMA_EXPERT_FILL_POPULATE",
+             "LLAMA_EXPERT_PREGATE", "LLAMA_EXPERT_PREGATE_K", "LLAMA_EXPERT_PREGATE_ORDER",
+             "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT", "LLAMA_EXPERT_PREGATE_LOOKAHEAD",
+-            "LLAMA_EXPERT_PREFETCH", "LLAMA_EXPERT_PREFETCH_NEXT"};
++            "LLAMA_EXPERT_PREFETCH", "LLAMA_EXPERT_PREFETCH_NEXT", "LLAMA_EXPERT_FILL_BACKEND"};
+         for (char ** e = environ; e && *e; ++e) {
+             const std::string entry(*e);
+             const size_t eq = entry.find('=');
+@@ -83,6 +83,7 @@
+             }
+         }
+         ExpertConfig c;
++        c.backend = choice("LLAMA_EXPERT_FILL_BACKEND", "pread", {"pread", "populate"});
+         c.fill = integer("LLAMA_EXPERT_FILL", 0, 0, 1);
+         c.random = choice("LLAMA_EXPERT_FILL_RANDOM", "0", {"0", "1", "decode"});
+         c.threads = integer("LLAMA_EXPERT_FILL_THREADS", 8, 1, 64);
+@@ -107,9 +108,9 @@
+     void print() const {
+         fprintf(stderr, "expert_config: effective fill=%zu random=%s max_tokens=%zu threads=%zu chunk_kib=%zu "
+             "pregate=%zu k=%zu order=%s max_inflight=%zu lookahead=%zu min_tokens=%zu diag=%zu populate=%zu "
+-            "diag_csv=%s prefetch=%zu prefetch_next=%zu\n",
++            "diag_csv=%s prefetch=%zu prefetch_next=%zu backend=%s\n",
+             fill, random.c_str(), max_tokens, threads, chunk_kib, pregate, k, order.c_str(), max_inflight,
+-            lookahead, min_tokens, diag, populate, diag_csv.empty() ? "(unset)" : diag_csv.c_str(), prefetch, prefetch_next);
++            lookahead, min_tokens, diag, populate, diag_csv.empty() ? "(unset)" : diag_csv.c_str(), prefetch, prefetch_next, backend.c_str());
+     }
+ };
+ 
+@@ -117,7 +118,7 @@
+ public:
+     struct Range { uint64_t offset; size_t len; };
+     struct Counters {
+-        uint64_t populate_calls = 0, populate_ns = 0, populate_errors = 0;
++        uint64_t populate_calls = 0, populate_ns = 0, populate_errors = 0, populate_bytes = 0, populate_fallbacks = 0;
+         uint64_t thread_majflt = 0, thread_minflt = 0;
+         uint64_t calls = 0, ranges = 0, bytes_requested = 0;
+         uint64_t bytes_skipped_resident = 0, bytes_read = 0, read_syscalls = 0;
+@@ -193,6 +194,7 @@
+         async_limit_ = std::min(threads_, config.max_inflight);
+         diag_ = config.diag;
+         populate_ = config.populate;
++        backend_populate_ = config.backend == "populate";
+         const long page = sysconf(_SC_PAGESIZE);
+         if (page <= 0 || !mapping_ || reinterpret_cast<uintptr_t>(mapping_) % page || !size_) {
+             throw std::runtime_error("invalid expert mmap");
+@@ -208,7 +210,7 @@
+         try {
+             // Allocate before starting workers, so allocation failures cannot kill a worker.
+             scratch_.resize(threads_); residency_.resize(threads_);
+-            for (auto & b : scratch_) { b.resize(std::max(page_, chunk_)); }
++            if (!backend_populate_) { for (auto & b : scratch_) { b.resize(std::max(page_, chunk_)); } }
+             for (auto & b : residency_) { b.resize((std::max(page_, chunk_) + page_ - 1) / page_); }
+             for (size_t i = 0; i < threads_; ++i) { workers_.emplace_back([this, i] { worker(i); }); }
+         } catch (...) {
+@@ -220,7 +222,16 @@
+     ExpertFiller & operator=(const ExpertFiller &) = delete;
+     size_t threads() const { return threads_; }
+     size_t chunk_bytes() const { return chunk_; }
+-    Counters counters() const { std::lock_guard<std::mutex> lock(fill_mutex_); return counters_; }
++    Counters counters() const {
++        std::lock_guard<std::mutex> lock(fill_mutex_);
++        auto result = counters_;
++        result.populate_calls += backend_populate_calls_.load();
++        result.populate_ns += backend_populate_ns_.load();
++        result.populate_errors += backend_populate_errors_.load();
++        result.populate_bytes += backend_populate_bytes_.load();
++        result.populate_fallbacks += backend_populate_fallbacks_.load();
++        return result;
++    }
+ 
+     // Enqueue only: no residency query, file IO, or wait for worker completion.
+     // Jobs use the existing pool, after all available synchronous jobs.
+@@ -355,6 +366,14 @@
+             std::vector<Range> jobs;
+             for (const auto & r : merged) {
+                 counters_.bytes_requested += r.len; // page-aligned union, once per fill
++                if (backend_populate_) {
++                    const size_t step = std::max(page_, chunk_ / page_ * page_);
++                    for (size_t pos = 0; pos < r.len;) {
++                        const size_t len = std::min(step, r.len - pos);
++                        jobs.push_back({r.offset + pos, len}); pos += len;
++                    }
++                    continue;
++                }
+                 const size_t pages = r.len / page_ + (r.len % page_ != 0);
+                 std::vector<unsigned char> resident(pages);
+                 if (mincore(mapping_ + r.offset, r.len, resident.data())) { throw std::runtime_error("expert mincore failed"); }
+@@ -381,9 +400,9 @@
+                 done_.wait(lock, [this] { return pending_ == 0; });
+                 counters_.bytes_read += batch_bytes_; counters_.read_syscalls += batch_syscalls_;
+                 batch_bytes_ = batch_syscalls_ = 0;
+-                if (error_) { throw std::runtime_error("expert pread failed: errno=" + std::to_string(error_)); }
++                if (error_) { throw std::runtime_error("expert fill failed: errno=" + std::to_string(error_)); }
+                 // All preads finish before populate, including ranges already resident.
+-                if (populate_.load() && !populate_unsupported().load()) {
++                if (!backend_populate_ && populate_.load() && !populate_unsupported().load()) {
+                     jobs_.clear();
+                     for (const auto & r : merged) {
+                         for (size_t pos = 0; pos < r.len;) {
+@@ -456,6 +475,34 @@
+             struct rusage before {}, after {};
+             if (diagnostic) { getrusage(RUSAGE_THREAD, &before); }
+             uint64_t populate_ns = 0, populate_calls = 0, populate_errors = 0;
++            auto read_range = [&](size_t first, size_t end) {
++                if (backend_populate_) {
++                    ++backend_populate_calls_;
++                    const auto start = std::chrono::steady_clock::now();
++                    const int result = madvise(mapping_ + job.offset + first, end - first, MADV_POPULATE_READ);
++                    const int populate_error = result ? errno : 0;
++                    backend_populate_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
++                    if (!result) { backend_populate_bytes_ += end - first; return; }
++                    ++backend_populate_errors_;
++                    if (populate_error != EINVAL && populate_error != ENOSYS) { error = populate_error; return; }
++                    ++backend_populate_fallbacks_;
++                    static std::atomic<bool> warned {false};
++                    if (!warned.exchange(true)) { fprintf(stderr, "expert_fill: populate backend unsupported; falling back to pread per chunk\n"); }
++                }
++                auto & scratch = scratch_[index];
++                if (scratch.size() < end) {
++                    try { scratch.resize(std::max(page_, chunk_)); }
++                    catch (...) { error = ENOMEM; return; }
++                }
++                size_t at = first;
++                while (at < end) {
++                    ++syscalls;
++                    const ssize_t n = pread(fd_, scratch.data() + at, end - at, off_t(job.offset + at));
++                    if (n < 0 && errno == EINTR) { continue; }
++                    if (n <= 0) { error = n < 0 ? errno : EIO; break; }
++                    at += size_t(n); bytes += size_t(n);
++                }
++            };
+             if (populating) {
+                 if (populate_.load() && !populate_unsupported().load()) {
+                     const auto start = std::chrono::steady_clock::now();
+@@ -470,6 +517,8 @@
+                     populate_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                         std::chrono::steady_clock::now() - start).count();
+                 }
++            } else if (backend_populate_) {
++                read_range(0, job.len);
+             } else if (async) {
+                 // Query at consumption time, including when sync filled these pages meanwhile.
+                 auto & resident = residency_[index];
+@@ -480,22 +529,9 @@
+                     const size_t first = pos;
+                     do { pos = std::min(job.len, pos + page_); }
+                     while (pos < job.len && !(resident[pos / page_] & 1));
+-                    size_t at = first;
+-                    while (at < pos) {
+-                        ++syscalls;
+-                        const ssize_t n = pread(fd_, scratch_[index].data() + at, pos - at, off_t(job.offset + at));
+-                        if (n < 0 && errno == EINTR) { continue; }
+-                        if (n <= 0) { error = n < 0 ? errno : EIO; break; }
+-                        at += size_t(n); bytes += size_t(n);
+-                    }
+-                }
+-            } else while (bytes < job.len) {
+-                ++syscalls;
+-                const ssize_t n = pread(fd_, scratch_[index].data() + bytes, job.len - bytes, off_t(job.offset + bytes));
+-                if (n < 0 && errno == EINTR) { continue; }
+-                if (n <= 0) { error = n < 0 ? errno : EIO; break; }
+-                bytes += size_t(n);
+-            }
++                    read_range(first, pos);
++                }
++            } else { read_range(0, job.len); }
+             if (diagnostic) { getrusage(RUSAGE_THREAD, &after); }
+             {
+                 std::lock_guard<std::mutex> lock(mutex_);
+@@ -520,6 +556,9 @@
+             }
+         }
+     }
++    bool backend_populate_ = false;
++    std::atomic<uint64_t> backend_populate_calls_ {0}, backend_populate_bytes_ {0}, backend_populate_fallbacks_ {0};
++    std::atomic<uint64_t> backend_populate_ns_ {0}, backend_populate_errors_ {0};
+     int fd_ = -1;
+     char * mapping_;
+     size_t size_, threads_, chunk_, page_ = 0;

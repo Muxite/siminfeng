@@ -1,0 +1,3526 @@
+Reading additional input from stdin...
+OpenAI Codex v0.167.0
+--------
+workdir: /home/muk/projects/siminfeng-wb
+model: gpt-6.1-sol
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /tmp]
+reasoning effort: max
+reasoning summaries: none
+session id: 01a1d157-2951-72b2-958f-6cb43ae9f03c
+--------
+user
+# F22 — close the scheduler bypass: compiles through jobq + host-contention guard (LEAN)
+
+Worktree: `/home/muk/projects/siminfeng-wb` (branch `c2/heavy-guard`). A live measurement campaign uses the MAIN checkout `/home/muk/projects/siminfeng` — do not touch it, `lab/jobq`, or experiments. No Docker/GPU, no compiling, no commits. Keep small; done quickly.
+
+Problem: `bin/jobq` already makes gpu and build classes mutually exclusive (`compatible()`), but compiles run OUTSIDE jobq (Codex workers' cmake, operator builds) and collided with a lab run (memory watchdog trip). Fix both sides:
+1. `bin/heavy` (bash or python, stdlib): `bin/heavy [--name N] [--timeout S] -- <cmd...>` submits `<cmd>` to `bin/jobq submit --class build`, waits (`jobq wait`), then prints the job log path and the command's stdout/stderr tail and exits with its rc. Uses `JOBQ_DIR` default like jobq. Read `bin/jobq` for how logs/state are stored.
+2. Contention guard: in `cc/om_run/om_run.sh` (additive, env-guarded default ON, `OM_CONTENTION_GUARD=0` disables) record `contention.json` with foreign heavy processes (comm in cc1plus, cc1, cicc, ptxas, nvcc, ld, ld.bfd, ld.gold, cmake, ninja, make, cargo, rustc) that are NOT descendants of this run, sampled at start and every few seconds during the engine run (reuse the existing sampler/telemetry loop pattern in om_run if present; else a light background loop killed at exit), with max count and names. `cc/abrun/run_summary.py`: expose `host_contention` (bool, max_foreign_heavy). `cc/abrun/gate.py`: a run with host_contention true is invalid for scoring (reason `host_contention`), like other invalid runs — never a win. Keep existing behaviour otherwise.
+3. `c2/launch_codex.sh`: append to the worker prompt "Any compile/build (cmake, make, nvcc, cargo) MUST run via /home/muk/projects/siminfeng/bin/heavy so it is serialized with lab jobs." and add `--add-dir /home/muk/projects/siminfeng/lab/jobq` to the codex command.
+4. Tests: `cc/abrun/test_contention.py` (summary flag + gate invalid with fixture contention.json) and a small `bin/heavy` test using a temp JOBQ_DIR with a fake fast command (start a `jobq worker --once` if needed — read jobq). Run `python3 -m pytest cc/abrun -q -p no:cacheprovider` in the worktree.
+Final message: files, how to use, limitations (sampling can miss short compiles; processes from other users).
+
+You are a Codex worker (siminfeng c2 / Satay factory). Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
+codex
+I’ll read the queue and run-summary code, make the targeted changes, then run the requested tests. I’ll keep all work in this worktree and temporary directories; no builds, experiments, or commits.
+exec
+/bin/bash -lc "sed -n '1,260p' bin/jobq && sed -n '1,260p' cc/om_run/om_run.sh" in /home/muk/projects/siminfeng-wb
+exec
+/bin/bash -lc "sed -n '1,280p' cc/abrun/run_summary.py && sed -n '1,300p' cc/abrun/gate.py && sed -n '1,260p' c2/launch_codex.sh && rg --files cc/abrun bin | head -100" in /home/muk/projects/siminfeng-wb
+ succeeded in 20ms:
+#!/usr/bin/env python3
+"""Local, flock-serialized job queue. All state changes happen under lock."""
+import re, argparse
+from contextlib import contextmanager
+import fcntl
+import json
+import math
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+import uuid
+
+ROOT = Path(__file__).resolve().parent.parent
+SELF = str(Path(__file__).resolve())
+DIR = Path(os.environ.get('JOBQ_DIR', ROOT / 'lab/jobq')).resolve()
+TERMINAL = {'succeeded', 'failed', 'cancelled', 'skipped_dep_failed', 'timeout'}
+
+
+@contextmanager
+def locked():
+    DIR.mkdir(parents=True, exist_ok=True)
+    with (DIR / 'lock').open('a') as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+
+
+def jobs():
+    return sorted((json.loads(p.read_text()) for p in DIR.glob('job-*.json')),
+                  key=lambda j: (j['submitted'], j['id']))
+
+
+def get(jid):
+    if not jid.startswith('job-') or any(c not in 'job-0123456789abcdef' for c in jid):
+        raise ValueError('invalid job id')
+    try:
+        return json.loads((DIR / (jid + '.json')).read_text())
+    except FileNotFoundError:
+        raise ValueError('unknown job: ' + jid)
+
+
+def save(j, event):
+    path = DIR / (j['id'] + '.json')
+    tmp = path.with_suffix('.tmp')
+    tmp.write_text(json.dumps(j, indent=2) + '\n')
+    os.replace(tmp, path)
+    with (DIR / 'events.jsonl').open('a') as f:
+        f.write(json.dumps(dict(time=time.time(), job=j['id'], event=event,
+                               state=j['state'])) + '\n')
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def alive(pid):
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+        # A dead supervisor may remain a zombie until its parent reaps it.
+        stat = Path('/proc/%s/stat' % pid)
+        if stat.exists() and stat.read_text().rsplit(')', 1)[1].split()[0] == 'Z':
+            return False
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def kill_groups(j, sig):
+    # Let run_op reap the command and record its outcome during the TERM grace.
+    groups = {j.get('pgid')}
+    if sig == signal.SIGKILL:
+        groups.add(j.get('wrapper_pgid'))
+    for pgid in groups - {None}:
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            pass
+
+
+def finish(j, state, rc):
+    j.update(state=state, rc=rc, end=time.time())
+    save(j, state)
+
+
+def reconcile():
+    for j in jobs():
+        if j['state'] == 'running' and not alive(j.get('runner_pid')):
+            kill_groups(j, signal.SIGKILL)
+            finish(j, j.get('stop_reason') or 'failed', None)
+
+
+def compatible(j, running):
+    for other in running:
+        if j['class'] in ('gpu', 'build') and other['class'] in ('gpu', 'build'):
+            return False
+        if j['class'] == 'gpu' and other['class'] == 'cpu' and not other['allow_during_gpu']:
+            return False
+        if j['class'] == 'cpu' and other['class'] == 'gpu' and not j['allow_during_gpu']:
+            return False
+    return True
+
+
+def worker(once):
+    children = []
+    try:
+        while True:
+            children[:] = [p for p in children if p.poll() is None]
+            with locked():
+                reconcile()
+                alljobs = jobs()
+                byid = {j['id']: j for j in alljobs}
+                running = [j for j in alljobs if j['state'] == 'running']
+                for j in alljobs:
+                    if j['state'] != 'queued':
+                        continue
+                    deps = [byid[d] for d in j['deps']]
+                    if any(d['state'] in TERMINAL - {'succeeded'} for d in deps):
+                        finish(j, 'skipped_dep_failed', None)
+                        continue
+                    if any(d['state'] != 'succeeded' for d in deps) or not compatible(j, running):
+                        continue
+                    j.update(state='running', start=time.time())
+                    for other in running:
+                        other['concurrent_jobs'].append(j['id'])
+                        j['concurrent_jobs'].append(other['id'])
+                        save(other, 'overlap')
+                    with (DIR / (j['id'] + '.log')).open('ab') as log:
+                        p = subprocess.Popen([sys.executable, SELF, '_run', j['id']],
+                                             stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                                             start_new_session=True)
+                    children.append(p)
+                    j['runner_pid'] = p.pid
+                    save(j, 'started')
+                    running.append(j)
+                pending = any(j['state'] in ('queued', 'running') for j in alljobs)
+            if once and not pending:
+                return 0
+            time.sleep(.05)
+    finally:
+        for p in children:
+            p.poll()
+
+
+def run_job(jid):
+    p = None
+    try:
+        with locked():
+            j = get(jid)
+            if j.get('stop_reason'):
+                finish(j, j['stop_reason'], None)
+                return 0
+            runop = os.environ.get('JOBQ_RUN_OP', str(ROOT / 'bin/run_op'))
+            job_env = (json.loads(Path(j['env_file']).read_text()) if j.get('env_file')
+                       else j.get('env', dict(os.environ)))
+            job_env['JOBQ_JOB_ID'] = jid
+            p = subprocess.Popen([runop, '--agent', 'jobq', '--task', j['name'], '--',
+                                  sys.executable, SELF, '_exec', jid],
+                                 cwd=j['cwd'], env=job_env, start_new_session=True)
+            j['wrapper_pgid'] = p.pid
+            save(j, 'wrapper_started')
+        stopped_at = None
+        while True:
+            with locked():
+                j = get(jid)
+                if not j.get('stop_reason') and j['timeout'] is not None and time.time() - j['start'] >= j['timeout']:
+                    j['stop_reason'] = 'timeout'
+                    save(j, 'timeout_requested')
+                if j.get('stop_reason'):
+                    if stopped_at is None:
+                        # One TERM lets cleanup handlers finish without interruption.
+                        kill_groups(j, signal.SIGTERM)
+                        stopped_at = time.monotonic()
+                    if p.poll() is not None:
+                        kill_groups(j, signal.SIGKILL)  # any remaining descendants
+                        finish(j, j['stop_reason'], p.returncode)
+                        return 0
+                    if time.monotonic() - stopped_at >= j.get('grace', 20):
+                        kill_groups(j, signal.SIGKILL)
+                        rc = p.wait()
+                        finish(j, j['stop_reason'], rc)
+                        return 0
+                elif p.poll() is not None:
+                    # Do not leave command descendants behind after wrapper exit.
+                    kill_groups(j, signal.SIGKILL)
+                    finish(j, 'succeeded' if p.returncode == 0 else 'failed', p.returncode)
+                    return 0
+            time.sleep(.025)
+    except Exception as exc:
+        with locked():
+            j = get(jid)
+            kill_groups(j, signal.SIGKILL)
+            j['error'] = str(exc)
+            finish(j, 'failed', None)
+        if p:
+            p.wait()
+        return 1
+
+
+def exec_job(jid):
+    with locked():
+        j = get(jid)
+        if j.get('stop_reason') or j['state'] != 'running':
+            return 1
+        j.update(pid=os.getpid(), pgid=os.getpgrp())
+        save(j, 'command_started')
+    os.execvpe(j['argv'][0], j['argv'], os.environ)
+
+
+def seconds(value):
+    n = float(value)
+    if not math.isfinite(n) or n < 0:
+        raise argparse.ArgumentTypeError('seconds must be finite and nonnegative')
+    return n
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    sp = ap.add_subparsers(dest='command', required=True)
+    s = sp.add_parser('submit')
+    s.add_argument('--class', dest='cls', choices=['gpu', 'build', 'cpu'], required=True)
+    s.add_argument('--after', nargs='+', action='extend', default=[])
+    s.add_argument('--name')
+    s.add_argument('--timeout', type=seconds)
+    s.add_argument('--grace', type=seconds, default=20, help='TERM to KILL grace in seconds')
+    s.add_argument('--allow-during-gpu', action='store_true')
+    s.add_argument('argv', nargs=argparse.REMAINDER)
+    w = sp.add_parser('worker'); w.add_argument('--once', action='store_true')
+    sp.add_parser('list')
+    r = sp.add_parser('reap-containers')
+    r.add_argument('--yes', action='store_true', help='Remove stale containers; default prints commands')
+    r.add_argument('--dry-run', action='store_true', help='Print commands only (the default)')
+    for cmd in ('show', 'wait', 'cancel', '_run', '_exec'):
+        p = sp.add_parser(cmd); p.add_argument('jobid')
+        if cmd == 'wait':
+            p.add_argument('--timeout', type=seconds)
+    a = ap.parse_args()
+    if a.command == 'reap-containers':
+        sys.path.insert(0, str(ROOT))
+        from cc.acc.server import reap_containers
+        reap_containers(dry_run=not a.yes or a.dry_run, labels=('om=1', 'acc=1'), unowned_max_age=None)
+        return 0
+    if a.command == '_run':
+        return run_job(a.jobid)
+    if a.command == '_exec':
+        return exec_job(a.jobid)
+    if a.command == 'worker':
+        return worker(a.once)
+    if a.command == 'wait':
+        deadline = None if a.timeout is None else time.monotonic() + a.timeout
+        while True:
+            with locked():
+                reconcile(); j = get(a.jobid)
+            if j['state'] in TERMINAL:
+                return 0 if j['state'] == 'succeeded' else 1
+            if deadline is not None and time.monotonic() >= deadline:
+                return 2
+#!/usr/bin/env bash
+# om_run.sh — guarded over-memory engine run on jetson-arm.
+# usage: om_run.sh OUTDIR IMAGE "ENV_FLAGS" TOOL ARGS...
+#   e.g. om_run.sh experiments/jetson/OM/b1-r1 campaign/llamacpp:jetson-c1-p03 "" llama-bench -m /om/model.gguf -lm mmap -ngl 99 -cmoe -p 64 -n 32 -r 2
+# Model dir ~/models/campaign/qwen36-35b-a3b is mounted read-only at /om. Watchdog kills ONLY this container
+# when MemAvailable < OM_MIN_AVAIL_MIB (default 700) or zram swap used > OM_MAX_SWAP_MIB (default 1536).
+set -u
+OUT=$1; IMG=$2; ENVF=$3; TOOL=$4; shift 4
+R=$(cd "$(dirname "$0")/../.." && pwd); mkdir -p "$OUT"
+NAME="om-$(date +%s)-$$"
+MODELDIR=${OM_MODELDIR:-$HOME/models/campaign/qwen36-35b-a3b}
+DATADIR=$HOME/models/campaign/data/wikitext/wikitext-2-raw
+DP=${DOCKER_CMD_PREFIX:-}
+dk(){ if [ -n "$DP" ]; then $DP "docker $*"; else docker "$@"; fi; }
+printf '%s\n' "$IMG" "$ENVF" "$TOOL $*" > "$OUT/cmd.txt"
+# OM_NSYS=1: run the engine under Nsight Systems (mounted read-only from the host install).
+# Traced runs perturb timing; use them for breakdowns only, never as speed evidence.
+NSYS_MOUNT=""; NSYS_PREFIX=""
+if [ "${OM_NSYS:-0}" = 1 ]; then
+    NSYS_DIR=${OM_NSYS_DIR:-/opt/nvidia/nsight-systems/2024.5.4}
+    [ -x "$NSYS_DIR/target-linux-tegra-armv8/nsys" ] || { echo "NSYS_MISSING $NSYS_DIR" > "$OUT/status"; exit 2; }
+    NSYS_MOUNT="-v $NSYS_DIR:/nsys:ro -v $(cd "$OUT" && pwd):/prof"
+    NSYS_PREFIX="/nsys/target-linux-tegra-armv8/nsys profile -t cuda,nvtx,osrt --cuda-graph-trace=node --sample=none --cpuctxsw=none -f true -o /prof/nsys"
+fi
+# Host-only page-cache protocol; unset means carryover (measure without warming).
+# OM_CACHE_MODEL overrides host model path inference from -m/--model under /om/.
+# warm uses OM_CACHE_WARM_RANGES (host JSON) or OM_CACHE_WARM_BYTES (prefix).
+OM_CACHE_ARGV=("$@")
+om_cache_record(){ python3 "$R/cc/page_cache/run_protocol.py" "$1" "$OUT" "$MODELDIR" "${OM_CACHE_ARGV[@]}"; }
+trap 'om_cache_record end || echo "page-cache end recording failed" >&2' EXIT
+om_cache_record start || { echo "CACHE_PROTOCOL_FAIL" > "$OUT/status"; exit 2; }
+dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
+   -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro $NSYS_MOUNT "$IMG" $NSYS_PREFIX /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
+if [ "${OM_THREADS:-0}" = 1 ]; then
+    python3 "$R/cc/thread_sampler/thread_sampler.py" --container "$NAME" --hz "${OM_THREADS_HZ:-100}" \
+        --out "$OUT/threads.jsonl" --summary "$OUT/threads.summary.json" \
+        >"$OUT/threads.log" 2>&1 & TS=$!
+fi
+if [ -n "$DP" ]; then KILLCMD="$DP 'docker kill $NAME'"; else KILLCMD="docker kill $NAME"; fi
+python3 "$R/cc/resource_observe/resource_observe.py" watchdog --min-available-mib ${OM_MIN_AVAIL_MIB:-600} \
+   --max-swap-used-mib ${OM_MAX_SWAP_MIB:-2560} --max-swap-rate-mibs ${OM_MAX_SWAP_RATE:-1000} --interval-ms 250 --kill-cmd "$KILLCMD" --out "$OUT/watchdog.jsonl" & WD=$!
+python3 "$R/cc/resource_observe/resource_observe.py" sample --backends io,proc,tegrastats --path "$MODELDIR" --interval-ms 500 \
+   --duration-s ${OM_MAX_S:-1800} --out "$OUT/telemetry.jsonl" >/dev/null 2>&1 & SM=$!
+T0=$(date +%s.%N)
+RC=$(dk wait "$NAME"); T1=$(date +%s.%N)
+kill $WD $SM 2>/dev/null; wait $WD 2>/dev/null; WDRC=$?
+dk logs "$NAME" > "$OUT/stdout.txt" 2> "$OUT/stderr.txt"
+if [ "${OM_THREADS:-0}" = 1 ]; then
+    wait "$TS" || echo "thread sampler failed; see threads.log" >&2
+    if [ -s "$OUT/threads.jsonl" ]; then
+        python3 "$R/cc/thread_sampler/thread_sampler.py" --summarize "$OUT/threads.jsonl" \
+            --stderr "$OUT/stderr.txt" --summary "$OUT/threads.summary.json" \
+            >>"$OUT/threads.log" 2>&1 || echo "thread summary failed; see threads.log" >&2
+    fi
+fi
+if [ "${OM_NSYS:-0}" = 1 ]; then
+    # nsys appends its own progress text to the engine's stdout; move it out so the output check sees only the engine.
+    python3 - "$OUT" <<'PY'
+import sys
+o=sys.argv[1]; s=open(o+"/stdout.txt","rb").read(); i=s.find(b"Collecting data...")
+if i >= 0:
+    open(o+"/nsys.stdout.txt","wb").write(s[i:]); open(o+"/stdout.txt","wb").write(s[:i])
+PY
+fi
+if [ "${OM_NSYS:-0}" = 1 ] && [ -s "$OUT/nsys.nsys-rep" ]; then
+    # Flat CSV summaries next to the other run files; the SQLite export is regenerable and large.
+    nsys stats -q -r cuda_gpu_kern_sum,cuda_api_sum,osrt_sum,cuda_gpu_mem_time_sum --format csv \
+        -o "$OUT/nsys" "$OUT/nsys.nsys-rep" > "$OUT/nsys.log" 2>&1 || echo "nsys stats failed; see nsys.log" >&2
+    rm -f "$OUT/nsys.sqlite"
+fi
+OOM=$(dk inspect "$NAME" --format '{{.State.OOMKilled}}')
+dk rm "$NAME" > /dev/null
+TRIP=$(grep -c watchdog_trip "$OUT/watchdog.jsonl" 2>/dev/null); TRIP=${TRIP:-0}
+python3 - "$OUT" "$RC" "$T0" "$T1" "$OOM" "$TRIP" "$IMG" "$ENVF" "$TOOL" "$@" <<'PY'
+import json,sys,os,socket
+o,rc,t0,t1,oom,trip,image,env,*argv=sys.argv[1:]
+code=int(rc.strip() or -1)
+tripped=int(trip)>0
+if tripped and code in (137, -9):
+    status="watchdog_tripped_killed"
+elif tripped and code == 0:
+    status="watchdog_tripped_survived"
+elif oom.strip()=="true":
+    status="oom_killed"
+else:
+    status="ok" if code == 0 else "failed"
+try:
+    with open(os.path.expanduser("~/.config/siminfeng/host_id")) as f:
+        host_id=f.read().strip() or socket.gethostname()
+except OSError:
+    host_id=socket.gethostname()
+json.dump(dict(exit_code=code,wall_s=round(float(t1)-float(t0),2),
+  oom_killed=oom.strip()=="true",watchdog_trips=int(trip),status=status,
+  host_id=host_id,image=image,env=env,argv=argv),open(o+"/result.json","w"),indent=1)
+print(open(o+"/result.json").read())
+PY
+
+exec
+/bin/bash -lc "pwd && git status --short && rg --files -g 'AGENTS.md' -g '"'!lab/jobq/**'"' -g '"'!experiments/**'"' /home/muk/projects 2>/dev/null" in /home/muk/projects/siminfeng-wb
+ succeeded in 77ms:
+#!/usr/bin/env python3
+"""Summarize guarded runs without requiring complete or well-formed logs."""
+import argparse
+import hashlib
+import json
+import math
+from pathlib import Path
+import re
+import statistics
+import sys
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+
+def numeric(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def summarize(directory, switch_regex=(), write=True):
+    directory = Path(directory)
+    result = {'dir': str(directory), 'reasons': {}, 'warnings': []}
+
+    def put(key, value, reason='not recorded'):
+        result[key] = value
+        if value is None:
+            result['reasons'][key] = reason
+        else:
+            result['reasons'].pop(key, None)
+
+    def read(name):
+        try:
+            return (directory / name).read_text(errors='replace')
+        except OSError as exc:
+            result['warnings'].append(f'{name}: {exc.strerror}')
+            return ''
+
+    try:
+        record = json.loads(read('result.json'))
+        if not isinstance(record, dict):
+            record = {}
+    except (ValueError, TypeError):
+        record = {}
+    put('status', record.get('status'), 'result.json status missing or invalid')
+    put('wall_s', record.get('wall_s') if numeric(record.get('wall_s')) else None)
+    for phase in ('start', 'end'):
+        try:
+            cache = json.loads(read(f'page_cache.{phase}.json'))
+            value = cache.get('resident_pct') if isinstance(cache, dict) else None
+            error = cache.get('error') if isinstance(cache, dict) else None
+        except (ValueError, TypeError):
+            value, error = None, 'invalid page-cache JSON'
+        put(f'cache_{phase}_resident_pct',
+            value if numeric(value) and 0 <= value <= 100 else None,
+            error or f'page_cache.{phase}.json residency unavailable')
+    stderr = read('stderr.txt')
+    stdout = read('stdout.txt')
+    try:
+        digest = hashlib.sha256((directory / 'stdout.txt').read_bytes()).hexdigest()[:12]
+    except OSError:
+        digest = None
+    put('output_sha', digest, 'stdout.txt unavailable')
+    patterns = []
+    for pattern in switch_regex:
+        try:
+            patterns.append(re.compile(pattern))
+        except re.error as exc:
+            result['warnings'].append(f'invalid switch regex {pattern!r}: {exc}')
+    result['switch_matches'] = {p.pattern: sum(bool(p.search(line)) for line in stderr.splitlines())
+                                for p in patterns}
+    result['switch_lines'] = [line for line in stderr.splitlines()
+                              if any(p.search(line) for p in patterns)]
+    for metric, expression in [('prompt_tps', r'prompt eval time.*?([\d.]+) tokens per second'),
+                               ('eval_tps', r'(?<!prompt )\beval time.*?([\d.]+) tokens per second'),
+                               ('load_s', r'\bload time\s*=\s*([\d.]+) ms'),
+                               ('eval_tokens', r'(?<!prompt )\beval time.*?/\s*(\d+) (?:runs|tokens)')]:
+        matches = re.findall(expression, stderr)
+        try:
+            value = float(matches[-1]) if matches else None
+        except ValueError:
+            value = None
+        if metric == 'load_s' and value is not None:
+            value /= 1000
+        put(metric, value, 'performance line absent or invalid')
+
+    for key, expression in [
+            ('eval_ms_per_token', r'(?<!prompt )\beval time.*?\(\s*([\d.]+) ms per token'),
+            ('prompt_ms_per_token', r'prompt eval time.*?\(\s*([\d.]+) ms per token'),
+            ('eval_ms_total', r'(?<!prompt )\beval time\s*=\s*([\d.]+) ms'),
+            ('eval_runs', r'(?<!prompt )\beval time.*?/\s*(\d+) (?:runs|tokens)'),
+            ('load_ms', r'\bload time\s*=\s*([\d.]+) ms')]:
+        matches = re.findall(expression, stderr)
+        value = float(matches[-1]) if matches else None
+        put(key, int(value) if key == 'eval_runs' and value is not None else value,
+            'performance line absent or invalid')
+
+    # Preserve both the benchmark average and the clock-ramp-discarded mean.
+    try:
+        bench = json.loads(stdout)
+    except ValueError:
+        bench = []
+    if isinstance(bench, dict):
+        bench = [bench]
+    if not isinstance(bench, list):
+        bench = []
+    result['bench'] = {'pp': [], 'tg': []}
+    for row in bench:
+        if not isinstance(row, dict):
+            continue
+        kind = ('pp' if row.get('n_prompt') and not row.get('n_gen') else
+                'tg' if row.get('n_gen') and not row.get('n_prompt') else None)
+        if kind is None:
+            continue
+        samples = row.get('samples_ts', [])
+        samples = samples if isinstance(samples, list) else []
+        clean = all(numeric(x) for x in samples)
+        steady = statistics.mean(samples[1:]) if len(samples) > 1 and clean else None
+        avg = row.get('avg_ts') if numeric(row.get('avg_ts')) else None
+        result['bench'][kind].append({'avg_ts': avg, 'samples_ts': samples, 'steady': steady})
+        for suffix, value in [('avg_ts', avg), ('samples_ts', samples), ('steady', steady)]:
+            put(f'{kind}_{suffix}', value, 'need at least two finite benchmark samples')
+        metric = 'prompt_tps' if kind == 'pp' else 'eval_tps'
+        put(metric, avg, 'benchmark avg_ts missing')
+        if kind == 'tg' and numeric(row.get('n_gen')):
+            put('eval_tokens', row['n_gen'])
+    for kind in ('pp', 'tg'):
+        for suffix in ('avg_ts', 'samples_ts', 'steady'):
+            if f'{kind}_{suffix}' not in result:
+                put(f'{kind}_{suffix}', None, 'no matching llama-bench JSON row')
+
+    values = {}
+    timed = {}
+    clocks = {}
+    swap_derived = []
+    unavailable = {}
+    factors = {'B': 1 / 1024, 'KiB': 1, 'MiB': 1024, 'GiB': 1024 ** 2,
+               'kB': 1000 / 1024}
+    for line in read('telemetry.jsonl').splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            result['warnings'].append('ignored malformed telemetry line')
+            continue
+        if not isinstance(row, dict):
+            continue
+        if numeric(row.get('mono_s')):
+            clocks.setdefault(str(row.get('backend', 'unknown')), []).append(row['mono_s'])
+        local = {}
+        metrics = row.get('metrics', [])
+        for metric in metrics if isinstance(metrics, list) else []:
+            if not isinstance(metric, dict) or not numeric(metric.get('value')):
+                continue
+            name, value = metric.get('name'), metric['value']
+            if not isinstance(name, str):
+                continue
+            if name == 'device_read':
+                factor = factors.get(metric.get('unit', 'KiB'))
+                if factor is None:
+                    unavailable[name] = 'unsupported device_read unit'
+                    continue
+                value *= factor
+            elif name in ('mem_available', 'swap_used', 'swap_total', 'swap_free'):
+                factor = factors.get(metric.get('unit', 'MiB'))
+                if factor is None:
+                    continue
+                value *= factor / 1024
+            elif name in ('gpu_freq', 'gpu_freq_cur', 'emc_freq') and metric.get('unit') == 'Hz':
+                value /= 1e6  # Summary clocks are MHz, including legacy telemetry.
+            values.setdefault(name, []).append(value)
+            clock = row.get('mono_s')
+            if numeric(clock):
+                timed.setdefault(name, []).append((clock, value))
+            local[name] = value
+        if 'swap_total' in local and 'swap_free' in local:
+            swap_derived.append(local['swap_total'] - local['swap_free'])
+        missing = row.get('unavailable', [])
+        for metric in missing if isinstance(missing, list) else []:
+            if isinstance(metric, dict):
+                unavailable[metric.get('name')] = str(metric.get('reason') or 'unavailable')
+
+    def delta(name):
+        v = values.get(name, [])
+        return max(v) - min(v) if len(v) >= 2 else None
+
+    read_kib, ios = delta('device_read'), delta('device_read_ios')
+    put('nvme_gib', read_kib / 1024 ** 2 if read_kib is not None else None,
+        unavailable.get('device_read', 'need two device_read samples'))
+    put('avg_kib_per_io', read_kib / ios if read_kib is not None and ios and ios > 0 else None,
+        'need device_read and positive device_read_ios delta')
+    tokens = result['eval_tokens']
+    put('nvme_gib_per_token', result['nvme_gib'] / tokens
+        if result['nvme_gib'] is not None and tokens and tokens > 0 else None,
+        'need NVMe delta and positive eval token count')
+    for key, names, fn in [('mem_available_min_mib', ['mem_available'], min),
+                           ('swap_max_mib', ['swap_used'], max),
+                           ('gpu_freq_median', ['gpu_freq', 'gpu_freq_cur'], statistics.median)]:
+        samples = next((values[n] for n in names if values.get(n)), [])
+        if key == 'swap_max_mib':
+            samples = samples + swap_derived
+        put(key, fn(samples) if samples else None,
+            '; '.join(unavailable.get(n, f'{n} not recorded') for n in names))
+    # Legacy stderr timestamps have no origin on the telemetry clock. Never
+    # equate them to host uptime. Use the explicit, auditable fallback below.
+    all_times = [t for ts in clocks.values() for t in ts]
+    duration = result['eval_ms_total']
+    start = end = load_start = load_end = None
+    if all_times:
+        load_start, end = min(all_times), max(all_times)
+        if numeric(duration) and duration > 0:
+            start = end - duration / 1000
+        if numeric(result['load_ms']) and result['load_ms'] >= 0:
+            load_end = load_start + result['load_ms'] / 1000
+    intervals = [b - a for ts in clocks.values()
+                 for a, b in zip(sorted(set(ts)), sorted(set(ts))[1:])]
+    result['phase_windows'] = {
+        'clock': 'mono_s', 'method': 'last_telemetry_before_exit_minus_eval_ms_total',
+        'decode_start': start, 'decode_end': end, 'load_start': load_start, 'load_end': load_end,
+        'sampling_error_bound_s': max(intervals) if intervals else None,
+        'absolute_error_bound_s': None,
+        'error_note': 'Endpoint sampling error is at most the largest observed backend interval '
+                      'assuming sampling continued until exit. Engine teardown/exit lag is unknown; '
+                      'no finite absolute phase alignment bound is available. Load begins at first '
+                      'telemetry sample; startup offset is also unknown.'}
+
+    def series(name):
+        return sorted(dict(timed.get(name, [])).items())
+
+    def clipped(name, lo, hi):
+        points = series(name)
+        if lo is None or hi is None or hi <= lo or len(points) < 2:
+            return []
+        if lo < points[0][0] or hi > points[-1][0]:
+            return []  # No extrapolation across missing coverage.
+        def at(t):
+            for (a, x), (b, y) in zip(points, points[1:]):
+                if a <= t <= b:
+                    return x + (y - x) * (t - a) / (b - a)
+        return [(lo, at(lo)), *[(t, v) for t, v in points if lo < t < hi], (hi, at(hi))]
+
+    # Different backends are emitted sequentially. Clip the endpoint to the
+    # last available counter/power sample (normally microseconds earlier).
+    def covered_end(name, hi):
+        points = series(name)
+        return min(hi, points[-1][0]) if hi is not None and points else hi
+
+    def phase_read(lo, hi):
+        points = clipped('device_read', lo, covered_end('device_read', hi))
+        if not points or any(b < a for (_, a), (_, b) in zip(points, points[1:])):
+            return None
+        return (points[-1][1] - points[0][1]) / 1024 ** 2
+
+    put('nvme_gib_decode', phase_read(start, end), 'need decode timing and covered device_read counters')
+    put('nvme_gib_load', phase_read(load_start, load_end), 'need load timing and covered device_read counters')
+    runs = result['eval_runs']
+    put('nvme_gib_per_token_decode', result['nvme_gib_decode'] / runs
+        if result['nvme_gib_decode'] is not None and runs and runs > 0 else None,
+        'need decode NVMe delta and positive eval_runs')
+    def window_values(names):
+        return next(([v for t, v in series(n) if start <= t <= end]
+                     for n in names if timed.get(n)), []) if start is not None else []
+
+    for key, names, fn in [
+            ('gpu_util_median', ['gpu_util'], statistics.median),
+            ('gpu_util_p90', ['gpu_util'], lambda v: sorted(v)[math.ceil(.9 * len(v)) - 1]),
+            ('device_util_median', ['device_util'], statistics.median),
+            ('power_in_w_median', ['power_VDD_IN_instant'], lambda v: statistics.median(v) / 1000),
+            ('temp_tj_max', ['temp_tj'], max),
+            ('gpu_freq_median', ['gpu_freq', 'gpu_freq_cur'], statistics.median),
+            ('emc_freq_median', ['emc_freq'], statistics.median)]:
+        samples = window_values(names)
+        # Keep legacy whole-run frequency support when no decode timing exists.
+        if key == 'gpu_freq_median' and start is None:
+            samples = next((values[n] for n in names if values.get(n)), [])
+        put(key, fn(samples) if samples else None, 'no decode-window samples: ' + ', '.join(names))
+    power = clipped('power_VDD_IN_instant', start,
+                    covered_end('power_VDD_IN_instant', end))
+    joules = sum((b - a) * (x + y) / 2000
+                 for (a, x), (b, y) in zip(power, power[1:])) if power else None
+    put('energy_j_per_token', joules / runs if joules is not None and runs and runs > 0 else None,
+        'need covered instant VDD_IN power, decode timing and positive eval_runs')
+#!/usr/bin/env python3
+"""A/A-aware, direction-aware performance gate for labelled summaries."""
+import argparse
+import json
+import math
+from pathlib import Path
+import statistics
+
+
+def finite(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+SECONDARY_FIELDS = ('nvme_gib_per_token', 'prompt_tps', 'eval_tps', 'eval_ms_per_token',
+                    'nvme_gib_per_token_decode', 'gpu_util_median', 'energy_j_per_token',
+                    'threads.cpu_workers_r_fraction', 'threads.main_workers_d_fraction',
+                    'threads.majflt_per_token')
+
+
+def metric_direction(metric, direction=None):
+    direction = direction or ('lower' if metric == 'eval_ms_per_token' else 'higher')
+    if direction not in ('lower', 'higher'):
+        raise ValueError('direction must be lower or higher')
+    return direction
+
+
+def secondary_table(verdict):
+    fields = ('eval_ms_per_token', 'nvme_gib_per_token_decode', 'gpu_util_median',
+              'energy_j_per_token', 'nvme_gib_per_token', 'prompt_tps', 'eval_tps',
+              'threads.cpu_workers_r_fraction', 'threads.main_workers_d_fraction',
+              'threads.majflt_per_token')
+    lines = ['| Arm | ms/token | NVMe GiB/token (decode) | gpu_util med (%) | J/token | NVMe GiB/token (whole) | Prompt t/s | Eval t/s | CPU workers R | Main+workers D | Threads majflt/token |',
+             '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
+    for arm, metrics in verdict['secondary_metrics'].items():
+        values = [format(metrics[f], '.6g') if finite(metrics.get(f)) else '—' for f in fields]
+        lines.append('| ' + ' | '.join([arm, *values]) + ' |')
+    return '\n'.join(lines)
+
+
+def evaluate(arms, metric='eval_tps', base='base', direction=None):
+    direction = metric_direction(metric, direction)
+    inputs = {arm: [run.get(metric) for run in runs] for arm, runs in arms.items()}
+    means, gaps = {}, {}
+    reasons = []
+    for arm, numbers in inputs.items():
+        valid = bool(numbers) and all(finite(n) and n > 0 for n in numbers)
+        means[arm] = statistics.mean(numbers) if valid else None
+        gaps[arm] = ((max(numbers) - min(numbers)) / means[arm]
+                     if valid and len(numbers) >= 2 else None)
+        if not valid:
+            reasons.append(f'{arm}: missing/nonpositive/nonfinite {metric}')
+        if any(r.get('status', 'ok') != 'ok' for r in arms[arm]):
+            reasons.append(f'{arm}: unsuccessful run')
+    base_values = inputs.get(base, [])
+    drift_halves = None
+    drift = None
+    if means.get(base) and len(base_values) >= 2:
+        split = len(base_values) // 2
+        drift_halves = [statistics.mean(base_values[:split]), statistics.mean(base_values[split:])]
+        drift = abs(drift_halves[1] - drift_halves[0]) / means[base]
+    aa_gap = max((gap for gap in gaps.values() if gap is not None), default=0.0)
+    threshold = max(0.03, 2 * aa_gap, 2 * (drift or 0.0))
+    if base not in arms:
+        reasons.append(f'base arm {base!r} absent')
+    comparisons = {}
+    for arm in arms:
+        if arm == base:
+            continue
+        ratio = None
+        if means[arm] and means.get(base):
+            ratio = (means[base] / means[arm] if direction == 'lower'
+                     else means[arm] / means[base])
+        verdict = 'null'
+        if ratio is not None and not reasons:
+            if ratio - 1 > threshold and not math.isclose(ratio - 1, threshold, rel_tol=1e-12):
+                verdict = 'improved'
+            elif 1 - ratio > threshold and not math.isclose(1 - ratio, threshold, rel_tol=1e-12):
+                verdict = 'regressed'
+        comparisons[arm] = {'mean': means[arm], 'base_mean': means.get(base),
+                            'ratio': ratio, 'change': ratio - 1 if ratio is not None else None,
+                            'threshold': threshold, 'verdict': verdict}
+    hashes = {arm: [run.get('output_sha') for run in runs] for arm, runs in arms.items()}
+    flat = [value for values in hashes.values() for value in values]
+    if not flat or any(value is None for value in flat):
+        output = {'class': 'unknown', 'reason': 'output hash missing', 'hashes': hashes}
+    elif len(set(flat)) == 1:
+        output = {'class': 'identical', 'hashes': hashes}
+    else:
+        reference = next(iter(hashes.get(base, [])), flat[0])
+        output = {'class': 'differs', 'hashes': hashes,
+                  'differs': {arm: [{'run_index': i, 'output_sha': h} for i, h in enumerate(values)
+                                    if h != reference] for arm, values in hashes.items()
+                              if any(h != reference for h in values)},
+                  'reference_sha': reference}
+    secondary = {}
+    for arm, runs in arms.items():
+        secondary[arm] = {}
+        for field in SECONDARY_FIELDS:
+            values = [r[field] for r in runs if finite(r.get(field))]
+            secondary[arm][field] = statistics.mean(values) if values else None
+    cache_means = {}
+    for arm, runs in arms.items():
+        values = [r['cache_start_resident_pct'] for r in runs
+                  if finite(r.get('cache_start_resident_pct'))
+                  and 0 <= r['cache_start_resident_pct'] <= 100]
+        if values:
+            cache_means[arm] = statistics.mean(values)
+    cache_confound = None
+    if len(cache_means) >= 2 and max(cache_means.values()) - min(cache_means.values()) > 10:
+        cache_confound = ('arms\' mean start residency differs by > 10 percentage points: '
+                          + ', '.join(f'{arm}={value:.2f}%' for arm, value in cache_means.items()))
+    return {'cache_confound': cache_confound,
+            'secondary_metrics': secondary, 'metric': metric, 'direction': direction, 'base': base, 'inputs': inputs, 'means': means,
+            'aa_gaps': gaps, 'aa_gap': aa_gap, 'drift_halves': drift_halves,
+            'drift': drift, 'threshold': threshold, 'minimum_effect': 0.03,
+            'noise_multiplier': 2, 'comparisons': comparisons, 'output': output,
+            'reasons': reasons}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('summaries', help='JSON object: arm -> summary objects or summary.json paths')
+    parser.add_argument('--metric', default='eval_ms_per_token')
+    parser.add_argument('--direction', choices=['lower', 'higher'])
+    parser.add_argument('--base', default='base')
+    args = parser.parse_args()
+    arms = json.loads(Path(args.summaries).read_text())
+    arms = {arm: [json.loads(Path(r).read_text()) if isinstance(r, str) else r for r in runs]
+            for arm, runs in arms.items()}
+    print(json.dumps(evaluate(arms, args.metric, args.base, args.direction), indent=2))
+
+
+if __name__ == '__main__':
+    main()
+#!/usr/bin/env bash
+# launch_codex.sh TASK ASSIGNMENT_FILE [EXTRA_PROMPT] — runs codex on an assignment, logs start/end to c2/worklog.jsonl
+set -u; cd "$(dirname "$0")/.."
+T=$1; A=$2; X=${3:-}
+mkdir -p artifacts/codex
+S=$(date -u +%FT%TZ); S0=$(date +%s)
+echo "{\"event\":\"start\",\"task\":\"$T\",\"worker\":\"codex\",\"assignment\":\"$A\",\"ts\":\"$S\"}" >> c2/worklog.jsonl
+codex exec ${CODEX_ARGS:-} -s workspace-write -C "${CODEX_CWD:-$PWD}" --add-dir /tmp ${CODEX_ADD_DIR:+--add-dir "$CODEX_ADD_DIR"} -o artifacts/codex/$T.final.txt \
+  "$(cat $A)
+$X
+You are a Codex worker (siminfeng c2 / Satay factory). Follow the assignment exactly; acceptance commands will be run verbatim by a checker." \
+  < /dev/null > artifacts/codex/$T.log 2>&1
+RC=$?
+TOK=$(grep -A1 -i 'tokens used' artifacts/codex/$T.log | tail -1 | tr -dc 0-9)
+echo "{\"event\":\"end\",\"task\":\"$T\",\"worker\":\"codex\",\"rc\":$RC,\"wall_s\":$(( $(date +%s)-S0 )),\"tokens\":\"$TOK\",\"ts\":\"$(date -u +%FT%TZ)\"}" >> c2/worklog.jsonl
+bin/lab
+bin/README-jobq.md
+bin/cuda_compile_check
+bin/ledger_appendix.py
+bin/cost_report
+bin/cc_hook
+bin/run_op
+bin/test_jobq.py
+bin/jobq
+bin/index_evidence
+bin/lab_run
+bin/perf_summary
+cc/abrun/README.md
+cc/abrun/test_abrun.py
+cc/abrun/preflight.py
+cc/abrun/specs/J-OM8.json
+cc/abrun/specs/J-XS2-smoke.json
+cc/abrun/specs/J-OM9.json
+cc/abrun/specs/J-OM10.json
+cc/abrun/specs/J-OM10b.json
+cc/abrun/specs/J-OM11.json
+cc/abrun/specs/J-OM10c.json
+cc/abrun/specs/J-XS1-smoke.json
+cc/abrun/specs/J-OM12.json
+cc/abrun/specs/J-OM13.json
+cc/abrun/specs/J-OM8b.json
+cc/abrun/specs/example-om7-replay.json
+cc/abrun/gate.py
+cc/abrun/run_summary.py
+cc/abrun/regate.py
+cc/abrun/__init__.py
+cc/abrun/tests/test_threads.py
+cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/README.md
+cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/stdout.txt
+cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/telemetry.jsonl
+cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/stderr.txt
+cc/abrun/tests/fixtures/J-OM10c-003-pg8i8/result.json
+cc/abrun/test_page_cache.py
+cc/abrun/test_effective_config.py
+cc/abrun/abrun.py
+cc/abrun/fixtures/llama-bench-help.txt
+
+ succeeded in 997ms:
+/home/muk/projects/siminfeng-wb
+/home/muk/projects/jiuwenswarm-f15/AGENTS.md
+/home/muk/projects/jiuwenswarm-cl/jiuwenswarm/channels/web/AGENTS.md
+/home/muk/projects/jiuwenswarm-cl/jiuwenswarm/channels/web/frontend/AGENTS.md
+/home/muk/projects/jiuwenswarm-cl/jiuwenswarm/channels/web/frontend/src/features/trajectory/AGENTS.md
+/home/muk/projects/jiuwenswarm-cl/AGENTS.md
+/home/muk/projects/jiuwenswarm/AGENTS.md
+/home/muk/projects/jiuwenswarm-f15/jiuwenswarm/channels/web/AGENTS.md
+/home/muk/projects/jiuwenswarm-f15/jiuwenswarm/channels/web/frontend/AGENTS.md
+/home/muk/projects/jiuwenswarm-f15/jiuwenswarm/channels/web/frontend/src/features/trajectory/AGENTS.md
+/home/muk/projects/jiuwenswarm/jiuwenswarm/channels/web/AGENTS.md
+/home/muk/projects/jiuwenswarm/jiuwenswarm/channels/web/frontend/AGENTS.md
+/home/muk/projects/jiuwenswarm/jiuwenswarm/channels/web/frontend/src/features/trajectory/AGENTS.md
+/home/muk/projects/xs-dev/llama-place/AGENTS.md
+/home/muk/projects/xs-dev/llama-obs/AGENTS.md
+/home/muk/projects/xs-dev/llama-opt/AGENTS.md
+/home/muk/projects/xs-dev/llama.cpp/AGENTS.md
+
+exec
+/bin/bash -lc 'for path in /AGENTS.md /home/AGENTS.md /home/muk/AGENTS.md /home/muk/projects/AGENTS.md; do if [ -f "$path" ]; then cat "$path"; fi; done
+rg --files --hidden -g '"'AGENTS.md' -g '"'!.git'"' -g '"'!lab/jobq/**'"' -g '"'!experiments/**'"' .
+sed -n '260,390p' bin/jobq
+sed -n '1,240p' bin/test_jobq.py
+sed -n '1,220p' bin/run_op
+cat bin/README-jobq.md" in /home/muk/projects/siminfeng-wb
+ succeeded in 0ms:
+                return 2
+            time.sleep(.05)
+    with locked():
+        reconcile()
+        if a.command == 'submit':
+            argv = a.argv[1:] if a.argv[:1] == ['--'] else a.argv
+            if not argv:
+                ap.error('command required after --')
+            for dep in a.after:
+                get(dep)
+            jid = 'job-' + uuid.uuid4().hex
+            j = dict(id=jid, argv=argv, **{'class': a.cls}, deps=a.after,
+                     name=a.name or argv[0], timeout=a.timeout, grace=a.grace,
+                     allow_during_gpu=a.allow_during_gpu, state='queued', pid=None,
+                     pgid=None, runner_pid=None, start=None, end=None, rc=None,
+                     concurrent_jobs=[], submitted=time.time_ns(), cwd=os.getcwd(),
+                     env_file=None, env_public=None)
+            env = dict(os.environ, JOBQ_DIR=str(DIR))
+            ed = DIR / 'env'; ed.mkdir(parents=True, exist_ok=True); os.chmod(ed, 0o700)
+            ef = ed / f'{jid}.json'
+            fd = os.open(ef, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w') as fh: json.dump(env, fh)
+            j['env_file'] = str(ef)
+            # never persist secrets in the job record (check-in H1 found tokens in job JSON)
+            secret = re.compile(r'TOKEN|KEY|SECRET|PASS|AUTH|SESSION|COOKIE|CREDENTIAL', re.I)
+            j['env_public'] = {k: v for k, v in env.items() if not secret.search(k)
+                               and k in ('PATH', 'DOCKER_CMD_PREFIX', 'BUILD_JOBS', 'LD_LIBRARY_PATH', 'JOBQ_DIR', 'OM_MAX_S', 'OM_MODELDIR') }
+            save(j, 'submitted'); print(jid)
+        elif a.command == 'list':
+            for j in jobs():
+                print(j['id'], j['state'], j['class'], j['name'])
+        elif a.command == 'show':
+            print(json.dumps(get(a.jobid), indent=2))
+        elif a.command == 'cancel':
+            j = get(a.jobid)
+            if j['state'] == 'queued':
+                finish(j, 'cancelled', None)
+            elif j['state'] == 'running':
+                j['stop_reason'] = 'cancelled'
+                save(j, 'cancel_requested')
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (ValueError, OSError) as exc:
+        print('jobq: ' + str(exc), file=sys.stderr)
+        sys.exit(1)
+"""Queue integration tests: no evidence, containers, builds, or device access."""
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+import pytest
+
+JOBQ = Path(__file__).with_name('jobq')
+
+
+@pytest.fixture
+def q(tmp_path):
+    fake = tmp_path / 'run_op'
+    fake.write_text('#!/usr/bin/env python3\nimport subprocess,sys\na=sys.argv[sys.argv.index("--")+1:]\np=subprocess.Popen(a,start_new_session=True)\nsys.exit(p.wait())\n')
+    fake.chmod(0o755)
+    env = dict(os.environ, JOBQ_DIR=str(tmp_path / 'state'), JOBQ_RUN_OP=str(fake))
+    workers = []
+
+    class Queue:
+        def call(self, *args, check=True):
+            return subprocess.run([str(JOBQ), *map(str, args)], env=env,
+                                  capture_output=True, text=True, check=check, timeout=15)
+
+        def submit(self, cls='cpu', cmd=None, options=()):
+            return self.call('submit', '--class', cls, *options, '--',
+                             *(cmd or ['true'])).stdout.strip()
+
+        def show(self, jid):
+            return json.loads(self.call('show', jid).stdout)
+
+        def worker(self):
+            p = subprocess.Popen([str(JOBQ), 'worker', '--once'], env=env,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            workers.append(p)
+            return p
+
+        def drain(self):
+            self.call('worker', '--once')
+
+        def until(self, jid, predicate):
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                j = self.show(jid)
+                if predicate(j):
+                    return j
+                time.sleep(.02)
+            pytest.fail('job did not reach expected state: ' + str(j))
+
+    queue = Queue()
+    queue.state = tmp_path / "state"
+    yield queue
+    state = tmp_path / 'state'
+    for path in state.glob('job-*.json'):
+        j = json.loads(path.read_text())
+        for key in ('pgid', 'wrapper_pgid'):
+            if j.get(key):
+                try:
+                    os.killpg(j[key], signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+    for p in workers:
+        if p.poll() is None:
+            p.terminate()
+        p.communicate(timeout=5)
+
+
+def test_fifo_and_metadata(q):
+    ids = [q.submit('build', ['sleep', '.1'], ['--name', 'ordered']) for _ in range(3)]
+    q.drain()
+    records = [q.show(i) for i in ids]
+    assert all(j['state'] == 'succeeded' and j['rc'] == 0 for j in records)
+    assert all(a['end'] <= b['start'] for a, b in zip(records, records[1:]))
+    for j in records:
+        assert j['argv'] == ['sleep', '.1']
+        assert j['pid'] == j['pgid'] and j['pid'] > 0
+        assert j['deps'] == [] and j['concurrent_jobs'] == []
+        assert j['allow_during_gpu'] is False
+    assert ids[0] in q.call('list').stdout
+    events = [json.loads(line) for line in (q.state / 'events.jsonl').read_text().splitlines()]
+    assert [e['job'] for e in events if e['event'] == 'submitted'] == ids
+    assert [e['job'] for e in events if e['event'] == 'succeeded'] == ids
+
+
+def test_dependencies_success_failure_and_transitive_skip(q):
+    good = q.submit()
+    bad = q.submit(cmd=['false'])
+    child = q.submit(options=['--after', good])
+    skipped = q.submit(options=['--after', good, bad])
+    grandchild = q.submit(options=['--after', skipped])
+    q.drain()
+    assert q.show(child)['state'] == 'succeeded'
+    assert q.show(child)['start'] >= q.show(good)['end']
+    assert q.show(bad)['state'] == 'failed'
+    for jid in (skipped, grandchild):
+        assert q.show(jid)['state'] == 'skipped_dep_failed'
+        assert q.show(jid)['pid'] is None
+    assert q.call('submit', '--class', 'cpu', '--after', 'job-abc', '--', 'true', check=False).returncode == 1
+
+
+def test_gpu_build_exclusion_multiple_workers(q):
+    ids = [q.submit(cls, ['sleep', '1']) for cls in ('gpu', 'build')]
+    p, other = q.worker(), q.worker()
+    assert p.wait(timeout=10) == other.wait(timeout=10) == 0
+    a, b = [q.show(i) for i in ids]
+    assert a['end'] <= b['start']
+    assert a['concurrent_jobs'] == b['concurrent_jobs'] == []
+
+
+def test_cpu_during_build(q):
+    build = q.submit('build', ['sleep', '.6'])
+    cpu = q.submit('cpu', ['sleep', '.3'])
+    q.drain()
+    a, b = q.show(build), q.show(cpu)
+    assert a['start'] < b['end'] and b['start'] < a['end']
+    assert a['concurrent_jobs'] == [cpu] and b['concurrent_jobs'] == [build]
+
+
+@pytest.mark.parametrize('cpu_first', [False, True])
+def test_cpu_gpu_exclusion_both_directions(q, cpu_first):
+    ids = [q.submit(c, ['sleep', '.2']) for c in (('cpu', 'gpu') if cpu_first else ('gpu', 'cpu'))]
+    q.drain()
+    a, b = [q.show(i) for i in ids]
+    assert a['end'] <= b['start']
+
+
+def test_cpu_opt_in_during_gpu(q):
+    gpu = q.submit('gpu', ['sleep', '.5'])
+    cpu = q.submit('cpu', ['sleep', '.3'], ['--allow-during-gpu'])
+    q.drain()
+    assert q.show(cpu)['allow_during_gpu'] is True
+    assert q.show(gpu)['concurrent_jobs'] == [cpu]
+    assert q.show(cpu)['concurrent_jobs'] == [gpu]
+
+
+def test_cancel_child_process_group(q, tmp_path):
+    child_pid = tmp_path / 'child.pid'
+    # Parent reaps its child on TERM, so the assertion checks death, not zombies.
+    code = '''import os,signal,subprocess,sys,time
+p=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"])
+def stop(*args):
+    p.wait(timeout=3)
+    sys.exit(0)
+signal.signal(signal.SIGTERM,stop)
+open(sys.argv[1],"w").write(str(p.pid))
+time.sleep(30)
+'''
+    jid = q.submit(cmd=[sys.executable, '-c', code, str(child_pid)])
+    p = q.worker()
+    q.until(jid, lambda j: j['pid'] is not None and child_pid.exists())
+    pid = int(child_pid.read_text())
+    q.call('cancel', jid)
+    assert q.call('wait', jid, '--timeout', '5', check=False).returncode == 1
+    assert q.show(jid)['state'] == 'cancelled'
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+    assert p.wait(timeout=5) == 0
+
+
+def test_queued_cancel_and_wait_codes(q):
+    queued = q.submit()
+    assert q.call('wait', queued, '--timeout', '.05', check=False).returncode == 2
+    q.call('cancel', queued)
+    assert q.call('wait', queued, check=False).returncode == 1
+    good, bad = q.submit(), q.submit(cmd=['false'])
+    q.drain()
+    assert q.call('wait', good).returncode == 0
+    assert q.call('wait', bad, check=False).returncode == 1
+    assert q.show(queued)['state'] == 'cancelled'
+
+
+def test_job_timeout(q):
+    jid = q.submit(cmd=['sleep', '30'], options=['--timeout', '.2'])
+    next_job = q.submit('gpu')
+    q.drain()
+    j = q.show(jid)
+    assert j['state'] == 'timeout'
+    assert j['end'] - j['start'] < 3
+    assert q.show(next_job)['start'] >= j['end']
+    assert q.call('wait', jid, check=False).returncode == 1
+
+
+@pytest.mark.parametrize('reason', ['cancel', 'timeout'])
+def test_term_grace_allows_two_second_cleanup(q, tmp_path, reason):
+    ready, cleaned = tmp_path / 'ready', tmp_path / 'cleaned'
+    code = '''import os,signal,sys,time
+from pathlib import Path
+def stop(*args):
+    time.sleep(2)
+    Path(sys.argv[2]).write_text(os.environ['JOBQ_JOB_ID'])
+    sys.exit(0)
+signal.signal(signal.SIGTERM, stop)
+Path(sys.argv[1]).write_text('ready')
+time.sleep(30)
+'''
+    options = ['--timeout', '1', '--grace', '3'] if reason == 'timeout' else []
+    jid = q.submit(cmd=[sys.executable, '-c', code, str(ready), str(cleaned)], options=options)
+    worker = q.worker()
+    q.until(jid, lambda j: ready.exists())
+    assert q.show(jid)['grace'] == (3 if reason == 'timeout' else 20)
+    if reason == 'cancel':
+        q.call('cancel', jid)
+    assert q.call('wait', jid, '--timeout', '7', check=False).returncode == 1
+    job = q.show(jid)
+    assert job['state'] == ('cancelled' if reason == 'cancel' else 'timeout')
+    assert job['rc'] == 0
+    assert cleaned.read_text() == jid
+    assert worker.wait(timeout=5) == 0
+
+
+def test_custom_grace_kills_unresponsive_command(q, tmp_path):
+    ready = tmp_path / 'ready'
+    code = "import signal,sys,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); open(sys.argv[1], 'w').close(); time.sleep(30)"
+    jid = q.submit(cmd=[sys.executable, '-c', code, str(ready)], options=['--grace', '.15'])
+    worker = q.worker()
+    q.until(jid, lambda j: ready.exists())
+    start = time.monotonic()
+    q.call('cancel', jid)
+    assert q.call('wait', jid, '--timeout', '3', check=False).returncode == 1
+    assert .15 <= time.monotonic() - start < 3
+    assert q.show(jid)['rc'] != 0
+    assert worker.wait(timeout=5) == 0
+#!/usr/bin/env python3
+"""run_op: record intent -> run command -> record outcome. Append-only JSONL per agent, flock-protected.
+Usage: run_op --agent A [--parent P] [--task T] [--desc D] [--campaign C] -- cmd args...
+Observes: argv, cwd, UTC times, exit code/signal, stdout/stderr (saved+sha256), process-group id, allowlisted env.
+Does NOT observe: grandchildren's own argv (only pgid membership at start/end), network, files written by the command."""
+import argparse, fcntl, hashlib, json, os, signal, subprocess, sys, time, uuid, datetime as dt
+ROOT = os.environ.get("CAMPAIGN_ROOT", os.path.expanduser("~/projects/siminfeng"))
+ENV_ALLOW = ["CAMPAIGN_ID", "CUDA_VISIBLE_DEVICES", "PATH", "LANG"]
+def evdir(root):
+    """D021: per-host evidence dir. Host id from ~/.config/siminfeng/host_id (untracked); legacy x86 stream stays at evidence/."""
+    try: h = open(os.path.expanduser("~/.config/siminfeng/host_id")).read().strip()
+    except Exception: h = "x86-main"
+    d = os.path.join(root, "evidence") if h in ("", "x86-main") else os.path.join(root, "evidence", h)
+    os.makedirs(d, exist_ok=True); return d, h
+def now(): return dt.datetime.now(dt.timezone.utc).isoformat()
+def emit(agent, rec):
+    d, host = evdir(ROOT); rec.setdefault("host_id", host)
+    path = os.path.join(d, f"{agent}.jsonl")
+    line = (json.dumps(rec, sort_keys=True) + "\n").encode()
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX); os.write(fd, line); os.fsync(fd)
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
+def survivors(sid):
+    """processes still alive in the command's session (descendants that outlived the main process)"""
+    out = []
+    for d in os.listdir("/proc"):
+        if not d.isdigit(): continue
+        try:
+            st = open(f"/proc/{d}/stat").read().rsplit(")", 1)[1].split()
+            if int(st[3]) == sid and st[0] != "Z":   # session id == sid, not zombie
+                out.append(dict(pid=int(d), cmd=open(f"/proc/{d}/cmdline").read().replace("\0", " ")[:200]))
+        except Exception: pass
+    return out
+def sha(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""): h.update(b)
+    return h.hexdigest()
+def main():
+    ap = argparse.ArgumentParser(); ap.add_argument("--agent", required=True)
+    ap.add_argument("--parent"); ap.add_argument("--task"); ap.add_argument("--desc", default="")
+    ap.add_argument("--campaign", default=os.environ.get("CAMPAIGN_ID", "c0")); ap.add_argument("--timeout", type=float)
+    ap.add_argument("cmd", nargs=argparse.REMAINDER); a = ap.parse_args()
+    cmd = a.cmd[1:] if a.cmd and a.cmd[0] == "--" else a.cmd
+    if not cmd: sys.exit("no command")
+    op = "op-" + uuid.uuid4().hex[:12]
+    outdir = os.path.join(ROOT, "artifacts", op); os.makedirs(outdir)
+    base = dict(campaign=a.campaign, agent=a.agent, task=a.task, parent=a.parent, op=op)
+    emit(a.agent, dict(base, kind="intent", ts=now(), argv=cmd, cwd=os.getcwd(), desc=a.desc,
+         env={k: os.environ.get(k, "") for k in ENV_ALLOW if k != "PATH"}, wrapper_pid=os.getpid()))
+    t0 = time.monotonic(); outp, errp = os.path.join(outdir, "stdout"), os.path.join(outdir, "stderr")
+    status, code, sig, pgid = "unknown", None, None, None
+    try:
+        with open(outp, "wb") as o, open(errp, "wb") as e:
+            p = subprocess.Popen(cmd, stdout=o, stderr=e, start_new_session=True); pgid = p.pid
+            emit(a.agent, dict(base, kind="started", ts=now(), pid=p.pid, pgid=pgid, sid=pgid))
+            try: rc = p.wait(timeout=a.timeout)
+            except subprocess.TimeoutExpired:
+                os.killpg(pgid, signal.SIGKILL); p.wait(); rc = None; status = "timeout"
+        if rc is not None:
+            if rc < 0: status, sig = "signaled", -rc
+            else: status, code = ("ok" if rc == 0 else "failed"), rc
+    except FileNotFoundError as ex: status = "spawn_error"; open(errp, "a").write(str(ex))
+    surv = survivors(pgid) if pgid else []
+    emit(a.agent, dict(base, kind="outcome", ts=now(), status=status, survivors=surv, exit_code=code, signal=sig,
+         elapsed_s=round(time.monotonic() - t0, 3), pgid=pgid,
+         stdout=dict(path=outp, sha256=sha(outp), bytes=os.path.getsize(outp)),
+         stderr=dict(path=errp, sha256=sha(errp), bytes=os.path.getsize(errp))))
+    sys.stdout.flush(); sys.stdout.buffer.write(open(outp, 'rb').read()); sys.stdout.buffer.flush()  # D021: raw bytes, never decode
+    sys.stderr.buffer.write(open(errp, 'rb').read())
+    sys.exit(code if code is not None else 1)
+main()
+# Local job queue
+
+Run from the campaign root. Python 3 standard library only; jobs use `bin/run_op`
+with agent `jobq` and the submitted name as task. No worker starts automatically.
+
+```sh
+build=$(bin/jobq submit --class build --name engine --timeout 7200 -- python3 cc/build_engine/build_engine.py ...)
+run=$(bin/jobq submit --class gpu --after "$build" --name timing --timeout 5400 -- python3 cc/om_spec/om_spec.py ...)
+bin/jobq worker --once
+bin/jobq wait "$run" --timeout 600
+bin/jobq list
+bin/jobq show "$run"
+bin/jobq cancel "$run"
+```
+
+`worker` polls continuously; `worker --once` drains the queue until idle, including
+jobs made ready by dependencies. Multiple workers share the same admission lock.
+Eligible jobs are admitted FIFO; blocked jobs do not prevent compatible work.
+A failed, cancelled, timed out, or skipped dependency causes `skipped_dep_failed`.
+`wait` returns 0 for success, 1 for any other terminal state, 2 for wait timeout.
+Wait timeout does not cancel work. Job timeout terminates its process groups.
+Timeout and cancellation send TERM once, then wait for the command to exit.
+`submit --grace SECONDS` sets the per-job delay before KILL (default 20 seconds).
+A command that exits during grace retains its actual exit code; the job state
+still records `timeout` or `cancelled`.
+
+At most one GPU or build job runs at once. CPU jobs can overlap builds; CPU jobs
+exclude GPU jobs unless submitted with `--allow-during-gpu`. This prevents the
+build/timing contamination seen in D029/D031. The rule works in both directions.
+Only commands admitted through this queue are covered by its exclusivity rules.
+
+State defaults to `lab/jobq/`: one JSON per job, append-only `events.jsonl`, a
+`lock`, and per-job logs. JSON records command PID/group, wrapper group, times,
+exit status, dependencies, and symmetric `concurrent_jobs` overlap history.
+A worker restart detects a dead job supervisor and fails the abandoned job.
+`JOBQ_DIR` overrides state storage; `JOBQ_RUN_OP` selects a test wrapper.
+Submit preserves the working directory and environment for execution, adding
+`JOBQ_JOB_ID` for container ownership labels.
+
+`bin/jobq reap-containers` inspects running/exited containers labelled `om=1`
+or `acc=1`, asks `jobq show` about `jobq_job` owners, and prints Docker removal
+commands for jobs that are absent or not running. Dry-run is the default;
+`--yes` executes removals. Containers without a job label are retained.
+`--dry-run` explicitly previews commands even if `--yes` is also present.
+Docker discovery is read-only during a dry run and respects `DOCKER_CMD_PREFIX`.
+
+Migration of `cc/om_run/pipeline6.sh` (run after the preceding pipeline's job):
+
+```sh
+O=experiments/jetson/SPEC2-$(date +%Y%m%d-%H%M)
+IMG=campaign/llamacpp:jetson-up1108
+prev=$pipeline5_job_id
+for arm in 'base 1' 'ngram-mod 1' 'ngram-mod 2' 'base 2'; do
+  set -- $arm
+  prev=$(bin/jobq submit --class gpu --after "$prev" \
+    --name "J-SPEC2-$1-r$2" --timeout 5400 -- \
+    python3 cc/om_spec/om_spec.py "$O/$1-r$2" "$IMG" "$1" "$2")
+done
+bin/jobq worker --once
+bin/jobq wait "$prev"
+```
+
+exec
+/bin/bash -lc "cat cc/abrun/test_abrun.py
+cat cc/abrun/test_page_cache.py
+sed -n '280,500p' cc/abrun/run_summary.py
+rg -n 'host_contention|contention|unsuccessful run|reasons|invalid' cc/abrun cc/om_run c2/launch_codex.sh
+ls -ld bin cc/om_run cc/abrun c2 && git branch --show-current" in /home/muk/projects/siminfeng-wb
+ succeeded in 0ms:
+"""CPU-only acceptance and failure-path tests; fixture writes are confined to tmp."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import statistics
+import subprocess
+import sys
+
+import pytest
+from cc.abrun import abrun, gate, preflight, run_summary
+
+ROOT = Path(__file__).resolve().parents[2]
+FIXTURE = ROOT / 'experiments/jetson/OM/om7-20261110-1555'
+HELP = (Path(__file__).parent / 'fixtures/llama-bench-help.txt').read_text()
+
+
+def test_real_base_summary(tmp_path):
+    target = tmp_path / 'base-a'
+    shutil.copytree(FIXTURE / 'base-a', target)
+    summary = run_summary.summarize(target)
+    assert summary['status'] == 'ok'
+    assert summary['eval_tps'] == 1.18
+    assert summary['prompt_tps'] == 5.69
+    assert summary['nvme_gib'] == pytest.approx(57.2, abs=0.5)
+    assert summary['avg_kib_per_io'] == pytest.approx(95, abs=3)
+    assert summary['load_s'] == pytest.approx(50.26553)
+    assert summary['eval_tokens'] == 63
+    assert summary['nvme_gib_per_token'] == summary['nvme_gib'] / 63
+    assert summary['output_sha'] == hashlib.sha256((target / 'stdout.txt').read_bytes()).hexdigest()[:12]
+    assert json.loads((target / 'summary.json').read_text()) == summary
+
+
+@pytest.mark.parametrize('arm', ['pf-a', 'pf-b'])
+def test_prefetch_fixture(tmp_path, arm):
+    target = tmp_path / arm
+    shutil.copytree(FIXTURE / arm, target)
+    summary = run_summary.summarize(target, [r'expert_prefetch:.*enabled'])
+    assert summary['avg_kib_per_io'] == pytest.approx(5, abs=1)
+    assert len(summary['switch_lines']) == 1
+
+
+def test_llama_bench(tmp_path):
+    source = ROOT / 'experiments/jetson/J-E007-unfuse-by-type/bf16-base-a.json'
+    shutil.copyfile(source, tmp_path / 'stdout.txt')
+    summary = run_summary.summarize(tmp_path)
+    row = json.loads(source.read_text())[0]
+    assert summary['eval_tps'] == row['avg_ts']
+    assert summary['tg_samples_ts'] == row['samples_ts']
+    assert summary['tg_steady'] == statistics.mean(row['samples_ts'][1:])
+    assert 'eval_tps' not in summary['reasons']
+
+
+def test_bench_pp_and_tg(tmp_path):
+    rows = [{'n_prompt': 64, 'n_gen': 0, 'avg_ts': 20, 'samples_ts': [10, 25, 25]},
+            {'n_prompt': 0, 'n_gen': 32, 'avg_ts': 5, 'samples_ts': [3, 6, 6]}]
+    (tmp_path / 'stdout.txt').write_text(json.dumps(rows))
+    s = run_summary.summarize(tmp_path, write=False)
+    assert (s['prompt_tps'], s['eval_tps'], s['pp_steady'], s['tg_steady']) == (20, 5, 25, 6)
+
+
+def test_last_perf_lines(tmp_path):
+    (tmp_path / 'stderr.txt').write_text('\n'.join([
+        'common_perf_print: prompt eval time = 12 ms / 2 tokens (1 tokens per second)',
+        'common_perf_print: eval time = 30 ms / 3 runs (2 tokens per second)',
+        'common_perf_print: prompt eval time = 12 ms / 2 tokens (7 tokens per second)',
+        'common_perf_print: eval time = 30 ms / 3 runs (8 tokens per second)']))
+    s = run_summary.summarize(tmp_path, write=False)
+    assert (s['prompt_tps'], s['eval_tps']) == (7, 8)
+
+
+def test_missing_and_malformed(tmp_path):
+    (tmp_path / 'result.json').write_text('oops')
+    (tmp_path / 'telemetry.jsonl').write_text('broken\nnull\n{"metrics":[null]}\n')
+    s = run_summary.summarize(tmp_path, write=False)
+    for key in ('status', 'wall_s', 'eval_tps', 'nvme_gib', 'avg_kib_per_io',
+                'mem_available_min_mib', 'swap_max_mib', 'gpu_freq_median', 'output_sha'):
+        assert s[key] is None
+        assert s['reasons'][key]
+    assert not (tmp_path / 'summary.json').exists()
+
+
+@pytest.mark.parametrize('unit,factor', [('KiB', 1), ('MiB', 1024)])
+def test_telemetry_units(tmp_path, unit, factor):
+    rows = []
+    for i in (0, 1, 2):
+        rows.append({'metrics': [
+            {'name': 'device_read', 'value': 100 + i * 1024 / factor, 'unit': unit},
+            {'name': 'device_read_ios', 'value': 10 + i * 16},
+            {'name': 'mem_available', 'value': 3000 - i, 'unit': 'MiB'},
+            {'name': 'swap_total', 'value': 4000, 'unit': 'MiB'},
+            {'name': 'swap_free', 'value': 3500 - i, 'unit': 'MiB'},
+            {'name': 'gpu_freq', 'value': [300, 900, 600][i], 'unit': 'MHz'}]})
+    (tmp_path / 'telemetry.jsonl').write_text('\n'.join(json.dumps(r) for r in rows))
+    s = run_summary.summarize(tmp_path, write=False)
+    assert s['nvme_gib'] == 2048 / 1024 ** 2
+    assert s['avg_kib_per_io'] == 64
+    assert s['mem_available_min_mib'] == 2998
+    assert s['swap_max_mib'] == 502
+    assert s['gpu_freq_median'] == 600
+
+
+def test_cli_no_write(tmp_path):
+    target = tmp_path / 'base'
+    shutil.copytree(FIXTURE / 'base-a', target)
+    (target / 'summary.json').unlink(missing_ok=True)
+    result = subprocess.run([sys.executable, str(Path(run_summary.__file__)), str(target),
+                             '--json', '--no-write'], capture_output=True, text=True, check=True)
+    assert json.loads(result.stdout)['eval_tps'] == 1.18
+    assert not (target / 'summary.json').exists()
+
+
+def runs(numbers, sha='aaa'):
+    return [{'eval_tps': n, 'output_sha': sha, 'status': 'ok'} for n in numbers]
+
+
+@pytest.mark.parametrize('b,expected', [(110, 'improved'), (102, 'null'), (90, 'regressed')])
+def test_gate_verdict(b, expected):
+    g = gate.evaluate({'base': runs([100, 100]), 'B': runs([b, b])})
+    assert g['comparisons']['B']['verdict'] == expected
+    assert g['comparisons']['B']['ratio'] == b / 100
+    assert g['inputs']['B'] == [b, b]
+    assert g['threshold'] == .03
+    assert g['output']['class'] == 'identical'
+
+
+def test_gate_noise_and_drift():
+    g = gate.evaluate({'base': runs([90, 110]), 'B': runs([120, 120])})
+    assert g['aa_gap'] == .2
+    assert g['drift'] == .2
+    assert g['drift_halves'] == [90, 110]
+    assert g['threshold'] == .4
+    assert g['comparisons']['B']['verdict'] == 'null'
+
+
+def test_output_differs():
+    g = gate.evaluate({'base': runs([1, 1]), 'B': runs([2, 2], 'bbb')})
+    assert g['output']['class'] == 'differs'
+    assert list(g['output']['differs']) == ['B']
+    assert len(g['output']['differs']['B']) == 2
+
+
+@pytest.mark.parametrize('bad', [None, 0, float('nan')])
+def test_missing_gate_metric(bad):
+    g = gate.evaluate({'base': runs([1, 1]), 'B': runs([bad, 2])})
+    assert g['reasons']
+    assert g['comparisons']['B']['verdict'] == 'null'
+
+
+def test_preflight_reject_and_cache(tmp_path):
+    calls = []
+    def fake(image, tool):
+        calls.append((image, tool))
+        return HELP
+    with pytest.raises(ValueError, match='unsupported flags: -c'):
+        preflight.check('img', 'llama-bench', ['-c', '4096'], fake, tmp_path)
+    preflight.check('img', 'llama-bench', ['-m', '/m', '-n', '32', '-ngl', '99', '--output=json'], fake, tmp_path)
+    assert calls == [('img', 'llama-bench')]
+    with pytest.raises(ValueError, match='--n-gpu'):
+        preflight.check('img', 'llama-bench', ['--n-gpu'], fake, tmp_path)
+    preflight.check('img2', 'llama-bench', ['-n', '-1'], fake, tmp_path)
+    assert len(calls) == 2
+
+
+def spec(tmp_path, count=2):
+    arms = {'base': {'image': 'test', 'env': {}},
+            'pf': {'image': 'test', 'env': {'SWITCH': '1'}, 'expect_switch': True}}
+    if count == 3:
+        arms['pfn'] = {'image': 'test', 'env': {'SWITCH': '2'}, 'expect_switch': True}
+    return {'id': 'test', 'outdir_base': str(tmp_path / 'outputs'), 'runner': 'om_run',
+            'tool': 'llama-bench', 'argv': ['-n', '32'], 'arms': arms,
+            'switch_regex': ['switch active'], 'metric': 'eval_tps',
+            'order': 'ABBA' if count == 2 else 'ABCCBA', 'rounds': 1}
+
+
+@pytest.mark.parametrize('count,order', [(2, ['base', 'pf', 'pf', 'base']),
+                                       (3, ['base', 'pf', 'pfn', 'pfn', 'pf', 'base'])])
+def test_dry_run(tmp_path, count, order):
+    s = spec(tmp_path, count)
+    path = tmp_path / 'spec.json'
+    path.write_text(json.dumps(s))
+    result = subprocess.run([sys.executable, str(Path(abrun.__file__)), str(path), '--dry-run'],
+                            capture_output=True, text=True, check=True)
+    assert result.stdout.splitlines()[0] == 'Order: ' + ', '.join(order)
+    assert sum(line.startswith('Run ') for line in result.stdout.splitlines()) == len(order)
+    assert not (tmp_path / 'outputs').exists()
+
+
+def test_rounds_explicit_and_mirrored(tmp_path):
+    s = spec(tmp_path, 3)
+    s.update(order='explicit', explicit_order=['base', 'pf', 'pfn'], rounds=2)
+    assert abrun.planned_order(s) == ['base', 'pf', 'pfn'] * 2
+    s['arms']['fourth'] = {'image': 'test', 'env': {}}
+    s.update(order='mirrored', rounds=1)
+    assert abrun.planned_order(s) == ['base', 'pf', 'pfn', 'fourth', 'fourth', 'pfn', 'pf', 'base']
+
+
+@pytest.mark.parametrize('mode,expected_count,status', [('inert', 2, 'INVALID'),
+                                                       ('leak', 1, 'INVALID'),
+                                                       ('ok', 4, 'completed'),
+                                                       ('fail', 1, 'INVALID')])
+def test_fake_execution(tmp_path, mode, expected_count, status):
+    s = spec(tmp_path)
+    path = tmp_path / 'spec.json'
+    path.write_text(json.dumps(s))
+    fake = tmp_path / 'runner.py'
+    fake.write_text('''import json, os, pathlib, sys
+out, image, env, tool, *argv = sys.argv[1:]
+p = pathlib.Path(out); p.mkdir(parents=True)
+mode = os.environ['TEST_MODE']
+active = (mode == 'ok' and 'SWITCH' in env) or mode == 'leak'
+(p/'stderr.txt').write_text(('switch active\\n' if active else '') + 'common_perf_print: eval time = 1000 ms / 10 runs (10 tokens per second)')
+(p/'stdout.txt').write_text('same output')
+(p/'result.json').write_text(json.dumps({'status':'failed' if mode=='fail' else 'ok', 'wall_s':1}))
+sys.exit(1 if mode=='fail' else 0)
+''')
+    helper = tmp_path / 'help.py'
+    helper.write_text('import pathlib,sys\np=pathlib.Path(__file__).with_suffix(".calls")\np.write_text(p.read_text()+"x" if p.exists() else "x")\nprint("-n --help")\n')
+    env = dict(os.environ, ABRUN_RUNNER=f'{sys.executable} {fake}',
+               ABRUN_PREFLIGHT_RUNNER=f'{sys.executable} {helper}',
+               ABRUN_PREFLIGHT_CACHE_DIR=str(tmp_path / 'help-cache'), TEST_MODE=mode)
+    result = subprocess.run([sys.executable, str(Path(abrun.__file__)), str(path)],
+                            capture_output=True, text=True, env=env)
+    out = tmp_path / 'outputs/test'
+    verdict = json.loads((out / 'verdict.json').read_text())
+    assert result.returncode == (0 if status == 'completed' else 1), result.stderr
+    assert verdict['status'] == status
+    assert len(verdict['executed_order']) == expected_count
+    assert len(list(out.glob('*/summary.json'))) == expected_count
+    assert (out / 'REPORT.md').exists()
+    assert helper.with_suffix('.calls').read_text() == 'x'
+    if mode == 'inert':
+        assert any('switch inert' in reason for reason in verdict['invalid_reasons'])
+    if mode == 'leak':
+        assert any('switch leaked' in reason for reason in verdict['invalid_reasons'])
+
+
+@pytest.mark.parametrize('b', [97, 103])
+def test_gate_strict_threshold(b):
+    g = gate.evaluate({'base': runs([100, 100]), 'B': runs([b, b])})
+    assert g['comparisons']['B']['verdict'] == 'null'
+
+
+def test_real_om7_gate(tmp_path):
+    grouped = {'base': [], 'pf': [], 'pfn': []}
+    expected = {'base-a': 1.18, 'base-b': 1.22, 'pf-a': .72, 'pf-b': .76,
+                'pfn-a': .64, 'pfn-b': .65}
+    for name in ['base-a', 'pf-a', 'pfn-a', 'pfn-b', 'pf-b', 'base-b']:
+        target = tmp_path / name
+        shutil.copytree(FIXTURE / name, target)
+        summary = run_summary.summarize(target, ['expert_prefetch:.*enabled'])
+        assert summary['eval_tps'] == expected[name]
+        arm = name.rsplit('-', 1)[0]
+        assert bool(summary['switch_lines']) == (arm != 'base')
+        grouped[arm].append(summary)
+    verdict = gate.evaluate(grouped)
+    assert verdict['means']['base'] == 1.2
+    assert verdict['output']['class'] == 'identical'
+    assert all(c['verdict'] == 'regressed' for c in verdict['comparisons'].values())
+
+
+def test_preflight_failure_report(tmp_path, monkeypatch):
+    s = spec(tmp_path)
+    out, plan = abrun.plan(s)
+    def reject(*args):
+        raise ValueError('unsupported flags: -n')
+    monkeypatch.setattr(preflight, 'check', reject)
+    assert abrun.execute(s, out, plan) == 1
+    verdict = json.loads((out / 'verdict.json').read_text())
+    assert verdict['status'] == 'INVALID'
+    assert verdict['executed_order'] == []
+    assert 'unsupported flags: -n' in verdict['invalid_reasons']
+    assert not list(out.glob('*/summary.json'))
+
+
+def test_submit_is_one_gpu_job(tmp_path, monkeypatch):
+    s = spec(tmp_path)
+    path = tmp_path / 'spec.json'
+    path.write_text(json.dumps(s))
+    calls = []
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+    # The submission adapter needs only existence; supply a temporary queue path.
+    fake_root = tmp_path / 'repo'
+    (fake_root / 'bin').mkdir(parents=True)
+    (fake_root / 'bin/jobq').touch()
+    monkeypatch.setattr(abrun, 'ROOT', fake_root)
+    monkeypatch.setattr(abrun.subprocess, 'run', fake_run)
+    monkeypatch.setattr(sys, 'argv', ['abrun.py', str(path), '--submit'])
+    assert abrun.main() == 0
+    assert len(calls) == 1
+    assert calls[0][1:6] == ['submit', '--class', 'gpu', '--name', 'test']
+    assert '--submit' not in calls[0]
+    assert not (tmp_path / 'outputs').exists()
+
+
+def test_per_arm_all_matches_and_legacy_or(tmp_path):
+    s = spec(tmp_path)
+    s['switch_regex'] = ['legacy active', 'legacy alternative']
+    s['arms']['pf']['switch_regex'] = ['fill enabled', 'random enabled']
+    abrun.validate(s)
+    (tmp_path / 'stderr.txt').write_text('legacy active\nfill enabled\nfill enabled\n')
+    summary = run_summary.summarize(tmp_path, abrun.switch_patterns(s), write=False)
+    assert summary['switch_matches'] == {'legacy active': 1, 'legacy alternative': 0,
+                                         'fill enabled': 2, 'random enabled': 0}
+    errors = abrun.switch_errors(s, 'pf', summary)
+    assert len(errors) == 1 and 'random enabled' in errors[0]
+    with (tmp_path / 'stderr.txt').open('a') as stream:
+        stream.write('random enabled\n')
+    summary = run_summary.summarize(tmp_path, abrun.switch_patterns(s), write=False)
+    assert abrun.switch_errors(s, 'pf', summary) == []
+    del s['switch_regex']
+    abrun.validate(s)  # Per-arm signatures alone suffice.
+    assert abrun.switch_errors(s, 'pf', summary) == []
+
+
+def test_cross_arm_leak_in_nonbase_control(tmp_path, monkeypatch):
+    s = spec(tmp_path, 3)
+    s.pop('switch_regex')
+    s['arms']['pf'].update(expect_switch=False)
+    s['arms']['pfn']['switch_regex'] = ['next prefetch enabled']
+    abrun.validate(s)
+    monkeypatch.setattr(preflight, 'check', lambda *args: None)
+    def fake_run(command, **kwargs):
+        directory = Path(command[-1])
+        directory.mkdir()
+        (directory/'stderr.txt').write_text(
+            ('next prefetch enabled\n' if directory.name.endswith('-pf') else '') +
+            'eval time = 1000 ms / 10 runs (10 tokens per second)\n')
+        (directory/'stdout.txt').write_text('same')
+        (directory/'result.json').write_text(json.dumps({'status': 'ok', 'wall_s': 1}))
+        return subprocess.CompletedProcess(command, 0)
+    monkeypatch.setattr(abrun.subprocess, 'run', fake_run)
+    out, planned = abrun.plan(s)
+    for row in planned:
+        row['command'] = ['fake-runner', row['dir']]
+    assert abrun.execute(s, out, planned) == 1
+    verdict = json.loads((out/'verdict.json').read_text())
+    assert verdict['executed_order'] == ['base', 'pf']
+    assert any('pf: switch leaked' in r for r in verdict['invalid_reasons'])
+    report = (out/'REPORT.md').read_text()
+    assert 'Switch matches' in report and 'next prefetch enabled' in report
+    assert 'Secondary metrics' in report
+
+
+def test_regate_exclude_and_preserve_data(tmp_path):
+    from cc.abrun import regate
+    s = spec(tmp_path)
+    s.pop('switch_regex')
+    s['arms']['pf']['expect_switch'] = False
+    (tmp_path/'spec.json').write_text(json.dumps(s))
+    for run_id, speed in [('001-base', 50), ('002-pf', 110), ('003-pf', 110), ('004-base', 100)]:
+        directory = tmp_path/run_id
+        directory.mkdir()
+        summary = runs([speed])[0]
+        summary.update(prompt_tps=20, nvme_gib_per_token=.5, switch_matches={}, switch_lines=[])
+        (directory/'summary.json').write_text(json.dumps(summary))
+    original = {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    assert regate.recompute(tmp_path)['comparisons']['pf']['verdict'] == 'null'
+    args = [sys.executable, regate.__file__, str(tmp_path), '--exclude', '001-base',
+            '--reason', 'overlap', '--metric', 'eval_tps']
+    result = subprocess.run([*args, '--no-write'], capture_output=True, text=True, check=True)
+    verdict = json.loads(result.stdout)
+    assert verdict['excluded_runs'] == ['001-base']
+    assert verdict['reason'] == 'overlap'
+    assert verdict['comparisons']['pf']['verdict'] == 'improved'
+    assert verdict['secondary_metrics']['pf'] == dict(nvme_gib_per_token=.5, prompt_tps=20, eval_tps=110,
+        eval_ms_per_token=None, nvme_gib_per_token_decode=None, gpu_util_median=None, energy_j_per_token=None,
+        **{'threads.cpu_workers_r_fraction': None, 'threads.main_workers_d_fraction': None,
+           'threads.majflt_per_token': None})
+    assert not (tmp_path/'verdict-regate.json').exists()
+    subprocess.run(args, capture_output=True, text=True, check=True)
+    assert json.loads((tmp_path/'verdict-regate.json').read_text()) == verdict
+    assert all(p.read_bytes() == content for p, content in original.items())
+    with pytest.raises(ValueError, match='unknown excluded'):
+        regate.recompute(tmp_path, ['999-typo'])
+
+
+def test_secondary_metrics_do_not_affect_gate():
+    arms = {'base': runs([100, 100]), 'pf': runs([110, 110])}
+    for arm in arms.values():
+        arm[0].update(nvme_gib_per_token=2, prompt_tps=10)
+        arm[1].update(nvme_gib_per_token=4, prompt_tps=None)
+    verdict = gate.evaluate(arms)
+    assert verdict['comparisons']['pf']['verdict'] == 'improved'
+    assert verdict['secondary_metrics']['pf'] == dict(nvme_gib_per_token=3, prompt_tps=10, eval_tps=110,
+        eval_ms_per_token=None, nvme_gib_per_token_decode=None, gpu_util_median=None, energy_j_per_token=None,
+        **{'threads.cpu_workers_r_fraction': None, 'threads.main_workers_d_fraction': None,
+           'threads.majflt_per_token': None})
+
+
+CAPTURED = Path(__file__).parent / 'tests/fixtures/J-OM10c-003-pg8i8'
+
+
+def test_captured_h5_metrics_and_provenance():
+    source = ROOT / 'experiments/jetson/OM/J-OM10c/003-pg8i8'
+    for name in ('stderr.txt', 'telemetry.jsonl'):
+        original = set((source / name).read_text().splitlines())
+        assert set((CAPTURED / name).read_text().splitlines()) <= original
+    s = run_summary.summarize(CAPTURED, write=False)
+    assert s['eval_ms_per_token'] == 716.54
+    assert s['prompt_ms_per_token'] == 174.41
+    assert s['eval_ms_total'] == 45141.77
+    assert s['eval_runs'] == 63
+    assert s['load_ms'] == 60357.82
+    assert s['eval_tps'] == 1.4
+    window = s['phase_windows']
+    assert window['decode_end'] - window['decode_start'] == pytest.approx(45.14177)
+    assert window['absolute_error_bound_s'] is None  # No absolute log origin was captured.
+    assert s['nvme_gib_per_token_decode'] == s['nvme_gib_decode'] / s['eval_runs']
+    assert 0 < s['nvme_gib_per_token_decode'] < s['nvme_gib_per_token']
+    assert s['nvme_gib_load'] > 0
+    assert s['gpu_util_median'] == 18
+    assert s['gpu_util_p90'] == 36
+    assert s['power_in_w_median'] == 7.158
+    assert s['temp_tj_max'] == 52.093
+    assert 0 < s['device_util_median'] <= 100
+    assert s['energy_j_per_token'] == pytest.approx(5.130958057657607)
+    # The trimmed capture preserves the same clock endpoints and phase results.
+    full = run_summary.summarize(source, write=False)
+    for field in ('nvme_gib_decode', 'nvme_gib_load', 'energy_j_per_token',
+                  'gpu_util_median', 'device_util_median'):
+        assert s[field] == full[field]
+
+
+def test_captured_window_integration(tmp_path):
+    # Use actual power and counter samples, truncating only stderr-free metadata.
+    shutil.copytree(CAPTURED, tmp_path / 'run')
+    s = run_summary.summarize(tmp_path / 'run', write=False)
+    rows = [json.loads(line) for line in (CAPTURED / 'telemetry.jsonl').read_text().splitlines()]
+    lo, hi = s['phase_windows']['decode_start'], s['phase_windows']['decode_end']
+    def points(name):
+        return sorted((r['mono_s'], m['value'] * ({'B': 1, 'KiB': 1024, 'MiB': 1024**2, 'GiB': 1024**3}[m['unit']]
+                      if name == 'device_read' else 1))
+                      for r in rows for m in r['metrics'] if m['name'] == name)
+    def integral(samples):
+        total = 0
+        for (a, x), (b, y) in zip(samples, samples[1:]):
+            left, right = max(a, lo), min(b, hi)
+            if right > left:
+                vl = x + (y-x) * (left-a) / (b-a)
+                vr = x + (y-x) * (right-a) / (b-a)
+                total += (right-left) * (vl+vr) / 2
+        return total
+    assert s['energy_j_per_token'] == pytest.approx(integral(points('power_VDD_IN_instant')) / 1000 / s['eval_runs'])
+    reads = points('device_read')
+    # Cumulative-counter delta equals integrated interval read rate.
+    delta = sum((y-x) * max(0, min(b, hi)-max(a, lo)) / (b-a)
+                for (a,x),(b,y) in zip(reads, reads[1:]))
+    assert s['nvme_gib_decode'] == pytest.approx(delta / 1024**3)
+
+
+def test_lower_gate_and_default_spec(tmp_path):
+    s = spec(tmp_path)
+    s.pop('metric')
+    abrun.validate(s)
+    s['direction'] = 'sideways'
+    with pytest.raises(ValueError, match='direction'):
+        abrun.validate(s)
+    base = run_summary.summarize(ROOT / 'experiments/jetson/OM/J-OM10c/001-base', write=False)
+    pg = run_summary.summarize(CAPTURED, write=False)
+    verdict = gate.evaluate({'base': [base, base], 'pg': [pg, pg]}, 'eval_ms_per_token', direction='lower')
+    c = verdict['comparisons']['pg']
+    assert c['ratio'] == base['eval_ms_per_token'] / pg['eval_ms_per_token']
+    assert c['verdict'] == 'improved'
+    reversed_gate = gate.evaluate({'base': [pg, pg], 'pg': [base, base]}, 'eval_ms_per_token')
+    assert reversed_gate['comparisons']['pg']['verdict'] == 'regressed'
+
+
+def test_real_regate_dry_recomputes_without_writes(tmp_path):
+    from cc.abrun import regate
+    source = ROOT / 'experiments/jetson/OM/J-OM10c'
+    original = {p: hashlib.sha256(p.read_bytes()).digest() for p in source.rglob('*') if p.is_file()}
+    result = subprocess.run([sys.executable, regate.__file__, str(source), '--dry'],
+                            capture_output=True, text=True, check=True)
+    assert 'ms/token' in result.stdout and '| base | 840.975 |' in result.stdout
+    assert '| pg8i8 | 720.34 |' in result.stdout
+    verdict = regate.recompute(source, metric='eval_ms_per_token')
+    assert verdict['direction'] == 'lower'
+    assert verdict['inputs']['pg8i8'][0] == 716.54
+    assert all(c['verdict'] == 'improved' for c in verdict['comparisons'].values())
+    assert original == {p: hashlib.sha256(p.read_bytes()).digest() for p in source.rglob('*') if p.is_file()}
+    # A spec without a primary metric selects the new precise default.
+    spec_data = json.loads((source / 'spec.json').read_text())
+    spec_data.pop('metric')
+    (tmp_path / 'spec.json').write_text(json.dumps(spec_data))
+    shutil.copytree(CAPTURED, tmp_path / '001-pg8i8')
+    summary = run_summary.summarize(tmp_path / '001-pg8i8')
+    verdict = regate.recompute(tmp_path)
+    assert verdict['metric'] == 'eval_ms_per_token'
+"""Cache protocol planning, observations, and descriptive confound reporting."""
+import json
+
+import pytest
+
+from cc.abrun import abrun, gate, regate, run_summary
+
+
+def spec(tmp_path, **kwargs):
+    return dict(id='cache', outdir_base=str(tmp_path), runner='om_run', tool='llama-bench',
+                argv=['-m', '/om/model.gguf'], arms={'base': {'image': 'test'},
+                'other': {'image': 'test'}}, order='ABBA', **kwargs)
+
+
+@pytest.mark.parametrize('protocol', [None, 'carryover', 'cold', 'warm'])
+def test_protocol_plan(tmp_path, monkeypatch, protocol):
+    monkeypatch.setenv('ABRUN_RUNNER', '/fake/runner')
+    s = spec(tmp_path)
+    if protocol is not None:
+        s['cache_protocol'] = protocol
+    if protocol == 'warm':
+        s['cache_warm_bytes'] = 4096
+    abrun.validate(s)
+    _, planned = abrun.plan(s)
+    for row in planned:
+        assert f'OM_CACHE_PROTOCOL={protocol or "carryover"}' in row['command']
+        if protocol == 'warm':
+            assert 'OM_CACHE_WARM_BYTES=4096' in row['command']
+
+
+@pytest.mark.parametrize('extra', [dict(cache_protocol='hot'), dict(cache_protocol=[]),
+                                  dict(cache_warm_bytes=-1), dict(cache_warm_bytes=True),
+                                  dict(cache_warm_ranges=''),
+                                  dict(cache_warm_bytes=1, cache_warm_ranges='r.json')])
+def test_invalid_cache_spec(tmp_path, extra):
+    with pytest.raises(ValueError):
+        abrun.validate(spec(tmp_path, **extra))
+
+
+@pytest.mark.parametrize('value,expected', [(23.5, 23.5), (0, 0), (None, None),
+                                         (101, None), (True, None)])
+def test_cache_summary(tmp_path, value, expected):
+    (tmp_path / 'page_cache.start.json').write_text(json.dumps(dict(resident_pct=value)))
+    (tmp_path / 'page_cache.end.json').write_text('{broken')
+    summary = run_summary.summarize(tmp_path, write=False)
+    assert summary['cache_start_resident_pct'] == expected
+    assert summary['cache_end_resident_pct'] is None
+    assert 'cache_end_resident_pct' in summary['reasons']
+
+
+@pytest.mark.parametrize('gap,flag', [(10, False), (10.01, True), (0, False)])
+def test_cache_confound_does_not_change_gate(gap, flag):
+    arms = {'base': [dict(eval_tps=100, cache_start_resident_pct=p) for p in (10, 20)],
+            'other': [dict(eval_tps=120, cache_start_resident_pct=p + gap) for p in (10, 20)]}
+    plain = gate.evaluate({a: [dict(eval_tps=r['eval_tps']) for r in rs] for a, rs in arms.items()})
+    verdict = gate.evaluate(arms)
+    assert bool(verdict['cache_confound']) == flag
+    assert {k: v for k, v in verdict.items() if k != 'cache_confound'} == {
+        k: v for k, v in plain.items() if k != 'cache_confound'}
+
+
+def test_report_and_regate_protocol(tmp_path):
+    s = spec(tmp_path, cache_protocol='cold')
+    (tmp_path / 'spec.json').write_text(json.dumps(s))
+    for arm, pct in [('base', 0), ('other', 30)]:
+        directory = tmp_path / f'001-{arm}'
+        directory.mkdir()
+        (directory / 'summary.json').write_text(json.dumps(dict(
+            status='ok', wall_s=1, output_sha='same', eval_tps=100,
+            eval_ms_per_token=10, cache_start_resident_pct=pct)))
+    verdict = regate.recompute(tmp_path)
+    assert verdict['cache_protocol'] == 'cold'
+    assert verdict['cache_confound']
+    abrun.write_report(tmp_path, s, [dict(index=1, arm='base', summary=dict(
+        status='ok', wall_s=1, output_sha='same', cache_start_resident_pct=0,
+        cache_end_resident_pct=30))], verdict)
+    report = (tmp_path / 'REPORT.md').read_text()
+    assert 'Page-cache protocol: cold' in report
+    assert 'Cache start resident %' in report and 'Cache end resident %' in report
+    assert 'cache_confound' in report
+        'need covered instant VDD_IN power, decode timing and positive eval_runs')
+    # Use the thread capture's own last sample as the exit endpoint, like telemetry.
+    thread_path = directory / 'threads.jsonl'
+    thread_summary = None
+    if thread_path.exists():
+        try:
+            from cc.thread_sampler.thread_sampler import aggregate
+            thread_summary = aggregate(thread_path, result['eval_ms_total'], result['eval_runs'])
+            if write:
+                (directory / 'threads.summary.json').write_text(json.dumps(thread_summary, indent=2) + '\n')
+        except (OSError, ValueError, KeyError) as exc:
+            result['warnings'].append(f'threads: {exc}')
+    elif (directory / 'threads.summary.json').exists():
+        try:
+            thread_summary = json.loads((directory / 'threads.summary.json').read_text())
+        except (OSError, ValueError) as exc:
+            result['warnings'].append(f'threads: {exc}')
+    for field in ('cpu_workers_r_fraction', 'main_workers_d_fraction', 'majflt_per_token'):
+        value = thread_summary.get(field) if isinstance(thread_summary, dict) else None
+        put('threads.' + field, value, 'thread capture or decode window unavailable')
+    if write:
+        try:
+            (directory / 'summary.json').write_text(json.dumps(result, indent=2) + '\n')
+        except OSError as exc:
+            result['warnings'].append(f'cannot write summary.json: {exc.strerror}')
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('dirs', nargs='+')
+    parser.add_argument('--json', action='store_true')
+    parser.add_argument('--no-write', action='store_true')
+    parser.add_argument('--switch-regex', action='append', default=[])
+    args = parser.parse_args()
+    summaries = [summarize(d, args.switch_regex, not args.no_write) for d in args.dirs]
+    if args.json:
+        print(json.dumps(summaries[0] if len(summaries) == 1 else summaries, indent=2))
+    else:
+        for summary in summaries:
+            print(json.dumps(summary))
+
+
+if __name__ == '__main__':
+    main()
+cc/abrun/README.md:93:MHz. Missing metrics are null with entries in `reasons`. `--no-write` prevents
+cc/abrun/README.md:153:`nvme_gib_per_token` remains the whole-run value. Counter resets invalidate phase
+cc/abrun/test_abrun.py:52:    assert 'eval_tps' not in summary['reasons']
+cc/abrun/test_abrun.py:80:        assert s['reasons'][key]
+cc/abrun/test_abrun.py:147:    assert g['reasons']
+cc/abrun/test_abrun.py:234:        assert any('switch inert' in reason for reason in verdict['invalid_reasons'])
+cc/abrun/test_abrun.py:236:        assert any('switch leaked' in reason for reason in verdict['invalid_reasons'])
+cc/abrun/test_abrun.py:273:    assert 'unsupported flags: -n' in verdict['invalid_reasons']
+cc/abrun/test_abrun.py:342:    assert any('pf: switch leaked' in r for r in verdict['invalid_reasons'])
+cc/abrun/test_page_cache.py:35:def test_invalid_cache_spec(tmp_path, extra):
+cc/abrun/test_page_cache.py:48:    assert 'cache_end_resident_pct' in summary['reasons']
+cc/abrun/abrun.py:55:            raise ValueError('invalid arm')
+cc/abrun/abrun.py:192:              *verdict.get('invalid_reasons', []), *verdict.get('reasons', [])]
+cc/abrun/abrun.py:201:    completed, invalid = [], []
+cc/abrun/abrun.py:216:            invalid.extend(switch_errors(spec, run['arm'], summary))
+cc/abrun/abrun.py:218:                invalid.append(f"{run['arm']}: runner rc={rc}, status={summary['status']}")
+cc/abrun/abrun.py:219:            if invalid:
+cc/abrun/abrun.py:222:        invalid.append(str(exc))
+cc/abrun/abrun.py:224:    if verdict['reasons']:
+cc/abrun/abrun.py:225:        invalid.extend(verdict['reasons'])
+cc/abrun/abrun.py:226:    verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+cc/abrun/abrun.py:230:    if invalid:
+cc/abrun/abrun.py:235:    return 1 if invalid else 0
+cc/abrun/tests/test_threads.py:56:    assert 'unsupported flags: -t' in v['invalid_reasons']
+cc/abrun/run_summary.py:22:    result = {'dir': str(directory), 'reasons': {}, 'warnings': []}
+cc/abrun/run_summary.py:27:            result['reasons'][key] = reason
+cc/abrun/run_summary.py:29:            result['reasons'].pop(key, None)
+cc/abrun/run_summary.py:44:    put('status', record.get('status'), 'result.json status missing or invalid')
+cc/abrun/run_summary.py:52:            value, error = None, 'invalid page-cache JSON'
+cc/abrun/run_summary.py:68:            result['warnings'].append(f'invalid switch regex {pattern!r}: {exc}')
+cc/abrun/run_summary.py:84:        put(metric, value, 'performance line absent or invalid')
+cc/abrun/run_summary.py:95:            'performance line absent or invalid')
+cc/abrun/test_effective_config.py:46:    invalid = copy.deepcopy(spec)
+cc/abrun/test_effective_config.py:47:    invalid['arms']['base']['switch_regex_is_config'] = 'true'
+cc/abrun/test_effective_config.py:49:        abrun.validate(invalid)
+cc/abrun/regate.py:25:    included, invalid = [], []
+cc/abrun/regate.py:42:        invalid.extend(f'{run_id}: {error}' for error in abrun.switch_errors(spec, arm, summary))
+cc/abrun/regate.py:47:    invalid.extend(verdict['reasons'])
+cc/abrun/regate.py:48:    verdict.update(status='INVALID' if invalid else 'completed', invalid_reasons=invalid,
+cc/abrun/regate.py:51:    if invalid:
+cc/abrun/gate.py:44:    reasons = []
+cc/abrun/gate.py:51:            reasons.append(f'{arm}: missing/nonpositive/nonfinite {metric}')
+cc/abrun/gate.py:53:            reasons.append(f'{arm}: unsuccessful run')
+cc/abrun/gate.py:64:        reasons.append(f'base arm {base!r} absent')
+cc/abrun/gate.py:74:        if ratio is not None and not reasons:
+cc/abrun/gate.py:117:            'reasons': reasons}
+drwxrwxr-x 2 muk muk 4096 Nov 12 19:57 bin
+drwxrwxr-x 3 muk muk 4096 Nov 12 19:57 c2
+drwxrwxr-x 5 muk muk 4096 Nov 12 19:57 cc/abrun
+drwxrwxr-x 2 muk muk 4096 Nov 12 19:57 cc/om_run
+c2/heavy-guard
+
+codex
+`jobq` stores combined output in per-job logs and the exit code in the job record. `heavy` can use those after `jobq wait` completes; it will rely on an existing queue worker. I’ll add a lightweight `/proc` sampler and make any detected contention invalidate scoring.
+apply patch
+patch: completed
+/home/muk/projects/siminfeng-wb/bin/README-jobq.md
+/home/muk/projects/siminfeng-wb/bin/heavy
+/home/muk/projects/siminfeng-wb/c2/launch_codex.sh
+/home/muk/projects/siminfeng-wb/cc/abrun/gate.py
+/home/muk/projects/siminfeng-wb/cc/abrun/run_summary.py
+/home/muk/projects/siminfeng-wb/cc/om_run/contention.py
+/home/muk/projects/siminfeng-wb/cc/om_run/om_run.sh
+diff --git a/bin/README-jobq.md b/bin/README-jobq.md
+index 2d3d1001bf3ed76f8935e60971388fd30d0401c6..eb8fe369ee92ee35a365dda0538d5cf213f89282
+--- a/bin/README-jobq.md
++++ b/bin/README-jobq.md
+@@ -34,6 +34,9 @@
+ exit status, dependencies, and symmetric `concurrent_jobs` overlap history.
+ A worker restart detects a dead job supervisor and fails the abandoned job.
+ `JOBQ_DIR` overrides state storage; `JOBQ_RUN_OP` selects a test wrapper.
++`bin/heavy [--name NAME] [--timeout SECONDS] -- COMMAND ...` submits a build,
++waits for completion, prints the job log path and its last 80 lines, and returns
++the command exit code. It uses the same `JOBQ_DIR` and requires a running worker.
+ Submit preserves the working directory and environment for execution, adding
+ `JOBQ_JOB_ID` for container ownership labels.
+ 
+diff --git a/bin/heavy b/bin/heavy
+new file mode 100644
+index 0000000000000000000000000000000000000000..53b42156690900e556bbc300a34a2bc5c3ab0dc0
+--- /dev/null
++++ b/bin/heavy
+@@ -0,0 +1,53 @@
++#!/usr/bin/env python3
++"""Submit a build to jobq and wait for its output (requires a jobq worker)."""
++import argparse
++from collections import deque
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++
++ROOT = Path(__file__).resolve().parent.parent
++JOBQ = ROOT / 'bin/jobq'
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--name')
++    parser.add_argument('--timeout', help='job execution timeout in seconds')
++    parser.add_argument('argv', nargs=argparse.REMAINDER)
++    args = parser.parse_args()
++    argv = args.argv[1:] if args.argv[:1] == ['--'] else args.argv
++    if not argv:
++        parser.error('command required after --')
++    submit = [str(JOBQ), 'submit', '--class', 'build']
++    for key in ('name', 'timeout'):
++        value = getattr(args, key)
++        if value is not None:
++            submit.extend(['--' + key, value])
++    job = subprocess.run([*submit, '--', *argv], capture_output=True, text=True)
++    if job.returncode:
++        sys.stderr.write(job.stderr)
++        return job.returncode
++    jid = job.stdout.strip()
++    waited = subprocess.run([str(JOBQ), 'wait', jid])
++    state = Path(os.environ.get('JOBQ_DIR', ROOT / 'lab/jobq')).resolve()
++    record = json.loads((state / (jid + '.json')).read_text())
++    log = state / (jid + '.log')
++    print(f'jobq log: {log}', flush=True)
++    if log.exists():
++        with log.open(errors='replace') as stream:
++            sys.stdout.write(''.join(deque(stream, maxlen=80)))
++    rc = record.get('rc')
++    if rc is None:
++        return waited.returncode or 1
++    return rc if rc >= 0 else 128 - rc
++
++
++if __name__ == '__main__':
++    try:
++        sys.exit(main())
++    except (OSError, ValueError) as exc:
++        print(f'heavy: {exc}', file=sys.stderr)
++        sys.exit(1)
+diff --git a/c2/launch_codex.sh b/c2/launch_codex.sh
+index a29afa665f11016a915843466560daa0b1262648..cf35c545d8e7fa7c07414e0d76d593e69b2d4228
+--- a/c2/launch_codex.sh
++++ b/c2/launch_codex.sh
+@@ -5,10 +5,11 @@
+ mkdir -p artifacts/codex
+ S=$(date -u +%FT%TZ); S0=$(date +%s)
+ echo "{\"event\":\"start\",\"task\":\"$T\",\"worker\":\"codex\",\"assignment\":\"$A\",\"ts\":\"$S\"}" >> c2/worklog.jsonl
+-codex exec ${CODEX_ARGS:-} -s workspace-write -C "${CODEX_CWD:-$PWD}" --add-dir /tmp ${CODEX_ADD_DIR:+--add-dir "$CODEX_ADD_DIR"} -o artifacts/codex/$T.final.txt \
++codex exec ${CODEX_ARGS:-} -s workspace-write -C "${CODEX_CWD:-$PWD}" --add-dir /tmp --add-dir /home/muk/projects/siminfeng/lab/jobq ${CODEX_ADD_DIR:+--add-dir "$CODEX_ADD_DIR"} -o artifacts/codex/$T.final.txt \
+   "$(cat $A)
+ $X
+-You are a Codex worker (siminfeng c2 / Satay factory). Follow the assignment exactly; acceptance commands will be run verbatim by a checker." \
++You are a Codex worker (siminfeng c2 / Satay factory). Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
++Any compile/build (cmake, make, nvcc, cargo) MUST run via /home/muk/projects/siminfeng/bin/heavy so it is serialized with lab jobs." \
+   < /dev/null > artifacts/codex/$T.log 2>&1
+ RC=$?
+ TOK=$(grep -A1 -i 'tokens used' artifacts/codex/$T.log | tail -1 | tr -dc 0-9)
+diff --git a/cc/abrun/gate.py b/cc/abrun/gate.py
+index 34393f53cafbec612532bee7cc6e199fed8acd04..e7039707e587a8b8d16745cdc63be414bc7434e6
+--- a/cc/abrun/gate.py
++++ b/cc/abrun/gate.py
+@@ -51,6 +51,8 @@
+             reasons.append(f'{arm}: missing/nonpositive/nonfinite {metric}')
+         if any(r.get('status', 'ok') != 'ok' for r in arms[arm]):
+             reasons.append(f'{arm}: unsuccessful run')
++        if any(r.get('host_contention') for r in arms[arm]):
++            reasons.append(f'{arm}: host_contention')
+     base_values = inputs.get(base, [])
+     drift_halves = None
+     drift = None
+diff --git a/cc/abrun/run_summary.py b/cc/abrun/run_summary.py
+index 4a18d861b354d4392a433626a10cd9bd21c36a3c..28fc95b62d4c8317afa4ff4135fea2e0b4726e19
+--- a/cc/abrun/run_summary.py
++++ b/cc/abrun/run_summary.py
+@@ -43,6 +43,17 @@
+         record = {}
+     put('status', record.get('status'), 'result.json status missing or invalid')
+     put('wall_s', record.get('wall_s') if numeric(record.get('wall_s')) else None)
++    contention = {}
++    if (directory / 'contention.json').exists():
++        try:
++            contention = json.loads(read('contention.json'))
++            if not isinstance(contention, dict):
++                contention = {}
++        except (ValueError, TypeError):
++            result['warnings'].append('invalid contention.json')
++    count = contention.get('max_foreign_heavy', 0)
++    result['max_foreign_heavy'] = count if numeric(count) and count >= 0 else 0
++    result['host_contention'] = result['max_foreign_heavy'] > 0
+     for phase in ('start', 'end'):
+         try:
+             cache = json.loads(read(f'page_cache.{phase}.json'))
+diff --git a/cc/om_run/contention.py b/cc/om_run/contention.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..e4ecf6a15b62474d91bfb3e3ce05b5ef2aec7b5e
+--- /dev/null
++++ b/cc/om_run/contention.py
+@@ -0,0 +1,61 @@
++#!/usr/bin/env python3
++"""Sample visible foreign build processes without inspecting their command lines."""
++import json
++from pathlib import Path
++import signal
++import sys
++import threading
++import time
++
++HEAVY = {'cc1plus', 'cc1', 'cicc', 'ptxas', 'nvcc', 'ld', 'ld.bfd', 'ld.gold',
++         'cmake', 'ninja', 'make', 'cargo', 'rustc'}
++
++
++def foreign_heavy(run_pid, proc=Path('/proc')):
++    processes = {}
++    children = {}
++    for path in proc.iterdir():
++        if not path.name.isdigit():
++            continue
++        try:
++            head, tail = (path / 'stat').read_text().rsplit(')', 1)
++            fields = tail.split()
++            if fields[0] in ('Z', 'X'):
++                continue
++            pid, ppid = int(path.name), int(fields[1])
++            processes[pid] = dict(pid=pid, ppid=ppid, comm=head.partition('(')[2],
++                                  uid=path.stat().st_uid)
++            children.setdefault(ppid, []).append(pid)
++        except (OSError, ValueError, IndexError):
++            continue  # Processes may exit or be unreadable during a snapshot.
++    descendants = set()
++    pending = [run_pid]
++    while pending:
++        pid = pending.pop()
++        if pid not in descendants:
++            descendants.add(pid)
++            pending.extend(children.get(pid, []))
++    return [p for pid, p in sorted(processes.items())
++            if pid not in descendants and p['comm'] in HEAVY]
++
++
++def main():
++    output, run_pid = Path(sys.argv[1]), int(sys.argv[2])
++    stopped = threading.Event()
++    for sig in (signal.SIGTERM, signal.SIGINT):
++        signal.signal(sig, lambda *_: stopped.set())
++    record = dict(max_foreign_heavy=0, names=[], samples=[])
++    while True:
++        foreign = foreign_heavy(run_pid)
++        record['samples'].append(dict(time=time.time(), foreign_heavy=foreign))
++        record['max_foreign_heavy'] = max(record['max_foreign_heavy'], len(foreign))
++        record['names'] = sorted(set(record['names']) | {p['comm'] for p in foreign})
++        tmp = output.with_suffix('.tmp')
++        tmp.write_text(json.dumps(record, indent=2) + '\n')
++        tmp.replace(output)
++        if stopped.wait(3):
++            break
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/cc/om_run/om_run.sh b/cc/om_run/om_run.sh
+index efc1aeae1a43317d6cc6a59287cf5cb04dd6da47..9b3efc0d0976b1dbb7fb64956426cc41b2e548e3
+--- a/cc/om_run/om_run.sh
++++ b/cc/om_run/om_run.sh
+@@ -27,8 +27,19 @@
+ # warm uses OM_CACHE_WARM_RANGES (host JSON) or OM_CACHE_WARM_BYTES (prefix).
+ OM_CACHE_ARGV=("$@")
+ om_cache_record(){ python3 "$R/cc/page_cache/run_protocol.py" "$1" "$OUT" "$MODELDIR" "${OM_CACHE_ARGV[@]}"; }
+-trap 'om_cache_record end || echo "page-cache end recording failed" >&2' EXIT
++CG=
++om_cleanup(){
++    if [ -n "$CG" ]; then kill "$CG" 2>/dev/null; wait "$CG" 2>/dev/null; fi
++    om_cache_record end || echo "page-cache end recording failed" >&2
++}
++trap om_cleanup EXIT
+ om_cache_record start || { echo "CACHE_PROTOCOL_FAIL" > "$OUT/status"; exit 2; }
++# Take the first snapshot before engine startup; stop sampling as soon as it exits.
++rm -f "$OUT/contention.json"
++if [ "${OM_CONTENTION_GUARD:-1}" != 0 ]; then
++    python3 "$R/cc/om_run/contention.py" "$OUT/contention.json" "$$" & CG=$!
++    while [ ! -s "$OUT/contention.json" ] && kill -0 "$CG" 2>/dev/null; do sleep .02; done
++fi
+ dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
+    -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro $NSYS_MOUNT "$IMG" $NSYS_PREFIX /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
+ if [ "${OM_THREADS:-0}" = 1 ]; then
+@@ -43,6 +54,7 @@
+    --duration-s ${OM_MAX_S:-1800} --out "$OUT/telemetry.jsonl" >/dev/null 2>&1 & SM=$!
+ T0=$(date +%s.%N)
+ RC=$(dk wait "$NAME"); T1=$(date +%s.%N)
++if [ -n "$CG" ]; then kill "$CG" 2>/dev/null; wait "$CG" 2>/dev/null; CG=; fi
+ kill $WD $SM 2>/dev/null; wait $WD 2>/dev/null; WDRC=$?
+ dk logs "$NAME" > "$OUT/stdout.txt" 2> "$OUT/stderr.txt"
+ if [ "${OM_THREADS:-0}" = 1 ]; then
+
+exec
+/bin/bash -lc 'chmod +x bin/heavy' in /home/muk/projects/siminfeng-wb
+ succeeded in 0ms:
+apply patch
+patch: completed
+/home/muk/projects/siminfeng-wb/bin/test_heavy.py
+/home/muk/projects/siminfeng-wb/cc/abrun/test_contention.py
+diff --git a/bin/README-jobq.md b/bin/README-jobq.md
+index 2d3d1001bf3ed76f8935e60971388fd30d0401c6..eb8fe369ee92ee35a365dda0538d5cf213f89282
+--- a/bin/README-jobq.md
++++ b/bin/README-jobq.md
+@@ -34,6 +34,9 @@
+ exit status, dependencies, and symmetric `concurrent_jobs` overlap history.
+ A worker restart detects a dead job supervisor and fails the abandoned job.
+ `JOBQ_DIR` overrides state storage; `JOBQ_RUN_OP` selects a test wrapper.
++`bin/heavy [--name NAME] [--timeout SECONDS] -- COMMAND ...` submits a build,
++waits for completion, prints the job log path and its last 80 lines, and returns
++the command exit code. It uses the same `JOBQ_DIR` and requires a running worker.
+ Submit preserves the working directory and environment for execution, adding
+ `JOBQ_JOB_ID` for container ownership labels.
+ 
+diff --git a/bin/heavy b/bin/heavy
+new file mode 100644
+index 0000000000000000000000000000000000000000..53b42156690900e556bbc300a34a2bc5c3ab0dc0
+--- /dev/null
++++ b/bin/heavy
+@@ -0,0 +1,53 @@
++#!/usr/bin/env python3
++"""Submit a build to jobq and wait for its output (requires a jobq worker)."""
++import argparse
++from collections import deque
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++
++ROOT = Path(__file__).resolve().parent.parent
++JOBQ = ROOT / 'bin/jobq'
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--name')
++    parser.add_argument('--timeout', help='job execution timeout in seconds')
++    parser.add_argument('argv', nargs=argparse.REMAINDER)
++    args = parser.parse_args()
++    argv = args.argv[1:] if args.argv[:1] == ['--'] else args.argv
++    if not argv:
++        parser.error('command required after --')
++    submit = [str(JOBQ), 'submit', '--class', 'build']
++    for key in ('name', 'timeout'):
++        value = getattr(args, key)
++        if value is not None:
++            submit.extend(['--' + key, value])
++    job = subprocess.run([*submit, '--', *argv], capture_output=True, text=True)
++    if job.returncode:
++        sys.stderr.write(job.stderr)
++        return job.returncode
++    jid = job.stdout.strip()
++    waited = subprocess.run([str(JOBQ), 'wait', jid])
++    state = Path(os.environ.get('JOBQ_DIR', ROOT / 'lab/jobq')).resolve()
++    record = json.loads((state / (jid + '.json')).read_text())
++    log = state / (jid + '.log')
++    print(f'jobq log: {log}', flush=True)
++    if log.exists():
++        with log.open(errors='replace') as stream:
++            sys.stdout.write(''.join(deque(stream, maxlen=80)))
++    rc = record.get('rc')
++    if rc is None:
++        return waited.returncode or 1
++    return rc if rc >= 0 else 128 - rc
++
++
++if __name__ == '__main__':
++    try:
++        sys.exit(main())
++    except (OSError, ValueError) as exc:
++        print(f'heavy: {exc}', file=sys.stderr)
++        sys.exit(1)
+diff --git a/bin/test_heavy.py b/bin/test_heavy.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..867972d7d2002b4b73a4c2146fed9a1028ae9aa0
+--- /dev/null
++++ b/bin/test_heavy.py
+@@ -0,0 +1,51 @@
++"""Exercise heavy with a temporary queue and fake commands, without builds."""
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++import time
++
++import pytest
++
++BIN = Path(__file__).resolve().parent
++
++
++@pytest.mark.parametrize('rc', [0, 7])
++def test_heavy_output_and_exit_code(tmp_path, rc):
++    wrapper = tmp_path / 'run_op'
++    wrapper.write_text('#!/usr/bin/env python3\nimport os,sys\n'
++                       'argv=sys.argv[sys.argv.index("--")+1:]\n'
++                       'os.execv(argv[0], argv)\n')
++    wrapper.chmod(0o755)
++    state = tmp_path / 'queue'
++    env = dict(os.environ, JOBQ_DIR=str(state), JOBQ_RUN_OP=str(wrapper))
++    command = ('import sys; print("command stdout", sys.argv[1]); '
++               'print("command stderr", file=sys.stderr); sys.exit(int(sys.argv[2]))')
++    heavy = subprocess.Popen([str(BIN / 'heavy'), '--name', 'fake-build', '--timeout', '5',
++                              '--', sys.executable, '-c', command, 'arg with spaces', str(rc)],
++                             cwd=tmp_path, env=env, stdout=subprocess.PIPE,
++                             stderr=subprocess.PIPE, text=True)
++    try:
++        deadline = time.monotonic() + 5
++        while not list(state.glob('job-*.json')):
++            assert heavy.poll() is None
++            assert time.monotonic() < deadline, 'heavy did not submit a job'
++            time.sleep(.02)
++        subprocess.run([str(BIN / 'jobq'), 'worker', '--once'], env=env,
++                       capture_output=True, text=True, check=True, timeout=10)
++        stdout, stderr = heavy.communicate(timeout=5)
++        assert heavy.returncode == rc, stderr
++        record_path, = state.glob('job-*.json')
++        record = json.loads(record_path.read_text())
++        assert record['class'] == 'build'
++        assert record['name'] == 'fake-build' and record['timeout'] == 5
++        assert record['cwd'] == str(tmp_path)
++        assert record['rc'] == rc
++        assert str(record_path.with_suffix('.log')) in stdout
++        assert 'command stdout arg with spaces' in stdout
++        assert 'command stderr' in stdout
++    finally:
++        if heavy.poll() is None:
++            heavy.terminate()
++        heavy.communicate(timeout=5)
+diff --git a/c2/launch_codex.sh b/c2/launch_codex.sh
+index a29afa665f11016a915843466560daa0b1262648..cf35c545d8e7fa7c07414e0d76d593e69b2d4228
+--- a/c2/launch_codex.sh
++++ b/c2/launch_codex.sh
+@@ -5,10 +5,11 @@
+ mkdir -p artifacts/codex
+ S=$(date -u +%FT%TZ); S0=$(date +%s)
+ echo "{\"event\":\"start\",\"task\":\"$T\",\"worker\":\"codex\",\"assignment\":\"$A\",\"ts\":\"$S\"}" >> c2/worklog.jsonl
+-codex exec ${CODEX_ARGS:-} -s workspace-write -C "${CODEX_CWD:-$PWD}" --add-dir /tmp ${CODEX_ADD_DIR:+--add-dir "$CODEX_ADD_DIR"} -o artifacts/codex/$T.final.txt \
++codex exec ${CODEX_ARGS:-} -s workspace-write -C "${CODEX_CWD:-$PWD}" --add-dir /tmp --add-dir /home/muk/projects/siminfeng/lab/jobq ${CODEX_ADD_DIR:+--add-dir "$CODEX_ADD_DIR"} -o artifacts/codex/$T.final.txt \
+   "$(cat $A)
+ $X
+-You are a Codex worker (siminfeng c2 / Satay factory). Follow the assignment exactly; acceptance commands will be run verbatim by a checker." \
++You are a Codex worker (siminfeng c2 / Satay factory). Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
++Any compile/build (cmake, make, nvcc, cargo) MUST run via /home/muk/projects/siminfeng/bin/heavy so it is serialized with lab jobs." \
+   < /dev/null > artifacts/codex/$T.log 2>&1
+ RC=$?
+ TOK=$(grep -A1 -i 'tokens used' artifacts/codex/$T.log | tail -1 | tr -dc 0-9)
+diff --git a/cc/abrun/gate.py b/cc/abrun/gate.py
+index 34393f53cafbec612532bee7cc6e199fed8acd04..e7039707e587a8b8d16745cdc63be414bc7434e6
+--- a/cc/abrun/gate.py
++++ b/cc/abrun/gate.py
+@@ -51,6 +51,8 @@
+             reasons.append(f'{arm}: missing/nonpositive/nonfinite {metric}')
+         if any(r.get('status', 'ok') != 'ok' for r in arms[arm]):
+             reasons.append(f'{arm}: unsuccessful run')
++        if any(r.get('host_contention') for r in arms[arm]):
++            reasons.append(f'{arm}: host_contention')
+     base_values = inputs.get(base, [])
+     drift_halves = None
+     drift = None
+diff --git a/cc/abrun/run_summary.py b/cc/abrun/run_summary.py
+index 4a18d861b354d4392a433626a10cd9bd21c36a3c..28fc95b62d4c8317afa4ff4135fea2e0b4726e19
+--- a/cc/abrun/run_summary.py
++++ b/cc/abrun/run_summary.py
+@@ -43,6 +43,17 @@
+         record = {}
+     put('status', record.get('status'), 'result.json status missing or invalid')
+     put('wall_s', record.get('wall_s') if numeric(record.get('wall_s')) else None)
++    contention = {}
++    if (directory / 'contention.json').exists():
++        try:
++            contention = json.loads(read('contention.json'))
++            if not isinstance(contention, dict):
++                contention = {}
++        except (ValueError, TypeError):
++            result['warnings'].append('invalid contention.json')
++    count = contention.get('max_foreign_heavy', 0)
++    result['max_foreign_heavy'] = count if numeric(count) and count >= 0 else 0
++    result['host_contention'] = result['max_foreign_heavy'] > 0
+     for phase in ('start', 'end'):
+         try:
+             cache = json.loads(read(f'page_cache.{phase}.json'))
+diff --git a/cc/abrun/test_contention.py b/cc/abrun/test_contention.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..0951e70a6a87288e68de87b5dd5a1ccd65fdb3e8
+--- /dev/null
++++ b/cc/abrun/test_contention.py
+@@ -0,0 +1,61 @@
++"""Host-contention evidence invalidates scoring; all fixtures are temporary."""
++import json
++import os
++
++import pytest
++
++from cc.abrun import gate, run_summary
++from cc.om_run import contention
++
++
++@pytest.fixture
++def contended_run(tmp_path):
++    (tmp_path / 'result.json').write_text(json.dumps(dict(status='ok', wall_s=1)))
++    (tmp_path / 'stdout.txt').write_text('same output\n')
++    (tmp_path / 'stderr.txt').write_text(
++        'eval time = 1000 ms / 120 runs (120 tokens per second)\n')
++    (tmp_path / 'contention.json').write_text(json.dumps(dict(
++        max_foreign_heavy=2, names=['cc1plus', 'ninja'], samples=[dict(
++            time=1, foreign_heavy=[dict(pid=42, ppid=1, comm='ninja')])])) )
++    return tmp_path
++
++
++def test_summary_contention(contended_run):
++    summary = run_summary.summarize(contended_run, write=False)
++    assert summary['host_contention'] is True
++    assert summary['max_foreign_heavy'] == 2
++
++
++@pytest.mark.parametrize('record', [None, {'max_foreign_heavy': 0}])
++def test_summary_without_contention(tmp_path, record):
++    if record is not None:
++        (tmp_path / 'contention.json').write_text(json.dumps(record))
++    summary = run_summary.summarize(tmp_path, write=False)
++    assert summary['host_contention'] is False
++    assert summary['max_foreign_heavy'] == 0
++
++
++@pytest.mark.parametrize('arm', ['base', 'other'])
++def test_contention_invalidates_gate(contended_run, arm):
++    arms = {'base': [dict(status='ok', eval_tps=100)],
++            'other': [dict(status='ok', eval_tps=120)]}
++    assert gate.evaluate(arms)['comparisons']['other']['verdict'] == 'improved'
++    arms[arm][0].update(run_summary.summarize(contended_run, write=False))
++    verdict = gate.evaluate(arms)
++    assert f'{arm}: host_contention' in verdict['reasons']
++    assert verdict['comparisons']['other']['verdict'] == 'null'
++
++
++def test_sampler_excludes_descendants_and_zombies(tmp_path):
++    # Synthetic proc tree: the run's build descendants are allowed; siblings
++    # and processes owned by other users are still foreign.
++    for pid, ppid, comm, state in [(10, 1, 'bash', 'S'), (11, 10, 'make', 'S'),
++                                    (12, 11, 'cc1plus', 'R'), (20, 1, 'ninja', 'S'),
++                                    (21, 20, 'rustc', 'R'), (22, 1, 'ld', 'Z'),
++                                    (23, 1, 'python3', 'R')]:
++        path = tmp_path / str(pid)
++        path.mkdir()
++        (path / 'stat').write_text(f'{pid} ({comm}) {state} {ppid} 0 0\n')
++    foreign = contention.foreign_heavy(10, tmp_path)
++    assert [(p['pid'], p['comm']) for p in foreign] == [(20, 'ninja'), (21, 'rustc')]
++    assert all(p['uid'] == os.getuid() for p in foreign)
+diff --git a/cc/om_run/contention.py b/cc/om_run/contention.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..e4ecf6a15b62474d91bfb3e3ce05b5ef2aec7b5e
+--- /dev/null
++++ b/cc/om_run/contention.py
+@@ -0,0 +1,61 @@
++#!/usr/bin/env python3
++"""Sample visible foreign build processes without inspecting their command lines."""
++import json
++from pathlib import Path
++import signal
++import sys
++import threading
++import time
++
++HEAVY = {'cc1plus', 'cc1', 'cicc', 'ptxas', 'nvcc', 'ld', 'ld.bfd', 'ld.gold',
++         'cmake', 'ninja', 'make', 'cargo', 'rustc'}
++
++
++def foreign_heavy(run_pid, proc=Path('/proc')):
++    processes = {}
++    children = {}
++    for path in proc.iterdir():
++        if not path.name.isdigit():
++            continue
++        try:
++            head, tail = (path / 'stat').read_text().rsplit(')', 1)
++            fields = tail.split()
++            if fields[0] in ('Z', 'X'):
++                continue
++            pid, ppid = int(path.name), int(fields[1])
++            processes[pid] = dict(pid=pid, ppid=ppid, comm=head.partition('(')[2],
++                                  uid=path.stat().st_uid)
++            children.setdefault(ppid, []).append(pid)
++        except (OSError, ValueError, IndexError):
++            continue  # Processes may exit or be unreadable during a snapshot.
++    descendants = set()
++    pending = [run_pid]
++    while pending:
++        pid = pending.pop()
++        if pid not in descendants:
++            descendants.add(pid)
++            pending.extend(children.get(pid, []))
++    return [p for pid, p in sorted(processes.items())
++            if pid not in descendants and p['comm'] in HEAVY]
++
++
++def main():
++    output, run_pid = Path(sys.argv[1]), int(sys.argv[2])
++    stopped = threading.Event()
++    for sig in (signal.SIGTERM, signal.SIGINT):
++        signal.signal(sig, lambda *_: stopped.set())
++    record = dict(max_foreign_heavy=0, names=[], samples=[])
++    while True:
++        foreign = foreign_heavy(run_pid)
++        record['samples'].append(dict(time=time.time(), foreign_heavy=foreign))
++        record['max_foreign_heavy'] = max(record['max_foreign_heavy'], len(foreign))
++        record['names'] = sorted(set(record['names']) | {p['comm'] for p in foreign})
++        tmp = output.with_suffix('.tmp')
++        tmp.write_text(json.dumps(record, indent=2) + '\n')
++        tmp.replace(output)
++        if stopped.wait(3):
++            break
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/cc/om_run/om_run.sh b/cc/om_run/om_run.sh
+index efc1aeae1a43317d6cc6a59287cf5cb04dd6da47..9b3efc0d0976b1dbb7fb64956426cc41b2e548e3
+--- a/cc/om_run/om_run.sh
++++ b/cc/om_run/om_run.sh
+@@ -27,8 +27,19 @@
+ # warm uses OM_CACHE_WARM_RANGES (host JSON) or OM_CACHE_WARM_BYTES (prefix).
+ OM_CACHE_ARGV=("$@")
+ om_cache_record(){ python3 "$R/cc/page_cache/run_protocol.py" "$1" "$OUT" "$MODELDIR" "${OM_CACHE_ARGV[@]}"; }
+-trap 'om_cache_record end || echo "page-cache end recording failed" >&2' EXIT
++CG=
++om_cleanup(){
++    if [ -n "$CG" ]; then kill "$CG" 2>/dev/null; wait "$CG" 2>/dev/null; fi
++    om_cache_record end || echo "page-cache end recording failed" >&2
++}
++trap om_cleanup EXIT
+ om_cache_record start || { echo "CACHE_PROTOCOL_FAIL" > "$OUT/status"; exit 2; }
++# Take the first snapshot before engine startup; stop sampling as soon as it exits.
++rm -f "$OUT/contention.json"
++if [ "${OM_CONTENTION_GUARD:-1}" != 0 ]; then
++    python3 "$R/cc/om_run/contention.py" "$OUT/contention.json" "$$" & CG=$!
++    while [ ! -s "$OUT/contention.json" ] && kill -0 "$CG" 2>/dev/null; do sleep .02; done
++fi
+ dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
+    -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro $NSYS_MOUNT "$IMG" $NSYS_PREFIX /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
+ if [ "${OM_THREADS:-0}" = 1 ]; then
+@@ -43,6 +54,7 @@
+    --duration-s ${OM_MAX_S:-1800} --out "$OUT/telemetry.jsonl" >/dev/null 2>&1 & SM=$!
+ T0=$(date +%s.%N)
+ RC=$(dk wait "$NAME"); T1=$(date +%s.%N)
++if [ -n "$CG" ]; then kill "$CG" 2>/dev/null; wait "$CG" 2>/dev/null; CG=; fi
+ kill $WD $SM 2>/dev/null; wait $WD 2>/dev/null; WDRC=$?
+ dk logs "$NAME" > "$OUT/stdout.txt" 2> "$OUT/stderr.txt"
+ if [ "${OM_THREADS:-0}" = 1 ]; then
+
+exec
+/bin/bash -lc 'python3 -m pytest cc/abrun -q -p no:cacheprovider' in /home/muk/projects/siminfeng-wb
+ exited 1 in 9658ms:
+........................................................................ [ 98%]
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________________________ test_om_run_commands_unchanged ________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-muk/pytest-247/test_om_run_commands_unchanged0')
+
+    def test_om_run_commands_unchanged(tmp_path):
+        # Stub executables only; never invoke Docker, resource observers, or a GPU.
+        bindir = tmp_path / 'bin'
+        bindir.mkdir()
+        docker = bindir / 'docker'
+        docker.write_text(f'''#!{sys.executable}
+    import json,os,sys,time
+    args=sys.argv[1:]
+    with open(os.environ['DOCKER_LOG'],'a') as f:f.write(json.dumps(args)+'\\n')
+    if args[0]=='run': print('fake-container')
+    elif args[0]=='wait': time.sleep(.2); print('0')
+    elif args[0]=='inspect': print(os.getppid() if '-f' in args else 'false')
+    elif args[0]=='logs': print('eval time = 100 ms / 2 runs',file=sys.stderr)
+    ''')
+        docker.chmod(0o755)
+        python = bindir / 'python3'
+        python.write_text(f'''#!{sys.executable}
+    import os,sys,time
+    if len(sys.argv)>1 and sys.argv[1].endswith('resource_observe.py'):
+        if '--out' in sys.argv:open(sys.argv[sys.argv.index('--out')+1],'w').close()
+        time.sleep(60)
+    elif len(sys.argv)>1 and sys.argv[1].endswith('thread_sampler.py'):
+        # The real sampler itself is covered by local busy-process tests. No proc
+        # namespace/container dependency belongs in this shell command comparison.
+        if '--out' in sys.argv:open(sys.argv[sys.argv.index('--out')+1],'w').close()
+    else:os.execv({sys.executable!r},[{sys.executable!r}]+sys.argv[1:])
+    ''')
+        python.chmod(0o755)
+        original = subprocess.check_output(['git', 'show', 'HEAD:./cc/om_run/om_run.sh'], cwd=ROOT, text=True)
+        baseline = tmp_path / 'original.sh'
+        baseline.write_text(original)
+        commands = []
+        for script, threads in [(baseline, None), (ROOT / 'cc/om_run/om_run.sh', None), (ROOT / 'cc/om_run/om_run.sh', '1')]:
+            idx = len(commands)
+            out = tmp_path / f'out{idx}'
+            log = tmp_path / f'docker{idx}.jsonl'
+            env = dict(os.environ, PATH=str(bindir) + ':' + os.environ['PATH'], DOCKER_LOG=str(log))
+            env.pop('DOCKER_CMD_PREFIX', None)
+            env.pop('OM_THREADS', None)
+            if threads:
+                env['OM_THREADS'] = threads
+>           subprocess.run(['bash', str(script), str(out), 'test-image', '-e TEST=1', 'llama-completion', '-t', '4'], env=env, check=True, capture_output=True, timeout=10)
+
+cc/abrun/tests/test_threads.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = True, timeout = 10, check = True
+popenargs = (['bash', '/tmp/pytest-of-muk/pytest-247/test_om_run_commands_unchanged0/original.sh', '/tmp/pytest-of-muk/pytest-247/test_om_run_commands_unchanged0/out0', 'test-image', '-e TEST=1', 'llama-completion', ...],)
+kwargs = {'env': {'SHELL': '/bin/bash', 'COREPACK_ENABLE_AUTO_PIN': '0', 'COLORTERM': '', 'CLAUDE_CODE_CHILD_SESSION': '1', ...}, 'stdout': -1, 'stderr': -1}
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout is given, and the process takes too long, a TimeoutExpired
+        exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['bash', '/tmp/pytest-of-muk/pytest-247/test_om_run_commands_unchanged0/original.sh', '/tmp/pytest-of-muk/pytest-247/test_om_run_commands_unchanged0/out0', 'test-image', '-e TEST=1', 'llama-completion', '-t', '4']' returned non-zero exit status 2.
+
+/usr/lib/python3.10/subprocess.py:526: CalledProcessError
+=========================== short test summary info ============================
+FAILED cc/abrun/tests/test_threads.py::test_om_run_commands_unchanged - subpr...
+1 failed, 72 passed in 8.14s
+
+exec
+/bin/bash -lc 'python3 -m pytest bin/test_heavy.py -q -p no:cacheprovider' in /home/muk/projects/siminfeng-wb
+exec
+/bin/bash -lc 'bash -n cc/om_run/om_run.sh c2/launch_codex.sh && git diff --check && git diff --stat && git status --short && git diff -- cc/om_run/om_run.sh cc/abrun/run_summary.py cc/abrun/gate.py c2/launch_codex.sh' in /home/muk/projects/siminfeng-wb
+ succeeded in 502ms:
+ bin/README-jobq.md      |  3 +++
+ c2/launch_codex.sh      |  5 +++--
+ cc/abrun/gate.py        |  2 ++
+ cc/abrun/run_summary.py | 11 +++++++++++
+ cc/om_run/om_run.sh     | 14 +++++++++++++-
+ 5 files changed, 32 insertions(+), 3 deletions(-)
+ M bin/README-jobq.md
+ M c2/launch_codex.sh
+ M cc/abrun/gate.py
+ M cc/abrun/run_summary.py
+ M cc/om_run/om_run.sh
+?? bin/heavy
+?? bin/test_heavy.py
+?? cc/abrun/test_contention.py
+?? cc/om_run/contention.py
+diff --git a/c2/launch_codex.sh b/c2/launch_codex.sh
+index a29afa6..cf35c54 100755
+--- a/c2/launch_codex.sh
++++ b/c2/launch_codex.sh
+@@ -5,10 +5,11 @@ T=$1; A=$2; X=${3:-}
+ mkdir -p artifacts/codex
+ S=$(date -u +%FT%TZ); S0=$(date +%s)
+ echo "{\"event\":\"start\",\"task\":\"$T\",\"worker\":\"codex\",\"assignment\":\"$A\",\"ts\":\"$S\"}" >> c2/worklog.jsonl
+-codex exec ${CODEX_ARGS:-} -s workspace-write -C "${CODEX_CWD:-$PWD}" --add-dir /tmp ${CODEX_ADD_DIR:+--add-dir "$CODEX_ADD_DIR"} -o artifacts/codex/$T.final.txt \
++codex exec ${CODEX_ARGS:-} -s workspace-write -C "${CODEX_CWD:-$PWD}" --add-dir /tmp --add-dir /home/muk/projects/siminfeng/lab/jobq ${CODEX_ADD_DIR:+--add-dir "$CODEX_ADD_DIR"} -o artifacts/codex/$T.final.txt \
+   "$(cat $A)
+ $X
+-You are a Codex worker (siminfeng c2 / Satay factory). Follow the assignment exactly; acceptance commands will be run verbatim by a checker." \
++You are a Codex worker (siminfeng c2 / Satay factory). Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
++Any compile/build (cmake, make, nvcc, cargo) MUST run via /home/muk/projects/siminfeng/bin/heavy so it is serialized with lab jobs." \
+   < /dev/null > artifacts/codex/$T.log 2>&1
+ RC=$?
+ TOK=$(grep -A1 -i 'tokens used' artifacts/codex/$T.log | tail -1 | tr -dc 0-9)
+diff --git a/cc/abrun/gate.py b/cc/abrun/gate.py
+index 34393f5..e703970 100644
+--- a/cc/abrun/gate.py
++++ b/cc/abrun/gate.py
+@@ -51,6 +51,8 @@ def evaluate(arms, metric='eval_tps', base='base', direction=None):
+             reasons.append(f'{arm}: missing/nonpositive/nonfinite {metric}')
+         if any(r.get('status', 'ok') != 'ok' for r in arms[arm]):
+             reasons.append(f'{arm}: unsuccessful run')
++        if any(r.get('host_contention') for r in arms[arm]):
++            reasons.append(f'{arm}: host_contention')
+     base_values = inputs.get(base, [])
+     drift_halves = None
+     drift = None
+diff --git a/cc/abrun/run_summary.py b/cc/abrun/run_summary.py
+index 4a18d86..28fc95b 100644
+--- a/cc/abrun/run_summary.py
++++ b/cc/abrun/run_summary.py
+@@ -43,6 +43,17 @@ def summarize(directory, switch_regex=(), write=True):
+         record = {}
+     put('status', record.get('status'), 'result.json status missing or invalid')
+     put('wall_s', record.get('wall_s') if numeric(record.get('wall_s')) else None)
++    contention = {}
++    if (directory / 'contention.json').exists():
++        try:
++            contention = json.loads(read('contention.json'))
++            if not isinstance(contention, dict):
++                contention = {}
++        except (ValueError, TypeError):
++            result['warnings'].append('invalid contention.json')
++    count = contention.get('max_foreign_heavy', 0)
++    result['max_foreign_heavy'] = count if numeric(count) and count >= 0 else 0
++    result['host_contention'] = result['max_foreign_heavy'] > 0
+     for phase in ('start', 'end'):
+         try:
+             cache = json.loads(read(f'page_cache.{phase}.json'))
+diff --git a/cc/om_run/om_run.sh b/cc/om_run/om_run.sh
+index efc1aea..9b3efc0 100755
+--- a/cc/om_run/om_run.sh
++++ b/cc/om_run/om_run.sh
+@@ -27,8 +27,19 @@ fi
+ # warm uses OM_CACHE_WARM_RANGES (host JSON) or OM_CACHE_WARM_BYTES (prefix).
+ OM_CACHE_ARGV=("$@")
+ om_cache_record(){ python3 "$R/cc/page_cache/run_protocol.py" "$1" "$OUT" "$MODELDIR" "${OM_CACHE_ARGV[@]}"; }
+-trap 'om_cache_record end || echo "page-cache end recording failed" >&2' EXIT
++CG=
++om_cleanup(){
++    if [ -n "$CG" ]; then kill "$CG" 2>/dev/null; wait "$CG" 2>/dev/null; fi
++    om_cache_record end || echo "page-cache end recording failed" >&2
++}
++trap om_cleanup EXIT
+ om_cache_record start || { echo "CACHE_PROTOCOL_FAIL" > "$OUT/status"; exit 2; }
++# Take the first snapshot before engine startup; stop sampling as soon as it exits.
++rm -f "$OUT/contention.json"
++if [ "${OM_CONTENTION_GUARD:-1}" != 0 ]; then
++    python3 "$R/cc/om_run/contention.py" "$OUT/contention.json" "$$" & CG=$!
++    while [ ! -s "$OUT/contention.json" ] && kill -0 "$CG" 2>/dev/null; do sleep .02; done
++fi
+ dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
+    -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro $NSYS_MOUNT "$IMG" $NSYS_PREFIX /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
+ if [ "${OM_THREADS:-0}" = 1 ]; then
+@@ -43,6 +54,7 @@ python3 "$R/cc/resource_observe/resource_observe.py" sample --backends io,proc,t
+    --duration-s ${OM_MAX_S:-1800} --out "$OUT/telemetry.jsonl" >/dev/null 2>&1 & SM=$!
+ T0=$(date +%s.%N)
+ RC=$(dk wait "$NAME"); T1=$(date +%s.%N)
++if [ -n "$CG" ]; then kill "$CG" 2>/dev/null; wait "$CG" 2>/dev/null; CG=; fi
+ kill $WD $SM 2>/dev/null; wait $WD 2>/dev/null; WDRC=$?
+ dk logs "$NAME" > "$OUT/stdout.txt" 2> "$OUT/stderr.txt"
+ if [ "${OM_THREADS:-0}" = 1 ]; then
+
+ succeeded in 5275ms:
+..                                                                       [100%]
+2 passed in 3.34s
+
+exec
+/bin/bash -lc "sed -n '1,160p' cc/abrun/tests/test_threads.py && sed -n '1,160p' cc/page_cache/run_protocol.py && cat /tmp/pytest-of-muk/pytest-247/test_om_run_commands_unchanged0/out0/status" in /home/muk/projects/siminfeng-wb
+ succeeded in 37ms:
+"""Thread capture spec, preflight, summary and shell integration without Docker."""
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+import pytest
+from cc.abrun import abrun, gate, run_summary
+from cc.thread_sampler.test_thread_sampler import write_capture
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+def spec():
+    return json.loads((ROOT / 'cc/abrun/specs/J-OM12.json').read_text())
+
+
+def test_om12_plan(monkeypatch):
+    monkeypatch.delenv('ABRUN_RUNNER', raising=False)
+    s = spec()
+    abrun.validate(s)
+    _, runs = abrun.plan(s)
+    assert [r['arm'] for r in runs] == ['base', 'pg8', 'pg8t4', 'pg8t6', 'pg8t6', 'pg8t4', 'pg8', 'base']
+    for run in runs:
+        assert 'OM_THREADS=1' in run['command']
+        if run['arm'] in ('pg8t4', 'pg8t6'):
+            assert run['command'][-2:] == ['-t', run['arm'][-1]]
+        else:
+            assert '-t' not in run['command']
+    s.pop('threads')
+    assert all('OM_THREADS=1' not in r['command'] for r in abrun.plan(s)[1])
+    assert s['arms']['base']['env'] == {}
+
+
+@pytest.mark.parametrize('field,value', [('threads', 1), ('threads', 'yes'), ('extra_argv', '-t 4'), ('extra_argv', [4])])
+def test_validation(field, value):
+    s = spec()
+    (s if field == 'threads' else s['arms']['pg8'])[field] = value
+    with pytest.raises(ValueError, match=field):
+        abrun.validate(s)
+
+
+def test_extra_argv_preflight(tmp_path, monkeypatch):
+    s = spec()
+    calls = []
+    def check(image, tool, argv):
+        calls.append(argv)
+        if '-t' in argv:
+            raise ValueError('unsupported flags: -t')
+    monkeypatch.setattr(abrun.preflight, 'check', check)
+    assert abrun.execute(s, tmp_path / 'run', []) == 1
+    assert any(a[-2:] == ['-t', '4'] for a in calls)
+    v = json.loads((tmp_path / 'run/verdict.json').read_text())
+    assert 'unsupported flags: -t' in v['invalid_reasons']
+
+
+def test_summary_secondary(tmp_path):
+    write_capture(tmp_path / 'threads.jsonl')
+    (tmp_path / 'stderr.txt').write_text('eval time = 1500 ms / 2 runs (750 ms per token, 1.3 tokens per second)\n')
+    s = run_summary.summarize(tmp_path)
+    assert s['threads.cpu_workers_r_fraction'] == 1
+    assert s['threads.main_workers_d_fraction'] == .25
+    assert s['threads.majflt_per_token'] == 4.5
+    v = gate.evaluate({'base': [s], 'pg8': [s]}, 'eval_ms_per_token')
+    assert v['secondary_metrics']['base']['threads.majflt_per_token'] == 4.5
+    assert 'Threads majflt/token' in gate.secondary_table(v)
+    assert json.loads((tmp_path / 'threads.summary.json').read_text())['phase_window']['tokens'] == 2
+
+
+def test_om_run_commands_unchanged(tmp_path):
+    # Stub executables only; never invoke Docker, resource observers, or a GPU.
+    bindir = tmp_path / 'bin'
+    bindir.mkdir()
+    docker = bindir / 'docker'
+    docker.write_text(f'''#!{sys.executable}
+import json,os,sys,time
+args=sys.argv[1:]
+with open(os.environ['DOCKER_LOG'],'a') as f:f.write(json.dumps(args)+'\\n')
+if args[0]=='run': print('fake-container')
+elif args[0]=='wait': time.sleep(.2); print('0')
+elif args[0]=='inspect': print(os.getppid() if '-f' in args else 'false')
+elif args[0]=='logs': print('eval time = 100 ms / 2 runs',file=sys.stderr)
+''')
+    docker.chmod(0o755)
+    python = bindir / 'python3'
+    python.write_text(f'''#!{sys.executable}
+import os,sys,time
+if len(sys.argv)>1 and sys.argv[1].endswith('resource_observe.py'):
+    if '--out' in sys.argv:open(sys.argv[sys.argv.index('--out')+1],'w').close()
+    time.sleep(60)
+elif len(sys.argv)>1 and sys.argv[1].endswith('thread_sampler.py'):
+    # The real sampler itself is covered by local busy-process tests. No proc
+    # namespace/container dependency belongs in this shell command comparison.
+    if '--out' in sys.argv:open(sys.argv[sys.argv.index('--out')+1],'w').close()
+else:os.execv({sys.executable!r},[{sys.executable!r}]+sys.argv[1:])
+''')
+    python.chmod(0o755)
+    original = subprocess.check_output(['git', 'show', 'HEAD:./cc/om_run/om_run.sh'], cwd=ROOT, text=True)
+    baseline = tmp_path / 'original.sh'
+    baseline.write_text(original)
+    commands = []
+    for script, threads in [(baseline, None), (ROOT / 'cc/om_run/om_run.sh', None), (ROOT / 'cc/om_run/om_run.sh', '1')]:
+        idx = len(commands)
+        out = tmp_path / f'out{idx}'
+        log = tmp_path / f'docker{idx}.jsonl'
+        env = dict(os.environ, PATH=str(bindir) + ':' + os.environ['PATH'], DOCKER_LOG=str(log))
+        env.pop('DOCKER_CMD_PREFIX', None)
+        env.pop('OM_THREADS', None)
+        if threads:
+            env['OM_THREADS'] = threads
+        subprocess.run(['bash', str(script), str(out), 'test-image', '-e TEST=1', 'llama-completion', '-t', '4'], env=env, check=True, capture_output=True, timeout=10)
+        rows = [json.loads(line) for line in log.read_text().splitlines()]
+        run = next(row for row in rows if row[0] == 'run')
+        commands.append([re.sub(r'om-\d+-\d+', 'CONTAINER', arg) for arg in run])
+        assert (out / 'threads.jsonl').exists() == bool(threads)
+    assert commands[0] == commands[1] == commands[2]
+#!/usr/bin/env python3
+"""Host-side om_run adapter; never invokes Docker or reads model contents to probe."""
+import json
+import os
+from pathlib import Path
+import sys
+import time
+
+sys.dont_write_bytecode = True
+if __package__:
+    from . import page_cache
+else:
+    import page_cache
+
+
+def model_path(modeldir, argv):
+    override = os.environ.get('OM_CACHE_MODEL')
+    if override:
+        return Path(override).expanduser()
+    model = None
+    for index, arg in enumerate(argv):
+        if arg in ('-m', '--model') and index + 1 < len(argv):
+            model = argv[index + 1]
+        elif arg.startswith(('-m=', '--model=')):
+            model = arg.split('=', 1)[1]
+    if not model:
+        raise ValueError('model argument missing; set OM_CACHE_MODEL to its host path')
+    if model.startswith('/om/'):
+        return Path(modeldir) / model[4:]
+    # Relative paths are relative to the engine working directory, not MODELDIR.
+    raise ValueError('model must be under /om/; set OM_CACHE_MODEL to its host path')
+
+
+def record(phase, out, modeldir, argv):
+    protocol = os.environ.get('OM_CACHE_PROTOCOL') or 'carryover'
+    result = dict(protocol=protocol, phase=phase, timestamp_ns=time.time_ns())
+    rc = 0
+    try:
+        if protocol not in ('carryover', 'cold', 'warm'):
+            raise ValueError(f'unknown OM_CACHE_PROTOCOL: {protocol}')
+        path = model_path(modeldir, argv)
+        result['path'] = str(path)
+        if phase == 'start' and protocol in ('cold', 'warm'):
+            # Validate all preparation inputs before evicting anything.
+            ranges_file = os.environ.get('OM_CACHE_WARM_RANGES')
+            ranges = page_cache.load_ranges(ranges_file) if protocol == 'warm' and ranges_file else None
+            prefix = None
+            if protocol == 'warm':
+                if ranges is not None:
+                    page_cache._check_ranges(ranges, path.stat().st_size)
+                else:
+                    prefix = int(os.environ['OM_CACHE_WARM_BYTES'])
+                    if prefix < 0:
+                        raise ValueError('OM_CACHE_WARM_BYTES must be nonnegative')
+            result['eviction'] = page_cache.evict(path)
+            if protocol == 'warm':
+                result['warming'] = page_cache.warm(path, ranges, prefix)
+                result.update(result['warming']['after'])
+            else:
+                result.update(result['eviction']['after'])
+        else:
+            result.update(page_cache.resident(path))
+    except (OSError, ValueError, KeyError) as exc:
+        result['error'] = str(exc)
+        # Recording must not break legacy carryover runs. Preparation must fail closed.
+        rc = int(phase == 'start' and protocol != 'carryover')
+        print(f'page_cache {phase}: {exc}', file=sys.stderr)
+    (Path(out) / f'page_cache.{phase}.json').write_text(json.dumps(result, indent=2) + '\n')
+    return rc
+
+
+if __name__ == '__main__':
+    sys.exit(record(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]))
+CACHE_PROTOCOL_FAIL
+
+codex
+The new contention tests and both `heavy` exit-code tests pass. The full suite found an existing fixture issue: its copied baseline script cannot find the page-cache helper. I’ll stub that helper in the command-comparison test, add a check for disabling the guard, and rerun the suite.
+apply patch
+patch: completed
+/home/muk/projects/siminfeng-wb/cc/abrun/test_contention.py
+/home/muk/projects/siminfeng-wb/cc/abrun/tests/test_threads.py
+diff --git a/bin/README-jobq.md b/bin/README-jobq.md
+index 2d3d1001bf3ed76f8935e60971388fd30d0401c6..eb8fe369ee92ee35a365dda0538d5cf213f89282
+--- a/bin/README-jobq.md
++++ b/bin/README-jobq.md
+@@ -34,6 +34,9 @@
+ exit status, dependencies, and symmetric `concurrent_jobs` overlap history.
+ A worker restart detects a dead job supervisor and fails the abandoned job.
+ `JOBQ_DIR` overrides state storage; `JOBQ_RUN_OP` selects a test wrapper.
++`bin/heavy [--name NAME] [--timeout SECONDS] -- COMMAND ...` submits a build,
++waits for completion, prints the job log path and its last 80 lines, and returns
++the command exit code. It uses the same `JOBQ_DIR` and requires a running worker.
+ Submit preserves the working directory and environment for execution, adding
+ `JOBQ_JOB_ID` for container ownership labels.
+ 
+diff --git a/bin/heavy b/bin/heavy
+new file mode 100644
+index 0000000000000000000000000000000000000000..53b42156690900e556bbc300a34a2bc5c3ab0dc0
+--- /dev/null
++++ b/bin/heavy
+@@ -0,0 +1,53 @@
++#!/usr/bin/env python3
++"""Submit a build to jobq and wait for its output (requires a jobq worker)."""
++import argparse
++from collections import deque
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++
++ROOT = Path(__file__).resolve().parent.parent
++JOBQ = ROOT / 'bin/jobq'
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--name')
++    parser.add_argument('--timeout', help='job execution timeout in seconds')
++    parser.add_argument('argv', nargs=argparse.REMAINDER)
++    args = parser.parse_args()
++    argv = args.argv[1:] if args.argv[:1] == ['--'] else args.argv
++    if not argv:
++        parser.error('command required after --')
++    submit = [str(JOBQ), 'submit', '--class', 'build']
++    for key in ('name', 'timeout'):
++        value = getattr(args, key)
++        if value is not None:
++            submit.extend(['--' + key, value])
++    job = subprocess.run([*submit, '--', *argv], capture_output=True, text=True)
++    if job.returncode:
++        sys.stderr.write(job.stderr)
++        return job.returncode
++    jid = job.stdout.strip()
++    waited = subprocess.run([str(JOBQ), 'wait', jid])
++    state = Path(os.environ.get('JOBQ_DIR', ROOT / 'lab/jobq')).resolve()
++    record = json.loads((state / (jid + '.json')).read_text())
++    log = state / (jid + '.log')
++    print(f'jobq log: {log}', flush=True)
++    if log.exists():
++        with log.open(errors='replace') as stream:
++            sys.stdout.write(''.join(deque(stream, maxlen=80)))
++    rc = record.get('rc')
++    if rc is None:
++        return waited.returncode or 1
++    return rc if rc >= 0 else 128 - rc
++
++
++if __name__ == '__main__':
++    try:
++        sys.exit(main())
++    except (OSError, ValueError) as exc:
++        print(f'heavy: {exc}', file=sys.stderr)
++        sys.exit(1)
+diff --git a/bin/test_heavy.py b/bin/test_heavy.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..867972d7d2002b4b73a4c2146fed9a1028ae9aa0
+--- /dev/null
++++ b/bin/test_heavy.py
+@@ -0,0 +1,51 @@
++"""Exercise heavy with a temporary queue and fake commands, without builds."""
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++import time
++
++import pytest
++
++BIN = Path(__file__).resolve().parent
++
++
++@pytest.mark.parametrize('rc', [0, 7])
++def test_heavy_output_and_exit_code(tmp_path, rc):
++    wrapper = tmp_path / 'run_op'
++    wrapper.write_text('#!/usr/bin/env python3\nimport os,sys\n'
++                       'argv=sys.argv[sys.argv.index("--")+1:]\n'
++                       'os.execv(argv[0], argv)\n')
++    wrapper.chmod(0o755)
++    state = tmp_path / 'queue'
++    env = dict(os.environ, JOBQ_DIR=str(state), JOBQ_RUN_OP=str(wrapper))
++    command = ('import sys; print("command stdout", sys.argv[1]); '
++               'print("command stderr", file=sys.stderr); sys.exit(int(sys.argv[2]))')
++    heavy = subprocess.Popen([str(BIN / 'heavy'), '--name', 'fake-build', '--timeout', '5',
++                              '--', sys.executable, '-c', command, 'arg with spaces', str(rc)],
++                             cwd=tmp_path, env=env, stdout=subprocess.PIPE,
++                             stderr=subprocess.PIPE, text=True)
++    try:
++        deadline = time.monotonic() + 5
++        while not list(state.glob('job-*.json')):
++            assert heavy.poll() is None
++            assert time.monotonic() < deadline, 'heavy did not submit a job'
++            time.sleep(.02)
++        subprocess.run([str(BIN / 'jobq'), 'worker', '--once'], env=env,
++                       capture_output=True, text=True, check=True, timeout=10)
++        stdout, stderr = heavy.communicate(timeout=5)
++        assert heavy.returncode == rc, stderr
++        record_path, = state.glob('job-*.json')
++        record = json.loads(record_path.read_text())
++        assert record['class'] == 'build'
++        assert record['name'] == 'fake-build' and record['timeout'] == 5
++        assert record['cwd'] == str(tmp_path)
++        assert record['rc'] == rc
++        assert str(record_path.with_suffix('.log')) in stdout
++        assert 'command stdout arg with spaces' in stdout
++        assert 'command stderr' in stdout
++    finally:
++        if heavy.poll() is None:
++            heavy.terminate()
++        heavy.communicate(timeout=5)
+diff --git a/c2/launch_codex.sh b/c2/launch_codex.sh
+index a29afa665f11016a915843466560daa0b1262648..cf35c545d8e7fa7c07414e0d76d593e69b2d4228
+--- a/c2/launch_codex.sh
++++ b/c2/launch_codex.sh
+@@ -5,10 +5,11 @@
+ mkdir -p artifacts/codex
+ S=$(date -u +%FT%TZ); S0=$(date +%s)
+ echo "{\"event\":\"start\",\"task\":\"$T\",\"worker\":\"codex\",\"assignment\":\"$A\",\"ts\":\"$S\"}" >> c2/worklog.jsonl
+-codex exec ${CODEX_ARGS:-} -s workspace-write -C "${CODEX_CWD:-$PWD}" --add-dir /tmp ${CODEX_ADD_DIR:+--add-dir "$CODEX_ADD_DIR"} -o artifacts/codex/$T.final.txt \
++codex exec ${CODEX_ARGS:-} -s workspace-write -C "${CODEX_CWD:-$PWD}" --add-dir /tmp --add-dir /home/muk/projects/siminfeng/lab/jobq ${CODEX_ADD_DIR:+--add-dir "$CODEX_ADD_DIR"} -o artifacts/codex/$T.final.txt \
+   "$(cat $A)
+ $X
+-You are a Codex worker (siminfeng c2 / Satay factory). Follow the assignment exactly; acceptance commands will be run verbatim by a checker." \
++You are a Codex worker (siminfeng c2 / Satay factory). Follow the assignment exactly; acceptance commands will be run verbatim by a checker.
++Any compile/build (cmake, make, nvcc, cargo) MUST run via /home/muk/projects/siminfeng/bin/heavy so it is serialized with lab jobs." \
+   < /dev/null > artifacts/codex/$T.log 2>&1
+ RC=$?
+ TOK=$(grep -A1 -i 'tokens used' artifacts/codex/$T.log | tail -1 | tr -dc 0-9)
+diff --git a/cc/abrun/gate.py b/cc/abrun/gate.py
+index 34393f53cafbec612532bee7cc6e199fed8acd04..e7039707e587a8b8d16745cdc63be414bc7434e6
+--- a/cc/abrun/gate.py
++++ b/cc/abrun/gate.py
+@@ -51,6 +51,8 @@
+             reasons.append(f'{arm}: missing/nonpositive/nonfinite {metric}')
+         if any(r.get('status', 'ok') != 'ok' for r in arms[arm]):
+             reasons.append(f'{arm}: unsuccessful run')
++        if any(r.get('host_contention') for r in arms[arm]):
++            reasons.append(f'{arm}: host_contention')
+     base_values = inputs.get(base, [])
+     drift_halves = None
+     drift = None
+diff --git a/cc/abrun/run_summary.py b/cc/abrun/run_summary.py
+index 4a18d861b354d4392a433626a10cd9bd21c36a3c..28fc95b62d4c8317afa4ff4135fea2e0b4726e19
+--- a/cc/abrun/run_summary.py
++++ b/cc/abrun/run_summary.py
+@@ -43,6 +43,17 @@
+         record = {}
+     put('status', record.get('status'), 'result.json status missing or invalid')
+     put('wall_s', record.get('wall_s') if numeric(record.get('wall_s')) else None)
++    contention = {}
++    if (directory / 'contention.json').exists():
++        try:
++            contention = json.loads(read('contention.json'))
++            if not isinstance(contention, dict):
++                contention = {}
++        except (ValueError, TypeError):
++            result['warnings'].append('invalid contention.json')
++    count = contention.get('max_foreign_heavy', 0)
++    result['max_foreign_heavy'] = count if numeric(count) and count >= 0 else 0
++    result['host_contention'] = result['max_foreign_heavy'] > 0
+     for phase in ('start', 'end'):
+         try:
+             cache = json.loads(read(f'page_cache.{phase}.json'))
+diff --git a/cc/abrun/test_contention.py b/cc/abrun/test_contention.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..567e809db7f04c4bd8951d6afb4923b87b62c97e
+--- /dev/null
++++ b/cc/abrun/test_contention.py
+@@ -0,0 +1,61 @@
++"""Host-contention evidence invalidates scoring; all fixtures are temporary."""
++import json
++import os
++
++import pytest
++
++from cc.abrun import gate, run_summary
++from cc.om_run import contention
++
++
++@pytest.fixture
++def contended_run(tmp_path):
++    (tmp_path / 'result.json').write_text(json.dumps(dict(status='ok', wall_s=1)))
++    (tmp_path / 'stdout.txt').write_text('same output\n')
++    (tmp_path / 'stderr.txt').write_text(
++        'eval time = 1000 ms / 120 runs (120 tokens per second)\n')
++    (tmp_path / 'contention.json').write_text(json.dumps(dict(
++        max_foreign_heavy=2, names=['cc1plus', 'ninja'], samples=[dict(
++            time=1, foreign_heavy=[dict(pid=42, ppid=1, comm='ninja')])])))
++    return tmp_path
++
++
++def test_summary_contention(contended_run):
++    summary = run_summary.summarize(contended_run, write=False)
++    assert summary['host_contention'] is True
++    assert summary['max_foreign_heavy'] == 2
++
++
++@pytest.mark.parametrize('record', [None, {'max_foreign_heavy': 0}])
++def test_summary_without_contention(tmp_path, record):
++    if record is not None:
++        (tmp_path / 'contention.json').write_text(json.dumps(record))
++    summary = run_summary.summarize(tmp_path, write=False)
++    assert summary['host_contention'] is False
++    assert summary['max_foreign_heavy'] == 0
++
++
++@pytest.mark.parametrize('arm', ['base', 'other'])
++def test_contention_invalidates_gate(contended_run, arm):
++    arms = {'base': [dict(status='ok', eval_tps=100)],
++            'other': [dict(status='ok', eval_tps=120)]}
++    assert gate.evaluate(arms)['comparisons']['other']['verdict'] == 'improved'
++    arms[arm][0].update(run_summary.summarize(contended_run, write=False))
++    verdict = gate.evaluate(arms)
++    assert f'{arm}: host_contention' in verdict['reasons']
++    assert verdict['comparisons']['other']['verdict'] == 'null'
++
++
++def test_sampler_excludes_descendants_and_zombies(tmp_path):
++    # Synthetic proc tree: the run's build descendants are allowed; siblings
++    # and processes owned by other users are still foreign.
++    for pid, ppid, comm, state in [(10, 1, 'bash', 'S'), (11, 10, 'make', 'S'),
++                                    (12, 11, 'cc1plus', 'R'), (20, 1, 'ninja', 'S'),
++                                    (21, 20, 'rustc', 'R'), (22, 1, 'ld', 'Z'),
++                                    (23, 1, 'python3', 'R')]:
++        path = tmp_path / str(pid)
++        path.mkdir()
++        (path / 'stat').write_text(f'{pid} ({comm}) {state} {ppid} 0 0\n')
++    foreign = contention.foreign_heavy(10, tmp_path)
++    assert [(p['pid'], p['comm']) for p in foreign] == [(20, 'ninja'), (21, 'rustc')]
++    assert all(p['uid'] == os.getuid() for p in foreign)
+diff --git a/cc/abrun/tests/test_threads.py b/cc/abrun/tests/test_threads.py
+index 9bf177429aa5f7c9e3fbf30a3953064168bb613f..66e81dcf957d5edac86c239089b96f3e9791c675
+--- a/cc/abrun/tests/test_threads.py
++++ b/cc/abrun/tests/test_threads.py
+@@ -94,6 +94,9 @@
+     # The real sampler itself is covered by local busy-process tests. No proc
+     # namespace/container dependency belongs in this shell command comparison.
+     if '--out' in sys.argv:open(sys.argv[sys.argv.index('--out')+1],'w').close()
++elif len(sys.argv)>1 and sys.argv[1].endswith('run_protocol.py'):
++    # The copied baseline has no helper tree; cache behavior is tested separately.
++    pass
+ else:os.execv({sys.executable!r},[{sys.executable!r}]+sys.argv[1:])
+ ''')
+     python.chmod(0o755)
+@@ -101,13 +104,18 @@
+     baseline = tmp_path / 'original.sh'
+     baseline.write_text(original)
+     commands = []
+-    for script, threads in [(baseline, None), (ROOT / 'cc/om_run/om_run.sh', None), (ROOT / 'cc/om_run/om_run.sh', '1')]:
++    current = ROOT / 'cc/om_run/om_run.sh'
++    for script, threads, guard in [(baseline, None, None), (current, None, None),
++                                   (current, '1', None), (current, None, '0')]:
+         idx = len(commands)
+         out = tmp_path / f'out{idx}'
+         log = tmp_path / f'docker{idx}.jsonl'
+         env = dict(os.environ, PATH=str(bindir) + ':' + os.environ['PATH'], DOCKER_LOG=str(log))
+         env.pop('DOCKER_CMD_PREFIX', None)
+         env.pop('OM_THREADS', None)
++        env.pop('OM_CONTENTION_GUARD', None)
++        if guard is not None:
++            env['OM_CONTENTION_GUARD'] = guard
+         if threads:
+             env['OM_THREADS'] = threads
+         subprocess.run(['bash', str(script), str(out), 'test-image', '-e TEST=1', 'llama-completion', '-t', '4'], env=env, check=True, capture_output=True, timeout=10)
+@@ -115,4 +123,8 @@
+         run = next(row for row in rows if row[0] == 'run')
+         commands.append([re.sub(r'om-\d+-\d+', 'CONTAINER', arg) for arg in run])
+         assert (out / 'threads.jsonl').exists() == bool(threads)
+-    assert commands[0] == commands[1] == commands[2]
++        if script == current:
++            assert (out / 'contention.json').exists() == (guard != '0')
++            if guard != '0':
++                assert json.loads((out / 'contention.json').read_text())['samples']
++    assert all(command == commands[0] for command in commands[1:])
+diff --git a/cc/om_run/contention.py b/cc/om_run/contention.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..e4ecf6a15b62474d91bfb3e3ce05b5ef2aec7b5e
+--- /dev/null
++++ b/cc/om_run/contention.py
+@@ -0,0 +1,61 @@
++#!/usr/bin/env python3
++"""Sample visible foreign build processes without inspecting their command lines."""
++import json
++from pathlib import Path
++import signal
++import sys
++import threading
++import time
++
++HEAVY = {'cc1plus', 'cc1', 'cicc', 'ptxas', 'nvcc', 'ld', 'ld.bfd', 'ld.gold',
++         'cmake', 'ninja', 'make', 'cargo', 'rustc'}
++
++
++def foreign_heavy(run_pid, proc=Path('/proc')):
++    processes = {}
++    children = {}
++    for path in proc.iterdir():
++        if not path.name.isdigit():
++            continue
++        try:
++            head, tail = (path / 'stat').read_text().rsplit(')', 1)
++            fields = tail.split()
++            if fields[0] in ('Z', 'X'):
++                continue
++            pid, ppid = int(path.name), int(fields[1])
++            processes[pid] = dict(pid=pid, ppid=ppid, comm=head.partition('(')[2],
++                                  uid=path.stat().st_uid)
++            children.setdefault(ppid, []).append(pid)
++        except (OSError, ValueError, IndexError):
++            continue  # Processes may exit or be unreadable during a snapshot.
++    descendants = set()
++    pending = [run_pid]
++    while pending:
++        pid = pending.pop()
++        if pid not in descendants:
++            descendants.add(pid)
++            pending.extend(children.get(pid, []))
++    return [p for pid, p in sorted(processes.items())
++            if pid not in descendants and p['comm'] in HEAVY]
++
++
++def main():
++    output, run_pid = Path(sys.argv[1]), int(sys.argv[2])
++    stopped = threading.Event()
++    for sig in (signal.SIGTERM, signal.SIGINT):
++        signal.signal(sig, lambda *_: stopped.set())
++    record = dict(max_foreign_heavy=0, names=[], samples=[])
++    while True:
++        foreign = foreign_heavy(run_pid)
++        record['samples'].append(dict(time=time.time(), foreign_heavy=foreign))
++        record['max_foreign_heavy'] = max(record['max_foreign_heavy'], len(foreign))
++        record['names'] = sorted(set(record['names']) | {p['comm'] for p in foreign})
++        tmp = output.with_suffix('.tmp')
++        tmp.write_text(json.dumps(record, indent=2) + '\n')
++        tmp.replace(output)
++        if stopped.wait(3):
++            break
++
++
++if __name__ == '__main__':
++    main()
+diff --git a/cc/om_run/om_run.sh b/cc/om_run/om_run.sh
+index efc1aeae1a43317d6cc6a59287cf5cb04dd6da47..9b3efc0d0976b1dbb7fb64956426cc41b2e548e3
+--- a/cc/om_run/om_run.sh
++++ b/cc/om_run/om_run.sh
+@@ -27,8 +27,19 @@
+ # warm uses OM_CACHE_WARM_RANGES (host JSON) or OM_CACHE_WARM_BYTES (prefix).
+ OM_CACHE_ARGV=("$@")
+ om_cache_record(){ python3 "$R/cc/page_cache/run_protocol.py" "$1" "$OUT" "$MODELDIR" "${OM_CACHE_ARGV[@]}"; }
+-trap 'om_cache_record end || echo "page-cache end recording failed" >&2' EXIT
++CG=
++om_cleanup(){
++    if [ -n "$CG" ]; then kill "$CG" 2>/dev/null; wait "$CG" 2>/dev/null; fi
++    om_cache_record end || echo "page-cache end recording failed" >&2
++}
++trap om_cleanup EXIT
+ om_cache_record start || { echo "CACHE_PROTOCOL_FAIL" > "$OUT/status"; exit 2; }
++# Take the first snapshot before engine startup; stop sampling as soon as it exits.
++rm -f "$OUT/contention.json"
++if [ "${OM_CONTENTION_GUARD:-1}" != 0 ]; then
++    python3 "$R/cc/om_run/contention.py" "$OUT/contention.json" "$$" & CG=$!
++    while [ ! -s "$OUT/contention.json" ] && kill -0 "$CG" 2>/dev/null; do sleep .02; done
++fi
+ dk run -d --name "$NAME" --runtime nvidia --network none --label campaign=c1 --label om=1 $ENVF \
+    -v "$MODELDIR":/om:ro -v "$DATADIR":/d:ro $NSYS_MOUNT "$IMG" $NSYS_PREFIX /app/$TOOL "$@" > "$OUT/container.id" || { echo "START_FAIL" > "$OUT/status"; exit 2; }
+ if [ "${OM_THREADS:-0}" = 1 ]; then
+@@ -43,6 +54,7 @@
+    --duration-s ${OM_MAX_S:-1800} --out "$OUT/telemetry.jsonl" >/dev/null 2>&1 & SM=$!
+ T0=$(date +%s.%N)
+ RC=$(dk wait "$NAME"); T1=$(date +%s.%N)
++if [ -n "$CG" ]; then kill "$CG" 2>/dev/null; wait "$CG" 2>/dev/null; CG=; fi
+ kill $WD $SM 2>/dev/null; wait $WD 2>/dev/null; WDRC=$?
+ dk logs "$NAME" > "$OUT/stdout.txt" 2> "$OUT/stderr.txt"
+ if [ "${OM_THREADS:-0}" = 1 ]; then
+
+exec
+/bin/bash -lc 'python3 -m pytest cc/abrun -q -p no:cacheprovider' in /home/muk/projects/siminfeng-wb
+ succeeded in 11327ms:
+........................................................................ [ 98%]
+.                                                                        [100%]
+73 passed in 10.29s
+
+exec
+/bin/bash -lc "git diff --check && bash -n cc/om_run/om_run.sh c2/launch_codex.sh && git status --short && wc -l bin/heavy bin/test_heavy.py cc/om_run/contention.py cc/abrun/test_contention.py && sed -n '1,100p' cc/abrun/test_contention.py" in /home/muk/projects/siminfeng-wb
+ succeeded in 833ms:
+ M bin/README-jobq.md
+ M c2/launch_codex.sh
+ M cc/abrun/gate.py
+ M cc/abrun/run_summary.py
+ M cc/abrun/tests/test_threads.py
+ M cc/om_run/om_run.sh
+?? bin/heavy
+?? bin/test_heavy.py
+?? cc/abrun/test_contention.py
+?? cc/om_run/contention.py
+  53 bin/heavy
+  51 bin/test_heavy.py
+  61 cc/om_run/contention.py
+  61 cc/abrun/test_contention.py
+ 226 total
+"""Host-contention evidence invalidates scoring; all fixtures are temporary."""
+import json
+import os
+
+import pytest
+
+from cc.abrun import gate, run_summary
+from cc.om_run import contention
+
+
+@pytest.fixture
+def contended_run(tmp_path):
+    (tmp_path / 'result.json').write_text(json.dumps(dict(status='ok', wall_s=1)))
+    (tmp_path / 'stdout.txt').write_text('same output\n')
+    (tmp_path / 'stderr.txt').write_text(
+        'eval time = 1000 ms / 120 runs (120 tokens per second)\n')
+    (tmp_path / 'contention.json').write_text(json.dumps(dict(
+        max_foreign_heavy=2, names=['cc1plus', 'ninja'], samples=[dict(
+            time=1, foreign_heavy=[dict(pid=42, ppid=1, comm='ninja')])])))
+    return tmp_path
+
+
+def test_summary_contention(contended_run):
+    summary = run_summary.summarize(contended_run, write=False)
+    assert summary['host_contention'] is True
+    assert summary['max_foreign_heavy'] == 2
+
+
+@pytest.mark.parametrize('record', [None, {'max_foreign_heavy': 0}])
+def test_summary_without_contention(tmp_path, record):
+    if record is not None:
+        (tmp_path / 'contention.json').write_text(json.dumps(record))
+    summary = run_summary.summarize(tmp_path, write=False)
+    assert summary['host_contention'] is False
+    assert summary['max_foreign_heavy'] == 0
+
+
+@pytest.mark.parametrize('arm', ['base', 'other'])
+def test_contention_invalidates_gate(contended_run, arm):
+    arms = {'base': [dict(status='ok', eval_tps=100)],
+            'other': [dict(status='ok', eval_tps=120)]}
+    assert gate.evaluate(arms)['comparisons']['other']['verdict'] == 'improved'
+    arms[arm][0].update(run_summary.summarize(contended_run, write=False))
+    verdict = gate.evaluate(arms)
+    assert f'{arm}: host_contention' in verdict['reasons']
+    assert verdict['comparisons']['other']['verdict'] == 'null'
+
+
+def test_sampler_excludes_descendants_and_zombies(tmp_path):
+    # Synthetic proc tree: the run's build descendants are allowed; siblings
+    # and processes owned by other users are still foreign.
+    for pid, ppid, comm, state in [(10, 1, 'bash', 'S'), (11, 10, 'make', 'S'),
+                                    (12, 11, 'cc1plus', 'R'), (20, 1, 'ninja', 'S'),
+                                    (21, 20, 'rustc', 'R'), (22, 1, 'ld', 'Z'),
+                                    (23, 1, 'python3', 'R')]:
+        path = tmp_path / str(pid)
+        path.mkdir()
+        (path / 'stat').write_text(f'{pid} ({comm}) {state} {ppid} 0 0\n')
+    foreign = contention.foreign_heavy(10, tmp_path)
+    assert [(p['pid'], p['comm']) for p in foreign] == [(20, 'ninja'), (21, 'rustc')]
+    assert all(p['uid'] == os.getuid() for p in foreign)
+
+codex
+Implemented in the worktree.
+
+- Added `bin/heavy`, `bin/test_heavy.py`, and queue documentation.
+- Added `cc/om_run/contention.py`; updated `om_run.sh`, summary/gate, launcher, and contention/integration tests.
+- Detected contention invalidates scoring with reason `host_contention`, preventing wins.
+
+Usage: `bin/heavy [--name N] [--timeout S] -- <cmd...>`. It requires a queue worker and honors `JOBQ_DIR`.
+
+The guard defaults ON; `OM_CONTENTION_GUARD=0` disables it. Three-second sampling can miss short compiles. Visible processes from other users count; restricted `/proc` visibility can hide them.
+
+Validation: requested abrun suite **73 passed**; heavy tests **2 passed**; shell syntax and diff checks passed. No builds, Docker/GPU runs, commits, or changes to MAIN, queue state, or experiments.
+tokens used
+47,795
+Implemented in the worktree.
+
+- Added `bin/heavy`, `bin/test_heavy.py`, and queue documentation.
+- Added `cc/om_run/contention.py`; updated `om_run.sh`, summary/gate, launcher, and contention/integration tests.
+- Detected contention invalidates scoring with reason `host_contention`, preventing wins.
+
+Usage: `bin/heavy [--name N] [--timeout S] -- <cmd...>`. It requires a queue worker and honors `JOBQ_DIR`.
+
+The guard defaults ON; `OM_CONTENTION_GUARD=0` disables it. Three-second sampling can miss short compiles. Visible processes from other users count; restricted `/proc` visibility can hide them.
+
+Validation: requested abrun suite **73 passed**; heavy tests **2 passed**; shell syntax and diff checks passed. No builds, Docker/GPU runs, commits, or changes to MAIN, queue state, or experiments.

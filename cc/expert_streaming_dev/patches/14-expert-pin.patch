@@ -1,0 +1,272 @@
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -645,6 +645,118 @@
+ }
+ 
+ #ifdef __linux__
++void llama_context::expert_pin_unlock() {
++    for (const auto & r : expert_pin_locked) { munlock(reinterpret_cast<void *>(r.first), r.second - r.first); }
++    expert_pin_locked.clear();
++    expert_pin_bytes = expert_pin_experts = 0;
++}
++
++void llama_context::expert_pin_begin(uint32_t n_tokens) {
++    if (!expert_config.pin_mib) { return; }
++    if (!expert_pin_checked) {
++        expert_pin_checked = true;
++        try {
++            if (!model.expert_pin_supported()) { throw std::runtime_error("pin requires plain mmap without model-wide mlock"); }
++            const long page = sysconf(_SC_PAGESIZE);
++            if (page <= 0) { throw std::runtime_error("invalid page size"); }
++            expert_pin_indices.resize(model.layers.size());
++            for (size_t il = 0; il < model.layers.size(); ++il) {
++                const auto & layer = model.layers[il];
++                const ggml_tensor * first = nullptr;
++                for (const auto * w : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
++                    if (w) { first = w; break; }
++                }
++                if (!first) { continue; }
++                if (first->ne[2] <= 0 || first->ne[2] > INT32_MAX) { throw std::runtime_error("invalid pin expert count"); }
++                for (int64_t id = 0; id < first->ne[2]; ++id) {
++                    expert_pin_entry entry {il, int32_t(id), 0, 0, {}};
++                    for (const auto * w : {layer.ffn_gate_exps, layer.ffn_up_exps, layer.ffn_down_exps, layer.ffn_gate_up_exps}) {
++                        if (!w) { continue; }
++                        llama_model::expert_file_range info;
++                        if (w->ne[2] != first->ne[2] || w->ne[3] != 1 || !ggml_is_contiguous(w) || !w->nb[2] ||
++                                !model.expert_file_info(w, info)) { throw std::runtime_error("pin expert layout/mmap unavailable"); }
++                        if (size_t(id) > (info.mapping_size - info.offset) / w->nb[2]) { throw std::runtime_error("pin expert offset outside mmap"); }
++                        const size_t start = info.offset + size_t(id) * w->nb[2];
++                        if (w->nb[2] > info.mapping_size - start) { throw std::runtime_error("pin expert range outside mmap"); }
++                        const size_t end = start + w->nb[2];
++                        const size_t lo = start / size_t(page) * size_t(page);
++                        const size_t hi = end + std::min((size_t(page) - end % size_t(page)) % size_t(page), info.mapping_size - end);
++                        const uintptr_t base = reinterpret_cast<uintptr_t>(info.mapping);
++                        entry.ranges.emplace_back(base + lo, base + hi);
++                        entry.bytes += hi - lo;
++                    }
++                    expert_pin_indices[il].push_back(expert_pin_entries.size());
++                    expert_pin_entries.push_back(std::move(entry));
++                }
++            }
++            if (expert_pin_entries.empty()) { throw std::runtime_error("no mmap experts to pin"); }
++            expert_prefetch_layers.resize(model.layers.size());
++            expert_pin_active = true;
++        } catch (const std::exception & e) {
++            fprintf(stderr, "expert_pin: inactive (%s)\n", e.what());
++        }
++    }
++    if (!expert_pin_active || n_tokens != 1) { return; }
++    if (expert_pin_tokens >= expert_config.pin_warmup &&
++            (expert_pin_tokens - expert_config.pin_warmup) % expert_config.pin_every == 0) { expert_pin_repin(); }
++    ++expert_pin_tokens;
++}
++
++void llama_context::expert_pin_selected(size_t il, const std::vector<int32_t> & selected) {
++    if (!expert_pin_active || !expert_fill_decode || il >= expert_pin_indices.size()) { return; }
++    const auto & indices = expert_pin_indices[il];
++    for (const int32_t id : selected) {
++        if (id >= 0 && size_t(id) < indices.size()) { ++expert_pin_entries[indices[id]].frequency; }
++    }
++}
++
++void llama_context::expert_pin_repin() {
++    std::vector<size_t> ranked;
++    for (size_t i = 0; i < expert_pin_entries.size(); ++i) {
++        if (expert_pin_entries[i].frequency) { ranked.push_back(i); }
++    }
++    std::sort(ranked.begin(), ranked.end(), [&](size_t a, size_t b) {
++        const auto & x = expert_pin_entries[a];
++        const auto & y = expert_pin_entries[b];
++        return x.frequency != y.frequency ? x.frequency > y.frequency : a < b;
++    });
++    uint64_t budget = uint64_t(expert_config.pin_mib) * 1024 * 1024, experts = 0;
++    std::vector<std::pair<uintptr_t, uintptr_t>> ranges;
++    for (const auto i : ranked) {
++        const auto & entry = expert_pin_entries[i];
++        if (entry.bytes > budget) { continue; }
++        budget -= entry.bytes; ++experts;
++        ranges.insert(ranges.end(), entry.ranges.begin(), entry.ranges.end());
++    }
++    std::sort(ranges.begin(), ranges.end());
++    std::vector<std::pair<uintptr_t, uintptr_t>> merged;
++    for (const auto & r : ranges) {
++        if (!merged.empty() && r.first <= merged.back().second) { merged.back().second = std::max(merged.back().second, r.second); }
++        else { merged.push_back(r); }
++    }
++    // Rebuild the union so shared boundary pages remain locked for retained experts.
++    expert_pin_unlock();
++    ++expert_pin_repins;
++    if (!expert_pin_willneed) {
++        for (const auto & r : merged) {
++            if (mlock(reinterpret_cast<void *>(r.first), r.second - r.first)) {
++                const int error = errno;
++                munlock(reinterpret_cast<void *>(r.first), r.second - r.first);
++                ++expert_pin_failures; expert_pin_willneed = true;
++                expert_pin_unlock();
++                fprintf(stderr, "expert_pin: mlock failed errno=%d; pin_mode=willneed (pages remain evictable)\n", error);
++                break;
++            }
++            expert_pin_locked.push_back(r);
++            expert_pin_bytes += r.second - r.first;
++        }
++        if (!expert_pin_willneed) { expert_pin_experts = experts; }
++    }
++    if (expert_pin_willneed) {
++        for (const auto & r : merged) { madvise(reinterpret_cast<void *>(r.first), r.second - r.first, MADV_WILLNEED); }
++    }
++}
++
+ void llama_context::expert_fill_init() {
+     if (expert_fill_checked) { return; }
+     expert_fill_checked = true;
+@@ -1127,7 +1239,7 @@
+ void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe, void * data) {
+     auto & ctx = *static_cast<llama_context *>(data);
+ #ifdef __linux__
+-    if (ctx.expert_fill_failed) { return; }
++    if (ctx.expert_fill_failed && !ctx.expert_pin_active) { return; }
+ #endif
+     if (t->op != GGML_OP_MUL_MAT_ID || !t->src[0] || !t->src[2]) {
+         return;
+@@ -1186,6 +1298,7 @@
+         }
+     }
+ #ifdef __linux__
++    ctx.expert_pin_selected(il, selected);
+     if (ctx.expert_fill_enabled) {
+         if (ctx.expert_pregate_enabled) {
+             ctx.expert_pregate_arrive(il, selected); // cancel before demand
+@@ -1198,6 +1311,7 @@
+         if (ctx.expert_diag_enabled) { ctx.expert_diag_pre_use(il); }
+         return;
+     }
++    if (!ctx.expert_config.prefetch) { return; }
+ #endif
+     state.tokens += ids->ne[1];
+     for (int32_t id : state.predicted) {
+@@ -1227,6 +1341,13 @@
+     synchronize();
+ 
+ #ifdef __linux__
++    if (expert_config.pin_mib) {
++        fprintf(stderr, "expert_pin: stats pinned_mib=%.3f pinned_experts=%llu repins=%llu mlock_failures=%llu mode=%s\n",
++            double(expert_pin_bytes) / (1024 * 1024), (unsigned long long)expert_pin_experts,
++            (unsigned long long)expert_pin_repins, (unsigned long long)expert_pin_failures,
++            expert_pin_active ? (expert_pin_willneed ? "willneed" : "mlock") : "inactive");
++        expert_pin_unlock();
++    }
+     if (expert_pregate_enabled) { expert_pregate_stats(); }
+     if (expert_diag_enabled) {
+         expert_diag_finish_token();
+@@ -2339,6 +2460,7 @@
+ #ifdef __linux__
+     expert_fill_init();
+     expert_fill_phase(ubatch.n_tokens);
++    expert_pin_begin(ubatch.n_tokens);
+     if (expert_fill_enabled && !expert_fill_failed && expert_fill_this_ubatch) { expert_demand_tokens += ubatch.n_tokens; }
+     if (expert_pregate_enabled) {
+         // Layer numbers restart for every ubatch; retire previous-token backlog.
+diff --git a/src/llama-context.h b/src/llama-context.h
+--- a/src/llama-context.h
++++ b/src/llama-context.h
+@@ -55,6 +55,22 @@
+ 
+ #ifdef __linux__
+     ExpertConfig expert_config = ExpertConfig::read();
++    struct expert_pin_entry {
++        size_t layer;
++        int32_t id;
++        uint64_t frequency = 0, bytes = 0;
++        std::vector<std::pair<uintptr_t, uintptr_t>> ranges;
++    };
++    std::vector<expert_pin_entry> expert_pin_entries;
++    std::vector<std::vector<size_t>> expert_pin_indices;
++    std::vector<std::pair<uintptr_t, uintptr_t>> expert_pin_locked;
++    bool expert_pin_checked = false, expert_pin_active = false, expert_pin_willneed = false;
++    uint64_t expert_pin_tokens = 0, expert_pin_repins = 0, expert_pin_failures = 0;
++    uint64_t expert_pin_bytes = 0, expert_pin_experts = 0;
++    void expert_pin_begin(uint32_t n_tokens);
++    void expert_pin_selected(size_t il, const std::vector<int32_t> & selected);
++    void expert_pin_repin();
++    void expert_pin_unlock();
+     uint64_t expert_demand_tokens = 0;
+     std::map<size_t, std::unique_ptr<ExpertFiller>> expert_fillers;
+     bool expert_fill_checked = false;
+diff --git a/src/llama-expert-fill.h b/src/llama-expert-fill.h
+--- a/src/llama-expert-fill.h
++++ b/src/llama-expert-fill.h
+@@ -33,6 +33,7 @@
+     size_t fill = 0, threads = 8, chunk_kib = 1024, min_tokens = 0, max_tokens = 0;
+     size_t diag = 0, populate = 0, pregate = 0, k = 8, max_inflight = 4, lookahead = 1;
+     size_t prefetch = 0, prefetch_next = 0;
++    size_t pin_mib = 0, pin_warmup = 8, pin_every = 32;
+     std::string random = "0", order = "after", diag_csv;
+     [[noreturn]] static void invalid(const char * name, const char * value, const std::string & range) {
+         fprintf(stderr, "expert_config: invalid %s=%s (range %s)\n", name, value, range.c_str());
+@@ -72,7 +73,8 @@
+             "LLAMA_EXPERT_FILL_DIAG", "LLAMA_EXPERT_FILL_DIAG_CSV", "LLAMA_EXPERT_FILL_POPULATE",
+             "LLAMA_EXPERT_PREGATE", "LLAMA_EXPERT_PREGATE_K", "LLAMA_EXPERT_PREGATE_ORDER",
+             "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT", "LLAMA_EXPERT_PREGATE_LOOKAHEAD",
+-            "LLAMA_EXPERT_PREFETCH", "LLAMA_EXPERT_PREFETCH_NEXT"};
++            "LLAMA_EXPERT_PREFETCH", "LLAMA_EXPERT_PREFETCH_NEXT",
++            "LLAMA_EXPERT_PIN_MIB", "LLAMA_EXPERT_PIN_WARMUP", "LLAMA_EXPERT_PIN_EVERY"};
+         for (char ** e = environ; e && *e; ++e) {
+             const std::string entry(*e);
+             const size_t eq = entry.find('=');
+@@ -83,6 +85,9 @@
+             }
+         }
+         ExpertConfig c;
++        c.pin_mib = integer("LLAMA_EXPERT_PIN_MIB", 0, 0, 8192);
++        c.pin_warmup = integer("LLAMA_EXPERT_PIN_WARMUP", 8, 0, 2147483647);
++        c.pin_every = integer("LLAMA_EXPERT_PIN_EVERY", 32, 1, 2147483647);
+         c.fill = integer("LLAMA_EXPERT_FILL", 0, 0, 1);
+         c.random = choice("LLAMA_EXPERT_FILL_RANDOM", "0", {"0", "1", "decode"});
+         c.threads = integer("LLAMA_EXPERT_FILL_THREADS", 8, 1, 64);
+@@ -107,9 +112,9 @@
+     void print() const {
+         fprintf(stderr, "expert_config: effective fill=%zu random=%s max_tokens=%zu threads=%zu chunk_kib=%zu "
+             "pregate=%zu k=%zu order=%s max_inflight=%zu lookahead=%zu min_tokens=%zu diag=%zu populate=%zu "
+-            "diag_csv=%s prefetch=%zu prefetch_next=%zu\n",
++            "diag_csv=%s prefetch=%zu prefetch_next=%zu pin_mib=%zu pin_warmup=%zu pin_every=%zu\n",
+             fill, random.c_str(), max_tokens, threads, chunk_kib, pregate, k, order.c_str(), max_inflight,
+-            lookahead, min_tokens, diag, populate, diag_csv.empty() ? "(unset)" : diag_csv.c_str(), prefetch, prefetch_next);
++            lookahead, min_tokens, diag, populate, diag_csv.empty() ? "(unset)" : diag_csv.c_str(), prefetch, prefetch_next, pin_mib, pin_warmup, pin_every);
+     }
+ };
+ 
+diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+--- a/src/llama-model.cpp
++++ b/src/llama-model.cpp
+@@ -2151,7 +2151,7 @@
+ 
+ #ifdef __linux__
+     const auto expert_config = ExpertConfig::read();
+-    if (expert_config.fill && use_mmap_buffer) {
++    if ((expert_config.fill || expert_config.pin_mib) && use_mmap_buffer) {
+         try {
+             for (const auto & file : ml.files) {
+                 const std::string path = "/proc/self/fd/" + std::to_string(file->file_id());
+@@ -2552,6 +2552,10 @@
+ 
+ llama_split_mode llama_model::split_mode() const {
+     return params.split_mode;
++}
++
++bool llama_model::expert_pin_supported() const {
++    return params.load_mode == LLAMA_LOAD_MODE_MMAP;
+ }
+ 
+ bool llama_model::expert_file_info(const ggml_tensor * t, expert_file_range & out, bool require_host) const {
+diff --git a/src/llama-model.h b/src/llama-model.h
+--- a/src/llama-model.h
++++ b/src/llama-model.h
+@@ -979,6 +979,7 @@
+     };
+     // require_host=false returns file metadata only; mapping+offset may be unmapped
+     // for GPU weights. Caller must map source_fd independently before dereferencing.
++    bool expert_pin_supported() const;
+     bool expert_file_info(const ggml_tensor * t, expert_file_range & out, bool require_host = true) const;
+ 
+     std::map<ggml_backend_buffer_type_t, size_t> memory_breakdown() const;

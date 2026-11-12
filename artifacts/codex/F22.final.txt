@@ -1,0 +1,11 @@
+Implemented in the worktree.
+
+- Added `bin/heavy`, `bin/test_heavy.py`, and queue documentation.
+- Added `cc/om_run/contention.py`; updated `om_run.sh`, summary/gate, launcher, and contention/integration tests.
+- Detected contention invalidates scoring with reason `host_contention`, preventing wins.
+
+Usage: `bin/heavy [--name N] [--timeout S] -- <cmd...>`. It requires a queue worker and honors `JOBQ_DIR`.
+
+The guard defaults ON; `OM_CONTENTION_GUARD=0` disables it. Three-second sampling can miss short compiles. Visible processes from other users count; restricted `/proc` visibility can hide them.
+
+Validation: requested abrun suite **73 passed**; heavy tests **2 passed**; shell syntax and diff checks passed. No builds, Docker/GPU runs, commits, or changes to MAIN, queue state, or experiments.

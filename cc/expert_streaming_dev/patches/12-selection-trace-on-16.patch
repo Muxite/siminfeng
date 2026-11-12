@@ -1,0 +1,208 @@
+From 0f8daddd0c1c23f88dc36d93a6f8545293aa2a2e Mon Sep 17 00:00:00 2001
+From: muk <operator@localhost>
+Date: Thu, 12 Nov 2026 19:58:54 +0000
+Subject: [PATCH] expert: 12-selection-trace (F16 candidate, CPU-tested only)
+
+---
+ src/llama-context.cpp   | 77 ++++++++++++++++++++++++++++++++++++++++-
+ src/llama-context.h     | 15 ++++++++
+ src/llama-expert-fill.h | 12 ++++---
+ 3 files changed, 99 insertions(+), 5 deletions(-)
+
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 3fe516ae1..15fe06802 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -650,6 +650,72 @@ llama_context::llama_context(
+ }
+ 
+ #ifdef __linux__
++void llama_context::expert_trace_flush() {
++    if (!expert_trace_file) { return; }
++    for (const auto & r : expert_trace_buffer) {
++        fprintf(expert_trace_file, "%llu,%llu,%zu,%s,", (unsigned long long)expert_trace_run,
++            (unsigned long long)r.token, r.layer, r.decode ? "decode" : "prompt");
++        for (size_t i = 0; i < r.selected.size(); ++i) { fprintf(expert_trace_file, "%s%d", i ? " " : "", r.selected[i]); }
++        fputc(',', expert_trace_file);
++        for (size_t i = 0; i < r.predicted.size(); ++i) { fprintf(expert_trace_file, "%s%d", i ? " " : "", r.predicted[i]); }
++        fputc('\n', expert_trace_file);
++    }
++    expert_trace_records += expert_trace_buffer.size();
++    expert_trace_buffer.clear();
++    if (fflush(expert_trace_file) || ferror(expert_trace_file)) {
++        LLAMA_LOG_ERROR("expert_trace: write failed path=%s\n", expert_config.trace.c_str());
++        fclose(expert_trace_file); expert_trace_file = nullptr;
++    }
++}
++
++void llama_context::expert_trace_begin(const llama_ubatch & ubatch) {
++    const uint32_t n_tokens = ubatch.n_tokens;
++    if (expert_config.trace.empty()) { return; }
++    if (!expert_trace_checked) {
++        expert_trace_checked = true;
++        expert_trace_file = fopen(expert_config.trace.c_str(), "a+");
++        if (!expert_trace_file) {
++            LLAMA_LOG_ERROR("expert_trace: cannot open path=%s\n", expert_config.trace.c_str());
++            return;
++        }
++        fseek(expert_trace_file, 0, SEEK_END);
++        if (ftell(expert_trace_file) == 0) { fputs("run,token_idx,layer,phase,selected,predicted\n", expert_trace_file); }
++        expert_trace_run = std::chrono::steady_clock::now().time_since_epoch().count();
++        expert_prefetch_layers.resize(model.layers.size());
++    }
++    if (!expert_trace_file) { return; }
++    // Flush between graphs, never once per layer.
++    if (expert_trace_token / 128 != (expert_trace_token + n_tokens) / 128) { expert_trace_flush(); }
++    expert_trace_ubatch_tokens = n_tokens;
++    expert_trace_output_tokens.clear();
++    for (uint32_t i = 0; i < n_tokens; ++i) {
++        if (ubatch.output && ubatch.output[i]) { expert_trace_output_tokens.push_back(expert_trace_token + i); }
++    }
++    expert_trace_token += n_tokens;
++}
++
++void llama_context::expert_trace_selected(size_t il, const ggml_tensor * ids) {
++    if (!expert_trace_file) { return; }
++    const bool full = ids->ne[1] == expert_trace_ubatch_tokens;
++    if (!full && size_t(ids->ne[1]) != expert_trace_output_tokens.size()) {
++        if (!expert_trace_warned) { LLAMA_LOG_ERROR("expert_trace: unsupported token subset (once)\n"); expert_trace_warned = true; }
++        return;
++    }
++    for (int64_t token = 0; token < ids->ne[1]; ++token) {
++        const uint64_t index = full ? expert_trace_token - expert_trace_ubatch_tokens + uint64_t(token) : expert_trace_output_tokens[token];
++        expert_trace_record r {index, il, expert_fill_decode, {}, {}};
++        for (int64_t k = 0; k < ids->ne[0]; ++k) {
++            int32_t id;
++            memcpy(&id, static_cast<const char *>(ids->data) + token * ids->nb[1] + k * ids->nb[0], sizeof(id));
++            r.selected.push_back(id);
++        }
++        if (expert_pregate_enabled && il < expert_pregate_layers.size()) {
++            for (const auto & prediction : expert_pregate_layers[il].predictions[0]) { r.predicted.push_back(prediction.id); }
++        }
++        expert_trace_buffer.push_back(std::move(r));
++    }
++}
++
+ void llama_context::expert_fill_init() {
+     if (expert_fill_checked) { return; }
+     expert_fill_checked = true;
+@@ -1159,7 +1225,7 @@ void llama_context::expert_prefetch_advise(size_t il, int32_t id) {
+ void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe, void * data) {
+     auto & ctx = *static_cast<llama_context *>(data);
+ #ifdef __linux__
+-    if (ctx.expert_fill_failed) { return; }
++    if (ctx.expert_fill_failed && !ctx.expert_trace_file) { return; }
+ #endif
+     if (t->op != GGML_OP_MUL_MAT_ID || !t->src[0] || !t->src[2]) {
+         return;
+@@ -1218,6 +1284,7 @@ void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe
+         }
+     }
+ #ifdef __linux__
++    ctx.expert_trace_selected(il, ids);
+     if (ctx.expert_fill_enabled) {
+         if (ctx.expert_pregate_enabled) {
+             ctx.expert_pregate_arrive(il, selected); // cancel before demand
+@@ -1230,6 +1297,7 @@ void llama_context::expert_prefetch_cb(ggml_tensor * t, bool ask, bool * observe
+         if (ctx.expert_diag_enabled) { ctx.expert_diag_pre_use(il); }
+         return;
+     }
++    if (!ctx.expert_config.prefetch) { return; }
+ #endif
+     state.tokens += ids->ne[1];
+     for (int32_t id : state.predicted) {
+@@ -1324,6 +1392,12 @@ llama_context::~llama_context() {
+             (unsigned long long) readiness_prompt_selected, (unsigned long long) (p.missing_predicted + p.missing_unpredicted),
+             (unsigned long long) (d.probe_ns + p.probe_ns));
+     }
++    expert_trace_flush();
++    if (expert_trace_file) {
++        if (fclose(expert_trace_file)) { LLAMA_LOG_ERROR("expert_trace: close failed\n"); }
++        expert_trace_file = nullptr;
++        fprintf(stderr, "expert_trace: wrote records=%llu path=%s\n", (unsigned long long)expert_trace_records, expert_config.trace.c_str());
++    }
+     if (expert_diag_enabled) {
+         expert_diag_finish_token();
+         const auto & d = expert_diag_total;
+@@ -2435,6 +2509,7 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
+ #ifdef __linux__
+     expert_fill_init();
+     expert_fill_phase(ubatch.n_tokens);
++    expert_trace_begin(ubatch);
+     if (expert_fill_enabled && !expert_fill_failed && expert_fill_this_ubatch) {
+         expert_demand_tokens += ubatch.n_tokens;
+         if (expert_config.readiness && ubatch.n_tokens == 1) { ++readiness_decode_tokens; }
+diff --git a/src/llama-context.h b/src/llama-context.h
+index a09dffad8..ce9a9103b 100644
+--- a/src/llama-context.h
++++ b/src/llama-context.h
+@@ -64,6 +64,21 @@ struct llama_context {
+     void expert_phase_start();
+     void expert_phase_complete();
+     void expert_phase_print();
++    struct expert_trace_record {
++        uint64_t token;
++        size_t layer;
++        bool decode;
++        std::vector<int32_t> selected, predicted;
++    };
++    FILE * expert_trace_file = nullptr;
++    bool expert_trace_checked = false, expert_trace_warned = false;
++    uint32_t expert_trace_ubatch_tokens = 0;
++    std::vector<uint64_t> expert_trace_output_tokens;
++    uint64_t expert_trace_token = 0, expert_trace_records = 0, expert_trace_run = 0;
++    std::vector<expert_trace_record> expert_trace_buffer;
++    void expert_trace_flush();
++    void expert_trace_begin(const llama_ubatch & ubatch);
++    void expert_trace_selected(size_t il, const ggml_tensor * ids);
+     uint64_t expert_demand_tokens = 0;
+     ExpertFiller::Readiness expert_readiness_decode, expert_readiness_prompt;
+     uint64_t readiness_decode_tokens = 0, readiness_selected = 0, readiness_predicted = 0, readiness_prompt_selected = 0;
+diff --git a/src/llama-expert-fill.h b/src/llama-expert-fill.h
+index 56fba9d51..4655a8f44 100644
+--- a/src/llama-expert-fill.h
++++ b/src/llama-expert-fill.h
+@@ -33,7 +33,7 @@ struct ExpertConfig {
+     size_t fill = 0, threads = 8, chunk_kib = 1024, min_tokens = 0, max_tokens = 0;
+     size_t diag = 0, populate = 0, pregate = 0, k = 8, max_inflight = 4, lookahead = 1;
+     size_t prefetch = 0, prefetch_next = 0, readiness = 0, join = 0, phase_stats = 0;
+-    std::string random = "0", order = "after", diag_csv;
++    std::string random = "0", order = "after", diag_csv, trace;
+     [[noreturn]] static void invalid(const char * name, const char * value, const std::string & range) {
+         fprintf(stderr, "expert_config: invalid %s=%s (range %s)\n", name, value, range.c_str());
+         fflush(stderr);
+@@ -73,7 +73,7 @@ struct ExpertConfig {
+             "LLAMA_EXPERT_PREGATE", "LLAMA_EXPERT_PREGATE_K", "LLAMA_EXPERT_PREGATE_ORDER",
+             "LLAMA_EXPERT_PREGATE_MAX_INFLIGHT", "LLAMA_EXPERT_PREGATE_LOOKAHEAD",
+             "LLAMA_EXPERT_PREFETCH", "LLAMA_EXPERT_PREFETCH_NEXT", "LLAMA_EXPERT_READINESS", "LLAMA_EXPERT_PREGATE_JOIN",
+-            "LLAMA_EXPERT_PHASE_STATS"};
++            "LLAMA_EXPERT_PHASE_STATS", "LLAMA_EXPERT_TRACE"};
+         for (char ** e = environ; e && *e; ++e) {
+             const std::string entry(*e);
+             const size_t eq = entry.find('=');
+@@ -86,6 +86,10 @@ struct ExpertConfig {
+         ExpertConfig c;
+         c.join = integer("LLAMA_EXPERT_PREGATE_JOIN", 0, 0, 1);
+         c.readiness = integer("LLAMA_EXPERT_READINESS", 0, 0, 1);
++        if (const char * path = getenv("LLAMA_EXPERT_TRACE")) {
++            if (!*path) { invalid("LLAMA_EXPERT_TRACE", path, "nonempty path"); }
++            c.trace = path;
++        }
+         c.fill = integer("LLAMA_EXPERT_FILL", 0, 0, 1);
+         c.random = choice("LLAMA_EXPERT_FILL_RANDOM", "0", {"0", "1", "decode"});
+         c.threads = integer("LLAMA_EXPERT_FILL_THREADS", 8, 1, 64);
+@@ -111,9 +115,9 @@ struct ExpertConfig {
+     void print() const {
+         fprintf(stderr, "expert_config: effective fill=%zu random=%s max_tokens=%zu threads=%zu chunk_kib=%zu "
+             "pregate=%zu k=%zu order=%s max_inflight=%zu lookahead=%zu min_tokens=%zu diag=%zu populate=%zu "
+-            "diag_csv=%s prefetch=%zu prefetch_next=%zu readiness=%zu join=%zu phase_stats=%zu\n",
++            "diag_csv=%s prefetch=%zu prefetch_next=%zu readiness=%zu join=%zu phase_stats=%zu trace=%s\n",
+             fill, random.c_str(), max_tokens, threads, chunk_kib, pregate, k, order.c_str(), max_inflight,
+-            lookahead, min_tokens, diag, populate, diag_csv.empty() ? "(unset)" : diag_csv.c_str(), prefetch, prefetch_next, readiness, join, phase_stats);
++            lookahead, min_tokens, diag, populate, diag_csv.empty() ? "(unset)" : diag_csv.c_str(), prefetch, prefetch_next, readiness, join, phase_stats, trace.empty() ? "(unset)" : trace.c_str());
+     }
+ };
+ 
+-- 
+2.34.1
+

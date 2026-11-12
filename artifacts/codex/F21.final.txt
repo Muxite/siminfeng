@@ -1,0 +1,19 @@
+Implemented F21 on `ai4r/contract-loop`.
+
+Files changed: ontology YAML/loader; all eight component materials and schema; `expert_streaming.py`, `components.py`; taskgraph/API/builder/manager/A-B code; three CC declarations; [NODE-EXAMPLE.md](/home/muk/projects/jiuwenswarm-cl/docs/architecture/factory/NODE-EXAMPLE.md); [test_ontology_dispatch.py](/home/muk/projects/jiuwenswarm-cl/tests/factory/test_ontology_dispatch.py).
+
+Ontology now drives two behaviors:
+
+- Applicability ranks components from evidence gaps and bottleneck signals, with ontology-path explanations.
+- Engagement labels counters with quantity/unit/phase and lists absent required evidence without substituting zero.
+
+Optional `node_id` submissions validate node state and dependencies, then retain the link in the attempt request. Calls without it preserve existing behavior.
+
+**Validation:** all 40 tests passed across the three requested files. `git diff --check` passed. No builds, Docker/GPU work, commits, or writes to main/live state.
+
+Known gaps intentionally deferred:
+
+- Ranking remains deliberately naive.
+- Entity references and resource declarations remain descriptive.
+- Evidence requirements do not automatically gate acceptance or update attempt links.
+- Dispatch checking and enqueueing are not atomic against concurrent graph revisions.
