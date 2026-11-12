@@ -1,0 +1,24 @@
+Implemented; pack built at `/tmp/jiuwenswarm-demo-pack`: **9 sections, 600 seconds, no evidence gaps**.
+
+Launch:
+```sh
+PYTHONPATH=/home/muk/projects/jiuwenswarm-demo /home/muk/projects/jiuwenswarm/.venv/bin/python -m jiuwenswarm.factory.cli demo serve --pack /tmp/jiuwenswarm-demo-pack
+```
+
+Terminal controls: `jiuwenswarm factory demo {next,prev,pause,resume,status,live}` and `goto N`.
+
+| Section | Source |
+|---|---|
+| Engine slide | Local `engine.html` |
+| Factory slide | Local `factory.html` |
+| Baseline + contract | Run 4 task/evaluation, frozen stdout, contract, current brief |
+| Capsule invocations | Run 4 telemetry and matched transcript receipts |
+| Source + build | Run 4 integration diffs and image receipts |
+| Expert activity | J-XS4 HTML, stderr counters, image ID |
+| Plan revision | Run 5 decision 13; taskgraph revisions 12/13 |
+| Result | J-OM13 report, Run 4 single runs, generated stdout |
+| Handoff | Capsule manifest and `RSI-START-HERE.md` |
+
+Timings and launch instructions: [DEMO-10MIN.md](/home/muk/projects/jiuwenswarm-demo/docs/architecture/factory/DEMO-10MIN.md).
+
+**Validation:** all 6 requested tests pass. Nothing fabricated. Browser/server verification was blocked by the sandbox’s socket restriction; optional Docker inspection was skipped. No commits or compiles.
