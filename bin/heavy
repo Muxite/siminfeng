@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""Submit a build to jobq and wait for its output (requires a jobq worker)."""
+import argparse
+from collections import deque
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+JOBQ = ROOT / 'bin/jobq'
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--name')
+    parser.add_argument('--timeout', help='job execution timeout in seconds')
+    parser.add_argument('argv', nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    argv = args.argv[1:] if args.argv[:1] == ['--'] else args.argv
+    if not argv:
+        parser.error('command required after --')
+    submit = [str(JOBQ), 'submit', '--class', 'build']
+    for key in ('name', 'timeout'):
+        value = getattr(args, key)
+        if value is not None:
+            submit.extend(['--' + key, value])
+    job = subprocess.run([*submit, '--', *argv], capture_output=True, text=True)
+    if job.returncode:
+        sys.stderr.write(job.stderr)
+        return job.returncode
+    jid = job.stdout.strip()
+    waited = subprocess.run([str(JOBQ), 'wait', jid])
+    state = Path(os.environ.get('JOBQ_DIR', ROOT / 'lab/jobq')).resolve()
+    record = json.loads((state / (jid + '.json')).read_text())
+    log = state / (jid + '.log')
+    print(f'jobq log: {log}', flush=True)
+    if log.exists():
+        with log.open(errors='replace') as stream:
+            sys.stdout.write(''.join(deque(stream, maxlen=80)))
+    rc = record.get('rc')
+    if rc is None:
+        return waited.returncode or 1
+    return rc if rc >= 0 else 128 - rc
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (OSError, ValueError) as exc:
+        print(f'heavy: {exc}', file=sys.stderr)
+        sys.exit(1)

@@ -34,6 +34,9 @@ State defaults to `lab/jobq/`: one JSON per job, append-only `events.jsonl`, a
 exit status, dependencies, and symmetric `concurrent_jobs` overlap history.
 A worker restart detects a dead job supervisor and fails the abandoned job.
 `JOBQ_DIR` overrides state storage; `JOBQ_RUN_OP` selects a test wrapper.
+`bin/heavy [--name NAME] [--timeout SECONDS] -- COMMAND ...` submits a build,
+waits for completion, prints the job log path and its last 80 lines, and returns
+the command exit code. It uses the same `JOBQ_DIR` and requires a running worker.
 Submit preserves the working directory and environment for execution, adding
 `JOBQ_JOB_ID` for container ownership labels.
 
