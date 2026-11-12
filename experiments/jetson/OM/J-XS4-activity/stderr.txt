@@ -1,0 +1,34 @@
+0.00.046.532 I llama_completion: llama backend init
+0.00.046.557 I llama_completion: load the model and apply lora adapter, if any
+expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=(unset) prefetch=0 prefetch_next=0 readiness=1 join=0 phase_stats=1 trace=/prof/expert_trace.csv
+expert_pregate: stats predictions=0 arrivals=0 hits=0 actual=0 predicted=0 recall_at_k=0.000000 precision=0.000000 async_bytes_read=0 async_reads=0 async_errors=0 dropped=0 cancelled_jobs=0 cancelled_bytes=0 inflight_at_arrival=0 inflight_reads=0 pending_reads=0 sync_bytes_with_prediction=0 sync_bytes_without_prediction=0 sync_calls_with_prediction=0 sync_calls_without_prediction=0 skips=0 pred_done=0 pred_inflight=0 pred_queued=0 pred_resident_at_predict=0 hit_done=0 hit_inflight=0 hit_queued=0 hit_resident=0 recall_at_k_d1=0.000000 recall_at_k_d2=0.000000 actual_d1=0 actual_d2=0 hits_d1=0 hits_d2=0 demand_wait_ns_total=0 demand_wait_ns_per_token=0.000 join_waits=0 join_wait_ns=0 join_bytes=0
+expert_readiness: stats decode_tokens=0 decode_selected=0 decode_selected_predicted=0 decode_ready_bytes_predicted=0 decode_missing_bytes_predicted=0 decode_ready_bytes_unpredicted=0 decode_missing_bytes_unpredicted=0 decode_wasted_async_bytes=0 decode_duplicate_demand_bytes=0 prompt_selected=0 prompt_missing_bytes=0 probe_ns_total=0
+0.01.918.688 W llama_model_loader: tensor overrides to CPU are used with mmap enabled - consider using --load-mode none for better performance
+expert_config: effective fill=1 random=decode max_tokens=1 threads=16 chunk_kib=2048 pregate=1 k=8 order=after max_inflight=4 lookahead=1 min_tokens=0 diag=0 populate=0 diag_csv=(unset) prefetch=0 prefetch_next=0 readiness=1 join=0 phase_stats=1 trace=/prof/expert_trace.csv
+0.54.084.866 I cmn          init: llama threadpool init, n_threads = 6
+expert_readiness: active
+1.04.546.477 I 
+1.04.549.541 I system_info: n_threads = 6 (n_threads_batch = 6) / 6 | CUDA : ARCHS = 870 | USE_GRAPHS = 1 | FA_QUANTS = q4_0-q4_0,q8_0-q8_0,f16-f16,bf16-bf16 | CPU : NEON = 1 | ARM_FMA = 1 | FP16_VA = 1 | DOTPROD = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+1.04.549.557 I 
+1.04.584.380 I sampler seed: 4294967295
+1.04.584.756 I sampler params: 
+	repeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000
+	dry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 64
+	top_k = 20, top_p = 0.950, min_p = 0.050, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000
+	mirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900
+1.04.584.807 I sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> greedy 
+1.04.584.809 I generate: n_ctx = 4096, n_batch = 2048, n_predict = 64, n_keep = 0
+1.04.584.811 I 
+2.41.922.295 I common_perf_print:    sampling time =      56.77 ms
+2.41.922.309 I common_perf_print:    samplers time =      24.41 ms /   259 tokens
+2.41.922.952 I common_perf_print:        load time =   63127.23 ms
+2.41.922.990 I common_perf_print: prompt eval time =   45417.18 ms /   195 tokens (  232.91 ms per token,     4.29 tokens per second)
+2.41.922.995 I common_perf_print:        eval time =   51841.11 ms /    63 runs   (  822.87 ms per token,     1.22 tokens per second)
+2.41.922.996 I common_perf_print:       total time =   97376.52 ms /   258 tokens
+2.41.922.998 I common_perf_print: unaccounted time =      61.45 ms /   0.1 %      (total - sampling - prompt eval - eval) / (total)
+2.41.922.998 I common_perf_print:    graphs reused =         61
+2.41.923.000 I common_perf_print:   graph reallocs =          1    /     0        (same size) / (changed size)
+expert_phase: stats decode_tokens=63 decode_wall_ns=51922609483 minflt=294400 majflt=9421 nvcsw=653261 nivcsw=118157 utime_us=36361426 stime_us=29807353 tok_ns_p50=755141578 tok_ns_p95=1217843976 tok_ns_max=1941886258 first8_ns_mean=908441802 rest_ns_mean=810913285
+expert_pregate: stats predictions=2457 arrivals=2457 hits=15908 actual=19656 predicted=19656 recall_at_k=0.809320 precision=0.809320 async_bytes_read=8950112256 async_reads=38987 async_errors=0 dropped=0 cancelled_jobs=4292 cancelled_bytes=2868355072 inflight_at_arrival=1329 inflight_reads=4383 pending_reads=8675 sync_bytes_with_prediction=5387542528 sync_bytes_without_prediction=661405696 sync_calls_with_prediction=2457 sync_calls_without_prediction=63 skips=0 pred_done=3194 pred_inflight=1830 pred_queued=1745 pred_resident_at_predict=12887 hit_done=2435 hit_inflight=1233 hit_queued=974 hit_resident=11266 recall_at_k_d1=0.809320 recall_at_k_d2=0.000000 actual_d1=19656 actual_d2=0 hits_d1=15908 hits_d2=0 demand_wait_ns_total=19874388366 demand_wait_ns_per_token=315466482.000 join_waits=0 join_wait_ns=0 join_bytes=0
+expert_readiness: stats decode_tokens=63 decode_selected=20160 decode_selected_predicted=15908 decode_ready_bytes_predicted=28340711424 decode_missing_bytes_predicted=2360184832 decode_ready_bytes_unpredicted=4585721856 decode_missing_bytes_unpredicted=3688951808 decode_wasted_async_bytes=2467966976 decode_duplicate_demand_bytes=941637632 prompt_selected=0 prompt_missing_bytes=0 probe_ns_total=1051848134
+expert_trace: wrote records=2600 path=/prof/expert_trace.csv

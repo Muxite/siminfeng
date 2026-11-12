@@ -40,3 +40,10 @@ CC inference factory (Satay handoff 2026-11-11): `~/projects/jiuwenswarm` branch
 - ladder resume treats a failed fit as complete if argv changed (fix queued); preflight rejection should fail fast.
 - thread_sampler costs ~23% of one core at 500 Hz with 24 threads → run at 100 Hz.
 - Qwen3.5 output may contain reasoning text despite `--reasoning off` (check `no_letter` in MCQ results).
+
+## 2026-11-12 demo wrap-up (supersedes earlier demo guidance)
+- Demo = factory Run 4 (recorded fallback, 903.95 → 785.22 ms/token) + Run 5 (factory-53db4945…, stopped at decision 21: capsule use, plan revision at rev 13, tuning trial at rev 19) + J-OM13 direct result (plain llama.cpp 841.5 vs factory engine 711.4 ms/token, 1.18×, identical output).
+- J-XS4-activity: one recorded observability run on factory/llamacpp:xs-trace (not scored): 79% of selected experts predicted; 92% of predicted vs 55% of unpredicted expert bytes ready before demand. View: experiments/jetson/OM/J-XS4-activity/activity.html.
+- Scheduler: compiles must go through bin/heavy; om_run contention guard invalidates contaminated runs.
+- Deferred (RSI/next): F19 placement runs, io_bench sweep, p12–p15 candidates (CPU-tested), adaptive read policies.
+- jiuwenswarm tag cc-baseline-2026-11-12; runbook docs/architecture/factory/DEMO-10MIN.md; handoff RSI-HANDOFF.md.
