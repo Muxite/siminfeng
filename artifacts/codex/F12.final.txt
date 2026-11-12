@@ -1,0 +1,21 @@
+Implemented F12.
+
+Files added: [component capsules](/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/ccs/components), [methodology](/home/muk/projects/jiuwenswarm/jiuwenswarm/factory/ccs/methodology_ab/AB.md), `ab.py`, `ab_runner.py`, `components.py`, bare contract, evolve task, schema and fixture tests. Updated Manager/API/lab_client, controller, story, monitor, telemetry and integration guidance.
+
+Patch-derived settings/checks:
+
+| Component | Enable environment | Engagement |
+|---|---|---|
+| mmap_advice | `LLAMA_MMAP_ADVICE=random` | mmap advice log |
+| router_prefetch | `LLAMA_EXPERT_PREFETCH=1`, `LLAMA_EXPERT_PREFETCH_NEXT=0` | hook enabled; positive advise calls |
+| expert_fill | `LLAMA_EXPERT_FILL=1`, random=`decode`, threads=`16`, chunk KiB=`2048`, token limits=`0/1` | active; decode advice; positive fill calls |
+| expert_pregate | `LLAMA_EXPERT_PREGATE=1`, K=`8`, order=`after`, inflight=`4`, lookahead=`1` | active; effective config; positive predictions |
+| thread_names | No new switch; fill must run | sampled `xfill-*` threads |
+
+Full names/ranges are recorded in each `component.yaml`. Patch 09 additionally requires `expert_pregate` source context from patch 06.
+
+Validation: **238 passed, 1 skipped** (monitor environment restriction). Patch-series check passed. Capsule listing includes all requested materials.
+
+Open: successful bare build receipt/reference freeze; whether observability-only `thread_names` may be retained without a speed win.
+
+No commits, pushes, builds, live lab runs or factory-home writes. `Store.query` unchanged.

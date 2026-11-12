@@ -1,0 +1,29 @@
+Implemented all 14 fixes. G1: **197 passed**. G3: installed `factory story`, `status`, and `capsules` commands pass. All three bundles were re-exported and verified; metrics remain visible.
+
+Regression tests in `tests/factory/`:
+
+| Defect | Status / test |
+|---|---|
+| 1 | Fixed — `test_missing_job_preserves_terminal`, `test_unknown_to_queued_uses_transition` |
+| 2 | Fixed — `test_agent_cannot_claim_host_ids`, `test_agent_cannot_claim_host_observation` |
+| 3 | Fixed — `test_decision_refuses_dangling_evidence`, `test_decision_evidence_read_grant` |
+| 4 | Fixed — `test_submit_failure_records_stderr`, `test_submit_uncertain_recovers` |
+| 5 | Fixed — `test_cancel_bounded_wait` |
+| 6 | Fixed — `test_redactor_preserves_metrics_and_words` |
+| 7 | Fixed — `test_export_extra_file_no_task_name_special_case` |
+| 8 | Fixed — `test_controller_cancel_reaps_lab` |
+| 9 | Fixed — `test_retry_spool_isolates_bad_manifests` |
+| 10 | Fixed — `test_build_worker_finally_records_result` |
+| 11 | Fixed — `test_freeze_reference_recovers_partial_import` |
+| 12 | Fixed — `test_preflight_cache_uses_store_home` |
+| 13 | Fixed — disk-independent fixture; `test_builder_ingests_and_reuses_success` |
+| 14 | Fixed — `test_contract_identifier_does_not_shadow_cwd` |
+
+Configuration/redaction consolidation, wrapper cleanup, schema migration, story polish, and documentation corrections are included.
+
+Two limitations remain:
+
+- G2 still finds one literal in the explicitly protected contract JSON; contracts remain unchanged.
+- Fresh live Docker identity is unavailable: socket/group access is denied. Re-exported bundles explicitly record fallback provenance.
+
+No commits, pushes, real builds/lab runs, or factory-home writes.

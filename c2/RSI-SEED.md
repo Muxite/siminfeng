@@ -4,12 +4,13 @@ Kept out of the jiuwenswarm repo on purpose, so an improver must find the proble
 
 ## Seed
 - **Capsule:** `factory.evidence`, capability `query`. It is the most-called capability: the agent queries evidence before every decision.
-- **Defect:** `jiuwenswarm/factory/store.py` `Store.query`, `for row in rows: if row['type']=='artifact': self.read_artifact(...)`. Each query reads and re-hashes every artifact blob in the result page, up to 50, and then throws the bytes away. The result does not depend on that work.
+- **Defect:** `jiuwenswarm/factory/store.py` `Store.query` runs an integrity sweep before it answers. It reads and SHA-256-hashes **every artifact blob of the task**, not just the returned page, and throws the bytes away. The result does not depend on that work. Commit eae83eff strengthened it from page-only verification, which the agent's small `since` pages hid: a flat 5 ms in run 4.
 - **Why it's realistic:**
   - It started as integrity checking on the read path.
   - The cost is invisible on small tasks: 21 ms on the accepted demo task, about 11 MB of artifacts.
   - The cost grows with artifact bytes. Each lab or A/B run adds about 11–90 MB: telemetry, threads.jsonl and watchdog files. Over an evolve task with many runs, query latency climbs to seconds.
   - One corrupt blob also makes every query fail. That is a robustness smell as well.
+- **Measured:** replaying run 4's 15 `evidence.query` calls (`python -m jiuwenswarm.factory.replay factory-bd173c08… --home <copy> --capability evidence.query`) at 478 MB of task artifacts took **720–768 ms each**. With page-only verification in the live run they took about 5 ms. Other capabilities have a median of about 5 ms. Cost is linear in artifact bytes; each A/B lab job adds about 80 MB.
 - **Telemetry signature** (factory.telemetry/1):
   - `cc.call` with `capsule=factory.evidence, capability=query`: `duration_ms` rises with `task_artifact_bytes`, while `out_bytes` stays flat.
   - The other capabilities' latency stays flat.

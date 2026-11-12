@@ -1,0 +1,12 @@
+Implemented F11.
+
+- Added `telemetry.py`, `replay.py`, `monitor.py`, two test files, and [TELEMETRY.md](/home/muk/projects/jiuwenswarm/docs/architecture/factory/TELEMETRY.md).
+- Integrated API, controller, store, CLI, export, and native-launcher hooks.
+- Events use `factory.telemetry/1` with task/turn/sequence context and call, material, turn, job, decision, and result metrics.
+- Adaptor token counts are recorded when reported; otherwise `null`. Material filesystem paths are not exposed by the stream.
+
+Validation: **212 passed, 1 skipped**; both CLI help commands pass. The copied real task returned 23 story events through in-memory HTTP handler checks; the copy was deleted.
+
+**G3 remains unverified over HTTP:** this sandbox prohibits socket creation. The port-0 test was skipped for that reason.
+
+No real-home writes, commits, pushes, live builds, or lab runs. `Store.query` behavior is unchanged.
