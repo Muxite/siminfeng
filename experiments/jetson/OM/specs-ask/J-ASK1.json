@@ -1,0 +1,62 @@
+{
+ "id": "J-ASK1",
+ "outdir_base": "experiments/jetson/OM",
+ "runner": "om_run",
+ "tool": "llama-completion",
+ "argv": [
+  "-m",
+  "/om/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf",
+  "-f",
+  "/om/prompts/p0-short.txt",
+  "-n",
+  "32",
+  "-c",
+  "4096",
+  "--temp",
+  "0",
+  "-s",
+  "1",
+  "-no-cnv",
+  "-ngl",
+  "99",
+  "-lm",
+  "mmap",
+  "-cmoe",
+  "-lv",
+  "4"
+ ],
+ "metric": "eval_ms_per_token",
+ "direction": "lower",
+ "threads": true,
+ "order": "ABBA",
+ "rounds": 1,
+ "arms": {
+  "base": {
+   "image": "factory/llamacpp:bare-cf34d311",
+   "env": {},
+   "expect_switch": false
+  },
+  "fill": {
+   "image": "factory/llamacpp:proof-ask-1-expert-fill",
+   "expect_switch": true,
+   "env": {
+    "LLAMA_EXPERT_FILL": "1",
+    "LLAMA_EXPERT_FILL_RANDOM": "decode",
+    "LLAMA_EXPERT_FILL_THREADS": "16",
+    "LLAMA_EXPERT_FILL_CHUNK_KIB": "2048",
+    "LLAMA_EXPERT_FILL_MIN_TOKENS": "0",
+    "LLAMA_EXPERT_FILL_MAX_TOKENS": "1",
+    "LLAMA_EXPERT_FILL_DIAG": "0",
+    "LLAMA_EXPERT_FILL_POPULATE": "0",
+    "LLAMA_EXPERT_PREFETCH": "0",
+    "LLAMA_EXPERT_PREFETCH_NEXT": "0",
+    "LLAMA_MMAP_ADVICE": "default"
+   },
+   "switch_regex": [
+    "expert_fill: active",
+    "expert_fill: random advice applied at decode",
+    "expert_fill: stats calls=[1-9][0-9]*"
+   ]
+  }
+ }
+}
