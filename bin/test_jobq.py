@@ -223,3 +223,65 @@ def test_custom_grace_kills_unresponsive_command(q, tmp_path):
     assert .15 <= time.monotonic() - start < 3
     assert q.show(jid)['rc'] != 0
     assert worker.wait(timeout=5) == 0
+
+
+def test_worker_interruption_resumes_without_replaying(q, tmp_path):
+    count = tmp_path / 'invocations'
+    code = 'import sys,time; open(sys.argv[1], "a").write("once\\n"); time.sleep(.5)'
+    jid = q.submit('build', [sys.executable, '-c', code, str(count)])
+    first = q.worker()
+    q.until(jid, lambda j: count.exists())
+    first.kill()
+    first.wait(timeout=3)
+    second = q.worker()
+    assert second.wait(timeout=5) == 0
+    assert q.show(jid)['state'] == 'succeeded'
+    assert count.read_text() == 'once\n'
+
+
+def test_runner_interruption_fails_and_releases_next_job(q):
+    jid = q.submit('build', ['sleep', '30'])
+    worker = q.worker()
+    j = q.until(jid, lambda j: j.get('pgid'))
+    os.kill(j['runner_pid'], signal.SIGKILL)
+    assert q.until(jid, lambda j: j['state'] == 'failed')['rc'] is None
+    assert worker.wait(timeout=5) == 0
+    next_job = q.submit('build')
+    q.drain()
+    assert q.show(next_job)['state'] == 'succeeded'
+
+
+def test_previous_boot_does_not_signal_reused_process(q):
+    jid = q.submit()
+    path = q.state / (jid + '.json')
+    j = json.loads(path.read_text())
+    innocent = subprocess.Popen(['sleep', '30'], start_new_session=True)
+    try:
+        j.update(state='running', boot_id='previous-boot', runner_pid=innocent.pid,
+                 pgid=innocent.pid, wrapper_pgid=innocent.pid)
+        path.write_text(json.dumps(j))
+        result = q.show(jid)
+        assert result['state'] == 'failed'
+        assert 'host reboot' in result['error']
+        assert innocent.poll() is None
+    finally:
+        innocent.kill()
+        innocent.wait(timeout=3)
+        j.update(state='failed', pgid=None, wrapper_pgid=None)
+        path.write_text(json.dumps(j))
+
+
+def test_timeout_ignores_wall_clock_shift(q):
+    jid = q.submit(cmd=['sleep', '.4'], options=['--timeout', '5'])
+    worker = q.worker()
+    q.until(jid, lambda j: j.get('pgid'))
+    # Use the queue's own lock to emulate an old wall-clock start atomically.
+    import fcntl
+    with (q.state / 'lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        path = q.state / (jid + '.json')
+        j = json.loads(path.read_text())
+        j['start'] -= 86400
+        path.write_text(json.dumps(j))
+    assert worker.wait(timeout=5) == 0
+    assert q.show(jid)['state'] == 'succeeded'

@@ -16,6 +16,7 @@ import uuid
 ROOT = Path(__file__).resolve().parent.parent
 SELF = str(Path(__file__).resolve())
 DIR = Path(os.environ.get('JOBQ_DIR', ROOT / 'lab/jobq')).resolve()
+BOOT_ID = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
 TERMINAL = {'succeeded', 'failed', 'cancelled', 'skipped_dep_failed', 'timeout'}
 
 
@@ -44,8 +45,16 @@ def get(jid):
 def save(j, event):
     path = DIR / (j['id'] + '.json')
     tmp = path.with_suffix('.tmp')
-    tmp.write_text(json.dumps(j, indent=2) + '\n')
+    with tmp.open('w') as f:
+        f.write(json.dumps(j, indent=2) + '\n')
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, path)
+    fd = os.open(DIR, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
     with (DIR / 'events.jsonl').open('a') as f:
         f.write(json.dumps(dict(time=time.time(), job=j['id'], event=event,
                                state=j['state'])) + '\n')
@@ -69,12 +78,27 @@ def alive(pid):
         return True
 
 
+def process_ticks(pid):
+    """Kernel process generation, unlike a reusable PID or jumping wall clock."""
+    try:
+        return Path('/proc/%s/stat' % pid).read_text().rsplit(')', 1)[1].split()[19]
+    except FileNotFoundError:
+        return None
+
+
 def kill_groups(j, sig):
+    if j.get('boot_id') != BOOT_ID:
+        return  # Never signal a PID/group saved by a previous boot.
     # Let run_op reap the command and record its outcome during the TERM grace.
-    groups = {j.get('pgid')}
+    groups = [(j.get('pgid'), j.get('command_ticks'))]
     if sig == signal.SIGKILL:
-        groups.add(j.get('wrapper_pgid'))
-    for pgid in groups - {None}:
+        groups.append((j.get('wrapper_pgid'), j.get('wrapper_ticks')))
+    for pgid, ticks in groups:
+        if not pgid:
+            continue
+        current = process_ticks(pgid)
+        if current is not None and current != ticks:
+            continue  # PID now belongs to another process generation.
         try:
             os.killpg(pgid, sig)
         except ProcessLookupError:
@@ -88,7 +112,15 @@ def finish(j, state, rc):
 
 def reconcile():
     for j in jobs():
-        if j['state'] == 'running' and not alive(j.get('runner_pid')):
+        if j['state'] != 'running':
+            continue
+        if not j.get('boot_id'):
+            raise ValueError('legacy running job requires operator reconciliation: ' + j['id'])
+        if j['boot_id'] != BOOT_ID:
+            j['error'] = 'interrupted by host reboot; not automatically retried'
+            finish(j, j.get('stop_reason') or 'failed', None)
+        elif (not alive(j.get('runner_pid')) or
+              process_ticks(j.get('runner_pid')) != j.get('runner_ticks')):
             kill_groups(j, signal.SIGKILL)
             finish(j, j.get('stop_reason') or 'failed', None)
 
@@ -123,7 +155,8 @@ def worker(once):
                         continue
                     if any(d['state'] != 'succeeded' for d in deps) or not compatible(j, running):
                         continue
-                    j.update(state='running', start=time.time())
+                    j.update(state='running', start=time.time(), start_monotonic=time.monotonic(),
+                             boot_id=BOOT_ID)
                     for other in running:
                         other['concurrent_jobs'].append(j['id'])
                         j['concurrent_jobs'].append(other['id'])
@@ -134,6 +167,7 @@ def worker(once):
                                              start_new_session=True)
                     children.append(p)
                     j['runner_pid'] = p.pid
+                    j['runner_ticks'] = process_ticks(p.pid)
                     save(j, 'started')
                     running.append(j)
                 pending = any(j['state'] in ('queued', 'running') for j in alljobs)
@@ -161,12 +195,13 @@ def run_job(jid):
                                   sys.executable, SELF, '_exec', jid],
                                  cwd=j['cwd'], env=job_env, start_new_session=True)
             j['wrapper_pgid'] = p.pid
+            j['wrapper_ticks'] = process_ticks(p.pid)
             save(j, 'wrapper_started')
         stopped_at = None
         while True:
             with locked():
                 j = get(jid)
-                if not j.get('stop_reason') and j['timeout'] is not None and time.time() - j['start'] >= j['timeout']:
+                if not j.get('stop_reason') and j['timeout'] is not None and time.monotonic() - j['start_monotonic'] >= j['timeout']:
                     j['stop_reason'] = 'timeout'
                     save(j, 'timeout_requested')
                 if j.get('stop_reason'):
@@ -205,7 +240,7 @@ def exec_job(jid):
         j = get(jid)
         if j.get('stop_reason') or j['state'] != 'running':
             return 1
-        j.update(pid=os.getpid(), pgid=os.getpgrp())
+        j.update(pid=os.getpid(), pgid=os.getpgrp(), command_ticks=process_ticks(os.getpid()))
         save(j, 'command_started')
     os.execvpe(j['argv'][0], j['argv'], os.environ)
 

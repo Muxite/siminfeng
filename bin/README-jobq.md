@@ -1,7 +1,8 @@
 # Local job queue
 
 Run from the campaign root. Python 3 standard library only; jobs use `bin/run_op`
-with agent `jobq` and the submitted name as task. No worker starts automatically.
+with agent `jobq` and the submitted name as task. Manual workers remain supported;
+Satay now has a supervised systemd user worker (see Recovery below).
 
 ```sh
 build=$(bin/jobq submit --class build --name engine --timeout 7200 -- python3 cc/build_engine/build_engine.py ...)
@@ -62,3 +63,22 @@ done
 bin/jobq worker --once
 bin/jobq wait "$prev"
 ```
+
+## Recovery (2026-11-13)
+
+State records are fsynced before atomic replacement. New running records include
+boot ID, process start ticks and monotonic start time. Reconciliation never signals
+PIDs from another boot or a different process generation. Interrupted jobs fail
+rather than silently rerun; dependent jobs are skipped. A live runner can survive
+worker restart. A legacy running record without boot identity requires explicit
+operator reconciliation before dispatch. Completed historical records are unchanged.
+
+Satay uses `satay-jobq.service` from `~/tools/TRANSFER/satay-recovery/`.
+`systemctl --user status satay-jobq` shows health; automatic restarts are bounded to
+five starts in five minutes. The service stops admission only, not existing runners;
+use `jobq cancel` to stop jobs. Boot-without-login requires `Linger=yes` (an admin
+can enable it with `sudo loginctl enable-linger muk`). Do not equate a user service
+being active with this boot prerequisite being satisfied.
+
+Tests: `python3 -m pytest bin/test_jobq.py -q`. All tests use isolated temporary
+queues and lightweight processes, with no hardware inference or builds.
